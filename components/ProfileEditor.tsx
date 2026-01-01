@@ -122,6 +122,7 @@ const ProfileEditor: React.FC<ProfileEditorProps> = ({ language, product, initia
   };
 
   const currentUnitPrice = calculateItemUnitPrice(length, holes, tapping);
+  const grooveCount = (selectedVariant.id === '2040' || selectedVariant.id === '3060') && (selectedSide === 'B' || selectedSide === 'D') ? 2 : 1;
 
   return (
     <div className="space-y-8">
@@ -197,17 +198,26 @@ const ProfileEditor: React.FC<ProfileEditorProps> = ({ language, product, initia
                   <option value="countersunk">{t.typeCountersunk}</option>
                 </select>
               </div>
+              
               <button onClick={addHole} className="bg-slate-900 text-white px-4 py-2 rounded-xl text-xs font-black hover:bg-slate-700 transition-all h-[42px] uppercase">Add</button>
            </div>
         </div>
-
+        {grooveCount === 2 && (
+                <div>
+                  <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">{t.groove}</label>
+                  <select value={selectedGrooveIndex} onChange={e => setSelectedGrooveIndex(parseInt(e.target.value))} className="w-full border rounded px-2 py-1.5 text-sm bg-white">
+                    <option value={0}>{t.groove1}</option>
+                    <option value={1}>{t.groove2}</option>
+                  </select>
+                </div>
+              )}
         <div className="mb-8">
           <div className="flex justify-between items-center mb-4">
              <span className="text-xs font-black text-slate-400 uppercase tracking-widest">Preview & Tapping</span>
              <div className="text-lg font-black text-blue-600">{currency}{currentUnitPrice.toFixed(1)} / pc</div>
           </div>
           <div className="bg-slate-50 p-4 rounded-3xl border border-slate-100">
-            <ProfileVisualizer config={{ length, variantId, holes, tapping, finish, colorId }} selectedSide={selectedSide} onSideChange={setSelectedSide} interactive={true} tapLabel={t.tapAction} onTapToggle={(s, i) => setTapping(prev => { const n = [...prev[s]]; n[i] = !n[i]; return {...prev, [s]: n}; })} onHoleClick={(id) => setHoles(holes.filter(h => h.id !== id))} onBarClick={(e, l, r) => { const mm = Math.round(((e.clientX - r.left) / r.width) * l); if (mm >= 0 && mm < l) setNewHolePos(mm.toString()); }} />
+            <ProfileVisualizer config={{ length, variantId, holes, tapping, finish, colorId }} selectedSide={selectedSide} onSideChange={setSelectedSide} interactive={true} tapLabel={t.tapAction} onTapToggle={(s, i) => setTapping(prev => { const n = [...prev[s]]; n[i] = !n[i]; return {...prev, [s]: n}; })} onHoleClick={(id) => setHoles(holes.filter(h => h.id !== id))} onBarClick={(e, l, r) => { const mm = Math.round(((e.clientX - r.left) / r.width) * l); if (grooveCount === 2) setSelectedGrooveIndex((e.clientY - r.top) / r.height > 0.5 ? 1 : 0); if (mm >= 0 && mm < l) setNewHolePos(mm.toString()); }} />
           </div>
         </div>
 
