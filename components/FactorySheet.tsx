@@ -21,43 +21,59 @@ const FactorySheet: React.FC<FactorySheetProps> = ({ cart, user, language, order
   const t = TRANSLATIONS[language];
   const currency = getCurrency(language);
  
-  // Summarize profiles for a sheet: length, model, color, section (finish + color), quantity, remarks
+// Summarize profiles for a sheet: length, model, color, section (finish + color), quantity, remarks
   const profileSummary = React.useMemo(() => {
     type Row = { length: string; model: string; color: string; section: string; quantity: number; remark: string; key: string };
     const map = new Map<string, Row>();
 
     cart.forEach(item => {
       if (item.product.type !== ProductType.PROFILE) return;
+
       const cfg = item.config as ProfileConfig;
+
       const length = `${cfg.length}`;
       const model = `${cfg.variantId}`;
       const colorDef = PROFILE_COLORS.find(c => c.id === cfg.colorId);
       const colorName = colorDef?.name[language] || '';
-      // section: combine finish label + color name to match examples (e.g. "Oxidized Natural")
+
       const finishLabel = cfg.finish === 'oxidized' ? t.finishOxidized :
                           cfg.finish === 'powder' ? t.finishPowder :
                           cfg.finish === 'electrophoretic' ? t.finishElectrophoretic : cfg.finish;
       const section = `${finishLabel}${colorName ? ' ' + colorName : ''}`.trim();
 
-      // Detect machining types so we don't group drilling and tapping together
-      const machiningSet = new Set<string>();
-      if (Array.isArray(cfg.holes) && cfg.holes.length > 0) {
-        cfg.holes.forEach(h => {
-          // common hole markers: tapped/tap flags or hole.type
-          if ((h as any).tapped || (h as any).tap || (h as any).type === 'tap') machiningSet.add('tap');
-          else machiningSet.add('drill');
-        });
-      }
-      // check other possible tap arrays (defensive)
-      if ((cfg as any).taps && Array.isArray((cfg as any).taps) && (cfg as any).taps.length > 0) machiningSet.add('tap');
+      // --- UPDATED DETECTION LOGIC START ---
 
-      const machiningKey = Array.from(machiningSet).sort().join('|'); // '' if none
-      const key = [length, model, cfg.colorId, section, machiningKey].join('||');
+      // 1. Check for Tapping (based on TappingConfig)
+      // Checks if any boolean in the left or right arrays is true
+      const hasTap = (cfg.tapping?.left?.some(Boolean) || cfg.tapping?.right?.some(Boolean));
+
+      // 2. Check for Drilling (based on DrillHole[])
+      const hasDrill = Array.isArray(cfg.holes) && cfg.holes.length > 0;
+
+      // 3. Determine unique Processing State
+      // 'tap' takes precedence (usually implies holes + tapping), 'drill' is just holes, 'raw' is nothing.
+      let processingState = 'raw';
+      
+      if (hasDrill) {
+        processingState = 'drill';
+      } else if (hasTap) {
+        processingState = 'tap';
+      }
+
+      // 4. Create Key
+      // This ensures a profile with tapping is stored separately from one without
+      const key = [length, model, cfg.colorId, section, processingState].join('||');
+
+      // 5. Create Remark
+      const remark = processingState === 'raw'
+        ? '无加工要求'
+        : (processingState === 'tap' ? '仅需攻丝加工' : '需打孔或打孔攻丝加工');
+
+      // --- UPDATED DETECTION LOGIC END ---
 
       const qty = item.quantity || 0;
-      const remark = machiningSet.size > 0 ? '加工参考下方图片' : '';
-
       const existing = map.get(key);
+
       if (existing) {
         existing.quantity += qty;
         if (!existing.remark && remark) existing.remark = remark;
