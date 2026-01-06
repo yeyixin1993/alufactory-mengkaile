@@ -44,8 +44,13 @@ const FactorySheet: React.FC<FactorySheetProps> = ({ cart, user, language, order
       // --- UPDATED DETECTION LOGIC START ---
 
       // 1. Check for Tapping (based on TappingConfig)
-      // Checks if any boolean in the left or right arrays is true
-      const hasTap = (cfg.tapping?.left?.some(Boolean) || cfg.tapping?.right?.some(Boolean));
+      // Determine left/right tap presence and one/both-side flags
+      const leftTap = Array.isArray(cfg.tapping?.left) && cfg.tapping.left.some(Boolean);
+      const rightTap = Array.isArray(cfg.tapping?.right) && cfg.tapping.right.some(Boolean);
+      const bothSideTap = leftTap && rightTap;
+      const oneSideTap = (leftTap || rightTap) && !bothSideTap;
+      const hasTap = leftTap || rightTap;
+      const tapType = bothSideTap ? 'both' : oneSideTap ? 'one' : 'none';
 
       // 2. Check for Drilling (based on DrillHole[])
       const hasDrill = Array.isArray(cfg.holes) && cfg.holes.length > 0;
@@ -62,12 +67,18 @@ const FactorySheet: React.FC<FactorySheetProps> = ({ cart, user, language, order
 
       // 4. Create Key
       // This ensures a profile with tapping is stored separately from one without
-      const key = [length, model, cfg.colorId, section, processingState].join('||');
+      const key = [length, model, cfg.colorId, section, processingState, tapType].join('||');
 
       // 5. Create Remark
-      const remark = processingState === 'raw'
-        ? '无加工要求'
-        : (processingState === 'tap' ? '仅需攻丝加工' : '需打孔或打孔攻丝加工');
+      let remark = '无额外加工';
+      if (processingState === 'raw') {
+        remark = '无额外加工';
+      } else if (processingState === 'tap') {
+        if (bothSideTap) remark = '两端有攻丝';
+        else remark = '一端有攻丝';
+      } else {
+        remark = '加工见下图';
+      }
 
       // --- UPDATED DETECTION LOGIC END ---
 
@@ -236,7 +247,7 @@ const FactorySheet: React.FC<FactorySheetProps> = ({ cart, user, language, order
                       const itemHasDrill = Array.isArray(cfg.holes) && cfg.holes.length > 0;
                       let itemProcessingState: 'raw' | 'tap' | 'drill' = 'raw';
                       if (itemHasDrill) itemProcessingState = 'drill';
-                      else if (itemHasTap) itemProcessingState = 'tap';
+                      else if (itemHasTap && ['2040', '3060'].includes(String(cfg.variantId))) itemProcessingState = 'tap';
 
                       const sidesToShow: ProfileSide[] =
                         itemProcessingState === 'raw' ? [] :
