@@ -164,7 +164,8 @@ const FactorySheet: React.FC<FactorySheetProps> = ({ cart, user, language, order
               {profileSummary.length === 0 ? (
                 <tr><td colSpan={6} className="p-4 text-center text-slate-400">—</td></tr>
               ) : (
-                profileSummary.map((r, i) => (
+                <>
+                {profileSummary.map((r, i) => (
                   <tr key={r.key + i} className="odd:bg-white even:bg-slate-50">
                     <td className="p-2 border border-slate-100">{r.length}</td>
                     <td className="p-2 border border-slate-100">{r.model}</td>
@@ -173,7 +174,18 @@ const FactorySheet: React.FC<FactorySheetProps> = ({ cart, user, language, order
                     <td className="p-2 border border-slate-100">{r.quantity}</td>
                     <td className="p-2 border border-slate-100">{r.remark}</td>
                   </tr>
-                ))
+                ))}
+                <tr className="bg-white">
+                  <td className="p-2 border border-slate-100"></td>
+                  <td className="p-2 border border-slate-100"></td>
+                  <td className="p-2 border border-slate-100"></td>
+                  <td className="p-2 border border-slate-100 font-bold underline text-left">Total</td>
+                  <td className="p-2 border border-slate-100 font-bold underline text-right">
+                    {profileSummary.reduce((sum, r) => sum + r.quantity, 0)}
+                  </td>
+                  <td className="p-2 border border-slate-100"></td>
+                </tr>
+                </>
               )}
             </tbody>
           </table>
