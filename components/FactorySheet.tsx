@@ -231,19 +231,38 @@ const FactorySheet: React.FC<FactorySheetProps> = ({ cart, user, language, order
                     </div>
 
                     {/* All-Sides Visualization */}
-                    <div>
-                       <h4 className="text-xs font-black text-slate-400 uppercase tracking-widest mb-4">{t.preview} (All Sides)</h4>
-                       <div className="grid grid-cols-1 gap-4">
-                          {(['A', 'B', 'C', 'D'] as ProfileSide[]).map(side => (
-                             <div key={side} className="flex gap-4 items-center">
+                    {(() => {
+                      const itemHasTap = !!(cfg.tapping?.left?.some(Boolean) || cfg.tapping?.right?.some(Boolean));
+                      const itemHasDrill = Array.isArray(cfg.holes) && cfg.holes.length > 0;
+                      let itemProcessingState: 'raw' | 'tap' | 'drill' = 'raw';
+                      if (itemHasDrill) itemProcessingState = 'drill';
+                      else if (itemHasTap) itemProcessingState = 'tap';
+
+                      const sidesToShow: ProfileSide[] =
+                        itemProcessingState === 'raw' ? [] :
+                        itemProcessingState === 'tap' ? ['B'] :
+                        ['A', 'B', 'C', 'D'];
+
+                      if (sidesToShow.length === 0) return null;
+
+                      const previewLabel = itemProcessingState === 'drill' ? `${t.preview} (All Sides)` : `${t.preview} (Side B)`;
+
+                      return (
+                        <div>
+                          <h4 className="text-xs font-black text-slate-400 uppercase tracking-widest mb-4">{previewLabel}</h4>
+                          <div className="grid grid-cols-1 gap-4">
+                            {sidesToShow.map(side => (
+                              <div key={side} className="flex gap-4 items-center">
                                 <div className="w-10 h-10 bg-slate-900 text-white rounded-lg flex items-center justify-center font-black text-xl">{side}</div>
                                 <div className="flex-1 bg-slate-50 border border-slate-200 rounded-xl p-3">
-                                   <ProfileVisualizer config={cfg} selectedSide={side} onSideChange={() => {}} interactive={false} tapLabel={t.tapAction} showSideSelector={false} />
+                                  <ProfileVisualizer config={cfg} selectedSide={side} onSideChange={() => {}} interactive={false} tapLabel={t.tapAction} showSideSelector={false} />
                                 </div>
-                             </div>
-                          ))}
-                       </div>
-                    </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      );
+                    })()}
 
                     {/* Drilling Spreadsheet */}
                     {cfg.holes.length > 0 ? (
