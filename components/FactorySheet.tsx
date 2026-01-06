@@ -214,6 +214,15 @@ const FactorySheet: React.FC<FactorySheetProps> = ({ cart, user, language, order
                                cfg.finish === 'powder' ? t.finishPowder : 
                                cfg.finish === 'electrophoretic' ? t.finishElectrophoretic : cfg.finish;
 
+           // Early per-item processing detection: if raw (no drilling/tapping), skip rendering this PROFILE item
+           const itemHasTap = !!(cfg.tapping?.left?.some(Boolean) || cfg.tapping?.right?.some(Boolean));
+           const itemHasDrill = Array.isArray(cfg.holes) && cfg.holes.length > 0;
+           let itemProcessingState: 'raw' | 'tap' | 'drill' = 'raw';
+           if (itemHasDrill) itemProcessingState = 'drill';
+           else if (itemHasTap && ['2040', '3060'].includes(String(cfg.variantId))) itemProcessingState = 'tap';
+
+           if (item.product.type === ProductType.PROFILE && itemProcessingState === 'raw') return null;
+
            return (
            <div key={idx} className="break-inside-avoid border-2 border-slate-900 rounded-xl overflow-hidden bg-white shadow-sm">
              <div className="bg-slate-900 text-white px-5 py-3 flex justify-between items-center">
