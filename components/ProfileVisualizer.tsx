@@ -35,7 +35,7 @@ const ProfileVisualizer: React.FC<ProfileVisualizerProps> = ({
   const isRadiusProfile = selectedVariant.id.endsWith('R');
   const availableSides: ProfileSide[] = isRadiusProfile ? ['A', 'B'] : ['A', 'B', 'C', 'D'];
   
-  const isRectangular = ['2040', '3060', '4040'].includes(selectedVariant.id) && selectedVariant.id !== '4040'; 
+  const isRectangular = ['2040', '3060', '2040-N1-20', '2040-N1-40'].includes(selectedVariant.id);
   const isWideFace = isRectangular && (selectedSide === 'B' || selectedSide === 'D');
 
   const getGrooveCount = (side: ProfileSide): number => {

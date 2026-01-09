@@ -1,4 +1,5 @@
 
+import { noDeprecation } from 'process';
 import { ColorDef, Language, Product, ProductType, ProfileVariant } from './types';
 
 export const TRANSLATIONS: Record<Language, Record<string, string>> = {
@@ -82,7 +83,7 @@ export const TRANSLATIONS: Record<Language, Record<string, string>> = {
     maxLength: 'Max Length',
     maxLengthExceeded: 'Exceeds maximum length for this color!',
     factorySheet: 'Production Sheet',
-    customer: 'Customer',
+    customer: 'username',
     contact: 'Contact',
     specs: 'Specifications',
     cutList: 'Cut List',
@@ -116,7 +117,11 @@ export const TRANSLATIONS: Record<Language, Record<string, string>> = {
     update: 'Update',
     emptyCart: 'Cart is empty',
     buildProject: 'Build your unique project with source factory direct pricing.',
-    startShopping: 'Start Shopping'
+    startShopping: 'Start Shopping',
+    newCustomer: 'New customer? Register here',
+    alreadyRegistered: 'Already have an account? Login here',
+    noTransaction: 'No transaction history found',
+    noAddress: 'No addresses saved'
   },
   cn: {
     title: '萌开了家居 源头工厂直供',
@@ -198,7 +203,7 @@ export const TRANSLATIONS: Record<Language, Record<string, string>> = {
     maxLength: '最大长度',
     maxLengthExceeded: '超过该颜色允许的最大长度！',
     factorySheet: '工厂生产单',
-    customer: '客户',
+    customer: '用户名',
     contact: '联系方式',
     specs: '规格详情',
     cutList: '切割清单',
@@ -232,7 +237,11 @@ export const TRANSLATIONS: Record<Language, Record<string, string>> = {
     update: '更新',
     emptyCart: '购物车为空',
     buildProject: '打造您的专属项目，享受源头工厂直供价格。',
-    startShopping: '开始选购'
+    startShopping: '开始选购',
+    newCustomer: '新用户？点击注册',
+    alreadyRegistered: '已有账号？点击登录',
+    noTransaction: '暂无交易记录',
+    noAddress: '暂无保存地址'
   },
   jp: {
     title: '萌开了家居 工場直販',
@@ -314,7 +323,7 @@ export const TRANSLATIONS: Record<Language, Record<string, string>> = {
     maxLength: '最大長',
     maxLengthExceeded: 'この色の最大長を超えています！',
     factorySheet: '生産シート',
-    customer: '顧客',
+    customer: 'ユーザー名',
     contact: '連絡先',
     specs: '仕様',
     cutList: 'カットリスト',
@@ -348,7 +357,11 @@ export const TRANSLATIONS: Record<Language, Record<string, string>> = {
     update: '更新',
     emptyCart: 'カートは空です',
     buildProject: '工場直販価格であなただけのプロジェクトを構築しましょう。',
-    startShopping: 'ショッピングを始める'
+    startShopping: 'ショッピングを始める',
+    newCustomer: '新規のお客様？こちらから登録',
+    alreadyRegistered: '既にアカウントをお持ちですか？こちらからログイン',
+    noTransaction: '取引履歴がありません',
+    noAddress: '保存された住所がありません'
   }
 };
 

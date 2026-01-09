@@ -182,7 +182,7 @@ const Auth: React.FC<{ language: Language, onLogin: (user: User) => void }> = ({
         </button>
       </form>
       <button onClick={() => setIsRegister(!isRegister)} className="w-full mt-6 text-sm text-blue-600 font-bold hover:underline">
-        {isRegister ? "Already have an account? Login" : "New customer? Register here"}
+        {isRegister ? t.alreadyRegistered : t.newCustomer}
       </button>
     </div>
   );
@@ -292,7 +292,7 @@ const UserProfile: React.FC<{
                       </div>
                    </div>
                  ))}
-                 {user.addresses.length === 0 && <p className="text-slate-400 text-sm italic py-4">No addresses saved</p>}
+                 {user.addresses.length === 0 && <p className="text-slate-400 text-sm italic py-4">{t.noAddress}</p>}
               </div>
            </div>
         </div>
@@ -341,7 +341,7 @@ const UserProfile: React.FC<{
                       </div>
                    </div>
                  ))}
-                 {orders.length === 0 && <p className="text-center py-20 text-slate-300 italic font-black">No transaction history found</p>}
+                 {orders.length === 0 && <p className="text-center py-20 text-slate-300 italic font-black">{t.noTransaction}</p>}
               </div>
            </div>
         </div>
