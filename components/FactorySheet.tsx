@@ -219,7 +219,7 @@ const FactorySheet: React.FC<FactorySheetProps> = ({ cart, user, language, order
            const itemHasDrill = Array.isArray(cfg.holes) && cfg.holes.length > 0;
            let itemProcessingState: 'raw' | 'tap' | 'drill' = 'raw';
            if (itemHasDrill) itemProcessingState = 'drill';
-           else if (itemHasTap && ['2040', '3060'].includes(String(cfg.variantId))) itemProcessingState = 'tap';
+           else if (itemHasTap && ['2040', '3060', '2040-N1-20', '2040-N1-40'].includes(String(cfg.variantId))) itemProcessingState = 'tap';
 
            if (item.product.type === ProductType.PROFILE && itemProcessingState === 'raw') return null;
 
@@ -256,7 +256,7 @@ const FactorySheet: React.FC<FactorySheetProps> = ({ cart, user, language, order
                       const itemHasDrill = Array.isArray(cfg.holes) && cfg.holes.length > 0;
                       let itemProcessingState: 'raw' | 'tap' | 'drill' = 'raw';
                       if (itemHasDrill) itemProcessingState = 'drill';
-                      else if (itemHasTap && ['2040', '3060'].includes(String(cfg.variantId))) itemProcessingState = 'tap';
+                      else if (itemHasTap && ['2040', '3060', '2040-N1-20', '2040-N1-40'].includes(String(cfg.variantId))) itemProcessingState = 'tap';
 
                       const sidesToShow: ProfileSide[] =
                         itemProcessingState === 'raw' ? [] :

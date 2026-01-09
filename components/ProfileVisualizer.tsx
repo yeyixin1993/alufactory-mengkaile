@@ -29,6 +29,8 @@ const ProfileVisualizer: React.FC<ProfileVisualizerProps> = ({
   const { length, variantId, holes, tapping } = config;
   const selectedVariant = PROFILE_VARIANTS.find(v => v.id === variantId) || PROFILE_VARIANTS[0];
 
+  const tapDisabledVariants = ['2040', '3060', '2040-N1-20', '2040-N1-40'];
+
   // Helper logic extracted from Editor
   const isRadiusProfile = selectedVariant.id.endsWith('R');
   const availableSides: ProfileSide[] = isRadiusProfile ? ['A', 'B'] : ['A', 'B', 'C', 'D'];
@@ -58,26 +60,27 @@ const ProfileVisualizer: React.FC<ProfileVisualizerProps> = ({
 
   // Helper to render tap indicator
   const renderTapIndicator = (side: 'left' | 'right', index: number, topPct: string) => {
-    // Check if this specific hole is tapped
-    const isTapped = tapping[side][index];
+    // Disable taps visually/click behavior for certain variants when A or C is selected
+    const disabledForSide = tapDisabledVariants.includes(selectedVariant.id) && (selectedSide === 'A' || selectedSide === 'C');
+    const isTapped = tapping[side][index] && !disabledForSide;
 
     return (
       <div 
            key={`${side}-${index}`}
-           className={`absolute ${side === 'left' ? 'left-2' : 'right-2'} -translate-y-1/2 flex flex-col items-center ${interactive ? 'cursor-pointer hover:scale-110' : ''} transition-transform ${
-             isTapped ? 'opacity-100' : 'opacity-20'
-           }`}
+           className={`absolute ${side === 'left' ? 'left-2' : 'right-2'} -translate-y-1/2 flex flex-col items-center transition-transform ${
+             interactive && !disabledForSide ? 'cursor-pointer hover:scale-110' : 'cursor-default'
+           } ${isTapped ? 'opacity-100' : disabledForSide ? 'opacity-40' : 'opacity-20'}`}
            style={{ top: topPct }}
            onClick={(e) => {
              e.stopPropagation();
-             interactive && onTapToggle?.(side, index);
+             if (interactive && !disabledForSide) onTapToggle?.(side, index);
            }}
         >
-           <span className="text-[10px] text-red-600 font-bold mb-0.5">{tapLabel}</span>
+           <span className={`${disabledForSide ? 'text-slate-400' : 'text-red-600'} text-[10px] font-bold mb-0.5`}>{tapLabel}</span>
            <div className={`w-5 h-5 rounded-full border flex items-center justify-center ${
              isTapped ? 'border-red-500 bg-red-100' : 'border-slate-300 bg-white'
            }`}>
-              <span className="text-red-500 text-[10px] font-bold">{side === 'left' ? '→' : '←'}</span>
+              <span className={`${disabledForSide ? 'text-slate-400' : 'text-red-500'} text-[10px] font-bold`}>{side === 'left' ? '→' : '←'}</span>
            </div>
         </div>
     );

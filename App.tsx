@@ -243,7 +243,7 @@ const UserProfile: React.FC<{
     setPrintOrder(o);
     setPrintWithPrice(withPrice);
     await new Promise(r => setTimeout(r, 600));
-    await exportToPDF(adminPrintRef.current, `Mengkailai_Order_${o.id}_${withPrice ? 'Price' : 'NoPrice'}.pdf`);
+    await exportToPDF(adminPrintRef.current, `Mengkaile_Order_${o.id}_${withPrice ? 'Price' : 'NoPrice'}.pdf`);
     setIsGenerating(null);
   };
 
@@ -268,8 +268,8 @@ const UserProfile: React.FC<{
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <h2 className="text-4xl font-black text-slate-900">{user.name}'s Dashboard</h2>
         <div className="flex gap-2 bg-slate-100 p-2 rounded-2xl w-full sm:w-auto">
-           <input type="password" placeholder="New Password" value={newPass} onChange={e => setNewPass(e.target.value)} className="bg-transparent border-none outline-none px-3 text-sm flex-1 sm:w-32 text-slate-700" />
-           <button onClick={updatePass} className="bg-slate-900 text-white px-4 py-1.5 rounded-xl text-xs font-black shadow-sm">Update</button>
+           <input type="password" placeholder={t.newPassword} value={newPass} onChange={e => setNewPass(e.target.value)} className="bg-transparent border-none outline-none px-3 text-sm flex-1 sm:w-32 text-slate-700" />
+           <button onClick={updatePass} className="bg-slate-900 text-white px-4 py-1.5 rounded-xl text-xs font-black shadow-sm">{t.update}</button>
         </div>
       </div>
 
@@ -643,7 +643,7 @@ const Cart: React.FC<{
   const handleGeneratePDF = async (includePrice: boolean = true) => {
     setPdfIncludePrice(includePrice);
     await new Promise(r => setTimeout(r, 600));
-    await exportToPDF(printRef.current, `Mengkailai_${includePrice ? 'OrderWithPrice' : 'OrderNoPrice'}_${new Date().toISOString().split('T')[0]}.pdf`);
+    await exportToPDF(printRef.current, `${user}_${finalTotal.toISOString()}_Mengkaile_${includePrice ? 'OrderWithPrice' : 'OrderNoPrice'}_${new Date().toISOString().split('T')[0]}.pdf`);
   };
 
   const handleCheckout = async () => {
@@ -710,10 +710,10 @@ const Cart: React.FC<{
       <div className="w-24 h-24 bg-slate-50 rounded-full flex items-center justify-center mx-auto mb-8">
         <ShoppingCart className="w-12 h-12 text-slate-200" />
       </div>
-      <h2 className="text-4xl font-black text-slate-800 mb-3">Cart is empty</h2>
-      <p className="text-slate-500 mb-12 text-lg">Build your unique project with source factory direct pricing.</p>
+      <h2 className="text-4xl font-black text-slate-800 mb-3">{t.emptyCart}</h2>
+      <p className="text-slate-500 mb-12 text-lg">{t.buildProject}</p>
       <Link to="/" className="bg-slate-900 text-white px-10 py-5 rounded-3xl font-black hover:bg-blue-600 transition-all inline-flex items-center gap-3 shadow-xl shadow-slate-900/10">
-        Start Shopping <ArrowLeft className="w-5 h-5 rotate-180" />
+        {t.startShopping} <ArrowLeft className="w-5 h-5 rotate-180" />
       </Link>
     </div>
   );
