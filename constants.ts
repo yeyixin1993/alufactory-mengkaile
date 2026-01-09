@@ -456,7 +456,10 @@ export const INITIAL_PRODUCTS: Product[] = [
     id: 'p2',
     type: ProductType.PROFILE,
     name: { en: 'Aluminum Profile Series', cn: '铝型材系列', jp: 'アルミプロファイルシリーズ' },
-    description: { en: 'Industrial aluminum profiles with custom cuts and drilling.', cn: '工业铝型材，支持定制定长、打孔、攻丝。', jp: 'カスタムカットと穴あけを備えた工業用アルミプロファイル。' },
+    description: { en: 'Supports customized length cutting, drilling, and tapping. N1 means no groove on one side, N2 means no groove on two sides, and N3 means no groove on three sides. By default, faces A, B, C, and D are adjacent in sequence. On the left side, the order is clockwise A-B-C-D; on the right side, the order is counterclockwise A-D-C-B. Drilling holes must be at least 5 mm away from the end edge. For 1515, the default tapping is M4; for 2020 and 2040, the default tapping is M6; for 3030, 3060, and 4040, the default tapping is M8.', 
+      cn: '支持定制定长、打孔、攻丝。N1 为一面封边, N2 为两面封边, N3 为三面封边。默认ABCD面依次相邻, 左边是顺时针ABCD, 右边是逆时针ADCB。打孔需要和端边至少隔开5mm。1515默认攻丝M4, 2020及2040默认攻丝M6, 3030, 3060和4040默认攻丝M8。', 
+      jp: '定寸カット、穴あけ、タップ加工のカスタム対応が可能です。N1は一面封止、N2は両面封止、N3は三面封止を示します。デフォルトではA・B・C・D面は順に隣接しており、左側は時計回りにABCD、右側は反時計回りにADCBとなります。穴あけ位置は端面から最低5mm以上離す必要があります。1515は標準タップM4、2020および2040は標準タップM6、3030・3060・4040は標準タップM8です。' 
+    },
     basePrice: 0,
     imageUrl: 'https://picsum.photos/400/300?random=2'
   },

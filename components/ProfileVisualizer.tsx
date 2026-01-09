@@ -39,11 +39,22 @@ const ProfileVisualizer: React.FC<ProfileVisualizerProps> = ({
   const isWideFace = isRectangular && (selectedSide === 'B' || selectedSide === 'D');
 
   const getGrooveCount = (side: ProfileSide): number => {
+    const id = selectedVariant.id;
     const name = selectedVariant.name.toLowerCase();
-    if (name.includes('one face') && side === 'A') return 0;
-    if (name.includes('two face') && (side === 'A' || side === 'B')) return 0;
-    if (name.includes('three face') && (side !== 'D')) return 0;
-    if ((selectedVariant.id === '2040' || selectedVariant.id === '3060') && (side === 'B' || side === 'D')) return 2;
+
+    // Specific exceptions for 2040 N1 variants
+    if (id === '2040-N1-20' && side === 'A') return 0;
+    if (id === '2040-N1-40' && side === 'A') return 1;
+    if (id === '2040-N1-40' && side === 'D') return 0;
+
+    // Legacy name-based rules (2020 / 3030 and other variants that include N1/N2/N3)
+    if (name.includes('n1') && side === 'A') return 0;
+    if (name.includes('n2') && (side === 'A' || side === 'B')) return 0;
+    if (name.includes('n3') && (side !== 'D')) return 0;
+
+    // Two-groove rectangular profiles (include the 2040 N1 variants here so they still render two grooves when applicable)
+    if (['2040', '3060', '2040-N1-20', '2040-N1-40'].includes(id) && (side === 'B' || side === 'D')) return 2;
+
     return 1;
   };
 
