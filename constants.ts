@@ -121,7 +121,8 @@ export const TRANSLATIONS: Record<Language, Record<string, string>> = {
     newCustomer: 'New customer? Register here',
     alreadyRegistered: 'Already have an account? Login here',
     noTransaction: 'No transaction history found',
-    noAddress: 'No addresses saved'
+    noAddress: 'No addresses saved. ',
+    addNewAddress: 'Click "Add New" to add New Address'
   },
   cn: {
     title: '萌开了家居 源头工厂直供',
@@ -241,7 +242,8 @@ export const TRANSLATIONS: Record<Language, Record<string, string>> = {
     newCustomer: '新用户？点击注册',
     alreadyRegistered: '已有账号？点击登录',
     noTransaction: '暂无交易记录',
-    noAddress: '暂无保存地址'
+    noAddress: '暂无保存地址',
+    addNewAddress: '点击“新增”添加新地址'
   },
   jp: {
     title: '萌开了家居 工場直販',
@@ -361,7 +363,8 @@ export const TRANSLATIONS: Record<Language, Record<string, string>> = {
     newCustomer: '新規のお客様？こちらから登録',
     alreadyRegistered: '既にアカウントをお持ちですか？こちらからログイン',
     noTransaction: '取引履歴がありません',
-    noAddress: '保存された住所がありません'
+    noAddress: '保存された住所がありません',
+    addNewAddress: '「新規追加」をクリックして新しい住所を追加'
   }
 };
 
@@ -466,13 +469,13 @@ export const INITIAL_PRODUCTS: Product[] = [
     Drilling holes must be at least 5 mm away from the end edge.
 
     For 1515, the default tapping is M4; for 2020 and 2040, the default tapping is M6; for 3030, 3060, and 4040, the default tapping is M8.`,
-      cn: `支持定制定长、打孔、攻丝。
+      cn: `支持定制定长、打孔、攻丝。\t\n
 
-    N1 为一面封边, N2 为两面封边, N3 为三面封边。
+    N1 为一面封边, N2 为两面封边, N3 为三面封边。\t\n
 
-    默认ABCD面依次相邻, 左边是顺时针ABCD, 右边是逆时针ADCB。
+    默认ABCD面依次相邻, 左边是顺时针ABCD, 右边是逆时针ADCB。\t\n
 
-    打孔需要和端边至少隔开5mm。
+    打孔需要和端边至少隔开5mm。\t\n
 
     1515默认攻丝M4, 2020及2040默认攻丝M6, 3030, 3060和4040默认攻丝M8。`,
       jp: `定寸カット、穴あけ、タップ加工のカスタム対応が可能です。

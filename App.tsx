@@ -643,7 +643,8 @@ const Cart: React.FC<{
   const handleGeneratePDF = async (includePrice: boolean = true) => {
     setPdfIncludePrice(includePrice);
     await new Promise(r => setTimeout(r, 600));
-    await exportToPDF(printRef.current, `${user}_${finalTotal.toISOString()}_Mengkaile_${includePrice ? 'OrderWithPrice' : 'OrderNoPrice'}_${new Date().toISOString().split('T')[0]}.pdf`);
+    const userLabel = user?.id || user?.name || 'guest';
+    await exportToPDF(printRef.current, `${userLabel}_${finalTotal.toFixed(1)}_Mengkaile_${includePrice ? 'OrderWithPrice' : 'OrderNoPrice'}_${new Date().toISOString().split('T')[0]}.pdf`);
   };
 
   const handleCheckout = async () => {
@@ -793,7 +794,7 @@ const Cart: React.FC<{
                    <button onClick={(e) => { e.stopPropagation(); setIsEditingAddress(addr); }} className="mt-4 flex items-center gap-1.5 text-xs font-black text-blue-600 bg-white border border-blue-100 px-3 py-1.5 rounded-xl hover:bg-blue-600 hover:text-white transition-all"><Pencil className="w-3 h-3"/>{t.edit}</button>
                  </div>
                ))}
-               {addresses.length === 0 && <p className="text-slate-400 italic text-sm text-center py-6 bg-slate-50 rounded-3xl">No shipping addresses saved. Click "Add New" to continue.</p>}
+               {addresses.length === 0 && <p className="text-slate-400 italic text-sm text-center py-6 bg-slate-50 rounded-3xl">{t.noAddress}{t.addNewAddress}</p>}
              </div>
           </div>
 
