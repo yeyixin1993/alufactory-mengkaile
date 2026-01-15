@@ -122,7 +122,7 @@ const ProfileEditor: React.FC<ProfileEditorProps> = ({ language, product, initia
   };
 
   const currentUnitPrice = calculateItemUnitPrice(length, holes, tapping);
-  const grooveCount = (selectedVariant.id === '2040' || selectedVariant.id === '3060') && (selectedSide === 'B' || selectedSide === 'D') ? 2 : 1;
+  const grooveCount = (['2040', '3060', '2040-N1-20', '2040-N1-40'].includes(selectedVariant.id) && (selectedSide === 'B' || selectedSide === 'D')) ? 2 : 1;
 
   return (
     <div className="space-y-8">
@@ -176,7 +176,7 @@ const ProfileEditor: React.FC<ProfileEditorProps> = ({ language, product, initia
         )}
 
         <div className="mb-8">
-            <label className="block text-xs font-black text-slate-400 uppercase mb-2">{t.length} (mm)</label>
+            <label className="block text-xs font-black text-slate-400 uppercase mb-2">{t.length} </label>
             <div className="relative">
               <input type="number" value={length} onChange={(e) => setLength(Math.max(0, parseFloat(e.target.value)))} className={`w-full border rounded-xl px-4 py-3 outline-none font-black text-xl ${length > selectedColor.maxLength ? 'border-red-300 text-red-600 bg-red-50' : 'border-slate-200 bg-slate-50'}`} />
               <div className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 text-sm font-black">MM</div>
@@ -199,7 +199,7 @@ const ProfileEditor: React.FC<ProfileEditorProps> = ({ language, product, initia
                 </select>
               </div>
               
-              <button onClick={addHole} className="bg-slate-900 text-white px-4 py-2 rounded-xl text-xs font-black hover:bg-slate-700 transition-all h-[42px] uppercase">Add</button>
+              <button onClick={addHole} className="bg-slate-900 text-white px-4 py-2 rounded-xl text-xs font-black hover:bg-slate-700 transition-all h-[42px] uppercase">{t.addHole}</button>
            </div>
         </div>
         {grooveCount === 2 && (
@@ -213,7 +213,7 @@ const ProfileEditor: React.FC<ProfileEditorProps> = ({ language, product, initia
               )}
         <div className="mb-8">
           <div className="flex justify-between items-center mb-4">
-             <span className="text-xs font-black text-slate-400 uppercase tracking-widest">Preview & Tapping</span>
+             <span className="text-xs font-black text-slate-400 uppercase tracking-widest">{t.previewAndTapping}</span>
              <div className="text-lg font-black text-blue-600">{currency}{currentUnitPrice.toFixed(1)} / pc</div>
           </div>
           <div className="bg-slate-50 p-4 rounded-3xl border border-slate-100">
@@ -242,7 +242,7 @@ const ProfileEditor: React.FC<ProfileEditorProps> = ({ language, product, initia
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-50">
-                {draftProfiles.length === 0 && <tr><td colSpan={6} className="py-12 text-center text-slate-300 italic font-black">No profiles in current list</td></tr>}
+                {draftProfiles.length === 0 && <tr><td colSpan={6} className="py-12 text-center text-slate-300 italic font-black">{t.emptyProfileList}</td></tr>}
                 {draftProfiles.map((item) => {
                     const profileColor = PROFILE_COLORS.find(c => c.id === item.config.colorId);
                     return (

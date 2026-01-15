@@ -29,19 +29,32 @@ const ProfileVisualizer: React.FC<ProfileVisualizerProps> = ({
   const { length, variantId, holes, tapping } = config;
   const selectedVariant = PROFILE_VARIANTS.find(v => v.id === variantId) || PROFILE_VARIANTS[0];
 
+  const tapDisabledVariants = ['2040', '3060', '2040-N1-20', '2040-N1-40'];
+
   // Helper logic extracted from Editor
   const isRadiusProfile = selectedVariant.id.endsWith('R');
   const availableSides: ProfileSide[] = isRadiusProfile ? ['A', 'B'] : ['A', 'B', 'C', 'D'];
   
-  const isRectangular = ['2040', '3060', '4040'].includes(selectedVariant.id) && selectedVariant.id !== '4040'; 
+  const isRectangular = ['2040', '3060', '2040-N1-20', '2040-N1-40'].includes(selectedVariant.id);
   const isWideFace = isRectangular && (selectedSide === 'B' || selectedSide === 'D');
 
   const getGrooveCount = (side: ProfileSide): number => {
+    const id = selectedVariant.id;
     const name = selectedVariant.name.toLowerCase();
-    if (name.includes('one face') && side === 'A') return 0;
-    if (name.includes('two face') && (side === 'A' || side === 'B')) return 0;
-    if (name.includes('three face') && (side !== 'D')) return 0;
-    if ((selectedVariant.id === '2040' || selectedVariant.id === '3060') && (side === 'B' || side === 'D')) return 2;
+
+    // Specific exceptions for 2040 N1 variants
+    if (id === '2040-N1-20' && side === 'A') return 0;
+    if (id === '2040-N1-40' && side === 'A') return 1;
+    if (id === '2040-N1-40' && side === 'D') return 0;
+
+    // Legacy name-based rules (2020 / 3030 and other variants that include N1/N2/N3)
+    if (name.includes('n1') && side === 'A') return 0;
+    if (name.includes('n2') && (side === 'A' || side === 'B')) return 0;
+    if (name.includes('n3') && (side !== 'D')) return 0;
+
+    // Two-groove rectangular profiles (include the 2040 N1 variants here so they still render two grooves when applicable)
+    if (['2040', '3060', '2040-N1-20', '2040-N1-40'].includes(id) && (side === 'B' || side === 'D')) return 2;
+
     return 1;
   };
 
@@ -58,26 +71,27 @@ const ProfileVisualizer: React.FC<ProfileVisualizerProps> = ({
 
   // Helper to render tap indicator
   const renderTapIndicator = (side: 'left' | 'right', index: number, topPct: string) => {
-    // Check if this specific hole is tapped
-    const isTapped = tapping[side][index];
+    // Disable taps visually/click behavior for certain variants when A or C is selected
+    const disabledForSide = tapDisabledVariants.includes(selectedVariant.id) && (selectedSide === 'A' || selectedSide === 'C');
+    const isTapped = tapping[side][index] && !disabledForSide;
 
     return (
       <div 
            key={`${side}-${index}`}
-           className={`absolute ${side === 'left' ? 'left-2' : 'right-2'} -translate-y-1/2 flex flex-col items-center ${interactive ? 'cursor-pointer hover:scale-110' : ''} transition-transform ${
-             isTapped ? 'opacity-100' : 'opacity-20'
-           }`}
+           className={`absolute ${side === 'left' ? 'left-2' : 'right-2'} -translate-y-1/2 flex flex-col items-center transition-transform ${
+             interactive && !disabledForSide ? 'cursor-pointer hover:scale-110' : 'cursor-default'
+           } ${isTapped ? 'opacity-100' : disabledForSide ? 'opacity-40' : 'opacity-20'}`}
            style={{ top: topPct }}
            onClick={(e) => {
              e.stopPropagation();
-             interactive && onTapToggle?.(side, index);
+             if (interactive && !disabledForSide) onTapToggle?.(side, index);
            }}
         >
-           <span className="text-[10px] text-red-600 font-bold mb-0.5">{tapLabel}</span>
+           <span className={`${disabledForSide ? 'text-slate-400' : 'text-red-600'} text-[10px] font-bold mb-0.5`}>{tapLabel}</span>
            <div className={`w-5 h-5 rounded-full border flex items-center justify-center ${
              isTapped ? 'border-red-500 bg-red-100' : 'border-slate-300 bg-white'
            }`}>
-              <span className="text-red-500 text-[10px] font-bold">{side === 'left' ? '→' : '←'}</span>
+              <span className={`${disabledForSide ? 'text-slate-400' : 'text-red-500'} text-[10px] font-bold`}>{side === 'left' ? '→' : '←'}</span>
            </div>
         </div>
     );

@@ -20,6 +20,81 @@ const getCurrency = (lang: Language) => lang === 'cn' ? '￥' : '$';
 const FactorySheet: React.FC<FactorySheetProps> = ({ cart, user, language, orderRef, dateStr, id, showPrice = true, address }) => {
   const t = TRANSLATIONS[language];
   const currency = getCurrency(language);
+ 
+// Summarize profiles for a sheet: length, model, color, section (finish + color), quantity, remarks
+  const profileSummary = React.useMemo(() => {
+    type Row = { length: string; model: string; color: string; section: string; quantity: number; remark: string; key: string };
+    const map = new Map<string, Row>();
+
+    cart.forEach(item => {
+      if (item.product.type !== ProductType.PROFILE) return;
+
+      const cfg = item.config as ProfileConfig;
+
+      const length = `${cfg.length}`;
+      const model = `${cfg.variantId}`;
+      const colorDef = PROFILE_COLORS.find(c => c.id === cfg.colorId);
+      const colorName = colorDef?.name[language] || '';
+
+      const finishLabel = cfg.finish === 'oxidized' ? t.finishOxidized :
+                          cfg.finish === 'powder' ? t.finishPowder :
+                          cfg.finish === 'electrophoretic' ? t.finishElectrophoretic : cfg.finish;
+      const section = `${finishLabel}${colorName ? ' ' + colorName : ''}`.trim();
+
+      // --- UPDATED DETECTION LOGIC START ---
+
+      // 1. Check for Tapping (based on TappingConfig)
+      // Determine left/right tap presence and one/both-side flags
+      const leftTap = Array.isArray(cfg.tapping?.left) && cfg.tapping.left.some(Boolean);
+      const rightTap = Array.isArray(cfg.tapping?.right) && cfg.tapping.right.some(Boolean);
+      const bothSideTap = leftTap && rightTap;
+      const oneSideTap = (leftTap || rightTap) && !bothSideTap;
+      const hasTap = leftTap || rightTap;
+      const tapType = bothSideTap ? 'both' : oneSideTap ? 'one' : 'none';
+
+      // 2. Check for Drilling (based on DrillHole[])
+      const hasDrill = Array.isArray(cfg.holes) && cfg.holes.length > 0;
+
+      // 3. Determine unique Processing State
+      // 'tap' takes precedence (usually implies holes + tapping), 'drill' is just holes, 'raw' is nothing.
+      let processingState = 'raw';
+      
+      if (hasDrill) {
+        processingState = 'drill';
+      } else if (hasTap) {
+        processingState = 'tap';
+      }
+
+      // 4. Create Key
+      // This ensures a profile with tapping is stored separately from one without
+      const key = [length, model, cfg.colorId, section, processingState, tapType].join('||');
+
+      // 5. Create Remark
+      let remark = '无额外加工';
+      if (processingState === 'raw') {
+        remark = '无额外加工';
+      } else if (processingState === 'tap') {
+        if (bothSideTap) remark = '两端有攻丝';
+        else remark = '一端有攻丝';
+      } else {
+        remark = '加工见下图';
+      }
+
+      // --- UPDATED DETECTION LOGIC END ---
+
+      const qty = item.quantity || 0;
+      const existing = map.get(key);
+
+      if (existing) {
+        existing.quantity += qty;
+        if (!existing.remark && remark) existing.remark = remark;
+      } else {
+        map.set(key, { length, model, color: colorName, section, quantity: qty, remark, key });
+      }
+    });
+
+    return Array.from(map.values());
+  }, [cart, language, t]);
 
   // Use passed address or fallback to default user address
   const activeAddress = address || user?.addresses.find(a => a.isDefault) || user?.addresses[0];
@@ -81,6 +156,53 @@ const FactorySheet: React.FC<FactorySheetProps> = ({ cart, user, language, order
         </div>
       </div>
 
+      {/* Profiles Summary Spreadsheet (after header, before items) */}
+      <div className="bg-slate-50 p-4 rounded border border-slate-200">
+        <h4 className="text-xs font-black text-slate-400 uppercase tracking-widest mb-2">{t.profileSummary || 'Profiles Summary'}</h4>
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm border-collapse">
+            <thead>
+              <tr className="bg-white/50 text-left text-xs">
+                <th className="p-2 border border-slate-200">长度 (mm)</th>
+                <th className="p-2 border border-slate-200">Profile Model</th>
+                <th className="p-2 border border-slate-200">Color</th>
+                <th className="p-2 border border-slate-200">Section</th>
+                <th className="p-2 border border-slate-200">Quantity</th>
+                <th className="p-2 border border-slate-200">Remarks</th>
+              </tr>
+            </thead>
+            <tbody>
+              {profileSummary.length === 0 ? (
+                <tr><td colSpan={6} className="p-4 text-center text-slate-400">—</td></tr>
+              ) : (
+                <>
+                {profileSummary.map((r, i) => (
+                  <tr key={r.key + i} className="odd:bg-white even:bg-slate-50">
+                    <td className="p-2 border border-slate-100">{r.length}</td>
+                    <td className="p-2 border border-slate-100">{r.model}</td>
+                    <td className="p-2 border border-slate-100">{r.color}</td>
+                    <td className="p-2 border border-slate-100">{r.section}</td>
+                    <td className="p-2 border border-slate-100">{r.quantity}</td>
+                    <td className="p-2 border border-slate-100">{r.remark}</td>
+                  </tr>
+                ))}
+                <tr className="bg-white">
+                  <td className="p-2 border border-slate-100"></td>
+                  <td className="p-2 border border-slate-100"></td>
+                  <td className="p-2 border border-slate-100"></td>
+                  <td className="p-2 border border-slate-100 font-bold underline text-left">Total</td>
+                  <td className="p-2 border border-slate-100 font-bold underline text-right">
+                    {profileSummary.reduce((sum, r) => sum + r.quantity, 0)}
+                  </td>
+                  <td className="p-2 border border-slate-100"></td>
+                </tr>
+                </>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
       {/* Items */}
       <div className="space-y-10">
         {cart.map((item, idx) => {
@@ -91,6 +213,15 @@ const FactorySheet: React.FC<FactorySheetProps> = ({ cart, user, language, order
            const finishLabel = cfg.finish === 'oxidized' ? t.finishOxidized : 
                                cfg.finish === 'powder' ? t.finishPowder : 
                                cfg.finish === 'electrophoretic' ? t.finishElectrophoretic : cfg.finish;
+
+           // Early per-item processing detection: if raw (no drilling/tapping), skip rendering this PROFILE item
+           const itemHasTap = !!(cfg.tapping?.left?.some(Boolean) || cfg.tapping?.right?.some(Boolean));
+           const itemHasDrill = Array.isArray(cfg.holes) && cfg.holes.length > 0;
+           let itemProcessingState: 'raw' | 'tap' | 'drill' = 'raw';
+           if (itemHasDrill) itemProcessingState = 'drill';
+           else if (itemHasTap && ['2040', '3060', '2040-N1-20', '2040-N1-40'].includes(String(cfg.variantId))) itemProcessingState = 'tap';
+
+           if (item.product.type === ProductType.PROFILE && itemProcessingState === 'raw') return null;
 
            return (
            <div key={idx} className="break-inside-avoid border-2 border-slate-900 rounded-xl overflow-hidden bg-white shadow-sm">
@@ -120,19 +251,38 @@ const FactorySheet: React.FC<FactorySheetProps> = ({ cart, user, language, order
                     </div>
 
                     {/* All-Sides Visualization */}
-                    <div>
-                       <h4 className="text-xs font-black text-slate-400 uppercase tracking-widest mb-4">{t.preview} (All Sides)</h4>
-                       <div className="grid grid-cols-1 gap-4">
-                          {(['A', 'B', 'C', 'D'] as ProfileSide[]).map(side => (
-                             <div key={side} className="flex gap-4 items-center">
+                    {(() => {
+                      const itemHasTap = !!(cfg.tapping?.left?.some(Boolean) || cfg.tapping?.right?.some(Boolean));
+                      const itemHasDrill = Array.isArray(cfg.holes) && cfg.holes.length > 0;
+                      let itemProcessingState: 'raw' | 'tap' | 'drill' = 'raw';
+                      if (itemHasDrill) itemProcessingState = 'drill';
+                      else if (itemHasTap && ['2040', '3060', '2040-N1-20', '2040-N1-40'].includes(String(cfg.variantId))) itemProcessingState = 'tap';
+
+                      const sidesToShow: ProfileSide[] =
+                        itemProcessingState === 'raw' ? [] :
+                        itemProcessingState === 'tap' ? ['B'] :
+                        ['A', 'B', 'C', 'D'];
+
+                      if (sidesToShow.length === 0) return null;
+
+                      const previewLabel = itemProcessingState === 'drill' ? `${t.preview} (All Sides)` : `${t.preview} (Side B)`;
+
+                      return (
+                        <div>
+                          <h4 className="text-xs font-black text-slate-400 uppercase tracking-widest mb-4">{previewLabel}</h4>
+                          <div className="grid grid-cols-1 gap-4">
+                            {sidesToShow.map(side => (
+                              <div key={side} className="flex gap-4 items-center">
                                 <div className="w-10 h-10 bg-slate-900 text-white rounded-lg flex items-center justify-center font-black text-xl">{side}</div>
                                 <div className="flex-1 bg-slate-50 border border-slate-200 rounded-xl p-3">
-                                   <ProfileVisualizer config={cfg} selectedSide={side} onSideChange={() => {}} interactive={false} tapLabel={t.tapAction} showSideSelector={false} />
+                                  <ProfileVisualizer config={cfg} selectedSide={side} onSideChange={() => {}} interactive={false} tapLabel={t.tapAction} showSideSelector={false} />
                                 </div>
-                             </div>
-                          ))}
-                       </div>
-                    </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      );
+                    })()}
 
                     {/* Drilling Spreadsheet */}
                     {cfg.holes.length > 0 ? (

@@ -3,11 +3,11 @@ import { Order, Product, User, Address, ProfileVariant, ColorDef } from '../type
 import { INITIAL_PRODUCTS, PROFILE_VARIANTS, PROFILE_COLORS, SHIPPING_RATES } from '../constants';
 
 const DB_KEYS = {
-  USERS: 'mengkailai_users',
-  ORDERS: 'mengkailai_orders',
-  CURRENT_USER: 'mengkailai_session',
-  VARIANTS: 'mengkailai_variants',
-  COLORS: 'mengkailai_colors'
+  USERS: 'mengkaile_users',
+  ORDERS: 'mengkaile_orders',
+  CURRENT_USER: 'mengkaile_session',
+  VARIANTS: 'mengkaile_variants',
+  COLORS: 'mengkaile_colors'
 };
 
 const getStored = <T>(key: string, fallback: T): T => {
