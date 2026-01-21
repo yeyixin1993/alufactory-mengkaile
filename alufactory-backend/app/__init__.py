@@ -1,4 +1,4 @@
-from flask import Flask
+from flask import Flask, send_from_directory
 from flask_cors import CORS
 from flask_jwt_extended import JWTManager
 from config import config
@@ -8,11 +8,16 @@ from app.routes.users import user_bp
 from app.routes.cart import cart_bp
 from app.routes.orders import order_bp
 from app.routes.admin import admin_bp
+from app.routes.profiles import profile_bp
 import os
 
 def create_app(config_name='development'):
     """Application factory"""
-    app = Flask(__name__)
+    # Get the base directory of the app
+    base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    admin_dir = os.path.join(base_dir, 'admin')
+    
+    app = Flask(__name__, static_folder=admin_dir, static_url_path='/admin')
     
     # Load configuration
     app.config.from_object(config[config_name])
@@ -28,6 +33,7 @@ def create_app(config_name='development'):
     app.register_blueprint(cart_bp)
     app.register_blueprint(order_bp)
     app.register_blueprint(admin_bp)
+    app.register_blueprint(profile_bp)
     
     # Create database tables
     with app.app_context():
@@ -37,6 +43,30 @@ def create_app(config_name='development'):
     @app.route('/api/health', methods=['GET'])
     def health():
         return {'status': 'ok', 'message': 'Alufactory Backend is running'}, 200
+    
+    # Serve admin index.html
+    @app.route('/admin/', methods=['GET'])
+    def admin_index():
+        return send_from_directory(admin_dir, 'index.html')
+    
+    @app.route('/admin/index.html', methods=['GET'])
+    def admin_index_direct():
+        return send_from_directory(admin_dir, 'index.html')
+    
+    # Serve admin login.html
+    @app.route('/admin/login.html', methods=['GET'])
+    def admin_login():
+        return send_from_directory(admin_dir, 'login.html')
+    
+    # Serve static files from admin directory
+    @app.route('/admin/<path:filename>', methods=['GET'])
+    def admin_files(filename):
+        return send_from_directory(admin_dir, filename)
+    
+    # Serve root as health check
+    @app.route('/', methods=['GET'])
+    def root():
+        return {'status': 'ok', 'message': 'Alufactory Backend API'}, 200
     
     return app
 

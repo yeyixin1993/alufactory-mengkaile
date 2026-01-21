@@ -236,3 +236,54 @@ class OrderItem(db.Model):
             'config': self.config,
             'created_at': self.created_at.isoformat(),
         }
+
+class Profile(db.Model):
+    """Store user profile data with PDF uploads"""
+    __tablename__ = 'profiles'
+    
+    id = db.Column(db.String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    user_id = db.Column(db.String(36), db.ForeignKey('users.id'), nullable=False, unique=True)
+    
+    # Profile information
+    profile_name = db.Column(db.String(255), nullable=True)
+    profile_data = db.Column(db.JSON, nullable=True)  # Store profile configuration as JSON
+    
+    # Address information
+    address_recipient_name = db.Column(db.String(120), nullable=True)
+    address_phone = db.Column(db.String(20), nullable=True)
+    address_province = db.Column(db.String(50), nullable=True)
+    address_detail = db.Column(db.Text, nullable=True)
+    
+    # PDF file path
+    pdf_path = db.Column(db.String(500), nullable=True)
+    pdf_filename = db.Column(db.String(255), nullable=True)
+    pdf_base64 = db.Column(db.Text, nullable=True)  # Store base64 encoded PDF
+    
+    # Timestamps
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    # Relationships
+    user = db.relationship('User', backref='profiles')
+    
+    def to_dict(self, include_pdf_data=False):
+        data = {
+            'id': self.id,
+            'user_id': self.user_id,
+            'profile_name': self.profile_name,
+            'profile_data': self.profile_data,
+            'address': {
+                'recipient_name': self.address_recipient_name,
+                'phone': self.address_phone,
+                'province': self.address_province,
+                'detail': self.address_detail,
+            },
+            'pdf_filename': self.pdf_filename,
+            'created_at': self.created_at.isoformat(),
+            'updated_at': self.updated_at.isoformat(),
+        }
+        
+        if include_pdf_data and self.pdf_base64:
+            data['pdf_base64'] = self.pdf_base64
+        
+        return data

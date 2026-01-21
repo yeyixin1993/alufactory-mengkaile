@@ -1,7 +1,7 @@
 from flask import Blueprint, request, jsonify
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from datetime import datetime
-from app.models.user import db, User, Order
+from app.models.user import db, User, Order, Profile
 import uuid
 
 admin_bp = Blueprint('admin', __name__, url_prefix='/api/admin')
@@ -220,4 +220,61 @@ def get_statistics():
         'shipped_orders': shipped_orders,
         'delivered_orders': delivered_orders,
         'total_revenue': float(total_revenue)
+    }), 200
+
+
+@admin_bp.route('/profiles', methods=['GET'])
+@admin_required
+def get_all_profiles():
+    """Get all user profiles (admin only)"""
+    page = request.args.get('page', 1, type=int)
+    per_page = request.args.get('per_page', 50, type=int)
+    user_id = request.args.get('user_id')  # Optional filter by user
+    
+    query = Profile.query
+    if user_id:
+        query = query.filter_by(user_id=user_id)
+    
+    profiles_paginated = query.order_by(Profile.created_at.desc()).paginate(page=page, per_page=per_page)
+    
+    profiles_data = []
+    for profile in profiles_paginated.items:
+        user = User.query.get(profile.user_id)
+        profile_dict = profile.to_dict()
+        profile_dict['user'] = {
+            'id': user.id,
+            'username': user.username,
+            'phone': user.phone,
+            'full_name': user.full_name,
+        }
+        profiles_data.append(profile_dict)
+    
+    return jsonify({
+        'profiles': profiles_data,
+        'total': profiles_paginated.total,
+        'pages': profiles_paginated.pages,
+        'current_page': page
+    }), 200
+
+
+@admin_bp.route('/profiles/<profile_id>', methods=['GET'])
+@admin_required
+def get_profile_details(profile_id):
+    """Get profile details with full data"""
+    profile = Profile.query.get(profile_id)
+    if not profile:
+        return jsonify({'error': 'Profile not found'}), 404
+    
+    user = User.query.get(profile.user_id)
+    profile_dict = profile.to_dict(include_pdf_data=True)
+    profile_dict['user'] = {
+        'id': user.id,
+        'username': user.username,
+        'phone': user.phone,
+        'full_name': user.full_name,
+        'email': user.email,
+    }
+    
+    return jsonify({
+        'profile': profile_dict
     }), 200

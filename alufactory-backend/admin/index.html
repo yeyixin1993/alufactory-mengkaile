@@ -313,6 +313,7 @@
             <nav>
                 <div class="nav-item active" onclick="switchTab('dashboard')">📊 仪表板</div>
                 <div class="nav-item" onclick="switchTab('users')">👥 用户管理</div>
+                <div class="nav-item" onclick="switchTab('profiles')">📋 用户资料</div>
                 <div class="nav-item" onclick="switchTab('orders')">📦 订单管理</div>
                 <div class="nav-item logout-btn" onclick="logout()">🚪 退出</div>
             </nav>
@@ -377,6 +378,32 @@
                         </tbody>
                     </table>
                     <div class="pagination" id="usersPagination"></div>
+                </div>
+            </div>
+            
+            <!-- Profiles Management -->
+            <div id="profiles" class="content hidden">
+                <div class="table-wrapper">
+                    <div class="table-header">
+                        <h3>用户资料列表</h3>
+                        <input type="text" class="search-box" id="profileSearch" placeholder="搜索资料...">
+                    </div>
+                    <table id="profilesTable">
+                        <thead>
+                            <tr>
+                                <th>资料名称</th>
+                                <th>用户</th>
+                                <th>电话</th>
+                                <th>收货地址</th>
+                                <th>PDF</th>
+                                <th>创建时间</th>
+                                <th>操作</th>
+                            </tr>
+                        </thead>
+                        <tbody id="profilesTableBody">
+                        </tbody>
+                    </table>
+                    <div class="pagination" id="profilesPagination"></div>
                 </div>
             </div>
             
@@ -466,6 +493,52 @@
         </div>
     </div>
     
+    <!-- Profile Details Modal -->
+    <div id="profileDetailsModal" class="modal">
+        <div class="modal-content" style="max-width: 700px; max-height: 80vh; overflow-y: auto;">
+            <div class="modal-header">资料详情</div>
+            <div class="form-group">
+                <label>资料名称</label>
+                <input type="text" id="profileViewName" readonly>
+            </div>
+            <div class="form-group">
+                <label>用户</label>
+                <input type="text" id="profileViewUser" readonly>
+            </div>
+            <div class="form-group">
+                <label>用户电话</label>
+                <input type="text" id="profileViewUserPhone" readonly>
+            </div>
+            <div class="form-group">
+                <label>收货人姓名</label>
+                <input type="text" id="profileViewRecipient" readonly>
+            </div>
+            <div class="form-group">
+                <label>收货人电话</label>
+                <input type="text" id="profileViewPhone" readonly>
+            </div>
+            <div class="form-group">
+                <label>地区</label>
+                <input type="text" id="profileViewProvince" readonly>
+            </div>
+            <div class="form-group">
+                <label>详细地址</label>
+                <textarea id="profileViewDetail" readonly rows="3"></textarea>
+            </div>
+            <div class="form-group" id="pdfDownloadGroup">
+                <label>PDF文件</label>
+                <button class="btn btn-primary" id="downloadPdfBtn" onclick="downloadProfilePdf()">下载PDF</button>
+            </div>
+            <div class="form-group">
+                <label>创建时间</label>
+                <input type="text" id="profileViewCreated" readonly>
+            </div>
+            <div class="form-actions">
+                <button class="btn" onclick="closeModal('profileDetailsModal')" style="background: #e5e7eb; color: #1f2937;">关闭</button>
+            </div>
+        </div>
+    </div>
+    
     <script>
         const API_BASE = 'http://localhost:5000/api';
         let authToken = localStorage.getItem('authToken');
@@ -524,12 +597,14 @@
             const titles = {
                 'dashboard': '仪表板',
                 'users': '用户管理',
+                'profiles': '用户资料',
                 'orders': '订单管理'
             };
             document.getElementById('pageTitle').textContent = titles[tab];
             
             // Load data
             if (tab === 'users') loadUsers();
+            if (tab === 'profiles') loadProfiles();
             if (tab === 'orders') loadOrders();
         }
         
@@ -626,6 +701,114 @@
                 renderPagination('ordersPagination', page, data.pages, (p) => loadOrders(p, status));
             } catch (error) {
                 console.error('Error loading orders:', error);
+            }
+        }
+        
+        // Load profiles
+        async function loadProfiles(page = 1) {
+            try {
+                const response = await fetch(`${API_BASE}/admin/profiles?page=${page}&per_page=20`, {
+                    headers: { 'Authorization': `Bearer ${authToken}` }
+                });
+                
+                if (!response.ok) throw new Error('Failed to load profiles');
+                
+                const data = await response.json();
+                const tbody = document.getElementById('profilesTableBody');
+                tbody.innerHTML = '';
+                
+                data.profiles.forEach(profile => {
+                    const row = tbody.insertRow();
+                    const date = new Date(profile.created_at).toLocaleDateString('zh-CN');
+                    const hasPdf = profile.pdf_filename ? '✓' : '-';
+                    row.innerHTML = `
+                        <td>${profile.profile_name || '-'}</td>
+                        <td>${profile.user.username}</td>
+                        <td>${profile.user.phone}</td>
+                        <td>${profile.address.province || '-'}</td>
+                        <td>${hasPdf}</td>
+                        <td>${date}</td>
+                        <td>
+                            <button class="btn btn-primary" onclick="viewProfile('${profile.id}')">查看</button>
+                        </td>
+                    `;
+                });
+                
+                // Pagination
+                renderPagination('profilesPagination', page, data.pages, loadProfiles);
+            } catch (error) {
+                console.error('Error loading profiles:', error);
+            }
+        }
+        
+        // View profile details
+        async function viewProfile(profileId) {
+            try {
+                const response = await fetch(`${API_BASE}/admin/profiles/${profileId}`, {
+                    headers: { 'Authorization': `Bearer ${authToken}` }
+                });
+                
+                if (!response.ok) throw new Error('Failed to load profile');
+                
+                const data = await response.json();
+                const profile = data.profile;
+                
+                // Fill form
+                document.getElementById('profileViewName').value = profile.profile_name || '-';
+                document.getElementById('profileViewUser').value = profile.user.username;
+                document.getElementById('profileViewUserPhone').value = profile.user.phone;
+                document.getElementById('profileViewRecipient').value = profile.address.recipient_name || '-';
+                document.getElementById('profileViewPhone').value = profile.address.phone || '-';
+                document.getElementById('profileViewProvince').value = profile.address.province || '-';
+                document.getElementById('profileViewDetail').value = profile.address.detail || '-';
+                document.getElementById('profileViewCreated').value = new Date(profile.created_at).toLocaleDateString('zh-CN');
+                
+                // Handle PDF button
+                const pdfBtn = document.getElementById('downloadPdfBtn');
+                if (profile.pdf_base64) {
+                    pdfBtn.style.display = 'inline-block';
+                    pdfBtn.onclick = () => downloadProfilePdf(profile);
+                } else {
+                    pdfBtn.style.display = 'none';
+                }
+                
+                // Store current profile for download
+                window.currentViewProfile = profile;
+                
+                document.getElementById('profileDetailsModal').classList.add('active');
+            } catch (error) {
+                alert('错误: ' + error.message);
+            }
+        }
+        
+        // Download profile PDF
+        function downloadProfilePdf(profile) {
+            profile = profile || window.currentViewProfile;
+            if (!profile || !profile.pdf_base64) {
+                alert('没有PDF文件');
+                return;
+            }
+            
+            try {
+                // Decode base64 and create blob
+                const binaryString = atob(profile.pdf_base64);
+                const bytes = new Uint8Array(binaryString.length);
+                for (let i = 0; i < binaryString.length; i++) {
+                    bytes[i] = binaryString.charCodeAt(i);
+                }
+                const blob = new Blob([bytes], { type: 'application/pdf' });
+                
+                // Create download link
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = profile.pdf_filename || 'profile.pdf';
+                document.body.appendChild(a);
+                a.click();
+                window.URL.revokeObjectURL(url);
+                document.body.removeChild(a);
+            } catch (error) {
+                alert('下载失败: ' + error.message);
             }
         }
         

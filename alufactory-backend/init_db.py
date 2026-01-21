@@ -5,6 +5,11 @@ Run this to create tables and add initial data
 """
 
 import os
+from dotenv import load_dotenv
+
+# Load environment variables from .env
+load_dotenv()
+
 from app import create_app
 from app.models.user import db, User
 

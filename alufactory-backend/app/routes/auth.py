@@ -133,3 +133,73 @@ def change_password():
 def logout():
     """Logout user (client-side token removal)"""
     return jsonify({'message': 'Logout successful'}), 200
+
+
+@auth_bp.route('/create-test-accounts', methods=['POST'])
+def create_test_accounts():
+    """Create test accounts - DEVELOPMENT ONLY"""
+    try:
+        test_accounts = [
+            {
+                'username': 'testuser',
+                'phone': '19821200413',
+                'password': '123456',
+                'full_name': 'Test User',
+                'is_admin': False
+            },
+            {
+                'username': 'admin',
+                'phone': '13916813579',
+                'password': 'admin',
+                'full_name': 'Administrator',
+                'is_admin': True
+            }
+        ]
+        
+        created_users = []
+        
+        for account in test_accounts:
+            # Check if user already exists
+            existing = User.query.filter_by(phone=account['phone']).first()
+            if existing:
+                created_users.append({
+                    'phone': account['phone'],
+                    'message': 'User already exists',
+                    'id': existing.id
+                })
+                continue
+            
+            # Create new user
+            user = User(
+                username=account['username'],
+                phone=account['phone'],
+                email=f"{account['username']}@test.com",
+                full_name=account['full_name'],
+                membership_level='standard',
+                is_admin=account['is_admin'],
+                is_active=True
+            )
+            user.set_password(account['password'])
+            
+            db.session.add(user)
+        
+        db.session.commit()
+        
+        # Fetch all created/existing users
+        for account in test_accounts:
+            user = User.query.filter_by(phone=account['phone']).first()
+            created_users.append({
+                'phone': account['phone'],
+                'username': account['username'],
+                'id': user.id,
+                'is_admin': user.is_admin
+            })
+        
+        return jsonify({
+            'message': 'Test accounts created/verified',
+            'users': created_users
+        }), 201
+    
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': str(e)}), 500

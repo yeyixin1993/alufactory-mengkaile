@@ -4,7 +4,7 @@ import { HashRouter, Routes, Route, Link, useLocation, useNavigate, useParams } 
 import { ShoppingCart, User as UserIcon, LogOut, Menu, X, Globe, Home, Package, History, Settings, FileDown, Eye, Truck, MapPin, Plus, Trash2, Edit2, CheckCircle, ArrowLeft, Lock, Save, UserCheck, Key, Info, Pencil, ChevronRight, Download } from 'lucide-react';
 import { Language, User, CartItem, Product, ProductType, ProfileConfig, PlateConfig, Order, ProfileSide, DrillHole, Address, ProfileVariant, ColorDef } from './types';
 import { TRANSLATIONS, INITIAL_PRODUCTS, PROFILE_COLORS, PROFILE_VARIANTS, PROFILE_WEIGHTS, SHIPPING_RATES } from './constants';
-import { MockService } from './services/mockStore';
+import { ApiService } from './services/apiService';
 import ProfileEditor from './components/ProfileEditor';
 import PlateEditor from './components/PlateEditor';
 import ProfileVisualizer from './components/ProfileVisualizer';
@@ -146,9 +146,9 @@ const Auth: React.FC<{ language: Language, onLogin: (user: User) => void }> = ({
     setError('');
     try {
       if (isRegister) {
-        await MockService.register({ id: phone, name, password, role: 'customer', addresses: [] });
+        await ApiService.register(phone, password, name);
       }
-      const user = await MockService.login(phone, password);
+      const user = await ApiService.login(phone, password);
       onLogin(user);
       
       const redirectTo = new URLSearchParams(location.search).get('redirect') || '/';
@@ -205,7 +205,7 @@ const UserProfile: React.FC<{
   const [printWithPrice, setPrintWithPrice] = useState(true);
 
   useEffect(() => {
-    MockService.getOrders(user.id).then(setOrders);
+    ApiService.getOrders(user.id).then(setOrders);
   }, [user.id]);
 
   const saveAddress = (addr: Address) => {
@@ -216,7 +216,7 @@ const UserProfile: React.FC<{
     const nextAddrs = isEditingAddress === 'new' ? [...user.addresses, addr] : user.addresses.map(a => a.id === addr.id ? addr : a);
     if (nextAddrs.length > 10) return alert("Maximum 10 addresses allowed");
     
-    MockService.updateUserAddresses(nextAddrs)
+    ApiService.updateUserAddresses(nextAddrs)
       .then(u => {
         setUser(u!);
         setIsEditingAddress(null);
@@ -229,13 +229,13 @@ const UserProfile: React.FC<{
 
   const deleteOrder = (orderId: string) => {
     if (window.confirm("Delete this order record?")) {
-      MockService.deleteOrder(orderId).then(() => setOrders(orders.filter(o => o.id !== orderId)));
+      ApiService.deleteOrder(orderId).then(() => setOrders(orders.filter(o => o.id !== orderId)));
     }
   };
 
   const updatePass = () => {
     if (!newPass) return;
-    MockService.changePassword(newPass).then(() => { alert("Password changed!"); setNewPass(''); });
+    ApiService.changePassword('', newPass).then(() => { alert("Password changed!"); setNewPass(''); });
   };
 
   const downloadOrderPDF = async (o: Order, withPrice: boolean) => {
@@ -288,7 +288,7 @@ const UserProfile: React.FC<{
                       <div className="text-xs text-slate-500">{a.province} {a.detail}</div>
                       <div className="flex gap-4 mt-3">
                         <button onClick={() => setIsEditingAddress(a)} className="text-blue-600 text-[10px] font-black uppercase tracking-wider">{t.edit}</button>
-                        <button onClick={() => MockService.updateUserAddresses(user.addresses.filter(x => x.id !== a.id)).then(u => setUser(u!))} className="text-red-500 text-[10px] font-black uppercase tracking-wider">{t.remove}</button>
+                        <button onClick={() => ApiService.updateUserAddresses(user.addresses.filter(x => x.id !== a.id)).then(u => setUser(u!))} className="text-red-500 text-[10px] font-black uppercase tracking-wider">{t.remove}</button>
                       </div>
                    </div>
                  ))}
@@ -667,7 +667,7 @@ const Cart: React.FC<{
         address: selectedAddress 
       };
       
-      await MockService.createOrder(newOrder);
+      await ApiService.createOrder(newOrder);
       setPdfIncludePrice(true);
       await new Promise(r => setTimeout(r, 200));
       await handleGeneratePDF(true); 
@@ -754,7 +754,7 @@ const Cart: React.FC<{
           onClose={() => setIsEditingAddress(null)} 
           onSave={(a) => {
             const next = isEditingAddress === 'new' ? [...addresses, a] : addresses.map(x => x.id === a.id ? a : x);
-            MockService.updateUserAddresses(next)
+            ApiService.updateUserAddresses(next)
               .then(u => {
                 updateUser(u!);
                 setSelectedAddressId(a.id);
@@ -937,7 +937,7 @@ const App: React.FC = () => {
   const t = TRANSLATIONS[language];
 
   useEffect(() => { 
-    MockService.getCurrentUser().then(setUser);
+    ApiService.getCurrentUser().then(setUser);
   }, []);
 
   const onEditOrder = (o: Order) => {
@@ -974,7 +974,7 @@ const App: React.FC = () => {
                      <UserIcon className="w-5 h-5 text-slate-400 group-hover:text-blue-600" />
                      <span className="text-sm font-black text-slate-800">{user.name}</span>
                   </Link>
-                  <button onClick={() => MockService.logout().then(() => setUser(null))} className="p-4 bg-red-50 text-red-400 hover:bg-red-500 hover:text-white rounded-[1.25rem] transition-all shadow-lg shadow-red-500/5"><LogOut className="w-6 h-6"/></button>
+                  <button onClick={() => ApiService.logout().then(() => setUser(null))} className="p-4 bg-red-50 text-red-400 hover:bg-red-500 hover:text-white rounded-[1.25rem] transition-all shadow-lg shadow-red-500/5"><LogOut className="w-6 h-6"/></button>
                 </div>
               ) : (
                 <Link to="/login" className="bg-slate-900 text-white px-8 py-4 rounded-[1.25rem] text-sm font-black shadow-2xl shadow-slate-900/10 hover:bg-blue-600 transition-all tracking-widest uppercase">{t.login}</Link>
