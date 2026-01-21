@@ -19,7 +19,7 @@ export interface Product {
 
 export interface Address {
   id: string;
-  name: string;
+  recipient_name: string;
   phone: string;
   province: string;
   detail: string;

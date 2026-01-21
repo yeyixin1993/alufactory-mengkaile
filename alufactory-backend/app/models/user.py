@@ -53,6 +53,7 @@ class User(db.Model):
             'created_at': self.created_at.isoformat(),
             'updated_at': self.updated_at.isoformat(),
             'last_login': self.last_login.isoformat() if self.last_login else None,
+            'addresses': [addr.to_dict() for addr in self.addresses],
         }
         return data
 

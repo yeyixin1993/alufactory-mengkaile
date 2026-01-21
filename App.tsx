@@ -209,7 +209,7 @@ const UserProfile: React.FC<{
   }, [user.id]);
 
   const saveAddress = (addr: Address) => {
-    if (!addr.name || !addr.phone || !addr.province || !addr.detail) {
+    if (!addr.recipient_name || !addr.phone || !addr.province || !addr.detail) {
       alert("Please fill all fields");
       return;
     }
@@ -330,7 +330,7 @@ const UserProfile: React.FC<{
                            <div className="text-xs font-bold text-slate-700">
                              {o.address ? (
                                <>
-                                 <div className="mb-1">{o.address.name} · {o.address.phone}</div>
+                                 <div className="mb-1">{o.address.recipient_name} · {o.address.phone}</div>
                                  <div className="text-slate-500">{o.address.province} {o.address.detail}</div>
                                </>
                              ) : (
@@ -433,9 +433,9 @@ const AddressModal: React.FC<{
 
   const validateForm = (): boolean => {
     const newErrors: Partial<Record<keyof Omit<Address, 'id'>, string>> = {};
-    
-    if (!formData.name.trim()) {
-      newErrors.name = t.recipientNameRequired || '收件人姓名不能为空';
+
+    if (!formData.recipient_name.trim()) {
+      newErrors.recipient_name = t.recipientNameRequired || '收件人姓名不能为空';
     }
     
     if (!formData.phone.trim()) {
@@ -464,7 +464,7 @@ const AddressModal: React.FC<{
     
     onSave({ 
       ...formData, 
-      id: address?.id || Math.random().toString(36).substr(2, 9) 
+      id: address?.id || `temp_${Math.random().toString(36).substr(2, 9)}`
     });
   };
 
@@ -492,13 +492,13 @@ const AddressModal: React.FC<{
             </label>
             <input 
               type="text" 
-              value={formData.name} 
-              onChange={e => handleInputChange('name', e.target.value)} 
+              value={formData.recipient_name} 
+              onChange={e => handleInputChange('recipient_name', e.target.value)} 
               className={`w-full border rounded-2xl px-4 py-4 outline-none focus:ring-4 focus:ring-blue-100 bg-slate-50/50 font-bold text-slate-700 ${
-                errors.name ? 'border-red-300' : 'border-slate-200'
+                errors.recipient_name ? 'border-red-300' : 'border-slate-200'
               }`}
             />
-            {errors.name && <p className="text-red-500 text-xs mt-1">{errors.name}</p>}
+            {errors.recipient_name && <p className="text-red-500 text-xs mt-1">{errors.recipient_name}</p>}
           </div>
           
           {/* 手机号码 */}
@@ -755,14 +755,22 @@ const Cart: React.FC<{
           onSave={(a) => {
             const next = isEditingAddress === 'new' ? [...addresses, a] : addresses.map(x => x.id === a.id ? a : x);
             ApiService.updateUserAddresses(next)
+              .then(() => {
+                // Fetch fresh user data after address update
+                return ApiService.getCurrentUser();
+              })
               .then(u => {
-                updateUser(u!);
-                setSelectedAddressId(a.id);
-                setIsEditingAddress(null);
+                if (u) {
+                  updateUser(u);
+                  setSelectedAddressId(a.id);
+                  setIsEditingAddress(null);
+                } else {
+                  throw new Error('Failed to fetch updated user');
+                }
               })
               .catch(err => {
                 console.error("Failed to update address in Cart", err);
-                alert("Failed to save address. Please check if you are logged in.");
+                alert("Failed to save address. Please ensure you are logged in.");
               });
           }} 
         />
@@ -789,7 +797,7 @@ const Cart: React.FC<{
                {addresses.map(addr => (
                  <div key={addr.id} onClick={() => setSelectedAddressId(addr.id)} className={`p-6 rounded-[2rem] border-2 cursor-pointer relative group transition-all duration-300 ${selectedAddressId === addr.id ? 'border-blue-500 bg-blue-50/50 shadow-lg shadow-blue-500/10' : 'border-slate-100 hover:border-slate-200 hover:bg-slate-50'}`}>
                    {selectedAddressId === addr.id && <div className="absolute top-6 right-6 bg-blue-600 p-1.5 rounded-full text-white shadow-xl animate-in zoom-in"><CheckCircle className="w-5 h-5"/></div>}
-                   <div className="font-black text-slate-900 text-xl mb-1">{addr.name} · {addr.phone}</div>
+                   <div className="font-black text-slate-900 text-xl mb-1">{addr.recipient_name} · {addr.phone}</div>
                    <div className="text-sm text-slate-500 leading-relaxed">{addr.province} {addr.detail}</div>
                    <button onClick={(e) => { e.stopPropagation(); setIsEditingAddress(addr); }} className="mt-4 flex items-center gap-1.5 text-xs font-black text-blue-600 bg-white border border-blue-100 px-3 py-1.5 rounded-xl hover:bg-blue-600 hover:text-white transition-all"><Pencil className="w-3 h-3"/>{t.edit}</button>
                  </div>

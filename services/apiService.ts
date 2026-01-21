@@ -70,7 +70,10 @@ class ApiServiceClass {
       this.authToken = data.access_token;
       localStorage.setItem('authToken', data.access_token);
     }
-    return {
+    
+    // Fetch complete user data including addresses
+    const user = await this.getCurrentUser();
+    return user || {
       id: data.user.id,
       name: data.user.username,
       password: '',
@@ -80,17 +83,25 @@ class ApiServiceClass {
   }
 
   async getCurrentUser() {
-    if (!this.authToken) return null;
+    // Always read fresh from localStorage in case token was just set
+    const token = localStorage.getItem('authToken');
+    if (!token) {
+      console.log('No auth token found in localStorage');
+      return null;
+    }
+    
     try {
       const data = await this.request('GET', '/auth/me');
+      const user = data.user || data;
       return {
-        id: data.id,
-        name: data.username,
+        id: user.id,
+        name: user.username,
         password: '',
         role: 'customer' as const,
-        addresses: data.addresses || [],
+        addresses: data.addresses || user.addresses || [],
       };
     } catch (e) {
+      console.error('getCurrentUser error:', e);
       return null;
     }
   }
@@ -98,7 +109,12 @@ class ApiServiceClass {
   async logout() {
     this.authToken = null;
     localStorage.removeItem('authToken');
-    await this.request('POST', '/auth/logout');
+    try {
+      await this.request('POST', '/auth/logout');
+    } catch (e) {
+      // Logout endpoint may return 401 if token expired, but we're clearing local state anyway
+      console.log('Logout completed locally');
+    }
   }
 
   async changePassword(oldPassword: string, newPassword: string) {
@@ -130,18 +146,18 @@ class ApiServiceClass {
     // Update addresses one by one
     for (const addr of addresses) {
       if (addr.id?.startsWith('temp_')) {
-        // New address
+        // New address - POST and get response
         await this.request('POST', `/users/${user.id}/addresses`, {
-          name: addr.name,
+          recipient_name: addr.recipient_name,
           phone: addr.phone,
           province: addr.province,
           detail: addr.detail,
           is_default: addr.isDefault,
         });
-      } else {
+      } else if (addr.id) {
         // Update existing
         await this.request('PUT', `/users/addresses/${addr.id}`, {
-          name: addr.name,
+          recipient_name: addr.recipient_name,
           phone: addr.phone,
           province: addr.province,
           detail: addr.detail,
@@ -150,7 +166,8 @@ class ApiServiceClass {
       }
     }
 
-    return user;
+    // Fetch fresh user data to get all updated addresses with real IDs from backend
+    return await this.getCurrentUser();
   }
 
   // ===== PRODUCTS (fallback to mock) =====
@@ -214,27 +231,66 @@ class ApiServiceClass {
 
   // ===== ORDERS =====
   async createOrder(order: Order) {
-    const data = await this.request('POST', '/orders', {
-      items: order.items,
+    // Validate address exists and has all required fields
+    if (!order.address) {
+      throw new Error('Shipping address is required');
+    }
+
+    if (!order.address.recipient_name || !order.address.phone || !order.address.province || !order.address.detail) {
+      console.error('Invalid address fields:', order.address);
+      throw new Error('Shipping address must have name, phone, province, and detail');
+    }
+
+    if (!Array.isArray(order.items) || order.items.length === 0) {
+      throw new Error('Order must have at least one item');
+    }
+
+    if (!order.total || order.total <= 0) {
+      throw new Error('Order total must be greater than 0');
+    }
+
+    // Format items to match backend expectations
+    const formattedItems = order.items.map(item => ({
+      product_id: item.product.id,
+      product_name: item.product.name.en,
+      product_type: item.product.type,
+      quantity: item.quantity,
+      unit_price: item.totalPrice / item.quantity,
+      total_price: item.totalPrice,
+      config: item.config
+    }));
+
+    const payload = {
+      items: formattedItems,
+      recipient_name: order.address.recipient_name,
+      phone: order.address.phone,
+      province: order.address.province,
+      address_detail: order.address.detail,
+      subtotal: order.total - order.shippingFee,
       shipping_fee: order.shippingFee,
-      total: order.total,
-      address_id: order.address?.id,
-    });
+      total_amount: order.total,
+    };
+
+    // Debug logging
+    console.log('Creating order with payload:', JSON.stringify(payload, null, 2));
+
+    const data = await this.request('POST', '/orders', payload);
     return {
-      id: data.id,
+      id: data.order.id,
       date: new Date().toISOString(),
       items: order.items,
-      total: data.total,
-      shippingFee: data.shipping_fee,
+      total: data.order.total_amount,
+      shippingFee: data.order.shipping_fee,
       status: 'pending' as const,
-      userId: data.user_id,
+      userId: data.order.user_id,
       address: order.address,
     };
   }
 
   async getOrders(userId: string) {
     const data = await this.request('GET', '/orders');
-    return data.map((order: any) => ({
+    const orders = data.orders || data;
+    return Array.isArray(orders) ? orders.map((order: any) => ({
       id: order.id,
       date: order.created_at,
       items: order.items || [],
@@ -243,7 +299,7 @@ class ApiServiceClass {
       status: order.status,
       userId: order.user_id,
       address: order.address,
-    }));
+    })) : [];
   }
 
   async deleteOrder(id: string) {

@@ -98,7 +98,7 @@ const FactorySheet: React.FC<FactorySheetProps> = ({ cart, user, language, order
 
   // Use passed address or fallback to default user address
   const activeAddress = address || user?.addresses.find(a => a.isDefault) || user?.addresses[0];
-  const userName = activeAddress?.name || user?.name || 'Guest User';
+  const userName = activeAddress?.recipient_name || user?.name || 'Guest User';
   const userPhone = activeAddress?.phone || user?.id || '-';
 
   const baseTotal = cart.reduce((acc, i) => acc + i.totalPrice, 0);

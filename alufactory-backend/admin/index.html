@@ -493,6 +493,45 @@
         </div>
     </div>
     
+    <!-- User Details Modal -->
+    <div id="userDetailsModal" class="modal">
+        <div class="modal-content" style="max-width: 700px; max-height: 80vh; overflow-y: auto;">
+            <div class="modal-header">用户详情</div>
+            <div class="form-group">
+                <label>用户名</label>
+                <input type="text" id="userDetailsUsername" readonly>
+            </div>
+            <div class="form-group">
+                <label>电话</label>
+                <input type="text" id="userDetailsPhone" readonly>
+            </div>
+            <div class="form-group">
+                <label>邮箱</label>
+                <input type="text" id="userDetailsEmail" readonly>
+            </div>
+            <div class="form-group">
+                <label>姓名</label>
+                <input type="text" id="userDetailsFullName" readonly>
+            </div>
+            <div class="form-group">
+                <label>会员级别</label>
+                <input type="text" id="userDetailsMembership" readonly>
+            </div>
+            <div class="form-group">
+                <label>注册时间</label>
+                <input type="text" id="userDetailsCreated" readonly>
+            </div>
+            <div class="form-group">
+                <label style="font-weight: 700; margin-bottom: 10px;">收货地址 (共<span id="userAddressCount">0</span>个)</label>
+                <div id="userAddressesList" style="border: 1px solid #d1d5db; border-radius: 6px; padding: 10px; max-height: 300px; overflow-y: auto;">
+                </div>
+            </div>
+            <div class="form-actions">
+                <button class="btn" onclick="closeModal('userDetailsModal')" style="background: #e5e7eb; color: #1f2937;">关闭</button>
+            </div>
+        </div>
+    </div>
+    
     <!-- Profile Details Modal -->
     <div id="profileDetailsModal" class="modal">
         <div class="modal-content" style="max-width: 700px; max-height: 80vh; overflow-y: auto;">
@@ -652,6 +691,7 @@
                         <td>${user.membership_level}</td>
                         <td>${user.is_active ? '激活' : '禁用'}</td>
                         <td>
+                            <button class="btn btn-primary" onclick="viewUserDetails('${user.id}')">查看详情</button>
                             <button class="btn btn-primary" onclick="editUser('${user.id}')">编辑</button>
                             ${!user.is_active ? `<button class="btn btn-success" onclick="activateUser('${user.id}')">激活</button>` : ''}
                         </td>
@@ -848,6 +888,54 @@
         function editUser(userId) {
             currentEditingUser = userId;
             document.getElementById('editUserModal').classList.add('active');
+        }
+        
+        // View user details with addresses
+        async function viewUserDetails(userId) {
+            try {
+                const response = await fetch(`${API_BASE}/admin/users?page=1&per_page=1000`, {
+                    headers: { 'Authorization': `Bearer ${authToken}` }
+                });
+                
+                if (!response.ok) throw new Error('Failed to load user');
+                
+                const data = await response.json();
+                const user = data.users.find(u => u.id === userId);
+                
+                if (!user) throw new Error('User not found');
+                
+                document.getElementById('userDetailsUsername').value = user.username;
+                document.getElementById('userDetailsPhone').value = user.phone;
+                document.getElementById('userDetailsEmail').value = user.email || '-';
+                document.getElementById('userDetailsFullName').value = user.full_name || '-';
+                document.getElementById('userDetailsMembership').value = user.membership_level;
+                document.getElementById('userDetailsCreated').value = new Date(user.created_at).toLocaleString('zh-CN');
+                
+                const addressesList = document.getElementById('userAddressesList');
+                const addresses = user.addresses || [];
+                document.getElementById('userAddressCount').textContent = addresses.length;
+                
+                if (addresses.length === 0) {
+                    addressesList.innerHTML = '<p style="color: #999; text-align: center; padding: 10px;">暂无地址</p>';
+                } else {
+                    addressesList.innerHTML = addresses.map((addr, idx) => `
+                        <div style="padding: 10px; border-bottom: 1px solid #e5e7eb; ${idx === addresses.length - 1 ? 'border-bottom: none;' : ''}">
+                            <div style="font-weight: 600; margin-bottom: 5px;">地址 ${idx + 1}${addr.is_default ? ' <span style="color: #ef4444;">(默认)</span>' : ''}</div>
+                            <div style="font-size: 13px; color: #666; line-height: 1.6;">
+                                <div><strong>收件人:</strong> ${addr.recipient_name}</div>
+                                <div><strong>电话:</strong> ${addr.phone}</div>
+                                <div><strong>省份:</strong> ${addr.province}</div>
+                                <div><strong>详细地址:</strong> ${addr.detail}</div>
+                                <div style="font-size: 12px; color: #999; margin-top: 5px;">创建: ${new Date(addr.created_at).toLocaleString('zh-CN')}</div>
+                            </div>
+                        </div>
+                    `).join('');
+                }
+                
+                document.getElementById('userDetailsModal').classList.add('active');
+            } catch (error) {
+                alert('错误: ' + error.message);
+            }
         }
         
         // Save user

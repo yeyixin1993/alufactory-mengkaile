@@ -35,10 +35,11 @@ const FactorySheetPreview: React.FC<FactorySheetPreviewProps> = ({ cart, user, l
             <button onClick={() => window.print()} className="px-4 py-2 bg-slate-700 hover:bg-slate-600 rounded text-sm flex items-center gap-2">
                <Printer className="w-4 h-4" /> {t.print}
             </button>
-            */}
+            
             <button onClick={onDownload} className="bg-blue-600 hover:bg-blue-700 px-4 py-2 rounded text-sm font-bold flex items-center gap-2 shadow-lg">
               <FileDown className="w-4 h-4" /> {t.downloadPdf}
             </button>
+            */}
           </div>
         </div>
 
