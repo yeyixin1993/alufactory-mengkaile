@@ -1,0 +1,752 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Alufactory 管理后台</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background: #f5f7fa;
+            color: #333;
+        }
+        
+        .container {
+            display: flex;
+            min-height: 100vh;
+        }
+        
+        .sidebar {
+            width: 250px;
+            background: #1f2937;
+            color: white;
+            padding: 20px;
+            position: fixed;
+            height: 100vh;
+            overflow-y: auto;
+        }
+        
+        .sidebar h1 {
+            font-size: 24px;
+            margin-bottom: 30px;
+            font-weight: 700;
+        }
+        
+        .nav-item {
+            padding: 12px 15px;
+            margin-bottom: 8px;
+            cursor: pointer;
+            border-radius: 6px;
+            transition: all 0.3s;
+        }
+        
+        .nav-item:hover {
+            background: #374151;
+        }
+        
+        .nav-item.active {
+            background: #3b82f6;
+            font-weight: 600;
+        }
+        
+        .main-content {
+            margin-left: 250px;
+            flex: 1;
+            padding: 30px;
+        }
+        
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 30px;
+        }
+        
+        .header h2 {
+            font-size: 28px;
+            color: #1f2937;
+        }
+        
+        .logout-btn {
+            background: #ef4444;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: 600;
+        }
+        
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+        
+        .stat-card {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+        
+        .stat-card h3 {
+            font-size: 14px;
+            color: #6b7280;
+            margin-bottom: 10px;
+            text-transform: uppercase;
+        }
+        
+        .stat-card .value {
+            font-size: 32px;
+            font-weight: 700;
+            color: #1f2937;
+        }
+        
+        .table-wrapper {
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+        
+        .table-header {
+            padding: 20px;
+            border-bottom: 1px solid #e5e7eb;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .search-box {
+            padding: 8px 12px;
+            border: 1px solid #d1d5db;
+            border-radius: 6px;
+            width: 300px;
+        }
+        
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        
+        th {
+            background: #f9fafb;
+            padding: 12px 20px;
+            text-align: left;
+            font-weight: 600;
+            color: #374151;
+            font-size: 14px;
+            border-bottom: 1px solid #e5e7eb;
+        }
+        
+        td {
+            padding: 15px 20px;
+            border-bottom: 1px solid #e5e7eb;
+            font-size: 14px;
+        }
+        
+        tr:hover {
+            background: #f9fafb;
+        }
+        
+        .btn {
+            padding: 8px 12px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 13px;
+            font-weight: 600;
+            margin-right: 5px;
+            transition: all 0.3s;
+        }
+        
+        .btn-primary {
+            background: #3b82f6;
+            color: white;
+        }
+        
+        .btn-primary:hover {
+            background: #2563eb;
+        }
+        
+        .btn-success {
+            background: #10b981;
+            color: white;
+        }
+        
+        .btn-danger {
+            background: #ef4444;
+            color: white;
+        }
+        
+        .btn-warning {
+            background: #f59e0b;
+            color: white;
+        }
+        
+        .status-badge {
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 12px;
+            font-weight: 600;
+        }
+        
+        .status-pending {
+            background: #fef3c7;
+            color: #92400e;
+        }
+        
+        .status-confirmed {
+            background: #dbeafe;
+            color: #1e40af;
+        }
+        
+        .status-shipped {
+            background: #d1fae5;
+            color: #065f46;
+        }
+        
+        .status-delivered {
+            background: #c7d2fe;
+            color: #3730a3;
+        }
+        
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0,0,0,0.5);
+            z-index: 1000;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .modal.active {
+            display: flex;
+        }
+        
+        .modal-content {
+            background: white;
+            padding: 30px;
+            border-radius: 8px;
+            max-width: 500px;
+            width: 90%;
+            box-shadow: 0 20px 25px -5px rgba(0,0,0,0.1);
+        }
+        
+        .modal-header {
+            font-size: 20px;
+            font-weight: 700;
+            margin-bottom: 20px;
+        }
+        
+        .form-group {
+            margin-bottom: 15px;
+        }
+        
+        .form-group label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: 600;
+            font-size: 14px;
+        }
+        
+        .form-group input,
+        .form-group select,
+        .form-group textarea {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #d1d5db;
+            border-radius: 6px;
+            font-size: 14px;
+        }
+        
+        .form-actions {
+            display: flex;
+            gap: 10px;
+            margin-top: 20px;
+        }
+        
+        .hidden {
+            display: none;
+        }
+        
+        .pagination {
+            display: flex;
+            justify-content: center;
+            gap: 5px;
+            margin-top: 20px;
+            padding: 20px;
+        }
+        
+        .pagination button {
+            padding: 8px 12px;
+            border: 1px solid #d1d5db;
+            background: white;
+            cursor: pointer;
+            border-radius: 4px;
+        }
+        
+        .pagination button.active {
+            background: #3b82f6;
+            color: white;
+            border-color: #3b82f6;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- Sidebar -->
+        <div class="sidebar">
+            <h1>Alufactory</h1>
+            <nav>
+                <div class="nav-item active" onclick="switchTab('dashboard')">📊 仪表板</div>
+                <div class="nav-item" onclick="switchTab('users')">👥 用户管理</div>
+                <div class="nav-item" onclick="switchTab('orders')">📦 订单管理</div>
+                <div class="nav-item logout-btn" onclick="logout()">🚪 退出</div>
+            </nav>
+        </div>
+        
+        <!-- Main Content -->
+        <div class="main-content">
+            <div class="header">
+                <h2 id="pageTitle">仪表板</h2>
+                <div id="userInfo" style="font-size: 14px; color: #6b7280;"></div>
+            </div>
+            
+            <!-- Dashboard -->
+            <div id="dashboard" class="content">
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <h3>总用户数</h3>
+                        <div class="value" id="totalUsers">-</div>
+                    </div>
+                    <div class="stat-card">
+                        <h3>活跃用户</h3>
+                        <div class="value" id="activeUsers">-</div>
+                    </div>
+                    <div class="stat-card">
+                        <h3>总订单数</h3>
+                        <div class="value" id="totalOrders">-</div>
+                    </div>
+                    <div class="stat-card">
+                        <h3>待处理订单</h3>
+                        <div class="value" id="pendingOrders">-</div>
+                    </div>
+                    <div class="stat-card">
+                        <h3>已发货订单</h3>
+                        <div class="value" id="shippedOrders">-</div>
+                    </div>
+                    <div class="stat-card">
+                        <h3>总收入</h3>
+                        <div class="value" id="totalRevenue">¥0</div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Users Management -->
+            <div id="users" class="content hidden">
+                <div class="table-wrapper">
+                    <div class="table-header">
+                        <h3>用户列表</h3>
+                        <input type="text" class="search-box" id="userSearch" placeholder="搜索用户...">
+                    </div>
+                    <table id="usersTable">
+                        <thead>
+                            <tr>
+                                <th>用户名</th>
+                                <th>电话</th>
+                                <th>邮箱</th>
+                                <th>会员级别</th>
+                                <th>状态</th>
+                                <th>操作</th>
+                            </tr>
+                        </thead>
+                        <tbody id="usersTableBody">
+                        </tbody>
+                    </table>
+                    <div class="pagination" id="usersPagination"></div>
+                </div>
+            </div>
+            
+            <!-- Orders Management -->
+            <div id="orders" class="content hidden">
+                <div class="table-wrapper">
+                    <div class="table-header">
+                        <h3>订单列表</h3>
+                        <select class="search-box" id="orderFilter" onchange="filterOrders()">
+                            <option value="">所有订单</option>
+                            <option value="pending">待处理</option>
+                            <option value="confirmed">已确认</option>
+                            <option value="shipped">已发货</option>
+                            <option value="delivered">已送达</option>
+                        </select>
+                    </div>
+                    <table id="ordersTable">
+                        <thead>
+                            <tr>
+                                <th>订单号</th>
+                                <th>客户</th>
+                                <th>总金额</th>
+                                <th>状态</th>
+                                <th>日期</th>
+                                <th>操作</th>
+                            </tr>
+                        </thead>
+                        <tbody id="ordersTableBody">
+                        </tbody>
+                    </table>
+                    <div class="pagination" id="ordersPagination"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Edit Order Modal -->
+    <div id="editOrderModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">编辑订单</div>
+            <div class="form-group">
+                <label>订单状态</label>
+                <select id="orderStatus">
+                    <option value="pending">待处理</option>
+                    <option value="confirmed">已确认</option>
+                    <option value="shipped">已发货</option>
+                    <option value="delivered">已送达</option>
+                    <option value="cancelled">已取消</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label>追踪号</label>
+                <input type="text" id="trackingNumber" placeholder="输入追踪号">
+            </div>
+            <div class="form-group">
+                <label>备注</label>
+                <textarea id="orderMemo" rows="3" placeholder="输入订单备注"></textarea>
+            </div>
+            <div class="form-actions">
+                <button class="btn btn-primary" onclick="saveOrder()">保存</button>
+                <button class="btn" onclick="closeModal('editOrderModal')" style="background: #e5e7eb; color: #1f2937;">取消</button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Edit User Modal -->
+    <div id="editUserModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">编辑用户</div>
+            <div class="form-group">
+                <label>会员级别</label>
+                <select id="userMembership">
+                    <option value="standard">标准</option>
+                    <option value="vip">VIP</option>
+                    <option value="vip_plus">VIP+</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label>
+                    <input type="checkbox" id="userActive"> 激活账户
+                </label>
+            </div>
+            <div class="form-actions">
+                <button class="btn btn-primary" onclick="saveUser()">保存</button>
+                <button class="btn" onclick="closeModal('editUserModal')" style="background: #e5e7eb; color: #1f2937;">取消</button>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        const API_BASE = 'http://localhost:5000/api';
+        let authToken = localStorage.getItem('authToken');
+        let currentUser = null;
+        let currentEditingOrder = null;
+        let currentEditingUser = null;
+        
+        // Initialize
+        document.addEventListener('DOMContentLoaded', function() {
+            if (!authToken) {
+                window.location.href = 'login.html';
+                return;
+            }
+            
+            getCurrentUser();
+            loadDashboard();
+        });
+        
+        // Get current user
+        async function getCurrentUser() {
+            try {
+                const response = await fetch(`${API_BASE}/auth/me`, {
+                    headers: { 'Authorization': `Bearer ${authToken}` }
+                });
+                
+                if (!response.ok) throw new Error('Unauthorized');
+                
+                const data = await response.json();
+                currentUser = data.user;
+                
+                if (!currentUser.is_admin) {
+                    alert('仅管理员可访问此页面');
+                    logout();
+                }
+                
+                document.getElementById('userInfo').textContent = `欢迎, ${currentUser.username}`;
+            } catch (error) {
+                console.error(error);
+                logout();
+            }
+        }
+        
+        // Switch tabs
+        function switchTab(tab) {
+            // Hide all content
+            document.querySelectorAll('.content').forEach(el => el.classList.add('hidden'));
+            
+            // Show selected
+            document.getElementById(tab).classList.remove('hidden');
+            
+            // Update nav
+            document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
+            event.target.classList.add('active');
+            
+            // Update title
+            const titles = {
+                'dashboard': '仪表板',
+                'users': '用户管理',
+                'orders': '订单管理'
+            };
+            document.getElementById('pageTitle').textContent = titles[tab];
+            
+            // Load data
+            if (tab === 'users') loadUsers();
+            if (tab === 'orders') loadOrders();
+        }
+        
+        // Load dashboard
+        async function loadDashboard() {
+            try {
+                const response = await fetch(`${API_BASE}/admin/statistics`, {
+                    headers: { 'Authorization': `Bearer ${authToken}` }
+                });
+                
+                if (!response.ok) throw new Error('Failed to load statistics');
+                
+                const data = await response.json();
+                
+                document.getElementById('totalUsers').textContent = data.total_users;
+                document.getElementById('activeUsers').textContent = data.active_users;
+                document.getElementById('totalOrders').textContent = data.total_orders;
+                document.getElementById('pendingOrders').textContent = data.pending_orders;
+                document.getElementById('shippedOrders').textContent = data.shipped_orders;
+                document.getElementById('totalRevenue').textContent = '¥' + data.total_revenue.toFixed(2);
+            } catch (error) {
+                console.error('Error loading dashboard:', error);
+            }
+        }
+        
+        // Load users
+        async function loadUsers(page = 1) {
+            try {
+                const response = await fetch(`${API_BASE}/admin/users?page=${page}&per_page=20`, {
+                    headers: { 'Authorization': `Bearer ${authToken}` }
+                });
+                
+                if (!response.ok) throw new Error('Failed to load users');
+                
+                const data = await response.json();
+                const tbody = document.getElementById('usersTableBody');
+                tbody.innerHTML = '';
+                
+                data.users.forEach(user => {
+                    const row = tbody.insertRow();
+                    row.innerHTML = `
+                        <td>${user.username}</td>
+                        <td>${user.phone}</td>
+                        <td>${user.email || '-'}</td>
+                        <td>${user.membership_level}</td>
+                        <td>${user.is_active ? '激活' : '禁用'}</td>
+                        <td>
+                            <button class="btn btn-primary" onclick="editUser('${user.id}')">编辑</button>
+                            ${!user.is_active ? `<button class="btn btn-success" onclick="activateUser('${user.id}')">激活</button>` : ''}
+                        </td>
+                    `;
+                });
+                
+                // Pagination
+                renderPagination('usersPagination', page, data.pages, loadUsers);
+            } catch (error) {
+                console.error('Error loading users:', error);
+            }
+        }
+        
+        // Load orders
+        async function loadOrders(page = 1, status = '') {
+            try {
+                const url = status 
+                    ? `${API_BASE}/admin/orders?page=${page}&per_page=20&status=${status}`
+                    : `${API_BASE}/admin/orders?page=${page}&per_page=20`;
+                
+                const response = await fetch(url, {
+                    headers: { 'Authorization': `Bearer ${authToken}` }
+                });
+                
+                if (!response.ok) throw new Error('Failed to load orders');
+                
+                const data = await response.json();
+                const tbody = document.getElementById('ordersTableBody');
+                tbody.innerHTML = '';
+                
+                data.orders.forEach(order => {
+                    const row = tbody.insertRow();
+                    const date = new Date(order.created_at).toLocaleDateString('zh-CN');
+                    row.innerHTML = `
+                        <td>${order.order_number}</td>
+                        <td>${order.recipient_name}</td>
+                        <td>¥${order.total_amount.toFixed(2)}</td>
+                        <td><span class="status-badge status-${order.status}">${getStatusText(order.status)}</span></td>
+                        <td>${date}</td>
+                        <td>
+                            <button class="btn btn-primary" onclick="editOrder('${order.id}')">编辑</button>
+                        </td>
+                    `;
+                });
+                
+                // Pagination
+                renderPagination('ordersPagination', page, data.pages, (p) => loadOrders(p, status));
+            } catch (error) {
+                console.error('Error loading orders:', error);
+            }
+        }
+        
+        // Edit order
+        function editOrder(orderId) {
+            currentEditingOrder = orderId;
+            document.getElementById('editOrderModal').classList.add('active');
+        }
+        
+        // Save order
+        async function saveOrder() {
+            try {
+                const response = await fetch(`${API_BASE}/admin/orders/${currentEditingOrder}/status`, {
+                    method: 'PUT',
+                    headers: {
+                        'Authorization': `Bearer ${authToken}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        status: document.getElementById('orderStatus').value,
+                        tracking_number: document.getElementById('trackingNumber').value,
+                        memo: document.getElementById('orderMemo').value
+                    })
+                });
+                
+                if (!response.ok) throw new Error('Failed to save order');
+                
+                alert('订单已保存');
+                closeModal('editOrderModal');
+                loadOrders();
+            } catch (error) {
+                alert('错误: ' + error.message);
+            }
+        }
+        
+        // Edit user
+        function editUser(userId) {
+            currentEditingUser = userId;
+            document.getElementById('editUserModal').classList.add('active');
+        }
+        
+        // Save user
+        async function saveUser() {
+            try {
+                const response = await fetch(`${API_BASE}/admin/users/${currentEditingUser}/membership`, {
+                    method: 'PUT',
+                    headers: {
+                        'Authorization': `Bearer ${authToken}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        membership_level: document.getElementById('userMembership').value
+                    })
+                });
+                
+                if (!response.ok) throw new Error('Failed to save user');
+                
+                alert('用户已保存');
+                closeModal('editUserModal');
+                loadUsers();
+            } catch (error) {
+                alert('错误: ' + error.message);
+            }
+        }
+        
+        // Activate user
+        async function activateUser(userId) {
+            try {
+                const response = await fetch(`${API_BASE}/admin/users/${userId}/activate`, {
+                    method: 'POST',
+                    headers: { 'Authorization': `Bearer ${authToken}` }
+                });
+                
+                if (!response.ok) throw new Error('Failed to activate user');
+                
+                alert('用户已激活');
+                loadUsers();
+            } catch (error) {
+                alert('错误: ' + error.message);
+            }
+        }
+        
+        // Filter orders
+        function filterOrders() {
+            const status = document.getElementById('orderFilter').value;
+            loadOrders(1, status);
+        }
+        
+        // Utilities
+        function closeModal(id) {
+            document.getElementById(id).classList.remove('active');
+        }
+        
+        function getStatusText(status) {
+            const texts = {
+                'pending': '待处理',
+                'confirmed': '已确认',
+                'shipped': '已发货',
+                'delivered': '已送达',
+                'cancelled': '已取消'
+            };
+            return texts[status] || status;
+        }
+        
+        function renderPagination(id, current, total, callback) {
+            const container = document.getElementById(id);
+            container.innerHTML = '';
+            
+            for (let i = 1; i <= total; i++) {
+                const btn = document.createElement('button');
+                btn.textContent = i;
+                if (i === current) btn.classList.add('active');
+                btn.onclick = () => callback(i);
+                container.appendChild(btn);
+            }
+        }
+        
+        function logout() {
+            localStorage.removeItem('authToken');
+            window.location.href = 'login.html';
+        }
+    </script>
+</body>
+</html>
