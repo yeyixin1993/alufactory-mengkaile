@@ -293,12 +293,31 @@ class ApiServiceClass {
     return Array.isArray(orders) ? orders.map((order: any) => ({
       id: order.id,
       date: order.created_at,
-      items: order.items || [],
-      total: order.total,
-      shippingFee: order.shipping_fee,
+      items: (order.items || []).map((item: any) => ({
+        id: item.id,
+        product: {
+          id: item.product_id,
+          type: item.product_type,
+          name: { en: item.product_name || item.product_id, cn: item.product_name || item.product_id, jp: item.product_name || item.product_id },
+          description: { en: '', cn: '', jp: '' },
+          basePrice: item.unit_price || 0,
+          imageUrl: ''
+        },
+        quantity: item.quantity,
+        config: item.config || {},
+        totalPrice: item.total_price || 0
+      })),
+      total: order.total_amount ?? order.total ?? 0,
+      shippingFee: order.shipping_fee ?? 0,
       status: order.status,
       userId: order.user_id,
-      address: order.address,
+      address: order.address || {
+        id: '',
+        recipient_name: order.recipient_name,
+        phone: order.phone,
+        province: order.province,
+        detail: order.address_detail
+      },
     })) : [];
   }
 

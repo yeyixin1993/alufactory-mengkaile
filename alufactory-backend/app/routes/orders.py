@@ -154,12 +154,12 @@ def delete_order(order_id):
     current_user_id = get_jwt_identity()
     current_user = User.query.get(current_user_id)
     
-    if not current_user.is_admin:
-        return jsonify({'error': 'Admin access required'}), 403
-    
     order = Order.query.get(order_id)
     if not order:
         return jsonify({'error': 'Order not found'}), 404
+
+    if order.user_id != current_user_id and not current_user.is_admin:
+        return jsonify({'error': 'Admin access required'}), 403
     
     try:
         db.session.delete(order)
