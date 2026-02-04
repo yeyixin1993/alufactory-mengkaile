@@ -50,7 +50,11 @@ const LanguageSwitcher: React.FC<{ current: Language, onChange: (l: Language) =>
 );
 
 // --- Robust Smart PDF Helper with Page Split Prevention ---
-const exportToPDF = async (element: HTMLElement | null, filename: string) => {
+const exportToPDF = async (
+  element: HTMLElement | null,
+  filename: string,
+  options?: { returnBase64?: boolean; skipSave?: boolean }
+) => {
   if (!element) return;
   
   // 1122px is roughly the height of an A4 page at 96 DPI
@@ -120,7 +124,14 @@ const exportToPDF = async (element: HTMLElement | null, filename: string) => {
       heightLeft -= pdfHeight;
     }
     
-    pdf.save(filename);
+    if (!options?.skipSave) {
+      pdf.save(filename);
+    }
+
+    if (options?.returnBase64) {
+      const dataUri = pdf.output('datauristring');
+      return dataUri.split(',')[1];
+    }
   } catch (e) {
     console.error("PDF Export failed", e);
   } finally {
@@ -653,11 +664,13 @@ const Cart: React.FC<{
 
   const { base: baseTotal, ship: shippingFee, total: finalTotal } = calculateTotal();
 
-  const handleGeneratePDF = async (includePrice: boolean = true) => {
+  const handleGeneratePDF = async (includePrice: boolean = true, returnBase64: boolean = false) => {
     setPdfIncludePrice(includePrice);
     await new Promise(r => setTimeout(r, 600));
     const userLabel = user?.id || user?.name || 'guest';
-    await exportToPDF(printRef.current, `${userLabel}_${finalTotal.toFixed(1)}_Mengkaile_${includePrice ? 'OrderWithPrice' : 'OrderNoPrice'}_${new Date().toISOString().split('T')[0]}.pdf`);
+    const filename = `${userLabel}_${finalTotal.toFixed(1)}_Mengkaile_${includePrice ? 'OrderWithPrice' : 'OrderNoPrice'}_${new Date().toISOString().split('T')[0]}.pdf`;
+    const pdfBase64 = await exportToPDF(printRef.current, filename, { returnBase64 });
+    return { pdfBase64, filename };
   };
 
   const handleCheckout = async () => {
@@ -680,10 +693,13 @@ const Cart: React.FC<{
         address: selectedAddress 
       };
       
-      await ApiService.createOrder(newOrder);
+      const createdOrder = await ApiService.createOrder(newOrder);
       setPdfIncludePrice(true);
       await new Promise(r => setTimeout(r, 200));
-      await handleGeneratePDF(true); 
+      const { pdfBase64, filename } = await handleGeneratePDF(true, true);
+      if (pdfBase64 && createdOrder?.id) {
+        await ApiService.uploadOrderPdf(createdOrder.id, pdfBase64, filename);
+      }
       
       alert(t.checkoutSuccess);
       setCart([]);

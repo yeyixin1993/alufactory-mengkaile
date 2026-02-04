@@ -306,6 +306,13 @@ class ApiServiceClass {
     await this.request('DELETE', `/orders/${id}`);
   }
 
+  async uploadOrderPdf(orderId: string, pdfBase64: string, pdfFilename: string) {
+    await this.request('POST', `/orders/${orderId}/pdf`, {
+      pdf_base64: pdfBase64,
+      pdf_filename: pdfFilename,
+    });
+  }
+
   isAuthenticated(): boolean {
     return !!this.authToken;
   }

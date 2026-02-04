@@ -1,8 +1,10 @@
-from flask import Blueprint, request, jsonify
+from flask import Blueprint, request, jsonify, current_app
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from datetime import datetime
-from app.models.user import db, User, Cart, CartItem, Order, OrderItem
+from app.models.user import db, User, Cart, CartItem, Order, OrderItem, Profile
 import uuid
+import os
+import base64
 
 order_bp = Blueprint('orders', __name__, url_prefix='/api/orders')
 
@@ -164,6 +166,62 @@ def delete_order(order_id):
         db.session.commit()
         
         return jsonify({'message': 'Order deleted successfully'}), 200
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': str(e)}), 500
+
+
+@order_bp.route('/<order_id>/pdf', methods=['POST'])
+@jwt_required()
+def upload_order_pdf(order_id):
+    """Upload order PDF (stores to instance/order_pdfs and associates with user profile)"""
+    current_user_id = get_jwt_identity()
+    current_user = User.query.get(current_user_id)
+
+    order = Order.query.get(order_id)
+    if not order:
+        return jsonify({'error': 'Order not found'}), 404
+
+    if order.user_id != current_user_id and not current_user.is_admin:
+        return jsonify({'error': 'Unauthorized'}), 403
+
+    data = request.get_json() or {}
+    pdf_base64 = data.get('pdf_base64')
+    pdf_filename = data.get('pdf_filename') or f"{order.order_number}.pdf"
+
+    if not pdf_base64:
+        return jsonify({'error': 'Missing pdf_base64'}), 400
+
+    # Strip data URI prefix if present
+    if isinstance(pdf_base64, str) and ',' in pdf_base64:
+        pdf_base64 = pdf_base64.split(',', 1)[1]
+
+    try:
+        pdf_bytes = base64.b64decode(pdf_base64)
+    except Exception:
+        return jsonify({'error': 'Invalid PDF data'}), 400
+
+    pdf_dir = os.path.join(current_app.instance_path, 'order_pdfs')
+    os.makedirs(pdf_dir, exist_ok=True)
+    pdf_path = os.path.join(pdf_dir, f"{order.id}.pdf")
+
+    try:
+        with open(pdf_path, 'wb') as f:
+            f.write(pdf_bytes)
+
+        profile = Profile.query.filter_by(user_id=order.user_id).first()
+        if not profile:
+            profile = Profile(user_id=order.user_id)
+            db.session.add(profile)
+
+        profile.pdf_filename = pdf_filename
+        profile.pdf_base64 = pdf_base64
+        profile.pdf_path = pdf_path
+        profile.updated_at = datetime.utcnow()
+
+        db.session.commit()
+
+        return jsonify({'message': 'PDF uploaded', 'pdf_filename': pdf_filename}), 200
     except Exception as e:
         db.session.rollback()
         return jsonify({'error': str(e)}), 500

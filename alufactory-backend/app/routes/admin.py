@@ -1,9 +1,10 @@
-from flask import Blueprint, request, jsonify, Response
+from flask import Blueprint, request, jsonify, Response, current_app, send_file
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from datetime import datetime
 from app.models.user import db, User, Order, Profile
 import uuid
 import base64
+import os
 
 admin_bp = Blueprint('admin', __name__, url_prefix='/api/admin')
 
@@ -154,6 +155,10 @@ def get_all_orders():
         user = User.query.get(order.user_id)
         profile = Profile.query.filter_by(user_id=order.user_id).first()
 
+        pdf_dir = os.path.join(current_app.instance_path, 'order_pdfs')
+        pdf_path = os.path.join(pdf_dir, f"{order.id}.pdf")
+        pdf_available = os.path.exists(pdf_path) or bool(profile and profile.pdf_base64)
+
         order_dict['user'] = {
             'id': user.id if user else None,
             'username': user.username if user else None,
@@ -162,9 +167,9 @@ def get_all_orders():
         }
         order_dict['customer_phone'] = order.phone
         order_dict['pdf'] = {
-            'filename': profile.pdf_filename if profile else None,
-            'available': bool(profile and profile.pdf_base64),
-            'url': f"/api/admin/orders/{order.id}/pdf" if profile and profile.pdf_base64 else None
+            'filename': profile.pdf_filename if profile and profile.pdf_filename else f"{order.order_number}.pdf",
+            'available': pdf_available,
+            'url': f"/api/admin/orders/{order.id}/pdf" if pdf_available else None
         }
 
         orders_data.append(order_dict)
@@ -185,6 +190,12 @@ def get_order_pdf(order_id):
     if not order:
         return jsonify({'error': 'Order not found'}), 404
 
+    pdf_dir = os.path.join(current_app.instance_path, 'order_pdfs')
+    pdf_path = os.path.join(pdf_dir, f"{order.id}.pdf")
+    if os.path.exists(pdf_path):
+        filename = f"{order.order_number}.pdf"
+        return send_file(pdf_path, mimetype='application/pdf', as_attachment=False, download_name=filename)
+
     profile = Profile.query.filter_by(user_id=order.user_id).first()
     if not profile or not profile.pdf_base64:
         return jsonify({'error': 'PDF not found'}), 404
@@ -194,7 +205,7 @@ def get_order_pdf(order_id):
     except Exception:
         return jsonify({'error': 'Invalid PDF data'}), 500
 
-    filename = profile.pdf_filename or f"order_{order.order_number}.pdf"
+    filename = profile.pdf_filename or f"{order.order_number}.pdf"
     return Response(
         pdf_bytes,
         mimetype='application/pdf',
