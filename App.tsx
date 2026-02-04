@@ -238,6 +238,19 @@ const UserProfile: React.FC<{
     ApiService.changePassword('', newPass).then(() => { alert("Password changed!"); setNewPass(''); });
   };
 
+  const getOrderTotal = (order: Order) => {
+    if (typeof order.total === 'number' && Number.isFinite(order.total)) {
+      return order.total;
+    }
+    if (Array.isArray(order.items)) {
+      return order.items.reduce((sum, item) => {
+        const itemTotal = typeof item.totalPrice === 'number' && Number.isFinite(item.totalPrice) ? item.totalPrice : 0;
+        return sum + itemTotal;
+      }, 0);
+    }
+    return 0;
+  };
+
   const downloadOrderPDF = async (o: Order, withPrice: boolean) => {
     setIsGenerating(o.id + (withPrice ? '_p' : '_np'));
     setPrintOrder(o);
@@ -308,7 +321,7 @@ const UserProfile: React.FC<{
                           <div>
                             <div className="text-xs text-slate-400 mb-1">{new Date(o.date).toLocaleString()}</div>
                             <div className="font-black text-slate-800">Order #{o.id}</div>
-                            <div className="text-lg font-black text-blue-600 mt-1">{getCurrency(language)}{o.total.toFixed(1)}</div>
+                            <div className="text-lg font-black text-blue-600 mt-1">{getCurrency(language)}{getOrderTotal(o).toFixed(1)}</div>
                           </div>
                           <div className="flex flex-wrap gap-2 mt-4 sm:mt-0">
                              {user.role === 'admin' && (
