@@ -1,8 +1,9 @@
-from flask import Blueprint, request, jsonify
+from flask import Blueprint, request, jsonify, Response
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from datetime import datetime
 from app.models.user import db, User, Order, Profile
 import uuid
+import base64
 
 admin_bp = Blueprint('admin', __name__, url_prefix='/api/admin')
 
@@ -147,12 +148,60 @@ def get_all_orders():
     
     orders_paginated = query.order_by(Order.created_at.desc()).paginate(page=page, per_page=per_page)
     
+    orders_data = []
+    for order in orders_paginated.items:
+        order_dict = order.to_dict()
+        user = User.query.get(order.user_id)
+        profile = Profile.query.filter_by(user_id=order.user_id).first()
+
+        order_dict['user'] = {
+            'id': user.id if user else None,
+            'username': user.username if user else None,
+            'phone': user.phone if user else None,
+            'full_name': user.full_name if user else None,
+        }
+        order_dict['customer_phone'] = order.phone
+        order_dict['pdf'] = {
+            'filename': profile.pdf_filename if profile else None,
+            'available': bool(profile and profile.pdf_base64),
+            'url': f"/api/admin/orders/{order.id}/pdf" if profile and profile.pdf_base64 else None
+        }
+
+        orders_data.append(order_dict)
+
     return jsonify({
-        'orders': [order.to_dict() for order in orders_paginated.items],
+        'orders': orders_data,
         'total': orders_paginated.total,
         'pages': orders_paginated.pages,
         'current_page': page
     }), 200
+
+
+@admin_bp.route('/orders/<order_id>/pdf', methods=['GET'])
+@admin_required
+def get_order_pdf(order_id):
+    """Get profile PDF associated with an order's user"""
+    order = Order.query.get(order_id)
+    if not order:
+        return jsonify({'error': 'Order not found'}), 404
+
+    profile = Profile.query.filter_by(user_id=order.user_id).first()
+    if not profile or not profile.pdf_base64:
+        return jsonify({'error': 'PDF not found'}), 404
+
+    try:
+        pdf_bytes = base64.b64decode(profile.pdf_base64)
+    except Exception:
+        return jsonify({'error': 'Invalid PDF data'}), 500
+
+    filename = profile.pdf_filename or f"order_{order.order_number}.pdf"
+    return Response(
+        pdf_bytes,
+        mimetype='application/pdf',
+        headers={
+            'Content-Disposition': f'inline; filename="{filename}"'
+        }
+    )
 
 
 @admin_bp.route('/orders/<order_id>/status', methods=['PUT'])

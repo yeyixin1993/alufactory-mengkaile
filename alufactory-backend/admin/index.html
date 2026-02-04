@@ -424,10 +424,14 @@
                         <thead>
                             <tr>
                                 <th>订单号</th>
+                                <th>用户名</th>
+                                <th>用户电话</th>
+                                <th>客户电话</th>
                                 <th>客户</th>
                                 <th>总金额</th>
                                 <th>状态</th>
                                 <th>日期</th>
+                                <th>PDF</th>
                                 <th>操作</th>
                             </tr>
                         </thead>
@@ -725,12 +729,23 @@
                 data.orders.forEach(order => {
                     const row = tbody.insertRow();
                     const date = new Date(order.created_at).toLocaleDateString('zh-CN');
+                    const userName = order.user?.username || '-';
+                    const userPhone = order.user?.phone || '-';
+                    const customerPhone = order.customer_phone || '-';
+                          const pdfLink = order.pdf?.available && order.pdf?.url
+                                ? `<button class="btn btn-success" style="padding: 6px 8px;" onclick="openOrderPdf('${order.pdf.url}', '${order.pdf.filename || ''}', false)">打开</button>
+                                    <button class="btn btn-primary" style="padding: 6px 8px;" onclick="openOrderPdf('${order.pdf.url}', '${order.pdf.filename || ''}', true)">下载</button>`
+                                : '-';
                     row.innerHTML = `
                         <td>${order.order_number}</td>
+                        <td>${userName}</td>
+                        <td>${userPhone}</td>
+                        <td>${customerPhone}</td>
                         <td>${order.recipient_name}</td>
                         <td>¥${order.total_amount.toFixed(2)}</td>
                         <td><span class="status-badge status-${order.status}">${getStatusText(order.status)}</span></td>
                         <td>${date}</td>
+                        <td>${pdfLink}</td>
                         <td>
                             <button class="btn btn-primary" onclick="editOrder('${order.id}')">编辑</button>
                         </td>
@@ -983,6 +998,33 @@
         function filterOrders() {
             const status = document.getElementById('orderFilter').value;
             loadOrders(1, status);
+        }
+
+        async function openOrderPdf(url, filename, download = false) {
+            try {
+                const response = await fetch(url, {
+                    headers: { 'Authorization': `Bearer ${authToken}` }
+                });
+
+                if (!response.ok) throw new Error('Failed to load PDF');
+
+                const blob = await response.blob();
+                const blobUrl = URL.createObjectURL(blob);
+
+                if (download) {
+                    const link = document.createElement('a');
+                    link.href = blobUrl;
+                    link.download = filename || 'document.pdf';
+                    document.body.appendChild(link);
+                    link.click();
+                    document.body.removeChild(link);
+                    URL.revokeObjectURL(blobUrl);
+                } else {
+                    window.open(blobUrl, '_blank');
+                }
+            } catch (error) {
+                alert('PDF加载失败: ' + error.message);
+            }
         }
         
         // Utilities
