@@ -908,7 +908,7 @@ const Cart: React.FC<{
                 </p>
                 <div className="flex justify-center p-4 bg-white rounded-2xl border border-slate-200">
                   <img 
-                    src="public/images/alipay-qr.jpg" 
+                    src="images/alipay-qr.jpg" 
                     alt="Alipay QR Code" 
                     className="w-32 h-32 rounded-lg"
                     onError={(e) => {
@@ -934,7 +934,7 @@ const Cart: React.FC<{
                 </p>
                 <div className="flex justify-center p-4 bg-white rounded-2xl border border-slate-200">
                   <img 
-                    src="public/images/wechatpay-qr.png" 
+                    src="images/wechatpay-qr.png" 
                     alt="WeChat QR Code" 
                     className="w-32 h-32 rounded-lg"
                     onError={(e) => {
@@ -963,7 +963,7 @@ const Cart: React.FC<{
                 </p>
                 <div className="flex justify-center p-4 bg-white rounded-2xl border border-slate-200">
                   <img 
-                    src="public/images/wechat-qr.jpg" 
+                    src="images/wechat-qr.jpg" 
                     alt="WeChat QR Code" 
                     className="w-32 h-32 rounded-lg"
                     onError={(e) => {
