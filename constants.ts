@@ -122,7 +122,14 @@ export const TRANSLATIONS: Record<Language, Record<string, string>> = {
     alreadyRegistered: 'Already have an account? Login here',
     noTransaction: 'No transaction history found',
     noAddress: 'No addresses saved. ',
-    addNewAddress: 'Click "Add New" to add New Address'
+    addNewAddress: 'Click "Add New" to add New Address',
+    alipayPayment: 'Save PDF and Pay via Alipay',
+    alipayInstructions: 'Scan the QR code below with Alipay to complete your payment',
+    wechatPayment: 'Or Pay via WeChat',
+    wechatInstructions: 'Scan the QR code below with WeChat to complete your payment',
+    wechatPhone: 'WeChat & Phone: 19821200413',
+    afterpay: 'After Your Payment',
+    afterpayinstructions: 'We will confirm your payment within 1 business day and start preparing right away. It usually takes 3-5 business days to complete your order. Please contact us via wechat if you have any questions.'
   },
   cn: {
     title: '萌开了家居 源头工厂直供',
@@ -243,7 +250,14 @@ export const TRANSLATIONS: Record<Language, Record<string, string>> = {
     alreadyRegistered: '已有账号？点击登录',
     noTransaction: '暂无交易记录',
     noAddress: '暂无保存地址',
-    addNewAddress: '点击“新增”添加新地址'
+    addNewAddress: '点击"新增"添加新地址',
+    alipayPayment: '保存PDF并通过支付宝支付',
+    alipayInstructions: '使用支付宝扫描下方二维码完成支付',
+    wechatPayment: '或通过微信支付',
+    wechatInstructions: '使用微信扫描下方二维码完成支付',
+    wechatPhone: '微信 & 电话: 19821200413',
+    afterpay:'支付完成后',
+    afterpayinstructions: '我们将在1个工作日内确认您的付款并立即开始准备。通常需要3-5个工作日来完成您的订单。如果您有任何问题，请通过微信联系我们。'
   },
   jp: {
     title: '萌开了家居 工場直販',
@@ -364,7 +378,14 @@ export const TRANSLATIONS: Record<Language, Record<string, string>> = {
     alreadyRegistered: '既にアカウントをお持ちですか？こちらからログイン',
     noTransaction: '取引履歴がありません',
     noAddress: '保存された住所がありません',
-    addNewAddress: '「新規追加」をクリックして新しい住所を追加'
+    addNewAddress: '「新規追加」をクリックして新しい住所を追加',
+    alipayPayment: 'PDFを保存してアリペイで支払う',
+    alipayInstructions: 'アリペイで下のQRコードをスキャンして支払いを完了してください',
+    wechatPayment: 'またはWeChatで支払う',
+    wechatInstructions: 'WeChatで下のQRコードをスキャンして支払いを完了してください',
+    wechatPhone: 'WeChat & Phone: 19821200413',
+    afterpay: 'お支払い後',
+    afterpayinstructions: 'お支払いを確認次第、1営業日以内に準備を開始します。通常、ご注文の完了には3-5営業日かかります。ご質問がある場合は、WeChatでお問い合わせください。'
   }
 };
 

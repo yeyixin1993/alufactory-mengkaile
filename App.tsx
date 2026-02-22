@@ -896,6 +896,87 @@ const Cart: React.FC<{
             <button onClick={handleCheckout} disabled={isExporting} className="w-full bg-blue-600 py-6 rounded-3xl font-black hover:bg-blue-500 transition-all shadow-2xl shadow-blue-600/30 disabled:bg-slate-800 disabled:text-slate-600 uppercase tracking-widest text-lg flex items-center justify-center gap-3">
               {isExporting ? <div className="w-6 h-6 border-4 border-white/30 border-t-white rounded-full animate-spin" /> : <><Download className="w-6 h-6" /> {t.checkout}</>}
             </button>
+
+            {/* Alipay Payment Section */}
+            <div className="mt-8 p-6 bg-gradient-to-br from-blue-50 to-slate-50 rounded-3xl border-2 border-blue-200 shadow-xl">
+              <div className="space-y-4">
+                <h4 className="text-lg font-black text-slate-900 text-center">
+                  {t.alipayPayment}
+                </h4>
+                <p className="text-xs text-slate-600 text-center leading-relaxed">
+                  {t.alipayInstructions} “上海暖橙黄信息科技有限公司”
+                </p>
+                <div className="flex justify-center p-4 bg-white rounded-2xl border border-slate-200">
+                  <img 
+                    src="public/images/alipay-qr.jpg" 
+                    alt="Alipay QR Code" 
+                    className="w-32 h-32 rounded-lg"
+                    onError={(e) => {
+                      (e.target as HTMLImageElement).style.display = 'none';
+                      const parent = (e.target as HTMLImageElement).parentElement;
+                      if (parent) {
+                        parent.innerHTML = '<p class="text-xs text-slate-400 italic text-center">QR Code Image (Please upload alipay-qr.jpg)</p>';
+                      }
+                    }}
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* WeChat Payment Section */}
+            <div className="mt-6 p-6 bg-gradient-to-br from-green-50 to-slate-50 rounded-3xl border-2 border-green-200 shadow-xl">
+              <div className="space-y-4">
+                <h4 className="text-lg font-black text-slate-900 text-center">
+                  {t.wechatPayment}
+                </h4>
+                <p className="text-xs text-slate-600 text-center leading-relaxed">
+                  {t.wechatInstructions}
+                </p>
+                <div className="flex justify-center p-4 bg-white rounded-2xl border border-slate-200">
+                  <img 
+                    src="public/images/wechatpay-qr.png" 
+                    alt="WeChat QR Code" 
+                    className="w-32 h-32 rounded-lg"
+                    onError={(e) => {
+                      (e.target as HTMLImageElement).style.display = 'none';
+                      const parent = (e.target as HTMLImageElement).parentElement;
+                      if (parent) {
+                        parent.innerHTML = '<p class="text-xs text-slate-400 italic text-center">QR Code Image (Please upload wechatpay-qr.png)</p>';
+                      }
+                    }}
+                  />
+                </div>
+                <p className="text-xs font-bold text-slate-700 text-center bg-green-100 py-2 px-3 rounded-2xl">
+                  {t.wechatPhone}
+                </p>
+              </div>
+            </div>
+
+            {/* WeChat Payment Section */}
+            <div className="mt-6 p-6 bg-gradient-to-br from-green-50 to-slate-50 rounded-3xl border-2 border-green-200 shadow-xl">
+              <div className="space-y-4">
+                <h4 className="text-lg font-black text-slate-900 text-center">
+                  {t.afterpay}
+                </h4>
+                <p className="text-xs text-slate-600 text-center leading-relaxed">
+                  {t.afterpayinstructions}
+                </p>
+                <div className="flex justify-center p-4 bg-white rounded-2xl border border-slate-200">
+                  <img 
+                    src="public/images/wechat-qr.jpg" 
+                    alt="WeChat QR Code" 
+                    className="w-32 h-32 rounded-lg"
+                    onError={(e) => {
+                      (e.target as HTMLImageElement).style.display = 'none';
+                      const parent = (e.target as HTMLImageElement).parentElement;
+                      if (parent) {
+                        parent.innerHTML = '<p class="text-xs text-slate-400 italic text-center">QR Code Image (Please upload wechat-qr.jpg)</p>';
+                      }
+                    }}
+                  />
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       </div>
