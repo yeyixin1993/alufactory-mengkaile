@@ -415,7 +415,7 @@
                         <select class="search-box" id="orderFilter" onchange="filterOrders()">
                             <option value="">所有订单</option>
                             <option value="pending">待处理</option>
-                            <option value="confirmed">已确认</option>
+                            <option value="confirmed">已付款</option>
                             <option value="shipped">已发货</option>
                             <option value="delivered">已送达</option>
                         </select>
@@ -428,6 +428,7 @@
                                 <th>用户电话</th>
                                 <th>客户电话</th>
                                 <th>客户</th>
+                                <th>地址</th>
                                 <th>总金额</th>
                                 <th>状态</th>
                                 <th>日期</th>
@@ -452,7 +453,7 @@
                 <label>订单状态</label>
                 <select id="orderStatus">
                     <option value="pending">待处理</option>
-                    <option value="confirmed">已确认</option>
+                    <option value="confirmed">已付款</option>
                     <option value="shipped">已发货</option>
                     <option value="delivered">已送达</option>
                     <option value="cancelled">已取消</option>
@@ -732,6 +733,7 @@
                     const userName = order.user?.username || '-';
                     const userPhone = order.user?.phone || '-';
                     const customerPhone = order.customer_phone || '-';
+                    const addressInfo = `${userName} ${order.province} ${order.address_detail} ${customerPhone}`;
                           const pdfLink = order.pdf?.available && order.pdf?.url
                                 ? `<button class="btn btn-success" style="padding: 6px 8px;" onclick="openOrderPdf('${order.pdf.url}', '${order.pdf.filename || ''}', false)">打开</button>
                                     <button class="btn btn-primary" style="padding: 6px 8px;" onclick="openOrderPdf('${order.pdf.url}', '${order.pdf.filename || ''}', true)">下载</button>`
@@ -742,6 +744,7 @@
                         <td>${userPhone}</td>
                         <td>${customerPhone}</td>
                         <td>${order.recipient_name}</td>
+                        <td>${addressInfo}</td>
                         <td>¥${order.total_amount.toFixed(2)}</td>
                         <td><span class="status-badge status-${order.status}">${getStatusText(order.status)}</span></td>
                         <td>${date}</td>
@@ -1035,7 +1038,7 @@
         function getStatusText(status) {
             const texts = {
                 'pending': '待处理',
-                'confirmed': '已确认',
+                'confirmed': '已付款',
                 'shipped': '已发货',
                 'delivered': '已送达',
                 'cancelled': '已取消'
