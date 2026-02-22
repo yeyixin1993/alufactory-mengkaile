@@ -21,9 +21,9 @@ const FactorySheet: React.FC<FactorySheetProps> = ({ cart, user, language, order
   const t = TRANSLATIONS[language];
   const currency = getCurrency(language);
  
-// Summarize profiles for a sheet: length, model, color, section (finish + color), quantity, remarks
+// Summarize profiles for a sheet: length, model, color, finish, tap, quantity, remarks
   const profileSummary = React.useMemo(() => {
-    type Row = { length: string; model: string; color: string; section: string; quantity: number; remark: string; key: string };
+    type Row = { length: string; model: string; color: string; section: string; tap: string; quantity: number; remark: string; key: string };
     const map = new Map<string, Row>();
 
     cart.forEach(item => {
@@ -39,7 +39,7 @@ const FactorySheet: React.FC<FactorySheetProps> = ({ cart, user, language, order
       const finishLabel = cfg.finish === 'oxidized' ? t.finishOxidized :
                           cfg.finish === 'powder' ? t.finishPowder :
                           cfg.finish === 'electrophoretic' ? t.finishElectrophoretic : cfg.finish;
-      const section = `${finishLabel}${colorName ? ' ' + colorName : ''}`.trim();
+      const section = `${finishLabel}`.trim();
 
       // --- UPDATED DETECTION LOGIC START ---
 
@@ -71,14 +71,11 @@ const FactorySheet: React.FC<FactorySheetProps> = ({ cart, user, language, order
 
       // 5. Create Remark
       let remark = '无额外加工';
-      if (processingState === 'raw') {
-        remark = '无额外加工';
-      } else if (processingState === 'tap') {
-        if (bothSideTap) remark = '两端有攻丝';
-        else remark = '一端有攻丝';
-      } else {
+      if (processingState === 'drill') {
         remark = '加工见下图';
       }
+
+      const tapLabel = bothSideTap ? '两端攻丝' : oneSideTap ? '一端攻丝' : '无';
 
       // --- UPDATED DETECTION LOGIC END ---
 
@@ -89,7 +86,7 @@ const FactorySheet: React.FC<FactorySheetProps> = ({ cart, user, language, order
         existing.quantity += qty;
         if (!existing.remark && remark) existing.remark = remark;
       } else {
-        map.set(key, { length, model, color: colorName, section, quantity: qty, remark, key });
+        map.set(key, { length, model, color: colorName, section, tap: tapLabel, quantity: qty, remark, key });
       }
     });
 
@@ -166,7 +163,8 @@ const FactorySheet: React.FC<FactorySheetProps> = ({ cart, user, language, order
                 <th className="p-2 border border-slate-200">长度 (mm)</th>
                 <th className="p-2 border border-slate-200">Profile Model</th>
                 <th className="p-2 border border-slate-200">Color</th>
-                <th className="p-2 border border-slate-200">Section</th>
+                <th className="p-2 border border-slate-200">Finish</th>
+                <th className="p-2 border border-slate-200">Tap</th>
                 <th className="p-2 border border-slate-200">Quantity</th>
                 <th className="p-2 border border-slate-200">Remarks</th>
               </tr>
@@ -182,11 +180,13 @@ const FactorySheet: React.FC<FactorySheetProps> = ({ cart, user, language, order
                     <td className="p-2 border border-slate-100">{r.model}</td>
                     <td className="p-2 border border-slate-100">{r.color}</td>
                     <td className="p-2 border border-slate-100">{r.section}</td>
+                    <td className="p-2 border border-slate-100">{r.tap}</td>
                     <td className="p-2 border border-slate-100">{r.quantity}</td>
                     <td className="p-2 border border-slate-100">{r.remark}</td>
                   </tr>
                 ))}
                 <tr className="bg-white">
+                  <td className="p-2 border border-slate-100"></td>
                   <td className="p-2 border border-slate-100"></td>
                   <td className="p-2 border border-slate-100"></td>
                   <td className="p-2 border border-slate-100"></td>
