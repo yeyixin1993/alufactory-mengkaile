@@ -51,7 +51,7 @@ python init_db.py
 输出应该显示:
 ```
 ✓ Database tables created
-✓ Initial admin user created (phone: 13800138000, password: admin123)
+✓ Initial admin user created (phone: 13916813579, password: admin)
 ✓ Demo customer user created (phone: 18888888888, password: demo123)
 ```
 
@@ -71,8 +71,8 @@ python run.py
 打开浏览器访问: **http://localhost:5000/admin/login.html**
 
 登录凭证:
-- 电话: 13800138000
-- 密码: admin123
+- 电话: 13916813579
+- 密码: admin
 
 ## API 测试
 
@@ -80,7 +80,7 @@ python run.py
 ```bash
 curl -X POST http://localhost:5000/api/auth/login \
   -H "Content-Type: application/json" \
-  -d '{"phone": "13800138000", "password": "admin123"}'
+  -d '{"phone": "13916813579", "password": "admin"}'
 ```
 
 ### 使用 Postman
@@ -89,8 +89,8 @@ curl -X POST http://localhost:5000/api/auth/login \
 3. Body (JSON):
 ```json
 {
-  "phone": "13800138000",
-  "password": "admin123"
+  "phone": "13916813579",
+  "password": "admin"
 }
 ```
 

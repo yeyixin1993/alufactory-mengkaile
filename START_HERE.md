@@ -99,8 +99,8 @@ Password: demo123
 
 ### Admin (Optional)
 ```
-Phone: 13800138000
-Password: admin123
+Phone: 13916813579
+Password: admin
 Go to: http://localhost:5000/admin/login.html
 ```
 

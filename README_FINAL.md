@@ -140,7 +140,7 @@ npm run dev
 ### Browser
 - Frontend: `http://localhost:5173`
 - Admin: `http://localhost:5000/admin/login.html`
-- Test Phone: `18888888888` or `13800138000` (admin)
+- Test Phone: `18888888888` or `13916813579` (admin)
 
 ---
 
@@ -251,8 +251,8 @@ Username: Demo Customer
 
 ### Admin Account
 ```
-Phone: 13800138000
-Password: admin123
+Phone: 13916813579
+Password: admin
 Username: System Admin
 ```
 

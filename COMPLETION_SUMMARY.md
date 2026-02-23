@@ -299,8 +299,8 @@ Your backend automatically provides:
 
 **Try it:**
 1. Go to `http://localhost:5000/admin/login.html`
-2. Phone: `13800138000`
-3. Password: `admin123`
+2. Phone: `13916813579`
+3. Password: `admin`
 
 ---
 

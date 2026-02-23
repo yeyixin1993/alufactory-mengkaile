@@ -47,8 +47,8 @@ npm run dev
 
 ### 4. Admin Dashboard (Optional)
 - Open `http://localhost:5000/admin/login.html`
-- Phone: `13800138000`
-- Password: `admin123`
+- Phone: `13916813579`
+- Password: `admin`
 - Manage users and orders
 
 ## 🔧 Configuration

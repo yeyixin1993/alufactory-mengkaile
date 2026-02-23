@@ -120,8 +120,8 @@ python run.py
 
 ### 6. 访问管理界面
 - URL: http://localhost:5000/admin/login.html
-- 用户: 13800138000
-- 密码: admin123
+- 用户: 13916813579
+- 密码: admin
 
 ## 📊 数据库表详情
 
@@ -155,8 +155,8 @@ python run.py
 ## 💾 测试用户
 
 ### 管理员
-- 电话: 13800138000
-- 密码: admin123
+- 电话: 13916813579
+- 密码: admin
 - 权限: 完整管理权限
 
 ### 普通用户
@@ -172,8 +172,8 @@ const response = await fetch('http://localhost:5000/api/auth/login', {
   method: 'POST',
   headers: { 'Content-Type': 'application/json' },
   body: JSON.stringify({ 
-    phone: '13800138000', 
-    password: 'admin123' 
+    phone: '13916813579', 
+    password: 'admin' 
   })
 });
 const { access_token } = await response.json();

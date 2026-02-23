@@ -41,8 +41,8 @@ Username: Demo Customer
 
 ### Admin
 ```
-Phone: 13800138000
-Password: admin123
+Phone: 13916813579
+Password: admin
 Username: System Admin
 ```
 

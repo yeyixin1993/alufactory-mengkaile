@@ -27,17 +27,17 @@ def init_db():
         if not admin:
             admin = User(
                 username='admin',
-                phone='13800138000',
+                phone='13916813579',
                 email='admin@alufactory.com',
                 full_name='Administrator',
                 is_admin=True,
                 is_active=True,
                 membership_level='vip_plus'
             )
-            admin.set_password('admin123')
+            admin.set_password('admin')
             db.session.add(admin)
             db.session.commit()
-            print("✓ Initial admin user created (phone: 13800138000, password: admin123)")
+            print("✓ Initial admin user created (phone: 13916813579, password: admin)")
         
         # Add demo customer
         customer = User.query.filter_by(username='demo_customer').first()

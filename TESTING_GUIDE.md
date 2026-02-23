@@ -323,8 +323,8 @@ Logout and try old password `test123`
 Open `http://localhost:5000/admin/login.html`
 
 ### Step 2: Login
-Phone: `13800138000`
-Password: `admin123`
+Phone: `13916813579`
+Password: `admin`
 
 **Expected:**
 - Admin dashboard loads

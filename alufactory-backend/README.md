@@ -92,7 +92,7 @@ python init_db.py
 
 This creates:
 - All necessary database tables
-- Initial admin user (phone: 13800138000, password: admin123)
+- Initial admin user (phone: 13916813579, password: admin)
 - Demo customer user (phone: 18888888888, password: demo123)
 
 ### 6. Run the Backend
@@ -150,8 +150,8 @@ The backend will be available at `http://localhost:5000`
 ### Access
 1. Open `admin/login.html` in a web browser (or navigate to admin folder)
 2. Login with credentials:
-   - Phone: 13800138000
-   - Password: admin123
+   - Phone: 13916813579
+   - Password: admin
 
 ### Features
 - **Dashboard**: View statistics (users, orders, revenue)
@@ -224,7 +224,7 @@ The backend will be available at `http://localhost:5000`
 const response = await fetch('http://localhost:5000/api/auth/login', {
   method: 'POST',
   headers: { 'Content-Type': 'application/json' },
-  body: JSON.stringify({ phone: '13800138000', password: 'admin123' })
+  body: JSON.stringify({ phone: '13916813579', password: 'admin' })
 });
 
 const data = await response.json();
@@ -251,7 +251,7 @@ const response = await fetch('http://localhost:5000/api/orders', {
   body: JSON.stringify({
     items: [...],
     recipient_name: 'John Doe',
-    phone: '13800138000',
+    phone: '13916813579',
     province: 'Beijing',
     address_detail: '123 Main St',
     subtotal: 100,
