@@ -953,6 +953,7 @@
                 alert('订单已保存');
                 closeModal('editOrderModal');
                 loadOrders();
+                loadDashboard();
             } catch (error) {
                 alert('错误: ' + error.message);
             }
