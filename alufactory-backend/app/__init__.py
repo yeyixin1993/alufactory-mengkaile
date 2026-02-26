@@ -24,7 +24,9 @@ def create_app(config_name='development'):
     
     # Initialize extensions
     db.init_app(app)
-    CORS(app, origins=['http://localhost:3000', 'http://localhost:5173', '*'])
+    cors_origins_raw = os.getenv('CORS_ORIGINS', '')
+    cors_origins = [o.strip() for o in cors_origins_raw.split(',') if o.strip()]
+    CORS(app, origins=cors_origins or ['*'])
     JWTManager(app)
     
     # Register blueprints
