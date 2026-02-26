@@ -23,12 +23,19 @@ const resolveApiBaseUrl = () => {
   return 'http://localhost:5000/api';
 };
 
-const API_BASE_URL = resolveApiBaseUrl();
-
 class ApiServiceClass {
   private authToken: string | null = localStorage.getItem('authToken');
+  private apiBaseUrl: string | null = null;
+
+  private getApiBaseUrl(): string {
+    if (!this.apiBaseUrl) {
+      this.apiBaseUrl = resolveApiBaseUrl();
+    }
+    return this.apiBaseUrl;
+  }
 
   private async request(method: string, endpoint: string, data?: any) {
+    const API_BASE_URL = this.getApiBaseUrl();
     const options: RequestInit = {
       method,
       headers: {
