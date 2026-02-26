@@ -1,7 +1,29 @@
 // Real API Service connecting to Flask backend
 import { Order, User, Address } from '../types';
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+const normalizeBaseUrl = (url: string) => url.replace(/\/+$/, '');
+
+const resolveApiBaseUrl = () => {
+  const envUrl = (import.meta.env.VITE_API_URL || '').trim();
+  if (envUrl) {
+    return normalizeBaseUrl(envUrl);
+  }
+
+  if (typeof window !== 'undefined') {
+    const runtimeUrl = (window as any).__API_BASE_URL__;
+    if (typeof runtimeUrl === 'string' && runtimeUrl.trim()) {
+      return normalizeBaseUrl(runtimeUrl.trim());
+    }
+
+    if (window.location?.origin) {
+      return `${normalizeBaseUrl(window.location.origin)}/api`;
+    }
+  }
+
+  return 'http://localhost:5000/api';
+};
+
+const API_BASE_URL = resolveApiBaseUrl();
 
 class ApiServiceClass {
   private authToken: string | null = localStorage.getItem('authToken');
