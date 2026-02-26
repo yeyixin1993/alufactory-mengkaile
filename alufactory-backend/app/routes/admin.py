@@ -135,6 +135,115 @@ def update_membership(user_id):
         return jsonify({'error': str(e)}), 500
 
 
+@admin_bp.route('/users/<user_id>/reset-password', methods=['POST'])
+@admin_required
+def reset_user_password(user_id):
+    """Reset user password"""
+    user = User.query.get(user_id)
+    if not user:
+        return jsonify({'error': 'User not found'}), 404
+    
+    data = request.get_json()
+    new_password = data.get('new_password', '123456')
+    
+    try:
+        user.set_password(new_password)
+        user.updated_at = datetime.utcnow()
+        db.session.commit()
+        
+        return jsonify({
+            'message': 'Password reset successfully',
+            'user': user.to_dict()
+        }), 200
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': str(e)}), 500
+
+
+@admin_bp.route('/users/create', methods=['POST'])
+@admin_required
+def create_user():
+    """Create a new user manually"""
+    data = request.get_json()
+    
+    # Validation
+    if not data or not data.get('username') or not data.get('phone') or not data.get('password'):
+        return jsonify({'error': 'Missing required fields: username, phone, password'}), 400
+    
+    # Check if user already exists
+    if User.query.filter_by(username=data['username']).first():
+        return jsonify({'error': 'Username already exists'}), 409
+    
+    if User.query.filter_by(phone=data['phone']).first():
+        return jsonify({'error': 'Phone number already registered'}), 409
+    
+    try:
+        # Create new user
+        user = User(
+            username=data['username'],
+            phone=data['phone'],
+            email=data.get('email'),
+            full_name=data.get('full_name', ''),
+            membership_level='standard',
+            is_active=True
+        )
+        user.set_password(data['password'])
+        
+        db.session.add(user)
+        db.session.commit()
+        
+        return jsonify({
+            'message': 'User created successfully',
+            'user': user.to_dict()
+        }), 201
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': str(e)}), 500
+
+
+@admin_bp.route('/users/<user_id>/delete', methods=['DELETE'])
+@admin_required
+def delete_user(user_id):
+    """Delete user with admin password confirmation"""
+    current_user_id = get_jwt_identity()
+    current_user = User.query.get(current_user_id)
+    
+    if not current_user:
+        return jsonify({'error': 'Admin user not found'}), 404
+    
+    # Get target user
+    target_user = User.query.get(user_id)
+    if not target_user:
+        return jsonify({'error': 'User not found'}), 404
+    
+    # Prevent admin from deleting themselves
+    if current_user_id == user_id:
+        return jsonify({'error': 'Cannot delete your own account'}), 400
+    
+    # Verify admin password
+    data = request.get_json()
+    admin_password = data.get('admin_password')
+    
+    if not admin_password:
+        return jsonify({'error': 'Admin password is required'}), 400
+    
+    if not current_user.check_password(admin_password):
+        return jsonify({'error': 'Invalid admin password'}), 401
+    
+    try:
+        # Delete the user (cascade will handle related records)
+        db.session.delete(target_user)
+        db.session.commit()
+        
+        return jsonify({
+            'message': 'User deleted successfully',
+            'deleted_user_id': user_id
+        }), 200
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': str(e)}), 500
+
+
 @admin_bp.route('/orders', methods=['GET'])
 @admin_required
 def get_all_orders():
