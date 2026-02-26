@@ -25,15 +25,16 @@ def create_app(config_name='development'):
     # Initialize extensions
     db.init_app(app)
     
-    # --- 修改开始：强制允许所有来源 ---
-    # 暂时忽略环境变量，直接开放所有 CORS，解决 OPTIONS 404 问题
-    CORS(app, resources={r"/*": {"origins": "*"}}, supports_credentials=True)
-
-    #cors_origins_raw = os.getenv('CORS_ORIGINS', '')
-    #cors_origins = [o.strip() for o in cors_origins_raw.split(',') if o.strip()]
-    #CORS(app, origins=cors_origins or ['*'])
-    # --- 修改结束 ---
-
+    # CORS configuration with explicit settings
+    CORS(app, 
+         resources={r"/*": {
+             "origins": "*",
+             "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+             "allow_headers": ["Content-Type", "Authorization"],
+             "expose_headers": ["Content-Type", "Authorization"],
+             "supports_credentials": False,
+             "max_age": 3600
+         }})
     
     JWTManager(app)
     
