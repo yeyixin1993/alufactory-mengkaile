@@ -6,7 +6,9 @@ import { Language, User, CartItem, Product, ProductType, ProfileConfig, PlateCon
 import { TRANSLATIONS, INITIAL_PRODUCTS, PROFILE_COLORS, PROFILE_VARIANTS, PROFILE_WEIGHTS, SHIPPING_RATES } from './constants';
 import { ApiService } from './services/apiService';
 import ProfileEditor from './components/ProfileEditor';
-import PlateEditor from './components/PlateEditor';
+import SharedBoardEditor from './components/SharedBoardEditor';
+import FrameEditor from './components/FrameEditor';
+import ShufateCabinetEditor from './components/ShufateCabinetEditor';
 import ProfileVisualizer from './components/ProfileVisualizer';
 import FactorySheetPreview from './components/FactorySheetPreview';
 import FactorySheet from './components/FactorySheet';
@@ -1031,8 +1033,21 @@ const ProductDetail: React.FC<{
               draftProfiles={draftProfiles}
               setDraftProfiles={setDraftProfiles}
             />
-          ) : product.type === ProductType.PEGBOARD ? (
-            <PlateEditor language={language} onSave={() => {}} />
+          ) : product.type === ProductType.PEGBOARD || product.type === ProductType.CABINET_DOOR ? (
+            <SharedBoardEditor
+              product={product}
+              onAddToCart={(item) => onAddToCart(item)}
+            />
+          ) : product.type === ProductType.FRAME ? (
+            <FrameEditor
+              product={product}
+              onAddToCart={(item) => onAddToCart(item)}
+            />
+          ) : product.type === ProductType.SHUFATE_CABINET ? (
+            <ShufateCabinetEditor
+              product={product}
+              onAddToCart={(item) => onAddToCart(item)}
+            />
           ) : (
             <div className="p-20 text-center bg-white rounded-[3rem] border-4 border-dashed border-slate-100 flex flex-col items-center">
                <div className="w-20 h-20 bg-slate-50 rounded-full flex items-center justify-center mb-6">

@@ -535,10 +535,22 @@ export const INITIAL_PRODUCTS: Product[] = [
     description: { en: 'Custom frames for your art.', cn: '为您的艺术品定制相框。', jp: 'アート用のカスタムフレーム。' },
     basePrice: 80,
     imageUrl: 'https://picsum.photos/400/300?random=4'
+  },
+  {
+    id: 'p5',
+    type: ProductType.SHUFATE_CABINET,
+    name: { en: 'Shufate Modular Cabinet', cn: '铝型材书法特柜子', jp: 'シューファットモジュラーキャビネット' },
+    description: {
+      en: 'Modular aluminum-profile cabinet inspired by IKEA style, supports 1/2/3-column auto layout.',
+      cn: '基于铝型材的宜家书法特风格模块柜，支持1/2/3列自动构造与预览。',
+      jp: 'IKEAスタイルを参考にしたアルミプロファイル製モジュラー収納、1/2/3列の自動レイアウト対応。'
+    },
+    basePrice: 30,
+    imageUrl: 'https://images.unsplash.com/photo-1595515106867-bfe0ad5ea4f4?q=80&w=800&auto=format&fit=crop'
   }
 ];
 
-export const PLATE_WIDTH = 2500;
-export const PLATE_HEIGHT = 1250;
+export const PLATE_WIDTH = 2450;
+export const PLATE_HEIGHT = 1240;
 export const PLATE_MARGIN = 5;
 export const ITEM_GAP = 5;

@@ -23,6 +23,10 @@ const resolveApiBaseUrl = () => {
   return 'http://localhost:5000/api';
 };
 
+type RequestOptions = {
+  handle401?: 'redirect' | 'ignore';
+};
+
 class ApiServiceClass {
   private authToken: string | null = localStorage.getItem('authToken');
   private apiBaseUrl: string | null = null;
@@ -34,7 +38,7 @@ class ApiServiceClass {
     return this.apiBaseUrl;
   }
 
-  private async request(method: string, endpoint: string, data?: any) {
+  private async request(method: string, endpoint: string, data?: any, reqOptions?: RequestOptions) {
     const API_BASE_URL = this.getApiBaseUrl();
     const options: RequestInit = {
       method,
@@ -57,7 +61,7 @@ class ApiServiceClass {
     const response = await fetch(`${API_BASE_URL}${endpoint}`, options);
 
     if (!response.ok) {
-      if (response.status === 401) {
+      if (response.status === 401 && (reqOptions?.handle401 ?? 'redirect') === 'redirect') {
         // Token expired
         localStorage.removeItem('authToken');
         this.authToken = null;
@@ -359,6 +363,18 @@ class ApiServiceClass {
       pdf_base64: pdfBase64,
       pdf_filename: pdfFilename,
     });
+  }
+
+  async getSharedBoardSettings(productType: 'PEGBOARD' | 'CABINET_DOOR') {
+    return this.request('GET', `/orders/shared-board/settings?product_type=${productType}`, undefined, { handle401: 'ignore' });
+  }
+
+  async getSharedBoardReservations(productType: 'PEGBOARD' | 'CABINET_DOOR') {
+    return this.request('GET', `/orders/shared-board/reservations?product_type=${productType}`, undefined, { handle401: 'ignore' });
+  }
+
+  async getFrameOptions() {
+    return this.request('GET', '/orders/frame/options', undefined, { handle401: 'ignore' });
   }
 
   isAuthenticated(): boolean {

@@ -288,3 +288,55 @@ class Profile(db.Model):
             data['pdf_base64'] = self.pdf_base64
         
         return data
+
+
+class SystemSetting(db.Model):
+    __tablename__ = 'system_settings'
+
+    key = db.Column(db.String(100), primary_key=True)
+    value = db.Column(db.JSON, nullable=False)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    def to_dict(self):
+        return {
+            'key': self.key,
+            'value': self.value,
+            'updated_at': self.updated_at.isoformat() if self.updated_at else None,
+        }
+
+
+class FrameOption(db.Model):
+    __tablename__ = 'frame_options'
+
+    id = db.Column(db.String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    style = db.Column(db.String(100), nullable=False)
+    frame_width_cm = db.Column(db.Float, nullable=True)
+    frame_height_cm = db.Column(db.Float, nullable=True)
+    material = db.Column(db.String(100), nullable=False)
+    color = db.Column(db.String(100), nullable=False)
+    has_mat = db.Column(db.Boolean, default=False)
+    mat_outer_width_cm = db.Column(db.Float, nullable=True)
+    mat_outer_height_cm = db.Column(db.Float, nullable=True)
+    mat_inner_width_cm = db.Column(db.Float, nullable=True)
+    mat_inner_height_cm = db.Column(db.Float, nullable=True)
+    is_active = db.Column(db.Boolean, default=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'style': self.style,
+            'frame_width_cm': self.frame_width_cm,
+            'frame_height_cm': self.frame_height_cm,
+            'material': self.material,
+            'color': self.color,
+            'has_mat': self.has_mat,
+            'mat_outer_width_cm': self.mat_outer_width_cm,
+            'mat_outer_height_cm': self.mat_outer_height_cm,
+            'mat_inner_width_cm': self.mat_inner_width_cm,
+            'mat_inner_height_cm': self.mat_inner_height_cm,
+            'is_active': self.is_active,
+            'created_at': self.created_at.isoformat(),
+            'updated_at': self.updated_at.isoformat(),
+        }

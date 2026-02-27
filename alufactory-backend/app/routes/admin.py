@@ -1,7 +1,7 @@
 from flask import Blueprint, request, jsonify, Response, current_app, send_file
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from datetime import datetime
-from app.models.user import db, User, Order, Profile
+from app.models.user import db, User, Order, OrderItem, Profile, SystemSetting, FrameOption
 import uuid
 import base64
 import os
@@ -251,10 +251,13 @@ def get_all_orders():
     page = request.args.get('page', 1, type=int)
     per_page = request.args.get('per_page', 50, type=int)
     status = request.args.get('status')
+    product_type = request.args.get('product_type')
     
     query = Order.query
     if status:
         query = query.filter_by(status=status)
+    if product_type:
+        query = query.join(OrderItem).filter(OrderItem.product_type == product_type).distinct()
     
     orders_paginated = query.order_by(Order.created_at.desc()).paginate(page=page, per_page=per_page)
     
@@ -289,6 +292,75 @@ def get_all_orders():
         'pages': orders_paginated.pages,
         'current_page': page
     }), 200
+
+
+@admin_bp.route('/shared-board/settings', methods=['PUT'])
+@admin_required
+def update_shared_board_settings():
+    data = request.get_json() or {}
+    product_type = (data.get('product_type') or '').upper()
+    if product_type not in ['PEGBOARD', 'CABINET_DOOR']:
+        return jsonify({'error': 'Invalid product_type'}), 400
+
+    key = f'shared_board_{product_type.lower()}_settings'
+    setting = SystemSetting.query.filter_by(key=key).first()
+    if not setting:
+        setting = SystemSetting(key=key, value={})
+        db.session.add(setting)
+
+    setting.value = {
+        'board_width_mm': data.get('board_width_mm', 2450),
+        'board_height_mm': data.get('board_height_mm', 1240),
+        'min_gap_mm': data.get('min_gap_mm', 5),
+        'group_factor': data.get('group_factor', 1),
+        'thickness_options': data.get('thickness_options', [2] if product_type == 'CABINET_DOOR' else [1, 2, 3, 4, 5]),
+        'thickness_price_map': data.get('thickness_price_map', {'2': 700} if product_type == 'CABINET_DOOR' else {'1': 780, '2': 1080, '3': 1380, '4': 1680, '5': 1980}),
+    }
+
+    try:
+        db.session.commit()
+        return jsonify({'message': 'Settings updated', 'setting': setting.to_dict()}), 200
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': str(e)}), 500
+
+
+@admin_bp.route('/frame/options', methods=['GET'])
+@admin_required
+def get_admin_frame_options():
+    rows = FrameOption.query.order_by(FrameOption.created_at.desc()).all()
+    return jsonify({'options': [row.to_dict() for row in rows]}), 200
+
+
+@admin_bp.route('/frame/options', methods=['POST'])
+@admin_required
+def create_frame_option():
+    data = request.get_json() or {}
+
+    if not data.get('style') or not data.get('material') or not data.get('color'):
+        return jsonify({'error': 'style, material, color are required'}), 400
+
+    row = FrameOption(
+        style=data['style'],
+        frame_width_cm=data.get('frame_width_cm'),
+        frame_height_cm=data.get('frame_height_cm'),
+        material=data['material'],
+        color=data['color'],
+        has_mat=bool(data.get('has_mat', False)),
+        mat_outer_width_cm=data.get('mat_outer_width_cm'),
+        mat_outer_height_cm=data.get('mat_outer_height_cm'),
+        mat_inner_width_cm=data.get('mat_inner_width_cm'),
+        mat_inner_height_cm=data.get('mat_inner_height_cm'),
+        is_active=bool(data.get('is_active', True)),
+    )
+
+    try:
+        db.session.add(row)
+        db.session.commit()
+        return jsonify({'message': 'Frame option created', 'option': row.to_dict()}), 201
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': str(e)}), 500
 
 
 @admin_bp.route('/orders/<order_id>/pdf', methods=['GET'])
@@ -447,3 +519,164 @@ def get_profile_details(profile_id):
     return jsonify({
         'profile': profile_dict
     }), 200
+
+
+# ===== SYSTEM SETTINGS =====
+@admin_bp.route('/settings/shared-board/<product_type>', methods=['GET', 'PUT'])
+@admin_required
+def manage_shared_board_settings(product_type):
+    """Get or update shared board settings"""
+    if product_type.upper() not in ['PEGBOARD', 'CABINET_DOOR']:
+        return jsonify({'error': 'Invalid product_type'}), 400
+    
+    key = f'shared_board_{product_type.lower()}_settings'
+    
+    if request.method == 'GET':
+        row = SystemSetting.query.filter_by(key=key).first()
+        if not row:
+            return jsonify({
+                'message': 'Using defaults',
+                'value': {
+                    'PEGBOARD': {
+                        'board_width_mm': 2450,
+                        'board_height_mm': 1240,
+                        'min_gap_mm': 5,
+                        'group_factor': 1,
+                        'thickness_options': [1, 2, 3, 4, 5],
+                        'thickness_price_map': {'1': 780, '2': 1080, '3': 1380, '4': 1680, '5': 1980},
+                    },
+                    'CABINET_DOOR': {
+                        'board_width_mm': 2450,
+                        'board_height_mm': 1240,
+                        'min_gap_mm': 5,
+                        'group_factor': 1,
+                        'thickness_options': [2],
+                        'thickness_price_map': {'2': 700},
+                    },
+                }.get(product_type.upper())
+            }), 200
+        
+        return jsonify(row.to_dict()), 200
+    
+    # PUT: Update settings
+    data = request.get_json()
+    if not data:
+        return jsonify({'error': 'Missing request body'}), 400
+    
+    try:
+        row = SystemSetting.query.filter_by(key=key).first()
+        if not row:
+            row = SystemSetting(key=key, value={})
+            db.session.add(row)
+        
+        row.value = data
+        row.updated_at = datetime.utcnow()
+        db.session.commit()
+        
+        return jsonify({
+            'message': 'Settings updated',
+            'setting': row.to_dict()
+        }), 200
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': str(e)}), 500
+
+
+# ===== FRAME OPTIONS =====
+@admin_bp.route('/settings/frame-options', methods=['GET', 'POST'])
+@admin_required
+def manage_frame_options():
+    """List or create frame options"""
+    if request.method == 'GET':
+        rows = FrameOption.query.filter_by(is_active=True).order_by(FrameOption.created_at.desc()).all()
+        return jsonify({'options': [row.to_dict() for row in rows]}), 200
+    
+    # POST: Create new frame option
+    data = request.get_json()
+    if not data or not data.get('style') or not data.get('material') or not data.get('color'):
+        return jsonify({'error': 'Missing required fields: style, material, color'}), 400
+    
+    try:
+        option = FrameOption(
+            style=data['style'],
+            frame_width_cm=data.get('frame_width_cm'),
+            frame_height_cm=data.get('frame_height_cm'),
+            material=data['material'],
+            color=data['color'],
+            has_mat=data.get('has_mat', False),
+            mat_outer_width_cm=data.get('mat_outer_width_cm'),
+            mat_outer_height_cm=data.get('mat_outer_height_cm'),
+            mat_inner_width_cm=data.get('mat_inner_width_cm'),
+            mat_inner_height_cm=data.get('mat_inner_height_cm'),
+            is_active=True
+        )
+        db.session.add(option)
+        db.session.commit()
+        
+        return jsonify({
+            'message': 'Frame option created',
+            'option': option.to_dict()
+        }), 201
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': str(e)}), 500
+
+
+@admin_bp.route('/settings/frame-options/<option_id>', methods=['GET', 'PUT', 'DELETE'])
+@admin_required
+def update_frame_option(option_id):
+    """Get, update, or delete a frame option"""
+    option = FrameOption.query.get(option_id)
+    if not option:
+        return jsonify({'error': 'Frame option not found'}), 404
+    
+    if request.method == 'GET':
+        return jsonify(option.to_dict()), 200
+    
+    if request.method == 'PUT':
+        data = request.get_json()
+        try:
+            if 'style' in data:
+                option.style = data['style']
+            if 'frame_width_cm' in data:
+                option.frame_width_cm = data['frame_width_cm']
+            if 'frame_height_cm' in data:
+                option.frame_height_cm = data['frame_height_cm']
+            if 'material' in data:
+                option.material = data['material']
+            if 'color' in data:
+                option.color = data['color']
+            if 'has_mat' in data:
+                option.has_mat = data['has_mat']
+            if 'mat_outer_width_cm' in data:
+                option.mat_outer_width_cm = data['mat_outer_width_cm']
+            if 'mat_outer_height_cm' in data:
+                option.mat_outer_height_cm = data['mat_outer_height_cm']
+            if 'mat_inner_width_cm' in data:
+                option.mat_inner_width_cm = data['mat_inner_width_cm']
+            if 'mat_inner_height_cm' in data:
+                option.mat_inner_height_cm = data['mat_inner_height_cm']
+            if 'is_active' in data:
+                option.is_active = data['is_active']
+            
+            option.updated_at = datetime.utcnow()
+            db.session.commit()
+            
+            return jsonify({
+                'message': 'Frame option updated',
+                'option': option.to_dict()
+            }), 200
+        except Exception as e:
+            db.session.rollback()
+            return jsonify({'error': str(e)}), 500
+    
+    if request.method == 'DELETE':
+        try:
+            option.is_active = False
+            option.updated_at = datetime.utcnow()
+            db.session.commit()
+            
+            return jsonify({'message': 'Frame option deleted'}), 200
+        except Exception as e:
+            db.session.rollback()
+            return jsonify({'error': str(e)}), 500

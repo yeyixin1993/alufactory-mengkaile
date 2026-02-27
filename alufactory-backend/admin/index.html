@@ -316,7 +316,11 @@
                 <div class="nav-item active" onclick="switchTab('dashboard')">📊 仪表板</div>
                 <div class="nav-item" onclick="switchTab('users')">👥 用户管理</div>
                 <!-- <div class="nav-item" onclick="switchTab('profiles')">📋 用户资料</div> -->
-                <div class="nav-item" onclick="switchTab('orders')">📦 订单管理</div>
+                <div class="nav-item" onclick="switchTab('orders')">📦 铝型材订单管理</div>
+                <div class="nav-item" onclick="switchTab('pegboardOrders')">🟦 洞洞板订单管理</div>
+                <div class="nav-item" onclick="switchTab('cabinetDoorOrders')">🚪 柜门订单管理</div>
+                <div class="nav-item" onclick="switchTab('frameOrders')">🖼️ 相框订单管理</div>
+                <div class="nav-item" onclick="switchTab('shufateOrders')">📚 书法特柜子订单管理</div>
                 <div class="nav-item logout-btn" onclick="logout()">🚪 退出</div>
             </nav>
         </div>
@@ -638,6 +642,7 @@
         const API_BASE = `${window.location.origin}/api`;
         let authToken = localStorage.getItem('authToken');
         let currentUser = null;
+        let currentOrdersProductType = 'PROFILE';
         let currentEditingOrder = null;
         let currentEditingUser = null;
         
@@ -681,11 +686,14 @@
         
         // Switch tabs
         function switchTab(tab) {
+            const orderTabs = ['orders', 'pegboardOrders', 'cabinetDoorOrders', 'frameOrders', 'shufateOrders'];
+            const contentTab = orderTabs.includes(tab) ? 'orders' : tab;
+
             // Hide all content
             document.querySelectorAll('.content').forEach(el => el.classList.add('hidden'));
             
             // Show selected
-            document.getElementById(tab).classList.remove('hidden');
+            document.getElementById(contentTab).classList.remove('hidden');
             
             // Update nav
             document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
@@ -696,14 +704,37 @@
                 'dashboard': '仪表板',
                 'users': '用户管理',
                 'profiles': '用户资料',
-                'orders': '订单管理'
+                'orders': '铝型材订单管理',
+                'pegboardOrders': '洞洞板订单管理',
+                'cabinetDoorOrders': '柜门订单管理',
+                'frameOrders': '相框订单管理',
+                'shufateOrders': '书法特柜子订单管理'
             };
             document.getElementById('pageTitle').textContent = titles[tab];
             
             // Load data
             if (tab === 'users') loadUsers();
             if (tab === 'profiles') loadProfiles();
-            if (tab === 'orders') loadOrders();
+            if (tab === 'orders') {
+                currentOrdersProductType = 'PROFILE';
+                loadOrders(1, '', currentOrdersProductType);
+            }
+            if (tab === 'pegboardOrders') {
+                currentOrdersProductType = 'PEGBOARD';
+                loadOrders(1, '', currentOrdersProductType);
+            }
+            if (tab === 'cabinetDoorOrders') {
+                currentOrdersProductType = 'CABINET_DOOR';
+                loadOrders(1, '', currentOrdersProductType);
+            }
+            if (tab === 'frameOrders') {
+                currentOrdersProductType = 'FRAME';
+                loadOrders(1, '', currentOrdersProductType);
+            }
+            if (tab === 'shufateOrders') {
+                currentOrdersProductType = 'SHUFATE_CABINET';
+                loadOrders(1, '', currentOrdersProductType);
+            }
         }
         
         // Load dashboard
@@ -767,11 +798,11 @@
         }
         
         // Load orders
-        async function loadOrders(page = 1, status = '') {
+        async function loadOrders(page = 1, status = '', productType = currentOrdersProductType) {
             try {
-                const url = status 
-                    ? `${API_BASE}/admin/orders?page=${page}&per_page=20&status=${status}`
-                    : `${API_BASE}/admin/orders?page=${page}&per_page=20`;
+                let url = `${API_BASE}/admin/orders?page=${page}&per_page=20`;
+                if (status) url += `&status=${status}`;
+                if (productType) url += `&product_type=${productType}`;
                 
                 const response = await fetch(url, {
                     headers: { 'Authorization': `Bearer ${authToken}` }
@@ -812,7 +843,7 @@
                 });
                 
                 // Pagination
-                renderPagination('ordersPagination', page, data.pages, (p) => loadOrders(p, status));
+                renderPagination('ordersPagination', page, data.pages, (p) => loadOrders(p, status, productType));
             } catch (error) {
                 console.error('Error loading orders:', error);
             }
@@ -1174,7 +1205,7 @@
         // Filter orders
         function filterOrders() {
             const status = document.getElementById('orderFilter').value;
-            loadOrders(1, status);
+            loadOrders(1, status, currentOrdersProductType);
         }
 
         async function openOrderPdf(url, filename, download = false) {

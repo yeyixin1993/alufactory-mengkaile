@@ -5,7 +5,8 @@ export enum ProductType {
   PEGBOARD = 'PEGBOARD',
   PROFILE = 'PROFILE',
   CABINET_DOOR = 'CABINET_DOOR',
-  FRAME = 'FRAME'
+  FRAME = 'FRAME',
+  SHUFATE_CABINET = 'SHUFATE_CABINET'
 }
 
 export interface Product {
@@ -90,6 +91,50 @@ export interface Rect {
 
 export interface PlateConfig {
   items: Rect[];
+}
+
+export interface SharedBoardPiece extends Rect {
+  thicknessMm: number;
+  areaM2: number;
+  unitPricePerM2: number;
+  price: number;
+}
+
+export interface SharedBoardConfig {
+  productType: ProductType.PEGBOARD | ProductType.CABINET_DOOR;
+  boardWidthMm: number;
+  boardHeightMm: number;
+  minGapMm: number;
+  groupFactor: number;
+  pieces: SharedBoardPiece[];
+}
+
+export interface FrameConfig {
+  size: 'A5' | 'A4' | 'A3';
+  widthCm: number;
+  heightCm: number;
+  frameStyle: string;
+  frameMaterial: string;
+  frameColor: string;
+  hasMat: boolean;
+  matOuterWidthCm?: number;
+  matOuterHeightCm?: number;
+  matInnerWidthCm?: number;
+  matInnerHeightCm?: number;
+  imageSource: 'sample' | 'upload';
+  imageUrl: string;
+}
+
+export interface ShufateConfig {
+  variantId: string;
+  variantName: string;
+  widthCm: number;
+  depthCm: number;
+  heightCm: number;
+  unitCount: number;
+  columns: 1 | 2 | 3;
+  rows: number;
+  wheelType: 'none' | 'basic' | 'nobel';
 }
 
 export interface CartItem {

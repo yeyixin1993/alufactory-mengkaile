@@ -1,12 +1,45 @@
 from flask import Blueprint, request, jsonify, current_app
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from datetime import datetime
-from app.models.user import db, User, Cart, CartItem, Order, OrderItem, Profile
+from app.models.user import db, User, Cart, CartItem, Order, OrderItem, Profile, SystemSetting, FrameOption
 import uuid
 import os
 import base64
 
 order_bp = Blueprint('orders', __name__, url_prefix='/api/orders')
+
+
+def _shared_board_default(product_type):
+    if product_type == 'CABINET_DOOR':
+        return {
+            'board_width_mm': 2450,
+            'board_height_mm': 1240,
+            'min_gap_mm': 5,
+            'group_factor': 1,
+            'thickness_options': [2],
+            'thickness_price_map': {'2': 700},
+        }
+    return {
+        'board_width_mm': 2450,
+        'board_height_mm': 1240,
+        'min_gap_mm': 5,
+        'group_factor': 1,
+        'thickness_options': [1, 2, 3, 4, 5],
+        'thickness_price_map': {'1': 780, '2': 1080, '3': 1380, '4': 1680, '5': 1980},
+    }
+
+
+def _get_shared_board_settings(product_type):
+    key = f'shared_board_{product_type.lower()}_settings'
+    row = SystemSetting.query.filter_by(key=key).first()
+    defaults = _shared_board_default(product_type)
+    if not row:
+        return defaults
+
+    value = row.value or {}
+    merged = dict(defaults)
+    merged.update(value)
+    return merged
 
 @order_bp.route('', methods=['GET'])
 @jwt_required()
@@ -258,3 +291,51 @@ def get_order_stats():
         'delivered': delivered_orders,
         'total_revenue': float(total_revenue)
     }), 200
+
+
+@order_bp.route('/shared-board/settings', methods=['GET'])
+def get_shared_board_settings():
+    product_type = request.args.get('product_type', 'PEGBOARD').upper()
+    if product_type not in ['PEGBOARD', 'CABINET_DOOR']:
+        return jsonify({'error': 'Invalid product_type'}), 400
+
+    return jsonify(_get_shared_board_settings(product_type)), 200
+
+
+@order_bp.route('/shared-board/reservations', methods=['GET'])
+def get_shared_board_reservations():
+    product_type = request.args.get('product_type', 'PEGBOARD').upper()
+    if product_type not in ['PEGBOARD', 'CABINET_DOOR']:
+        return jsonify({'error': 'Invalid product_type'}), 400
+
+    order_items = (
+        OrderItem.query
+        .join(Order, Order.id == OrderItem.order_id)
+        .filter(OrderItem.product_type == product_type)
+        .filter(Order.status != 'cancelled')
+        .all()
+    )
+
+    reservations = []
+    for item in order_items:
+        config = item.config or {}
+        pieces = config.get('pieces', []) if isinstance(config, dict) else []
+        for piece in pieces:
+            if not isinstance(piece, dict):
+                continue
+            if all(k in piece for k in ['x', 'y', 'width', 'height']):
+                reservations.append({
+                    'order_item_id': item.id,
+                    'x': piece['x'],
+                    'y': piece['y'],
+                    'width': piece['width'],
+                    'height': piece['height'],
+                })
+
+    return jsonify({'reservations': reservations}), 200
+
+
+@order_bp.route('/frame/options', methods=['GET'])
+def get_frame_options():
+    rows = FrameOption.query.filter_by(is_active=True).order_by(FrameOption.created_at.desc()).all()
+    return jsonify({'options': [row.to_dict() for row in rows]}), 200
