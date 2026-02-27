@@ -201,14 +201,8 @@ def upload_order_pdf(order_id):
     except Exception:
         return jsonify({'error': 'Invalid PDF data'}), 400
 
-    pdf_dir = os.path.join(current_app.instance_path, 'order_pdfs')
-    os.makedirs(pdf_dir, exist_ok=True)
-    pdf_path = os.path.join(pdf_dir, f"{order.id}.pdf")
-
     try:
-        with open(pdf_path, 'wb') as f:
-            f.write(pdf_bytes)
-
+        # Save to database first (critical for cloud environments)
         profile = Profile.query.filter_by(user_id=order.user_id).first()
         if not profile:
             profile = Profile(user_id=order.user_id)
@@ -216,8 +210,21 @@ def upload_order_pdf(order_id):
 
         profile.pdf_filename = pdf_filename
         profile.pdf_base64 = pdf_base64
-        profile.pdf_path = pdf_path
         profile.updated_at = datetime.utcnow()
+
+        # Try to save to file system (optional, may fail in cloud)
+        pdf_path = None
+        try:
+            pdf_dir = os.path.join(current_app.instance_path, 'order_pdfs')
+            os.makedirs(pdf_dir, exist_ok=True)
+            pdf_path = os.path.join(pdf_dir, f"{order.id}.pdf")
+            with open(pdf_path, 'wb') as f:
+                f.write(pdf_bytes)
+            profile.pdf_path = pdf_path
+        except Exception as file_error:
+            # File write failed (common in cloud), but continue with DB save
+            current_app.logger.warning(f"Failed to save PDF to file system: {file_error}")
+            profile.pdf_path = None
 
         db.session.commit()
 
