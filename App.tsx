@@ -49,47 +49,13 @@ const LanguageSwitcher: React.FC<{ current: Language, onChange: (l: Language) =>
   </div>
 );
 
-// --- Robust Smart PDF Helper with Page Split Prevention ---
+// --- PDF Export with Page Margins ---
 const exportToPDF = async (
   element: HTMLElement | null,
   filename: string,
   options?: { returnBase64?: boolean; skipSave?: boolean }
 ) => {
   if (!element) return;
-  
-  // 1122px is roughly the height of an A4 page at 96 DPI
-  const A4_PX_HEIGHT = 1115; 
-  const items = element.querySelectorAll('.break-inside-avoid');
-
-  // Clear any existing margins we added previously
-  (Array.from(element.children) as HTMLElement[]).forEach(child => child.style.marginTop = '0px');
-
-  // We iterate through items and check if their bottom crosses the next page threshold.
-  // If it does, we push the item to the start of the next page by adding margin.
-  let cumulativePush = 0;
-  
-  // We need to work on a cloned or live element carefully.
-  // Here we iterate over the actual children of the container.
-  const children = Array.from(element.children) as HTMLElement[];
-  
-  children.forEach((child) => {
-    const rect = child.getBoundingClientRect();
-    const parentRect = element.getBoundingClientRect();
-    
-    // Position relative to parent start including previous pushes
-    const relativeTop = rect.top - parentRect.top;
-    const relativeBottom = relativeTop + rect.height;
-    
-    // Current page number of the top of the item
-    const pageNum = Math.floor(relativeTop / A4_PX_HEIGHT);
-    const threshold = (pageNum + 1) * A4_PX_HEIGHT;
-    
-    if (relativeBottom > threshold) {
-       // This item crosses a boundary. Move it to the start of the next page.
-       const pushAmount = threshold - relativeTop;
-       child.style.marginTop = `${pushAmount}px`;
-    }
-  });
 
   try {
     const canvas = await html2canvas(element, { 
@@ -99,29 +65,38 @@ const exportToPDF = async (
       backgroundColor: '#ffffff'
     });
 
-    const imgWidth = canvas.width;
-    const imgHeight = canvas.height;
-    
     const pdf = new jsPDF('p', 'mm', 'a4');
     const pdfWidth = pdf.internal.pageSize.getWidth();
     const pdfHeight = pdf.internal.pageSize.getHeight();
-    
-    const imgScale = pdfWidth / imgWidth;
-    const imgInPdfHeight = imgHeight * imgScale;
-    
-    let heightLeft = imgInPdfHeight;
-    let position = 0;
-    
-    // Add first page
-    pdf.addImage(canvas, 'JPEG', 0, position, pdfWidth, imgInPdfHeight, undefined, 'FAST');
-    heightLeft -= pdfHeight;
-    
-    // Split into multiple pages by shifting the offset
-    while (heightLeft > 0) {
-      position = heightLeft - imgInPdfHeight; 
-      pdf.addPage();
-      pdf.addImage(canvas, 'JPEG', 0, position, pdfWidth, imgInPdfHeight, undefined, 'FAST');
-      heightLeft -= pdfHeight;
+
+    const MARGIN_MM = 8;
+    const printableHeight = pdfHeight - MARGIN_MM * 2;
+    const contentWidth = pdfWidth;
+    const imgScale = contentWidth / canvas.width;
+
+    let srcY = 0;
+    let pageIndex = 0;
+
+    while (srcY < canvas.height) {
+      const sliceHeightPx = Math.min(
+        Math.floor(printableHeight / imgScale),
+        canvas.height - srcY
+      );
+      const sliceHeightMm = sliceHeightPx * imgScale;
+
+      const pageCanvas = document.createElement('canvas');
+      pageCanvas.width = canvas.width;
+      pageCanvas.height = sliceHeightPx;
+      const ctx = pageCanvas.getContext('2d')!;
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(0, 0, pageCanvas.width, pageCanvas.height);
+      ctx.drawImage(canvas, 0, srcY, canvas.width, sliceHeightPx, 0, 0, canvas.width, sliceHeightPx);
+
+      if (pageIndex > 0) pdf.addPage();
+      pdf.addImage(pageCanvas, 'PNG', 0, MARGIN_MM, contentWidth, sliceHeightMm, undefined, 'FAST');
+
+      srcY += sliceHeightPx;
+      pageIndex++;
     }
     
     if (!options?.skipSave) {
@@ -134,9 +109,6 @@ const exportToPDF = async (
     }
   } catch (e) {
     console.error("PDF Export failed", e);
-  } finally {
-    // Reset styles after export
-    children.forEach(child => child.style.marginTop = '0px');
   }
 };
 

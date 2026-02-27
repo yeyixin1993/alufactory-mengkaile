@@ -87,11 +87,11 @@ const ProfileVisualizer: React.FC<ProfileVisualizerProps> = ({
              if (interactive && !disabledForSide) onTapToggle?.(side, index);
            }}
         >
-           <span className={`${disabledForSide ? 'text-slate-400' : 'text-red-600'} text-[10px] font-bold mb-0.5`}>{tapLabel}</span>
-           <div className={`w-5 h-5 rounded-full border flex items-center justify-center ${
+           <span className={`${disabledForSide ? 'text-slate-400' : 'text-red-600'} text-[10px] font-bold leading-none`}>{tapLabel}</span>
+           <div className={`w-5 h-5 rounded-full border flex items-center justify-center mt-0.5 ${
              isTapped ? 'border-red-500 bg-red-100' : 'border-slate-300 bg-white'
            }`}>
-              <span className={`${disabledForSide ? 'text-slate-400' : 'text-red-500'} text-[10px] font-bold`}>{side === 'left' ? '→' : '←'}</span>
+              <span className={`${disabledForSide ? 'text-slate-400' : 'text-red-500'} text-[10px] font-bold leading-none`}>{side === 'left' ? '→' : '←'}</span>
            </div>
         </div>
     );
@@ -206,7 +206,7 @@ const ProfileVisualizer: React.FC<ProfileVisualizerProps> = ({
           })}
 
           {/* Ruler */}
-          <div className="absolute bottom-0 w-full flex justify-between px-1 text-[8px] text-slate-500 font-mono leading-none">
+          <div className="absolute bottom-0 w-full flex justify-between items-end px-1 text-[8px] text-slate-500 font-mono leading-none pb-0.5">
             <span>0</span>
             <span>{Math.round(length / 2)}</span>
             <span>{length}mm</span>
