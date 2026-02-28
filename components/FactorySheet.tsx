@@ -343,7 +343,7 @@ const FactorySheet: React.FC<FactorySheetProps> = ({ cart, user, language, order
       {/* Payment QR Codes */}
       {showPrice && (
         <div className="break-inside-avoid border-t-2 border-slate-200 pt-6 mt-8">
-          <h4 className="text-xs font-black text-slate-400 uppercase tracking-widest mb-4">{t.alipayPayment?.replace(/save pdf and |保存PDF并|PDFを保存して/i, '') || '付款方式'}</h4>
+          <h4 className="text-xs font-black text-slate-400 uppercase tracking-widest mb-4">付款方式</h4>
           <div className="grid grid-cols-3 gap-4">
             {/* Alipay */}
             <div className="text-center space-y-2 p-3 bg-blue-50 rounded-xl border border-blue-200">
@@ -352,7 +352,7 @@ const FactorySheet: React.FC<FactorySheetProps> = ({ cart, user, language, order
                 <img src="images/alipay-qr.jpg" alt="Alipay" className="w-24 h-24 rounded-lg border border-slate-200" />
               </div>
               <p className="text-[9px] text-slate-500 leading-tight">{t.alipayInstructions}</p>
-              <p className="text-[9px] font-bold text-slate-700">"上海暖橙黄信息科技有限公司"</p>
+              <p className="text-[9px] font-bold text-slate-700">上海暖橙黄信息科技有限公司</p>
             </div>
             {/* WeChat Pay */}
             <div className="text-center space-y-2 p-3 bg-green-50 rounded-xl border border-green-200">
