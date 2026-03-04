@@ -69,6 +69,20 @@ export interface ColorDef {
   maxLength: number;
 }
 
+export type MiterCutDirection = 'up' | 'down';
+export type MiterCutSide = 'AC' | 'BD';
+
+export interface MiterCutEnd {
+  enabled: boolean;
+  direction: MiterCutDirection;
+  side: MiterCutSide;
+}
+
+export interface MiterCutConfig {
+  left: MiterCutEnd;
+  right: MiterCutEnd;
+}
+
 export interface ProfileConfig {
   length: number;
   tapping: TappingConfig;
@@ -77,6 +91,7 @@ export interface ProfileConfig {
   finish?: ProfileFinish;
   colorId?: string;
   unitPrice?: number;
+  miterCut?: MiterCutConfig;
 }
 
 export interface Rect {
@@ -102,11 +117,22 @@ export interface CartItem {
 
 export interface Order {
   id: string;
+  orderNumber?: string;
   date: string;
   items: CartItem[];
   total: number;
   shippingFee: number;
-  status: 'pending' | 'processing' | 'shipped';
+  overlengthFee?: number;
+  shippingMethod?: string;
+  status: 'pending' | 'confirmed' | 'processing' | 'shipped' | 'delivered' | 'cancelled';
   userId: string;
   address?: Address;
+  addressId?: string;
+  trackingNumber?: string;
+  memo?: string;
+  adminMemo?: string;
+  updatedAt?: string;
+  shippedAt?: string;
+  deliveredAt?: string;
+  cancelledAt?: string;
 }

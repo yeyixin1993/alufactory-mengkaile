@@ -434,6 +434,7 @@
                                 <th>客户电话</th>
                                 <th>客户</th>
                                 <th>地址</th>
+                                <th>发货方式</th>
                                 <th>总金额</th>
                                 <th>状态</th>
                                 <th>日期</th>
@@ -501,6 +502,10 @@
         <div class="modal-content">
             <div class="modal-header">编辑订单</div>
             <div class="form-group">
+                <label>发货方式</label>
+                <input type="text" id="orderShippingMethod" readonly>
+            </div>
+            <div class="form-group">
                 <label>订单状态</label>
                 <select id="orderStatus">
                     <option value="pending">待处理</option>
@@ -517,6 +522,10 @@
             <div class="form-group">
                 <label>备注</label>
                 <textarea id="orderMemo" rows="3" placeholder="输入订单备注"></textarea>
+            </div>
+            <div class="form-group">
+                <label>商家备注 (客户可见)</label>
+                <textarea id="adminMemo" rows="3" placeholder="输入商家备注，客户可以在前台看到"></textarea>
             </div>
             <div class="form-actions">
                 <button class="btn btn-primary" onclick="saveOrder()">保存</button>
@@ -639,6 +648,7 @@
         let authToken = localStorage.getItem('authToken');
         let currentUser = null;
         let currentEditingOrder = null;
+        let ordersCache = {};  // Cache orders data for pre-filling edit form
         let currentEditingUser = null;
         
         // Initialize
@@ -784,12 +794,14 @@
                 tbody.innerHTML = '';
                 
                 data.orders.forEach(order => {
+                    ordersCache[order.id] = order;  // Cache for edit form pre-fill
                     const row = tbody.insertRow();
                     const date = new Date(order.created_at).toLocaleDateString('zh-CN');
                     const userName = order.user?.username || '-';
                     const userPhone = order.user?.phone || '-';
                     const customerPhone = order.customer_phone || '-';
                     const addressInfo = `${userName} ${order.province} ${order.address_detail} ${customerPhone}`;
+                    const shippingMethodText = getShippingMethodText(order.shipping_method);
                           const pdfLink = order.pdf?.available && order.pdf?.url
                                 ? `<button class="btn btn-success" style="padding: 6px 8px;" onclick="openOrderPdf('${order.pdf.url}', '${order.pdf.filename || ''}', false)">打开</button>
                                     <button class="btn btn-primary" style="padding: 6px 8px;" onclick="openOrderPdf('${order.pdf.url}', '${order.pdf.filename || ''}', true)">下载</button>`
@@ -801,6 +813,7 @@
                         <td>${customerPhone}</td>
                         <td>${order.recipient_name}</td>
                         <td>${addressInfo}</td>
+                        <td>${shippingMethodText}</td>
                         <td>¥${order.total_amount.toFixed(2)}</td>
                         <td><span class="status-badge status-${order.status}">${getStatusText(order.status)}</span></td>
                         <td>${date}</td>
@@ -929,6 +942,20 @@
         // Edit order
         function editOrder(orderId) {
             currentEditingOrder = orderId;
+            const orderData = ordersCache[orderId];
+            if (orderData) {
+                document.getElementById('orderShippingMethod').value = getShippingMethodText(orderData.shipping_method);
+                document.getElementById('orderStatus').value = orderData.status || 'pending';
+                document.getElementById('trackingNumber').value = orderData.tracking_number || '';
+                document.getElementById('orderMemo').value = orderData.memo || '';
+                document.getElementById('adminMemo').value = orderData.admin_memo || '';
+            } else {
+                document.getElementById('orderShippingMethod').value = '-';
+                document.getElementById('orderStatus').value = 'pending';
+                document.getElementById('trackingNumber').value = '';
+                document.getElementById('orderMemo').value = '';
+                document.getElementById('adminMemo').value = '';
+            }
             openModal('editOrderModal');
         }
         
@@ -944,7 +971,8 @@
                     body: JSON.stringify({
                         status: document.getElementById('orderStatus').value,
                         tracking_number: document.getElementById('trackingNumber').value,
-                        memo: document.getElementById('orderMemo').value
+                        memo: document.getElementById('orderMemo').value,
+                        admin_memo: document.getElementById('adminMemo').value
                     })
                 });
                 
@@ -1232,6 +1260,22 @@
                 'cancelled': '已取消'
             };
             return texts[status] || status;
+        }
+
+        function getShippingMethodText(method) {
+            if (!method) return '-';
+
+            const normalized = String(method).trim().toLowerCase();
+            const map = {
+                'standard': '普通快递',
+                'sf': '顺丰快递',
+                'anneng': '安能物流',
+                'standard express': '普通快递',
+                'sf express': '顺丰快递',
+                'ane logistics': '安能物流'
+            };
+
+            return map[normalized] || method;
         }
         
         function renderPagination(id, current, total, callback) {

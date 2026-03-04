@@ -1,5 +1,5 @@
 import React from 'react';
-import { DrillHole, ProfileConfig, ProfileSide, TappingConfig } from '../types';
+import { DrillHole, ProfileConfig, ProfileSide, TappingConfig, MiterCutConfig } from '../types';
 import { PROFILE_VARIANTS } from '../constants';
 
 interface ProfileVisualizerProps {
@@ -150,6 +150,71 @@ const ProfileVisualizer: React.FC<ProfileVisualizerProps> = ({
              }
           }}
         >
+          {/* 45° Miter Cut Overlays
+               AC-side cut: visible as triangle on faces A and C (direction flips on C).
+               BD-side cut: visible as triangle on faces B and D (direction flips on D).
+               When viewing a face not in the cut's plane, no triangle is shown. */}
+          {config.miterCut?.left?.enabled && (() => {
+            const cutSide = config.miterCut!.left.side || 'AC';
+            let dir: 'up' | 'down' | null = null;
+            if (cutSide === 'AC') {
+              if (selectedSide === 'A') dir = config.miterCut!.left.direction;
+              else if (selectedSide === 'C') dir = config.miterCut!.left.direction === 'up' ? 'down' : 'up';
+            } else {
+              // BD cut
+              if (selectedSide === 'B') dir = config.miterCut!.left.direction;
+              else if (selectedSide === 'D') dir = config.miterCut!.left.direction === 'up' ? 'down' : 'up';
+            }
+            if (!dir) return null;
+
+            const h = isWideFace ? 96 : 48;
+            const label = `45°${cutSide}`;
+            return (
+              <svg className="absolute left-0 top-0 h-full pointer-events-none z-10" style={{ width: `${h}px` }} viewBox={`0 0 ${h} ${h}`} preserveAspectRatio="none">
+                {dir === 'up' ? (
+                  <>
+                    <polygon points={`0,0 ${h},0 0,${h}`} fill="#f8fafc" stroke="#f59e0b" strokeWidth="2" />
+                    <text x={h * 0.15} y={h * 0.3} fontSize={h * 0.15} fill="#d97706" fontWeight="bold" transform={`rotate(-45, ${h * 0.15}, ${h * 0.3})`}>{label}</text>
+                  </>
+                ) : (
+                  <>
+                    <polygon points={`0,${h} ${h},${h} 0,0`} fill="#f8fafc" stroke="#f59e0b" strokeWidth="2" />
+                    <text x={h * 0.15} y={h * 0.78} fontSize={h * 0.15} fill="#d97706" fontWeight="bold" transform={`rotate(45, ${h * 0.15}, ${h * 0.78})`}>{label}</text>
+                  </>
+                )}
+              </svg>
+            );
+          })()}
+          {config.miterCut?.right?.enabled && (() => {
+            const cutSide = config.miterCut!.right.side || 'AC';
+            let dir: 'up' | 'down' | null = null;
+            if (cutSide === 'AC') {
+              if (selectedSide === 'A') dir = config.miterCut!.right.direction;
+              else if (selectedSide === 'C') dir = config.miterCut!.right.direction === 'up' ? 'down' : 'up';
+            } else {
+              if (selectedSide === 'B') dir = config.miterCut!.right.direction;
+              else if (selectedSide === 'D') dir = config.miterCut!.right.direction === 'up' ? 'down' : 'up';
+            }
+            if (!dir) return null;
+
+            const h = isWideFace ? 96 : 48;
+            const label = `45°${cutSide}`;
+            return (
+              <svg className="absolute top-0 h-full pointer-events-none z-10" style={{ width: `${h}px`, left: `calc(100% - ${h}px)` }} viewBox={`0 0 ${h} ${h}`} preserveAspectRatio="none">
+                {dir === 'up' ? (
+                  <>
+                    <polygon points={`${h},0 0,0 ${h},${h}`} fill="#f8fafc" stroke="#f59e0b" strokeWidth="2" />
+                    <text x={h * 0.5} y={h * 0.3} fontSize={h * 0.15} fill="#d97706" fontWeight="bold" transform={`rotate(45, ${h * 0.5}, ${h * 0.3})`}>{label}</text>
+                  </>
+                ) : (
+                  <>
+                    <polygon points={`${h},${h} 0,${h} ${h},0`} fill="#f8fafc" stroke="#f59e0b" strokeWidth="2" />
+                    <text x={h * 0.5} y={h * 0.78} fontSize={h * 0.15} fill="#d97706" fontWeight="bold" transform={`rotate(-45, ${h * 0.5}, ${h * 0.78})`}>{label}</text>
+                  </>
+                )}
+              </svg>
+            );
+          })()}
           {/* Grooves */}
           {grooveCount === 1 && (
             <div className="absolute top-1/2 left-0 right-0 h-3 -translate-y-1/2 bg-black/10 border-y border-black/5 pointer-events-none"></div>

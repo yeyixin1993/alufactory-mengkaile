@@ -1,7 +1,8 @@
 
 import React from 'react';
 import { CartItem, User, ProductType, ProfileConfig, PlateConfig, Language, ProfileSide, Address } from '../types';
-import { TRANSLATIONS, PROFILE_COLORS, SHIPPING_RATES, PROFILE_WEIGHTS } from '../constants';
+import { TRANSLATIONS, PROFILE_COLORS, SHIPPING_RATES, SHIPPING_RATES_SF, SHIPPING_RATES_AN, PROFILE_WEIGHTS, SHIPPING_METHOD_NAMES } from '../constants';
+import type { ShippingMethod } from '../constants';
 import ProfileVisualizer from './ProfileVisualizer';
 
 interface FactorySheetProps {
@@ -13,17 +14,20 @@ interface FactorySheetProps {
   id?: string;
   showPrice?: boolean;
   address?: Address;
+  shippingMethod?: string;
+  shippingFee?: number;
+  overlengthFee?: number;
 }
 
 const getCurrency = (lang: Language) => lang === 'cn' ? '￥' : '$';
 
-const FactorySheet: React.FC<FactorySheetProps> = ({ cart, user, language, orderRef, dateStr, id, showPrice = true, address }) => {
+const FactorySheet: React.FC<FactorySheetProps> = ({ cart, user, language, orderRef, dateStr, id, showPrice = true, address, shippingMethod, shippingFee: passedShippingFee, overlengthFee: passedOverlengthFee }) => {
   const t = TRANSLATIONS[language];
   const currency = getCurrency(language);
  
 // Summarize profiles for a sheet: length, model, color, finish, tap, quantity, remarks
   const profileSummary = React.useMemo(() => {
-    type Row = { length: string; model: string; color: string; section: string; tap: string; quantity: number; remark: string; key: string };
+    type Row = { length: string; model: string; color: string; section: string; tap: string; quantity: number; remark: string; key: string; miter: string };
     const map = new Map<string, Row>();
 
     cart.forEach(item => {
@@ -65,17 +69,33 @@ const FactorySheet: React.FC<FactorySheetProps> = ({ cart, user, language, order
         processingState = 'tap';
       }
 
-      // 4. Create Key
-      // This ensures a profile with tapping is stored separately from one without
-      const key = [length, model, cfg.colorId, section, processingState, tapType].join('||');
+      // 4. Check for Miter Cut
+      const hasMiterLeft = cfg.miterCut?.left?.enabled;
+      const hasMiterRight = cfg.miterCut?.right?.enabled;
+      const leftMiterSide = cfg.miterCut?.left?.side || 'AC';
+      const rightMiterSide = cfg.miterCut?.right?.side || 'AC';
+      const leftMiterDir = cfg.miterCut?.left?.direction || 'up';
+      const rightMiterDir = cfg.miterCut?.right?.direction || 'up';
+      const miterKey = hasMiterLeft && hasMiterRight ? `both-${leftMiterSide}-${leftMiterDir}-${rightMiterSide}-${rightMiterDir}` : hasMiterLeft ? `left-${leftMiterSide}-${leftMiterDir}` : hasMiterRight ? `right-${rightMiterSide}-${rightMiterDir}` : 'none';
 
-      // 5. Create Remark
+      // 5. Create Key
+      // This ensures a profile with tapping is stored separately from one without
+      const key = [length, model, cfg.colorId, section, processingState, tapType, miterKey].join('||');
+
+      // 6. Create Remark
+      const hasMiter = hasMiterLeft || hasMiterRight;
       let remark = '无额外加工';
-      if (processingState === 'drill') {
+      if (processingState === 'drill' || hasMiter) {
         remark = '加工见下图';
       }
 
       const tapLabel = bothSideTap ? '两端攻丝' : oneSideTap ? '一端攻丝' : '无';
+      
+      // Miter cut label for map key (kept simple)
+      let miterLabel = '';
+      if (hasMiterLeft && hasMiterRight) miterLabel = '两端斜切45°';
+      else if (hasMiterLeft) miterLabel = '左端斜切45°';
+      else if (hasMiterRight) miterLabel = '右端斜切45°';
 
       // --- UPDATED DETECTION LOGIC END ---
 
@@ -86,7 +106,7 @@ const FactorySheet: React.FC<FactorySheetProps> = ({ cart, user, language, order
         existing.quantity += qty;
         if (!existing.remark && remark) existing.remark = remark;
       } else {
-        map.set(key, { length, model, color: colorName, section, tap: tapLabel, quantity: qty, remark, key });
+        map.set(key, { length, model, color: colorName, section, tap: tapLabel, quantity: qty, remark, key, miter: miterLabel });
       }
     });
 
@@ -115,14 +135,49 @@ const FactorySheet: React.FC<FactorySheetProps> = ({ cart, user, language, order
     return totalWeightKg;
   };
 
-  // 2. 运费计算
-  const shipRate = activeAddress ? (SHIPPING_RATES[activeAddress.province] || { first: 15, next: 0 }) : { first: 0, next: 0 };
+  // 2. 运费计算 — use passed-in values if available, otherwise auto-calculate cheapest
+  const hasOverlength = cart.some(item => {
+    if (item.product.type === ProductType.PROFILE) {
+      const cfg = item.config as ProfileConfig;
+      return cfg.length > 1400;
+    }
+    return false;
+  });
+
+  const calcForMethod = (method: 'standard' | 'sf' | 'anneng', province: string, weightKg: number) => {
+    const olFee = (method === 'standard' || method === 'sf') && hasOverlength ? 20 : 0;
+    if (method === 'anneng') {
+      const rate = SHIPPING_RATES_AN[province] || { first: 50, next: 3 };
+      return weightKg <= 15 ? rate.first : rate.first + Math.ceil(weightKg - 15) * rate.next;
+    } else if (method === 'sf') {
+      const rate = SHIPPING_RATES_SF[province] || { first: 15, next: 5 };
+      const rw = Math.max(1, Math.ceil(weightKg));
+      return rate.first + (rw - 1) * rate.next + olFee;
+    } else {
+      const rate = SHIPPING_RATES[province] || { first: 18, next: 5 };
+      const rw = Math.max(1, Math.ceil(weightKg));
+      return rate.first + (rw - 1) * rate.next + olFee;
+    }
+  };
 
   let shippingFee = 0;
-  if (activeAddress) {
+  let shippingLabel = shippingMethod || '';
+  if (typeof passedShippingFee === 'number') {
+    shippingFee = passedShippingFee;
+  } else if (activeAddress) {
     const totalWeightKg = calculateTotalWeight();
-    const roundedWeight = Math.max(1, Math.ceil(totalWeightKg));
-    shippingFee = shipRate.first + (roundedWeight - 1) * shipRate.next;
+    const province = activeAddress.province;
+    const stdFee = calcForMethod('standard', province, totalWeightKg);
+    const sfFee = calcForMethod('sf', province, totalWeightKg);
+    const anFee = calcForMethod('anneng', province, totalWeightKg);
+    if (stdFee <= sfFee && stdFee <= anFee) { shippingFee = stdFee; shippingLabel = SHIPPING_METHOD_NAMES.standard[language]; }
+    else if (sfFee <= anFee) { shippingFee = sfFee; shippingLabel = SHIPPING_METHOD_NAMES.sf[language]; }
+    else { shippingFee = anFee; shippingLabel = SHIPPING_METHOD_NAMES.anneng[language]; }
+  }
+
+  const normalizedShippingMethod = (shippingMethod || '').toLowerCase();
+  if (!shippingLabel && normalizedShippingMethod in SHIPPING_METHOD_NAMES) {
+    shippingLabel = SHIPPING_METHOD_NAMES[normalizedShippingMethod as ShippingMethod][language];
   }
 
   const finalTotal = baseTotal + shippingFee;
@@ -140,6 +195,7 @@ const FactorySheet: React.FC<FactorySheetProps> = ({ cart, user, language, order
           <div className="grid grid-cols-2 gap-x-8 gap-y-1 text-xs">
             <p><span className="font-bold">{t.customer}:</span> {userName}</p>
             <p><span className="font-bold">{t.contact}:</span> {userPhone}</p>
+            <p><span className="font-bold">{t.shippingMethodLabel || 'Shipping Method'}:</span> {shippingLabel || '-'}</p>
             {activeAddress && (
               <p className="col-span-2 mt-1 bg-slate-50 p-2 rounded border border-slate-200">
                 <span className="font-bold">{t.shippingAddress}:</span> {activeAddress.province} {activeAddress.detail}
@@ -214,11 +270,13 @@ const FactorySheet: React.FC<FactorySheetProps> = ({ cart, user, language, order
                                cfg.finish === 'powder' ? t.finishPowder : 
                                cfg.finish === 'electrophoretic' ? t.finishElectrophoretic : cfg.finish;
 
-           // Early per-item processing detection: if raw (no drilling/tapping), skip rendering this PROFILE item
+           // Early per-item processing detection: if raw (no drilling/tapping/miter), skip rendering this PROFILE item
            const itemHasTap = !!(cfg.tapping?.left?.some(Boolean) || cfg.tapping?.right?.some(Boolean));
            const itemHasDrill = Array.isArray(cfg.holes) && cfg.holes.length > 0;
-           let itemProcessingState: 'raw' | 'tap' | 'drill' = 'raw';
+           const itemHasMiter = !!(cfg.miterCut?.left?.enabled || cfg.miterCut?.right?.enabled);
+           let itemProcessingState: 'raw' | 'tap' | 'drill' | 'miter' = 'raw';
            if (itemHasDrill) itemProcessingState = 'drill';
+           else if (itemHasMiter) itemProcessingState = 'miter';
            else if (itemHasTap && ['2040', '3060', '2040-N1-20', '2040-N1-40'].includes(String(cfg.variantId))) itemProcessingState = 'tap';
 
            if (item.product.type === ProductType.PROFILE && itemProcessingState === 'raw') return null;
@@ -254,18 +312,48 @@ const FactorySheet: React.FC<FactorySheetProps> = ({ cart, user, language, order
                     {(() => {
                       const itemHasTap = !!(cfg.tapping?.left?.some(Boolean) || cfg.tapping?.right?.some(Boolean));
                       const itemHasDrill = Array.isArray(cfg.holes) && cfg.holes.length > 0;
-                      let itemProcessingState: 'raw' | 'tap' | 'drill' = 'raw';
-                      if (itemHasDrill) itemProcessingState = 'drill';
-                      else if (itemHasTap && ['2040', '3060', '2040-N1-20', '2040-N1-40'].includes(String(cfg.variantId))) itemProcessingState = 'tap';
+                      const itemHasMiterInner = !!(cfg.miterCut?.left?.enabled || cfg.miterCut?.right?.enabled);
+                      let itemProcessingState2: 'raw' | 'tap' | 'drill' | 'miter' = 'raw';
+                      if (itemHasDrill) itemProcessingState2 = 'drill';
+                      else if (itemHasMiterInner) itemProcessingState2 = 'miter';
+                      else if (itemHasTap && ['2040', '3060', '2040-N1-20', '2040-N1-40'].includes(String(cfg.variantId))) itemProcessingState2 = 'tap';
 
-                      const sidesToShow: ProfileSide[] =
-                        itemProcessingState === 'raw' ? [] :
-                        itemProcessingState === 'tap' ? ['B'] :
-                        ['A', 'B', 'C', 'D'];
+                      // For miter cut, determine which sides to show based on cut face (AC/BD)
+                      let sidesToShow: ProfileSide[] = [];
+                      if (itemProcessingState2 === 'raw') {
+                        sidesToShow = [];
+                      } else if (itemProcessingState2 === 'tap') {
+                        sidesToShow = ['B'];
+                      } else if (itemProcessingState2 === 'drill') {
+                        sidesToShow = ['A', 'B', 'C', 'D'];
+                      } else if (itemProcessingState2 === 'miter') {
+                        // Show sides relevant to each miter cut's face
+                        const miterSides = new Set<ProfileSide>();
+                        if (cfg.miterCut?.left?.enabled) {
+                          const s = cfg.miterCut.left.side || 'AC';
+                          if (s === 'AC') { miterSides.add('A'); miterSides.add('C'); }
+                          else { miterSides.add('B'); miterSides.add('D'); }
+                        }
+                        if (cfg.miterCut?.right?.enabled) {
+                          const s = cfg.miterCut.right.side || 'AC';
+                          if (s === 'AC') { miterSides.add('A'); miterSides.add('C'); }
+                          else { miterSides.add('B'); miterSides.add('D'); }
+                        }
+                        // Deduplicate and order
+                        const order: ProfileSide[] = ['A', 'B', 'C', 'D'];
+                        sidesToShow = order.filter(s => miterSides.has(s));
+                      }
+
+                      // If miter is combined with drill, ensure all sides
+                      if (itemHasDrill && itemHasMiterInner) {
+                        sidesToShow = ['A', 'B', 'C', 'D'];
+                      }
 
                       if (sidesToShow.length === 0) return null;
 
-                      const previewLabel = itemProcessingState === 'drill' ? `${t.preview} (All Sides)` : `${t.preview} (Side B)`;
+                      const previewLabel = itemProcessingState2 === 'drill' ? `${t.preview} (All Sides)` : 
+                                           itemProcessingState2 === 'miter' ? `${t.preview} (${t.miterCutLabel || '45° Cut'})` :
+                                           `${t.preview} (Side B)`;
 
                       return (
                         <div>
@@ -283,6 +371,33 @@ const FactorySheet: React.FC<FactorySheetProps> = ({ cart, user, language, order
                         </div>
                       );
                     })()}
+
+                    {/* Miter Cut Details */}
+                    {(cfg.miterCut?.left?.enabled || cfg.miterCut?.right?.enabled) && (
+                      <div className="bg-amber-50 p-4 rounded-xl border border-amber-200">
+                        <h4 className="text-xs font-black text-amber-700 uppercase tracking-widest mb-3 flex items-center gap-2">
+                          <span className="text-amber-500 text-lg">◿</span> {t.miterCutLabel || '45° Cut'}
+                        </h4>
+                        <div className="grid grid-cols-2 gap-4 text-xs">
+                          {cfg.miterCut?.left?.enabled && (
+                            <div className="bg-white p-3 rounded-lg border border-amber-100">
+                              <span className="text-slate-400 text-[10px] font-black uppercase">{t.miterCutLeft}</span>
+                              <div className="font-black text-amber-800 mt-1">
+                                {(cfg.miterCut.left.side || 'AC')} · {cfg.miterCut.left.direction === 'up' ? t.miterCutUp : t.miterCutDown}
+                              </div>
+                            </div>
+                          )}
+                          {cfg.miterCut?.right?.enabled && (
+                            <div className="bg-white p-3 rounded-lg border border-amber-100">
+                              <span className="text-slate-400 text-[10px] font-black uppercase">{t.miterCutRight}</span>
+                              <div className="font-black text-amber-800 mt-1">
+                                {(cfg.miterCut.right.side || 'AC')} · {cfg.miterCut.right.direction === 'up' ? t.miterCutUp : t.miterCutDown}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    )}
 
                     {/* Drilling Spreadsheet */}
                     {cfg.holes.length > 0 ? (
@@ -329,9 +444,15 @@ const FactorySheet: React.FC<FactorySheetProps> = ({ cart, user, language, order
       {/* Totals */}
       {showPrice && (
         <div className="mt-12 border-t-4 border-slate-900 pt-8 flex justify-end">
-           <div className="w-72 space-y-3 text-right">
+           <div className="w-80 space-y-3 text-right">
               <div className="flex justify-between text-slate-500 text-xs"><span>{t.total}:</span><span className="font-bold text-slate-800">{currency}{baseTotal.toFixed(1)}</span></div>
-              <div className="flex justify-between text-slate-500 text-xs"><span>{t.shippingFee}:</span><span className="font-bold text-slate-800">{currency}{shippingFee.toFixed(1)}</span></div>
+              <div className="flex justify-between text-slate-500 text-xs">
+                <span>{t.shippingFee}{shippingLabel ? ` (${shippingLabel})` : ''}:</span>
+                <span className="font-bold text-slate-800">{currency}{shippingFee.toFixed(1)}</span>
+              </div>
+              {(passedOverlengthFee ?? 0) > 0 && (
+                <div className="flex justify-between text-amber-600 text-xs"><span>{t.overlengthFee} (含):</span><span className="font-bold">+{currency}{passedOverlengthFee!.toFixed(0)}</span></div>
+              )}
               <div className="flex justify-between text-3xl font-black pt-4 border-t border-slate-100 text-blue-600">
                 <span>{t.total}</span>
                 <span>{currency}{finalTotal.toFixed(1)}</span>
