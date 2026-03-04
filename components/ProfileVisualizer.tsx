@@ -120,7 +120,7 @@ const ProfileVisualizer: React.FC<ProfileVisualizerProps> = ({
 
       {/* Visual Bar Container - Restored to px-8 for tap indicator visibility */}
       <div 
-        className={`relative w-full px-8 bg-slate-50 border border-slate-200 rounded flex items-center justify-center select-none transition-all duration-300 ${isWideFace ? 'h-32' : 'h-24'}`}
+        className={`relative w-full px-8 bg-slate-50 border border-slate-200 rounded flex items-center justify-center select-none transition-all duration-300 overflow-visible ${isWideFace ? 'h-32' : 'h-24'}`}
       >
         {/* Tapping Indicators */}
         {grooveCount === 1 && (
@@ -142,7 +142,8 @@ const ProfileVisualizer: React.FC<ProfileVisualizerProps> = ({
 
         {/* The Bar */}
         <div 
-          className={`relative w-full bg-gradient-to-b from-slate-200 to-slate-300 border-y border-slate-400 shadow-inner transition-all duration-300 ${isWideFace ? 'h-24' : 'h-12'} ${interactive ? 'cursor-crosshair' : ''}`}
+          className={`relative w-full bg-gradient-to-b from-slate-200 to-slate-300 border-y border-slate-400 shadow-inner transition-all duration-300 overflow-visible ${isWideFace ? 'h-24' : 'h-12'} ${interactive ? 'cursor-crosshair' : ''}`}
+          style={{ WebkitPrintColorAdjust: 'exact', printColorAdjust: 'exact' } as React.CSSProperties}
           onClick={(e) => {
              if (interactive && onBarClick) {
                  const rect = e.currentTarget.getBoundingClientRect();
@@ -200,7 +201,7 @@ const ProfileVisualizer: React.FC<ProfileVisualizerProps> = ({
             const h = isWideFace ? 96 : 48;
             const label = `45°${cutSide}`;
             return (
-              <svg className="absolute top-0 h-full pointer-events-none z-10" style={{ width: `${h}px`, left: `calc(100% - ${h}px)` }} viewBox={`0 0 ${h} ${h}`} preserveAspectRatio="none">
+              <svg className="absolute top-0 right-0 h-full pointer-events-none z-10" style={{ width: `${h}px` }} viewBox={`0 0 ${h} ${h}`} preserveAspectRatio="none">
                 {dir === 'up' ? (
                   <>
                     <polygon points={`${h},0 0,0 ${h},${h}`} fill="#f8fafc" stroke="#f59e0b" strokeWidth="2" />
@@ -254,11 +255,11 @@ const ProfileVisualizer: React.FC<ProfileVisualizerProps> = ({
                 }}
               >
                  {isCountersunkEntry && (
-                   <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-5 h-5 rounded-full border border-slate-600 bg-transparent pointer-events-none" />
+                   <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-5 h-5 rounded-full pointer-events-none" style={{ border: '1px solid #475569', WebkitPrintColorAdjust: 'exact', printColorAdjust: 'exact' } as React.CSSProperties} />
                  )}
                  <div 
-                   className={`rounded-full border border-white/50 bg-black transition-transform ${interactive ? 'group-hover:scale-125 group-hover:bg-red-500' : ''}`}
-                   style={{ width: '8px', height: '8px' }}
+                   className={`rounded-full border border-white/50 transition-transform ${interactive ? 'group-hover:scale-125 group-hover:bg-red-500' : ''}`}
+                   style={{ width: '8px', height: '8px', backgroundColor: '#000', WebkitPrintColorAdjust: 'exact', printColorAdjust: 'exact' } as React.CSSProperties}
                  />
                  
                  {interactive && (

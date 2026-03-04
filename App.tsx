@@ -9,7 +9,8 @@ import { ApiService } from './services/apiService';
 import ProfileEditor from './components/ProfileEditor';
 import PlateEditor from './components/PlateEditor';
 import ProfileVisualizer from './components/ProfileVisualizer';
-import FactorySheetPreview from './components/FactorySheetPreview';
+import { openFactorySheetPreview } from './components/FactorySheetPreview';
+import FactorySheetPreviewPage from './components/FactorySheetPreviewPage';
 import FactorySheet from './components/FactorySheet';
 import { jsPDF } from 'jspdf';
 import html2canvas from 'html2canvas';
@@ -647,7 +648,7 @@ const Cart: React.FC<{
   const currency = getCurrency(language);
   const navigate = useNavigate();
   const location = useLocation();
-  const [showPreview, setShowPreview] = useState(false);
+  // showPreview state no longer needed — preview opens in new window
   const [isExporting, setIsExporting] = useState(false);
   const [pdfIncludePrice, setPdfIncludePrice] = useState(true);
   
@@ -849,15 +850,7 @@ const Cart: React.FC<{
         </div>
       </div>
 
-      {showPreview && (
-        <FactorySheetPreview 
-           cart={cart} 
-           user={user} 
-           language={language} 
-           onClose={() => setShowPreview(false)} 
-           onDownload={() => handleGeneratePDF(true)} 
-        />
-      )}
+      {/* Preview now opens in a new window via openFactorySheetPreview */}
       
       {isEditingAddress && (
         <AddressModal 
@@ -893,7 +886,7 @@ const Cart: React.FC<{
           <div className="flex justify-between items-center bg-white p-5 rounded-[2rem] shadow-xl border border-slate-100">
             <Link to="/product/p2" className="flex items-center gap-2 text-blue-600 font-black px-5 py-3 rounded-2xl hover:bg-blue-50 transition-all text-sm"><ArrowLeft className="w-4 h-4"/> {t.continueShopping}</Link>
             <div className="flex gap-2">
-              <button onClick={() => setShowPreview(true)} className="flex items-center gap-2 text-slate-700 font-bold px-5 py-3 rounded-2xl border border-slate-200 hover:bg-slate-50 transition-all text-sm"><Eye className="w-4 h-4"/> {t.preview}</button>
+              <button onClick={() => openFactorySheetPreview({ cart, user, language, showPrice: true, address: selectedAddress || undefined, shippingMethod: SHIPPING_METHOD_NAMES[activeCourier][language], shippingFee, overlengthFee })} className="flex items-center gap-2 text-slate-700 font-bold px-5 py-3 rounded-2xl border border-slate-200 hover:bg-slate-50 transition-all text-sm"><Eye className="w-4 h-4"/> {t.preview}</button>
               {user?.role === 'admin' && (
                 <button onClick={() => handleGeneratePDF(false)} className="flex items-center gap-2 text-orange-600 font-bold px-5 py-3 rounded-2xl border border-orange-100 bg-orange-50 hover:bg-orange-100 transition-all text-sm"><FileDown className="w-4 h-4"/> {t.downloadNoPrice}</button>
               )}
@@ -1180,10 +1173,12 @@ const App: React.FC = () => {
     window.location.hash = `/cart?addressId=${encodeURIComponent(o.addressId || o.address?.id || '')}`;
   };
 
+  const isPreviewRoute = window.location.hash.startsWith('#/preview');
+
   return (
     <HashRouter>
-      <div className="min-h-screen bg-slate-50 font-sans text-slate-900 selection:bg-blue-100 selection:text-blue-900 pb-20">
-        <nav className="bg-white/90 backdrop-blur-xl sticky top-0 z-40 border-b border-slate-100 shadow-sm">
+      <div className={`min-h-screen font-sans text-slate-900 selection:bg-blue-100 selection:text-blue-900 ${isPreviewRoute ? '' : 'bg-slate-50 pb-20'}`}>
+        {!isPreviewRoute && <nav className="bg-white/90 backdrop-blur-xl sticky top-0 z-40 border-b border-slate-100 shadow-sm">
           <div className="max-w-7xl mx-auto px-6 h-24 flex items-center justify-between">
             <Link to="/" className="flex items-center gap-5 group">
               <div className="w-14 h-14 bg-slate-900 rounded-[1.25rem] flex items-center justify-center text-white font-black text-3xl shadow-2xl shadow-slate-900/20 group-hover:scale-110 group-hover:bg-blue-600 transition-all duration-500">M</div>
@@ -1227,7 +1222,7 @@ const App: React.FC = () => {
               </Link>
             </div>
           </div>
-        </nav>
+        </nav>}
 
         <Routes>
           <Route path="/" element={<Catalog language={language} />} />
@@ -1235,6 +1230,7 @@ const App: React.FC = () => {
           <Route path="/history" element={user ? <UserProfile user={user} language={language} setUser={setUser} onEditOrder={onEditOrder} /> : <div className="p-40 text-center flex flex-col items-center"><UserIcon className="w-20 h-20 text-slate-100 mb-6"/><p className="font-black text-slate-300 text-2xl">Please login to view your orders</p></div>} />
           <Route path="/product/:id" element={<ProductDetail language={language} onAddToCart={(item) => setCart(mergeCartItems(cart, [item]))} onAddBatchToCart={(items) => setCart(mergeCartItems(cart, items))} onUpdateCartItem={(item) => setCart(cart.map(x => x.id === item.id ? item : x))} draftProfiles={draftProfiles} setDraftProfiles={setDraftProfiles} />} />
           <Route path="/cart" element={<Cart cart={cart} language={language} setCart={setCart} user={user} updateUser={setUser} />} />
+          <Route path="/preview" element={<FactorySheetPreviewPage />} />
         </Routes>
       </div>
     </HashRouter>

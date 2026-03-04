@@ -362,7 +362,7 @@ const FactorySheet: React.FC<FactorySheetProps> = ({ cart, user, language, order
                             {sidesToShow.map(side => (
                               <div key={side} className="flex gap-4 items-center">
                                 <div className="w-10 h-10 bg-slate-900 text-white rounded-lg flex items-center justify-center font-black text-xl">{side}</div>
-                                <div className="flex-1 bg-slate-50 border border-slate-200 rounded-xl p-3">
+                                <div className="flex-1 bg-slate-50 border border-slate-200 rounded-xl p-3 overflow-visible">
                                   <ProfileVisualizer config={cfg} selectedSide={side} onSideChange={() => {}} interactive={false} tapLabel={t.tapAction} showSideSelector={false} />
                                 </div>
                               </div>
