@@ -1,5 +1,5 @@
 import React from 'react';
-import { DrillHole, ProfileConfig, ProfileSide, TappingConfig } from '../types';
+import { DrillHole, ProfileConfig, ProfileSide, TappingConfig, MiterCutConfig } from '../types';
 import { PROFILE_VARIANTS } from '../constants';
 
 interface ProfileVisualizerProps {
@@ -14,6 +14,94 @@ interface ProfileVisualizerProps {
   tapLabel: string; // New prop for localized label
   showSideSelector?: boolean;
 }
+
+/**
+ * Renders a 45° miter-cut triangle using an HTML <canvas> element.
+ * Canvas is used instead of SVG because html2canvas (used for PDF/PNG/JPG export)
+ * does not reliably render inline SVG elements.
+ */
+const MiterCutCanvas: React.FC<{
+  side: 'left' | 'right';
+  direction: 'up' | 'down';
+  size: number;
+  label: string;
+}> = ({ side, direction, size, label }) => {
+  const canvasRef = React.useRef<HTMLCanvasElement>(null);
+
+  React.useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const dpr = 2;
+    canvas.width = size * dpr;
+    canvas.height = size * dpr;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+    ctx.scale(dpr, dpr);
+    ctx.clearRect(0, 0, size, size);
+
+    // Draw filled triangle
+    ctx.beginPath();
+    if (side === 'left') {
+      if (direction === 'up') {
+        ctx.moveTo(0, 0); ctx.lineTo(size, 0); ctx.lineTo(0, size);
+      } else {
+        ctx.moveTo(0, size); ctx.lineTo(size, size); ctx.lineTo(0, 0);
+      }
+    } else {
+      if (direction === 'up') {
+        ctx.moveTo(size, 0); ctx.lineTo(0, 0); ctx.lineTo(size, size);
+      } else {
+        ctx.moveTo(size, size); ctx.lineTo(0, size); ctx.lineTo(size, 0);
+      }
+    }
+    ctx.closePath();
+    ctx.fillStyle = '#f8fafc';
+    ctx.fill();
+    ctx.strokeStyle = '#f59e0b';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+
+    // Draw rotated label
+    const fontSize = Math.max(7, size * 0.15);
+    ctx.font = `bold ${fontSize}px sans-serif`;
+    ctx.fillStyle = '#d97706';
+    ctx.save();
+    if (side === 'left') {
+      if (direction === 'up') {
+        ctx.translate(size * 0.15, size * 0.3);
+        ctx.rotate(-Math.PI / 4);
+      } else {
+        ctx.translate(size * 0.15, size * 0.78);
+        ctx.rotate(Math.PI / 4);
+      }
+    } else {
+      if (direction === 'up') {
+        ctx.translate(size * 0.5, size * 0.3);
+        ctx.rotate(Math.PI / 4);
+      } else {
+        ctx.translate(size * 0.5, size * 0.78);
+        ctx.rotate(-Math.PI / 4);
+      }
+    }
+    ctx.fillText(label, 0, 0);
+    ctx.restore();
+  }, [side, direction, size, label]);
+
+  return (
+    <canvas
+      ref={canvasRef}
+      style={{
+        position: 'absolute',
+        ...(side === 'left' ? { left: 0 } : { right: 0 }),
+        top: 0,
+        width: `${size}px`,
+        height: '100%',
+        pointerEvents: 'none',
+        zIndex: 10,
+      }}
+    />
+  );
+};
 
 const ProfileVisualizer: React.FC<ProfileVisualizerProps> = ({
   config,
@@ -120,7 +208,7 @@ const ProfileVisualizer: React.FC<ProfileVisualizerProps> = ({
 
       {/* Visual Bar Container - Restored to px-8 for tap indicator visibility */}
       <div 
-        className={`relative w-full px-8 bg-slate-50 border border-slate-200 rounded flex items-center justify-center select-none transition-all duration-300 ${isWideFace ? 'h-32' : 'h-24'}`}
+        className={`relative w-full px-8 bg-slate-50 border border-slate-200 rounded flex items-center justify-center select-none transition-all duration-300 overflow-visible ${isWideFace ? 'h-32' : 'h-24'}`}
       >
         {/* Tapping Indicators */}
         {grooveCount === 1 && (
@@ -142,7 +230,8 @@ const ProfileVisualizer: React.FC<ProfileVisualizerProps> = ({
 
         {/* The Bar */}
         <div 
-          className={`relative w-full bg-gradient-to-b from-slate-200 to-slate-300 border-y border-slate-400 shadow-inner transition-all duration-300 ${isWideFace ? 'h-24' : 'h-12'} ${interactive ? 'cursor-crosshair' : ''}`}
+          className={`relative w-full bg-gradient-to-b from-slate-200 to-slate-300 border-y border-slate-400 shadow-inner transition-all duration-300 overflow-visible ${isWideFace ? 'h-24' : 'h-12'} ${interactive ? 'cursor-crosshair' : ''}`}
+          style={{ WebkitPrintColorAdjust: 'exact', printColorAdjust: 'exact' } as React.CSSProperties}
           onClick={(e) => {
              if (interactive && onBarClick) {
                  const rect = e.currentTarget.getBoundingClientRect();
@@ -150,6 +239,40 @@ const ProfileVisualizer: React.FC<ProfileVisualizerProps> = ({
              }
           }}
         >
+          {/* 45° Miter Cut Overlays
+               AC-side cut: visible as triangle on faces A and C (direction flips on C).
+               BD-side cut: visible as triangle on faces B and D (direction flips on D).
+               When viewing a face not in the cut's plane, no triangle is shown. */}
+          {config.miterCut?.left?.enabled && (() => {
+            const cutSide = config.miterCut!.left.side || 'AC';
+            let dir: 'up' | 'down' | null = null;
+            if (cutSide === 'AC') {
+              if (selectedSide === 'A') dir = config.miterCut!.left.direction;
+              else if (selectedSide === 'C') dir = config.miterCut!.left.direction === 'up' ? 'down' : 'up';
+            } else {
+              if (selectedSide === 'B') dir = config.miterCut!.left.direction;
+              else if (selectedSide === 'D') dir = config.miterCut!.left.direction === 'up' ? 'down' : 'up';
+            }
+            if (!dir) return null;
+            const h = isWideFace ? 96 : 48;
+            const label = `45°${cutSide}`;
+            return <MiterCutCanvas side="left" direction={dir} size={h} label={label} />;
+          })()}
+          {config.miterCut?.right?.enabled && (() => {
+            const cutSide = config.miterCut!.right.side || 'AC';
+            let dir: 'up' | 'down' | null = null;
+            if (cutSide === 'AC') {
+              if (selectedSide === 'A') dir = config.miterCut!.right.direction;
+              else if (selectedSide === 'C') dir = config.miterCut!.right.direction === 'up' ? 'down' : 'up';
+            } else {
+              if (selectedSide === 'B') dir = config.miterCut!.right.direction;
+              else if (selectedSide === 'D') dir = config.miterCut!.right.direction === 'up' ? 'down' : 'up';
+            }
+            if (!dir) return null;
+            const h = isWideFace ? 96 : 48;
+            const label = `45°${cutSide}`;
+            return <MiterCutCanvas side="right" direction={dir} size={h} label={label} />;
+          })()}
           {/* Grooves */}
           {grooveCount === 1 && (
             <div className="absolute top-1/2 left-0 right-0 h-3 -translate-y-1/2 bg-black/10 border-y border-black/5 pointer-events-none"></div>
@@ -189,11 +312,11 @@ const ProfileVisualizer: React.FC<ProfileVisualizerProps> = ({
                 }}
               >
                  {isCountersunkEntry && (
-                   <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-5 h-5 rounded-full border border-slate-600 bg-transparent pointer-events-none" />
+                   <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-5 h-5 rounded-full pointer-events-none" style={{ border: '1px solid #475569', WebkitPrintColorAdjust: 'exact', printColorAdjust: 'exact' } as React.CSSProperties} />
                  )}
                  <div 
-                   className={`rounded-full border border-white/50 bg-black transition-transform ${interactive ? 'group-hover:scale-125 group-hover:bg-red-500' : ''}`}
-                   style={{ width: '8px', height: '8px' }}
+                   className={`rounded-full border border-white/50 transition-transform ${interactive ? 'group-hover:scale-125 group-hover:bg-red-500' : ''}`}
+                   style={{ width: '8px', height: '8px', backgroundColor: '#000', WebkitPrintColorAdjust: 'exact', printColorAdjust: 'exact' } as React.CSSProperties}
                  />
                  
                  {interactive && (

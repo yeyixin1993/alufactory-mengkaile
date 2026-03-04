@@ -354,6 +354,9 @@ def update_order_status(order_id):
         if 'memo' in data:
             order.memo = data['memo']
         
+        if 'admin_memo' in data:
+            order.admin_memo = data['admin_memo']
+        
         order.updated_at = datetime.utcnow()
         db.session.commit()
         

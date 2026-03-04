@@ -2,7 +2,7 @@
 // Add missing React import to fix namespace errors
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { DrillHole, ProfileConfig, ProfileSide, TappingConfig, Language, HoleType, ProfileFinish, CartItem, Product } from '../types';
+import { DrillHole, ProfileConfig, ProfileSide, TappingConfig, Language, HoleType, ProfileFinish, CartItem, Product, MiterCutConfig, MiterCutDirection, MiterCutSide } from '../types';
 import { TRANSLATIONS, PROFILE_VARIANTS, PROFILE_COLORS } from '../constants';
 import { Plus, Trash2, List, ShoppingCart, Pencil, X, Hammer, Settings2 } from 'lucide-react';
 import ProfileVisualizer from './ProfileVisualizer';
@@ -22,6 +22,8 @@ const getCurrency = (lang: Language) => lang === 'cn' ? '￥' : '$';
 const PRICE_HOLE_THROUGH = 1.0;
 const PRICE_HOLE_COUNTERSUNK = 1.8;
 const PRICE_TAPPING_PER_END = 1.5;
+const PRICE_MITER_CUT = 1.0;
+const MIN_PROFILE_LENGTH_MM = 100;
 
 const ProfileEditor: React.FC<ProfileEditorProps> = ({ language, product, initialItem, onAddBatchToCart, onUpdateItem, draftProfiles, setDraftProfiles }) => {
   const t = TRANSLATIONS[language];
@@ -36,6 +38,8 @@ const ProfileEditor: React.FC<ProfileEditorProps> = ({ language, product, initia
   const [length, setLength] = useState<number>(initialConfig?.length || 1000);
   const [tapping, setTapping] = useState<TappingConfig>(initialConfig?.tapping || { left: [false, false], right: [false, false] });
   const [holes, setHoles] = useState<DrillHole[]>(initialConfig?.holes || []);
+  const [miterCut, setMiterCut] = useState<MiterCutConfig>(initialConfig?.miterCut || { left: { enabled: false, direction: 'up', side: 'AC' }, right: { enabled: false, direction: 'up', side: 'AC' } });
+  const [showMiterCut, setShowMiterCut] = useState<boolean>(!!(initialConfig?.miterCut?.left?.enabled || initialConfig?.miterCut?.right?.enabled));
   
   const [selectedSide, setSelectedSide] = useState<ProfileSide>('A');
   const [newHolePos, setNewHolePos] = useState<string>('');
@@ -46,6 +50,8 @@ const ProfileEditor: React.FC<ProfileEditorProps> = ({ language, product, initia
 
   const selectedVariant = PROFILE_VARIANTS.find(v => v.id === variantId) || PROFILE_VARIANTS[0];
   const selectedColor = PROFILE_COLORS.find(c => c.id === colorId) || PROFILE_COLORS[0];
+  const isTooShort = length <= MIN_PROFILE_LENGTH_MM;
+  const isTooLong = length > selectedColor.maxLength;
 
   useEffect(() => {
     setHoles(prevHoles => prevHoles.filter(hole => hole.positionMm < length));
@@ -64,11 +70,16 @@ const ProfileEditor: React.FC<ProfileEditorProps> = ({ language, product, initia
     }
   }, [finish]);
 
-  const calculateItemUnitPrice = (len: number, currentHoles: DrillHole[], currentTapping: TappingConfig) => {
+  const calculateItemUnitPrice = (len: number, currentHoles: DrillHole[], currentTapping: TappingConfig, currentMiterCut?: MiterCutConfig) => {
     const materialPrice = (len / 1000) * selectedVariant.price[finish];
     let holeFee = currentHoles.reduce((acc, h) => acc + (h.type === 'countersunk' ? PRICE_HOLE_COUNTERSUNK : PRICE_HOLE_THROUGH), 0);
     let tappingFee = (currentTapping.left.filter(Boolean).length + currentTapping.right.filter(Boolean).length) * PRICE_TAPPING_PER_END;
-    return parseFloat((materialPrice + holeFee + tappingFee).toFixed(1));
+    let miterFee = 0;
+    if (currentMiterCut) {
+      if (currentMiterCut.left.enabled) miterFee += PRICE_MITER_CUT;
+      if (currentMiterCut.right.enabled) miterFee += PRICE_MITER_CUT;
+    }
+    return parseFloat((materialPrice + holeFee + tappingFee + miterFee).toFixed(1));
   };
 
   const addHole = () => {
@@ -81,12 +92,17 @@ const ProfileEditor: React.FC<ProfileEditorProps> = ({ language, product, initia
     }
   };
 
+  const defaultMiterCut: MiterCutConfig = { left: { enabled: false, direction: 'up', side: 'AC' }, right: { enabled: false, direction: 'up', side: 'AC' } };
+
   const addToBatch = () => {
+    if (length <= MIN_PROFILE_LENGTH_MM) { alert(t.minLengthDangerous); return; }
     if (length > selectedColor.maxLength) { alert(t.maxLengthExceeded); return; }
     const sortedHoles = [...holes].sort((a, b) => a.side.localeCompare(b.side) || a.positionMm - b.positionMm);
-    const unitPrice = calculateItemUnitPrice(length, sortedHoles, tapping);
+    // If miter cut toggle is off, pass no miter cut
+    const effectiveMiterCut = showMiterCut ? miterCut : defaultMiterCut;
+    const unitPrice = calculateItemUnitPrice(length, sortedHoles, tapping, effectiveMiterCut);
     
-    const config: ProfileConfig = { length, tapping: JSON.parse(JSON.stringify(tapping)), holes: sortedHoles, variantId, finish, colorId, unitPrice };
+    const config: ProfileConfig = { length, tapping: JSON.parse(JSON.stringify(tapping)), holes: sortedHoles, variantId, finish, colorId, unitPrice, miterCut: JSON.parse(JSON.stringify(effectiveMiterCut)) };
     
     if (initialItem) {
       onUpdateItem({ ...initialItem, config, totalPrice: parseFloat((unitPrice * initialItem.quantity).toFixed(1)) });
@@ -96,10 +112,12 @@ const ProfileEditor: React.FC<ProfileEditorProps> = ({ language, product, initia
       setEditingId(null);
       setHoles([]);
       setTapping({ left: [false, false], right: [false, false] });
+      setMiterCut({ ...defaultMiterCut });
+      setShowMiterCut(false);
     } else {
       const existingIdx = draftProfiles.findIndex(item => {
         const c = item.config as ProfileConfig;
-        return c.length === config.length && c.variantId === config.variantId && c.finish === config.finish && c.colorId === config.colorId && JSON.stringify(c.tapping) === JSON.stringify(config.tapping) && JSON.stringify(c.holes) === JSON.stringify(config.holes);
+        return c.length === config.length && c.variantId === config.variantId && c.finish === config.finish && c.colorId === config.colorId && JSON.stringify(c.tapping) === JSON.stringify(config.tapping) && JSON.stringify(c.holes) === JSON.stringify(config.holes) && JSON.stringify(c.miterCut) === JSON.stringify(config.miterCut);
       });
 
       if (existingIdx > -1) {
@@ -112,16 +130,28 @@ const ProfileEditor: React.FC<ProfileEditorProps> = ({ language, product, initia
       }
       setHoles([]);
       setTapping({ left: [false, false], right: [false, false] });
+      setMiterCut({ ...defaultMiterCut });
+      setShowMiterCut(false);
     }
   };
 
   const handleBatchConfirm = () => {
+    const hasTooShortProfile = draftProfiles.some(item => {
+      const cfg = item.config as ProfileConfig;
+      return cfg.length <= MIN_PROFILE_LENGTH_MM;
+    });
+
+    if (hasTooShortProfile) {
+      alert(t.minLengthDangerous);
+      return;
+    }
+
     onAddBatchToCart(draftProfiles);
     setDraftProfiles([]);
     navigate('/cart');
   };
 
-  const currentUnitPrice = calculateItemUnitPrice(length, holes, tapping);
+  const currentUnitPrice = calculateItemUnitPrice(length, holes, tapping, miterCut);
   const grooveCount = (['2040', '3060', '2040-N1-20', '2040-N1-40'].includes(selectedVariant.id) && (selectedSide === 'B' || selectedSide === 'D')) ? 2 : 1;
 
   return (
@@ -178,10 +208,11 @@ const ProfileEditor: React.FC<ProfileEditorProps> = ({ language, product, initia
         <div className="mb-8">
             <label className="block text-xs font-black text-slate-400 uppercase mb-2">{t.length} </label>
             <div className="relative">
-              <input type="number" value={length} onChange={(e) => setLength(Math.max(0, parseFloat(e.target.value)))} className={`w-full border rounded-xl px-4 py-3 outline-none font-black text-xl ${length > selectedColor.maxLength ? 'border-red-300 text-red-600 bg-red-50' : 'border-slate-200 bg-slate-50'}`} />
+              <input type="number" min={MIN_PROFILE_LENGTH_MM + 1} value={length} onChange={(e) => setLength(Math.max(0, parseFloat(e.target.value)))} className={`w-full border rounded-xl px-4 py-3 outline-none font-black text-xl ${isTooLong || isTooShort ? 'border-red-300 text-red-600 bg-red-50' : 'border-slate-200 bg-slate-50'}`} />
               <div className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 text-sm font-black">MM</div>
             </div>
-            {length > selectedColor.maxLength && <div className="text-red-500 text-xs mt-2 font-bold">{t.maxLengthExceeded} ({selectedColor.maxLength}mm)</div>}
+            {isTooShort && <div className="text-red-600 text-xs mt-2 font-black">{t.minLengthDangerous} (&gt;{MIN_PROFILE_LENGTH_MM}mm)</div>}
+            {isTooLong && <div className="text-red-500 text-xs mt-2 font-bold">{t.maxLengthExceeded} ({selectedColor.maxLength}mm)</div>}
         </div>
 
         <div className="mb-8 bg-slate-50 p-6 rounded-2xl border border-slate-100">
@@ -211,17 +242,124 @@ const ProfileEditor: React.FC<ProfileEditorProps> = ({ language, product, initia
                   </select>
                 </div>
               )}
+        {/* Miter Cut 45° Toggle */}
+        <div className="mb-4">
+          <label className="flex items-center gap-3 cursor-pointer select-none">
+            <input
+              type="checkbox"
+              checked={showMiterCut}
+              onChange={(e) => {
+                setShowMiterCut(e.target.checked);
+                if (!e.target.checked) {
+                  setMiterCut({ left: { enabled: false, direction: 'up', side: 'AC' }, right: { enabled: false, direction: 'up', side: 'AC' } });
+                }
+              }}
+              className="w-5 h-5 rounded border-slate-300 text-amber-500 focus:ring-amber-400"
+            />
+            <span className="text-xs font-black text-slate-500 uppercase tracking-widest flex items-center gap-2">
+              <span className="text-amber-500 text-lg">◿</span> {t.miterCutToggle}
+            </span>
+          </label>
+        </div>
+
+        {/* Miter Cut 45° Section - conditionally shown */}
+        {showMiterCut && (
+        <div className="mb-8 bg-amber-50 p-6 rounded-2xl border border-amber-100">
+           <h4 className="text-xs font-black text-slate-400 uppercase mb-4 flex items-center gap-2 tracking-widest">
+             <span className="text-amber-500 text-lg">◿</span> {t.miterCut} <span className="text-[10px] font-normal text-amber-600 ml-2">({t.miterCutPrice})</span>
+           </h4>
+           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {/* Left End */}
+              <div className="bg-white p-4 rounded-xl border border-amber-200">
+                <div className="flex items-center justify-between mb-3">
+                  <label className="text-[10px] font-black text-slate-500 uppercase">{t.miterCutLeft}</label>
+                  <button
+                    onClick={() => setMiterCut(prev => ({ ...prev, left: { ...prev.left, enabled: !prev.left.enabled } }))}
+                    className={`w-10 h-6 rounded-full transition-colors ${miterCut.left.enabled ? 'bg-amber-500' : 'bg-slate-200'} relative`}
+                  >
+                    <span className={`absolute top-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform ${miterCut.left.enabled ? 'translate-x-4' : 'translate-x-0.5'}`}></span>
+                  </button>
+                </div>
+                {miterCut.left.enabled && (
+                  <div className="space-y-3">
+                    <div>
+                      <label className="block text-[10px] font-black text-slate-400 uppercase mb-1">{t.miterCutSide}</label>
+                      <select
+                        value={miterCut.left.side || 'AC'}
+                        onChange={e => setMiterCut(prev => ({ ...prev, left: { ...prev.left, side: e.target.value as MiterCutSide } }))}
+                        className="w-full border rounded-xl px-3 py-2 text-sm bg-white font-black"
+                      >
+                        <option value="AC">{t.miterCutSideAC}</option>
+                        <option value="BD">{t.miterCutSideBD}</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-[10px] font-black text-slate-400 uppercase mb-1">{t.miterCutDirection}</label>
+                      <select
+                        value={miterCut.left.direction}
+                        onChange={e => setMiterCut(prev => ({ ...prev, left: { ...prev.left, direction: e.target.value as MiterCutDirection } }))}
+                        className="w-full border rounded-xl px-3 py-2 text-sm bg-white font-black"
+                      >
+                        <option value="up">{t.miterCutUp} ◸</option>
+                        <option value="down">{t.miterCutDown} ◺</option>
+                      </select>
+                    </div>
+                  </div>
+                )}
+              </div>
+              {/* Right End */}
+              <div className="bg-white p-4 rounded-xl border border-amber-200">
+                <div className="flex items-center justify-between mb-3">
+                  <label className="text-[10px] font-black text-slate-500 uppercase">{t.miterCutRight}</label>
+                  <button
+                    onClick={() => setMiterCut(prev => ({ ...prev, right: { ...prev.right, enabled: !prev.right.enabled } }))}
+                    className={`w-10 h-6 rounded-full transition-colors ${miterCut.right.enabled ? 'bg-amber-500' : 'bg-slate-200'} relative`}
+                  >
+                    <span className={`absolute top-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform ${miterCut.right.enabled ? 'translate-x-4' : 'translate-x-0.5'}`}></span>
+                  </button>
+                </div>
+                {miterCut.right.enabled && (
+                  <div className="space-y-3">
+                    <div>
+                      <label className="block text-[10px] font-black text-slate-400 uppercase mb-1">{t.miterCutSide}</label>
+                      <select
+                        value={miterCut.right.side || 'AC'}
+                        onChange={e => setMiterCut(prev => ({ ...prev, right: { ...prev.right, side: e.target.value as MiterCutSide } }))}
+                        className="w-full border rounded-xl px-3 py-2 text-sm bg-white font-black"
+                      >
+                        <option value="AC">{t.miterCutSideAC}</option>
+                        <option value="BD">{t.miterCutSideBD}</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-[10px] font-black text-slate-400 uppercase mb-1">{t.miterCutDirection}</label>
+                      <select
+                        value={miterCut.right.direction}
+                        onChange={e => setMiterCut(prev => ({ ...prev, right: { ...prev.right, direction: e.target.value as MiterCutDirection } }))}
+                        className="w-full border rounded-xl px-3 py-2 text-sm bg-white font-black"
+                      >
+                        <option value="up">{t.miterCutUp} ◹</option>
+                        <option value="down">{t.miterCutDown} ◿</option>
+                      </select>
+                    </div>
+                  </div>
+                )}
+              </div>
+           </div>
+        </div>
+        )}
+
         <div className="mb-8">
           <div className="flex justify-between items-center mb-4">
              <span className="text-xs font-black text-slate-400 uppercase tracking-widest">{t.previewAndTapping}</span>
              <div className="text-lg font-black text-blue-600">{currency}{currentUnitPrice.toFixed(1)} / pc</div>
           </div>
           <div className="bg-slate-50 p-4 rounded-3xl border border-slate-100">
-            <ProfileVisualizer config={{ length, variantId, holes, tapping, finish, colorId }} selectedSide={selectedSide} onSideChange={setSelectedSide} interactive={true} tapLabel={t.tapAction} onTapToggle={(s, i) => setTapping(prev => { const n = [...prev[s]]; n[i] = !n[i]; return {...prev, [s]: n}; })} onHoleClick={(id) => setHoles(holes.filter(h => h.id !== id))} onBarClick={(e, l, r) => { const mm = Math.round(((e.clientX - r.left) / r.width) * l); if (grooveCount === 2) setSelectedGrooveIndex((e.clientY - r.top) / r.height > 0.5 ? 1 : 0); if (mm >= 0 && mm < l) setNewHolePos(mm.toString()); }} />
+            <ProfileVisualizer config={{ length, variantId, holes, tapping, finish, colorId, miterCut }} selectedSide={selectedSide} onSideChange={setSelectedSide} interactive={true} tapLabel={t.tapAction} onTapToggle={(s, i) => setTapping(prev => { const n = [...prev[s]]; n[i] = !n[i]; return {...prev, [s]: n}; })} onHoleClick={(id) => setHoles(holes.filter(h => h.id !== id))} onBarClick={(e, l, r) => { const mm = Math.round(((e.clientX - r.left) / r.width) * l); if (grooveCount === 2) setSelectedGrooveIndex((e.clientY - r.top) / r.height > 0.5 ? 1 : 0); if (mm >= 0 && mm < l) setNewHolePos(mm.toString()); }} />
           </div>
         </div>
 
-        <button onClick={addToBatch} disabled={length > selectedColor.maxLength} className={`w-full py-5 font-black rounded-2xl shadow-xl transition-all flex items-center justify-center gap-3 uppercase tracking-widest ${initialItem || editingId ? 'bg-blue-600 hover:bg-blue-700 text-white shadow-blue-600/20' : 'bg-slate-900 hover:bg-slate-800 text-white shadow-slate-900/10'}`}>
+        <button onClick={addToBatch} disabled={isTooLong || isTooShort} className={`w-full py-5 font-black rounded-2xl shadow-xl transition-all flex items-center justify-center gap-3 uppercase tracking-widest ${isTooLong || isTooShort ? 'bg-slate-200 text-slate-400 cursor-not-allowed shadow-none' : (initialItem || editingId ? 'bg-blue-600 hover:bg-blue-700 text-white shadow-blue-600/20' : 'bg-slate-900 hover:bg-slate-800 text-white shadow-slate-900/10')}`}>
           {initialItem ? 'Save Updates' : (editingId ? t.updateBatchItem : t.addToBatch)}
         </button>
       </div>
@@ -259,6 +397,8 @@ const ProfileEditor: React.FC<ProfileEditorProps> = ({ language, product, initia
                             <span className="text-[10px] font-black px-2 py-0.5 bg-blue-100 text-blue-700 rounded-full">{item.config.holes.length}H</span>
                             {item.config.tapping.left.some((b:boolean)=>b) && <span className="text-[10px] font-black px-2 py-0.5 bg-red-100 text-red-600 rounded-full">L-TAP</span>}
                             {item.config.tapping.right.some((b:boolean)=>b) && <span className="text-[10px] font-black px-2 py-0.5 bg-red-100 text-red-600 rounded-full">R-TAP</span>}
+                            {item.config.miterCut?.left?.enabled && <span className="text-[10px] font-black px-2 py-0.5 bg-amber-100 text-amber-700 rounded-full">L-45°({item.config.miterCut.left.side || 'AC'})</span>}
+                            {item.config.miterCut?.right?.enabled && <span className="text-[10px] font-black px-2 py-0.5 bg-amber-100 text-amber-700 rounded-full">R-45°({item.config.miterCut.right.side || 'AC'})</span>}
                           </div>
                         </td>
                         <td className="px-4 text-center">
@@ -267,7 +407,7 @@ const ProfileEditor: React.FC<ProfileEditorProps> = ({ language, product, initia
                         <td className="px-4 font-black text-blue-600">{currency}{item.totalPrice.toFixed(1)}</td>
                         <td className="px-4 text-right">
                           <div className="flex gap-1 justify-end opacity-0 group-hover:opacity-100 transition-opacity">
-                            <button onClick={() => { setEditingId(item.id); setVariantId(item.config.variantId); setLength(item.config.length); setHoles(item.config.holes); setTapping(item.config.tapping); setFinish(item.config.finish); setColorId(item.config.colorId); }} className="p-2 text-slate-400 hover:text-blue-600 hover:bg-white rounded-xl transition-all"><Pencil className="w-4 h-4"/></button>
+                            <button onClick={() => { setEditingId(item.id); setVariantId(item.config.variantId); setLength(item.config.length); setHoles(item.config.holes); setTapping(item.config.tapping); setFinish(item.config.finish); setColorId(item.config.colorId); const mc = item.config.miterCut || { left: { enabled: false, direction: 'up', side: 'AC' }, right: { enabled: false, direction: 'up', side: 'AC' } }; setMiterCut(mc); setShowMiterCut(!!(mc.left?.enabled || mc.right?.enabled)); }} className="p-2 text-slate-400 hover:text-blue-600 hover:bg-white rounded-xl transition-all"><Pencil className="w-4 h-4"/></button>
                             <button onClick={() => setDraftProfiles(draftProfiles.filter(x => x.id !== item.id))} className="p-2 text-slate-400 hover:text-red-500 hover:bg-white rounded-xl transition-all"><Trash2 className="w-4 h-4"/></button>
                           </div>
                         </td>

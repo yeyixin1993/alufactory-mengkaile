@@ -153,6 +153,7 @@ class Order(db.Model):
     user_id = db.Column(db.String(36), db.ForeignKey('users.id'), nullable=False)
     
     # Shipping address at order time
+    address_id = db.Column(db.String(36), nullable=True)  # Reference to original address ID
     recipient_name = db.Column(db.String(120), nullable=False)
     phone = db.Column(db.String(20), nullable=False)
     province = db.Column(db.String(50), nullable=False)
@@ -162,6 +163,8 @@ class Order(db.Model):
     subtotal = db.Column(db.Float, default=0)
     shipping_fee = db.Column(db.Float, default=0)
     total_amount = db.Column(db.Float, nullable=False)
+    shipping_method = db.Column(db.String(50), nullable=True)  # standard / sf / anneng
+    overlength_fee = db.Column(db.Float, default=0)  # 超长费
     
     # Status: pending, confirmed, shipped, delivered, cancelled
     status = db.Column(db.String(50), default='pending', nullable=False)
@@ -169,8 +172,11 @@ class Order(db.Model):
     # Tracking info
     tracking_number = db.Column(db.String(100), nullable=True)
     
-    # Order memo
+    # Order memo (customer memo)
     memo = db.Column(db.Text, nullable=True)
+    
+    # Admin memo (visible to customer as read-only)
+    admin_memo = db.Column(db.Text, nullable=True)
     
     # Timestamps
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
@@ -187,6 +193,7 @@ class Order(db.Model):
             'id': self.id,
             'order_number': self.order_number,
             'user_id': self.user_id,
+            'address_id': self.address_id,
             'recipient_name': self.recipient_name,
             'phone': self.phone,
             'province': self.province,
@@ -194,9 +201,12 @@ class Order(db.Model):
             'subtotal': self.subtotal,
             'shipping_fee': self.shipping_fee,
             'total_amount': self.total_amount,
+            'shipping_method': self.shipping_method,
+            'overlength_fee': self.overlength_fee,
             'status': self.status,
             'tracking_number': self.tracking_number,
             'memo': self.memo,
+            'admin_memo': self.admin_memo,
             'items': [item.to_dict() for item in self.items],
             'created_at': self.created_at.isoformat(),
             'updated_at': self.updated_at.isoformat(),

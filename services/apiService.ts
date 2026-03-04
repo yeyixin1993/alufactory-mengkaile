@@ -295,9 +295,12 @@ class ApiServiceClass {
       phone: order.address.phone,
       province: order.address.province,
       address_detail: order.address.detail,
+      address_id: order.address.id || '',
       subtotal: order.total - order.shippingFee,
       shipping_fee: order.shippingFee,
       total_amount: order.total,
+      shipping_method: order.shippingMethod || '',
+      overlength_fee: order.overlengthFee || 0,
     };
 
     // Debug logging
@@ -306,6 +309,7 @@ class ApiServiceClass {
     const data = await this.request('POST', '/orders', payload);
     return {
       id: data.order.id,
+      orderNumber: data.order.order_number,
       date: new Date().toISOString(),
       items: order.items,
       total: data.order.total_amount,
@@ -313,6 +317,9 @@ class ApiServiceClass {
       status: 'pending' as const,
       userId: data.order.user_id,
       address: order.address,
+      addressId: order.address.id,
+      shippingMethod: order.shippingMethod,
+      overlengthFee: order.overlengthFee,
     };
   }
 
@@ -321,6 +328,7 @@ class ApiServiceClass {
     const orders = data.orders || data;
     return Array.isArray(orders) ? orders.map((order: any) => ({
       id: order.id,
+      orderNumber: order.order_number,
       date: order.created_at,
       items: (order.items || []).map((item: any) => ({
         id: item.id,
@@ -341,12 +349,22 @@ class ApiServiceClass {
       status: order.status,
       userId: order.user_id,
       address: order.address || {
-        id: '',
+        id: order.address_id || '',
         recipient_name: order.recipient_name,
         phone: order.phone,
         province: order.province,
         detail: order.address_detail
       },
+      addressId: order.address_id,
+      trackingNumber: order.tracking_number,
+      memo: order.memo,
+      adminMemo: order.admin_memo,
+      updatedAt: order.updated_at,
+      shippedAt: order.shipped_at,
+      deliveredAt: order.delivered_at,
+      cancelledAt: order.cancelled_at,
+      shippingMethod: order.shipping_method,
+      overlengthFee: order.overlength_fee,
     })) : [];
   }
 

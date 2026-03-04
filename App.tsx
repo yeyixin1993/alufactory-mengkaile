@@ -3,12 +3,14 @@ import React, { useState, useEffect, useRef } from 'react';
 import { HashRouter, Routes, Route, Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { ShoppingCart, User as UserIcon, LogOut, Menu, X, Globe, Home, Package, History, Settings, FileDown, Eye, Truck, MapPin, Plus, Trash2, Edit2, CheckCircle, ArrowLeft, Lock, Save, UserCheck, Key, Info, Pencil, ChevronRight, Download } from 'lucide-react';
 import { Language, User, CartItem, Product, ProductType, ProfileConfig, PlateConfig, Order, ProfileSide, DrillHole, Address, ProfileVariant, ColorDef } from './types';
-import { TRANSLATIONS, INITIAL_PRODUCTS, PROFILE_COLORS, PROFILE_VARIANTS, PROFILE_WEIGHTS, SHIPPING_RATES } from './constants';
+import { TRANSLATIONS, INITIAL_PRODUCTS, PROFILE_COLORS, PROFILE_VARIANTS, PROFILE_WEIGHTS, SHIPPING_RATES, SHIPPING_RATES_SF, SHIPPING_RATES_AN, SHIPPING_METHOD_NAMES } from './constants';
+import type { ShippingMethod } from './constants';
 import { ApiService } from './services/apiService';
 import ProfileEditor from './components/ProfileEditor';
 import PlateEditor from './components/PlateEditor';
 import ProfileVisualizer from './components/ProfileVisualizer';
-import FactorySheetPreview from './components/FactorySheetPreview';
+import { openFactorySheetPreview } from './components/FactorySheetPreview';
+import FactorySheetPreviewPage from './components/FactorySheetPreviewPage';
 import FactorySheet from './components/FactorySheet';
 import { jsPDF } from 'jspdf';
 import html2canvas from 'html2canvas';
@@ -40,13 +42,15 @@ const mergeCartItems = (currentCart: CartItem[], newItems: CartItem[]): CartItem
 };
 
 const LanguageSwitcher: React.FC<{ current: Language, onChange: (l: Language) => void }> = ({ current, onChange }) => (
-  <div className="flex bg-slate-100 p-1 rounded-xl">
-    {(['en', 'cn', 'jp'] as Language[]).map(lang => (
-      <button key={lang} onClick={() => onChange(lang)} className={`px-3 py-1 rounded-lg text-xs font-black transition-all ${current === lang ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}>
-        {lang.toUpperCase()}
-      </button>
-    ))}
-  </div>
+  <select 
+    value={current} 
+    onChange={(e) => onChange(e.target.value as Language)}
+    className="px-3 py-2 bg-white border border-slate-200 rounded-lg text-xs font-black text-slate-700 hover:border-slate-300 transition-all cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-500"
+  >
+    <option value="en">EN</option>
+    <option value="cn">中文</option>
+    <option value="jp">日本語</option>
+  </select>
 );
 
 // --- PDF Export with Page Margins ---
@@ -256,6 +260,9 @@ const UserProfile: React.FC<{
               dateStr={new Date(printOrder.date).toLocaleDateString()} 
               showPrice={printWithPrice}
               address={printOrder.address}
+              shippingMethod={printOrder.shippingMethod}
+              shippingFee={printOrder.shippingFee}
+              overlengthFee={printOrder.overlengthFee}
             />
           )}
         </div>
@@ -297,14 +304,27 @@ const UserProfile: React.FC<{
            <div className="bg-white p-8 rounded-3xl shadow-xl border border-slate-100">
               <h3 className="text-xl font-black text-slate-800 mb-6 flex items-center gap-2"><History className="w-5 h-5 text-blue-600"/> {t.orderHistory}</h3>
               <div className="space-y-4">
-                 {orders.sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime()).map(o => (
+                 {orders.sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime()).map(o => {
+                   const statusMap: Record<string, { label: string, color: string, bg: string, border: string }> = {
+                     pending: { label: t.statusPending, color: 'text-amber-700', bg: 'bg-amber-50', border: 'border-amber-200' },
+                     confirmed: { label: t.statusConfirmed, color: 'text-blue-700', bg: 'bg-blue-50', border: 'border-blue-200' },
+                     shipped: { label: t.statusShipped, color: 'text-purple-700', bg: 'bg-purple-50', border: 'border-purple-200' },
+                     delivered: { label: t.statusDelivered, color: 'text-green-700', bg: 'bg-green-50', border: 'border-green-200' },
+                     cancelled: { label: t.statusCancelled, color: 'text-red-700', bg: 'bg-red-50', border: 'border-red-200' },
+                   };
+                   const statusStyle = statusMap[o.status] || statusMap.pending;
+                   const apiBaseUrl = (import.meta.env.VITE_API_URL || '').trim().replace(/\/+$/, '') || `${window.location.origin}/api`;
+                   const pdfUrl = `${apiBaseUrl}/orders/${o.id}/pdf`;
+                   
+                   return (
                    <div key={o.id} className="p-6 border rounded-3xl hover:border-blue-200 transition-colors border-slate-100 bg-white">
                       <div className="flex flex-col justify-between gap-4">
                         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center">
                           <div>
                             <div className="text-xs text-slate-400 mb-1">{new Date(o.date).toLocaleString()}</div>
-                            <div className="font-black text-slate-800">Order #{o.id}</div>
+                            <div className="font-black text-slate-800">Order #{o.orderNumber || o.id}</div>
                             <div className="text-lg font-black text-blue-600 mt-1">{getCurrency(language)}{getOrderTotal(o).toFixed(1)}</div>
+                            <span className={`inline-block mt-2 text-[11px] font-black px-3 py-1 rounded-full border ${statusStyle.bg} ${statusStyle.color} ${statusStyle.border}`}>{statusStyle.label}</span>
                           </div>
                           <div className="flex flex-wrap gap-2 mt-4 sm:mt-0">
                              {user.role === 'admin' && (
@@ -317,10 +337,45 @@ const UserProfile: React.FC<{
                                  </button>
                                </>
                              )}
+                             {/*<a href={pdfUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 bg-green-50 text-green-600 px-3 py-2 rounded-xl text-xs font-black hover:bg-green-100 transition-all border border-green-100">
+                               <Eye className="w-3 h-3"/> {t.viewPdf}
+                             </a>*/}
                              <button onClick={() => onEditOrder(o)} className="p-2.5 bg-slate-50 hover:bg-slate-100 text-slate-600 rounded-xl transition-colors border border-slate-200"><Edit2 className="w-4 h-4"/></button>
-                             <button onClick={() => deleteOrder(o.id)} className="p-2.5 bg-red-50 hover:bg-red-100 text-red-500 rounded-xl transition-colors border border-red-100"><Trash2 className="w-4 h-4"/></button>
+                             {!['confirmed', 'shipped', 'delivered'].includes(o.status) && (
+                               <button onClick={() => deleteOrder(o.id)} className="p-2.5 bg-red-50 hover:bg-red-100 text-red-500 rounded-xl transition-colors border border-red-100"><Trash2 className="w-4 h-4"/></button>
+                             )}
                           </div>
                         </div>
+                        
+                        {/* Order Update Info - read-only status section */}
+                        <div className="p-4 bg-gradient-to-r from-indigo-50 to-blue-50 rounded-2xl border border-indigo-100">
+                           <h4 className="text-[10px] font-black text-indigo-400 uppercase tracking-widest mb-3 flex items-center gap-1.5"><Info className="w-3 h-3"/> {t.orderUpdateInfo}</h4>
+                           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                             <div>
+                               <span className="text-[10px] font-black text-slate-400 uppercase">{t.trackingNumber}</span>
+                               <div className="text-sm font-bold text-slate-800 mt-0.5">
+                                 {o.trackingNumber ? (
+                                   <span className="bg-white px-3 py-1 rounded-lg border border-slate-200 inline-block">{o.trackingNumber}</span>
+                                 ) : (
+                                   <span className="text-slate-400 italic text-xs">{t.noTrackingYet}</span>
+                                 )}
+                               </div>
+                             </div>
+                             <div>
+                               <span className="text-[10px] font-black text-slate-400 uppercase">{t.orderUpdatedAt}</span>
+                               <div className="text-xs font-bold text-slate-600 mt-0.5">
+                                 {o.updatedAt ? new Date(o.updatedAt).toLocaleString() : '-'}
+                               </div>
+                             </div>
+                             {o.adminMemo && (
+                               <div className="sm:col-span-2">
+                                 <span className="text-[10px] font-black text-slate-400 uppercase">{t.adminNote}</span>
+                                 <div className="text-sm font-bold text-slate-700 mt-0.5 bg-white p-3 rounded-xl border border-slate-200 whitespace-pre-wrap">{o.adminMemo}</div>
+                               </div>
+                             )}
+                           </div>
+                        </div>
+
                         <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100">
                            <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">{t.shippingAddress}</h4>
                            <div className="text-xs font-bold text-slate-700">
@@ -336,7 +391,8 @@ const UserProfile: React.FC<{
                         </div>
                       </div>
                    </div>
-                 ))}
+                   );
+                 })}
                  {orders.length === 0 && <p className="text-center py-20 text-slate-300 italic font-black">{t.noTransaction}</p>}
               </div>
            </div>
@@ -591,12 +647,20 @@ const Cart: React.FC<{
   const t = TRANSLATIONS[language];
   const currency = getCurrency(language);
   const navigate = useNavigate();
-  const [showPreview, setShowPreview] = useState(false);
+  const location = useLocation();
+  // showPreview state no longer needed — preview opens in new window
   const [isExporting, setIsExporting] = useState(false);
   const [pdfIncludePrice, setPdfIncludePrice] = useState(true);
   
-  const [selectedAddressId, setSelectedAddressId] = useState<string | null>(user?.addresses?.[0]?.id || null);
+  // Read addressId from URL query params (set when editing an existing order)
+  const searchParams = new URLSearchParams(location.search);
+  const initialAddressId = searchParams.get('addressId');
+  
+  const [selectedAddressId, setSelectedAddressId] = useState<string | null>(
+    initialAddressId || user?.addresses?.[0]?.id || null
+  );
   const [isEditingAddress, setIsEditingAddress] = useState<Address | null | 'new'>(null);
+  const [selectedCourier, setSelectedCourier] = useState<ShippingMethod | 'auto'>('auto');
 
   const printRef = useRef<HTMLDivElement>(null);
   const addresses = user?.addresses || [];
@@ -608,33 +672,76 @@ const Cart: React.FC<{
     }
   }, [addresses, selectedAddressId]);
 
-  const calculateTotal = () => {
-    const base = cart.reduce((acc, i) => acc + i.totalPrice, 0);
-    
-    let totalWeightKg = 0;
-    cart.forEach(item => {
-       if (item.product.type === ProductType.PROFILE) {
-          const cfg = item.config as ProfileConfig;
-          const weightPerM = PROFILE_WEIGHTS[cfg.variantId!] || 0.6;
-          totalWeightKg += weightPerM * (cfg.length / 1000) * item.quantity;
-       } else {
-          totalWeightKg += 1 * item.quantity;
-       }
-    });
-
-    const shipRate = selectedAddress ? (SHIPPING_RATES[selectedAddress.province] || { first: 15, next: 0 }) : { first: 0, next: 0 };
-    
-    let shippingFee = 0;
-    if (selectedAddress) {
-       // Accurate "首重 + 次重" calculation
-       const roundedWeight = Math.max(1, Math.ceil(totalWeightKg));
-       shippingFee = shipRate.first + (roundedWeight - 1) * shipRate.next;
+  // Check if any profile item exceeds 1.4m (1400mm)
+  const hasOverlength = cart.some(item => {
+    if (item.product.type === ProductType.PROFILE) {
+      const cfg = item.config as ProfileConfig;
+      return cfg.length > 1400;
     }
+    return false;
+  });
 
-    return { base, ship: shippingFee, total: base + shippingFee };
+  // Calculate total weight
+  const totalWeightKg = React.useMemo(() => {
+    let w = 0;
+    cart.forEach(item => {
+      if (item.product.type === ProductType.PROFILE) {
+        const cfg = item.config as ProfileConfig;
+        const weightPerM = PROFILE_WEIGHTS[cfg.variantId!] || 0.6;
+        w += weightPerM * (cfg.length / 1000) * item.quantity;
+      } else {
+        w += 1 * item.quantity;
+      }
+    });
+    return w;
+  }, [cart]);
+
+  // Calculate shipping fee for a given courier method
+  const calcShippingForMethod = (method: ShippingMethod, province: string): { fee: number, overlength: number } => {
+    const overlength = (method === 'standard' || method === 'sf') && hasOverlength ? 20 : 0;
+    
+    if (method === 'anneng') {
+      // 安能: 15kg以内是首重价, 15kg以上每kg续重
+      const rate = SHIPPING_RATES_AN[province] || { first: 50, next: 3 };
+      if (totalWeightKg <= 15) {
+        return { fee: rate.first, overlength: 0 };
+      } else {
+        const extraKg = Math.ceil(totalWeightKg - 15);
+        return { fee: rate.first + extraKg * rate.next, overlength: 0 };
+      }
+    } else if (method === 'sf') {
+      // 顺丰: 首重1kg, 续重每kg
+      const rate = SHIPPING_RATES_SF[province] || { first: 15, next: 5 };
+      const roundedWeight = Math.max(1, Math.ceil(totalWeightKg));
+      return { fee: rate.first + (roundedWeight - 1) * rate.next + overlength, overlength };
+    } else {
+      // 普通快递: 首重1kg, 续重每kg
+      const rate = SHIPPING_RATES[province] || { first: 18, next: 5 };
+      const roundedWeight = Math.max(1, Math.ceil(totalWeightKg));
+      return { fee: rate.first + (roundedWeight - 1) * rate.next + overlength, overlength };
+    }
   };
 
-  const { base: baseTotal, ship: shippingFee, total: finalTotal } = calculateTotal();
+  // Calculate all 3 shipping fees
+  const shippingOptions = React.useMemo(() => {
+    if (!selectedAddress) return { standard: { fee: 0, overlength: 0 }, sf: { fee: 0, overlength: 0 }, anneng: { fee: 0, overlength: 0 }, cheapest: 'standard' as ShippingMethod };
+    const province = selectedAddress.province;
+    const std = calcShippingForMethod('standard', province);
+    const sf = calcShippingForMethod('sf', province);
+    const an = calcShippingForMethod('anneng', province);
+    const cheapest: ShippingMethod = std.fee <= sf.fee && std.fee <= an.fee ? 'standard' : sf.fee <= an.fee ? 'sf' : 'anneng';
+    return { standard: std, sf, anneng: an, cheapest };
+  }, [selectedAddress, totalWeightKg, hasOverlength]);
+
+  const activeCourier: ShippingMethod = selectedCourier === 'auto' ? shippingOptions.cheapest : selectedCourier;
+  const activeShipping = shippingOptions[activeCourier];
+
+  const calculateTotal = () => {
+    const base = cart.reduce((acc, i) => acc + i.totalPrice, 0);
+    return { base, ship: activeShipping.fee, overlength: activeShipping.overlength, total: base + activeShipping.fee };
+  };
+
+  const { base: baseTotal, ship: shippingFee, overlength: overlengthFee, total: finalTotal } = calculateTotal();
 
   const handleGeneratePDF = async (includePrice: boolean = true, returnBase64: boolean = false) => {
     setPdfIncludePrice(includePrice);
@@ -659,7 +766,9 @@ const Cart: React.FC<{
         date: new Date().toISOString(), 
         items: [...cart], 
         total: finalTotal, 
-        shippingFee, 
+        shippingFee,
+        overlengthFee,
+        shippingMethod: SHIPPING_METHOD_NAMES[activeCourier][language],
         status: 'pending', 
         userId: user.id, 
         address: selectedAddress 
@@ -734,19 +843,14 @@ const Cart: React.FC<{
             dateStr={new Date().toLocaleDateString()} 
             showPrice={pdfIncludePrice}
             address={selectedAddress || undefined}
+            shippingMethod={SHIPPING_METHOD_NAMES[activeCourier][language]}
+            shippingFee={shippingFee}
+            overlengthFee={overlengthFee}
           />
         </div>
       </div>
 
-      {showPreview && (
-        <FactorySheetPreview 
-           cart={cart} 
-           user={user} 
-           language={language} 
-           onClose={() => setShowPreview(false)} 
-           onDownload={() => handleGeneratePDF(true)} 
-        />
-      )}
+      {/* Preview now opens in a new window via openFactorySheetPreview */}
       
       {isEditingAddress && (
         <AddressModal 
@@ -782,7 +886,7 @@ const Cart: React.FC<{
           <div className="flex justify-between items-center bg-white p-5 rounded-[2rem] shadow-xl border border-slate-100">
             <Link to="/product/p2" className="flex items-center gap-2 text-blue-600 font-black px-5 py-3 rounded-2xl hover:bg-blue-50 transition-all text-sm"><ArrowLeft className="w-4 h-4"/> {t.continueShopping}</Link>
             <div className="flex gap-2">
-              <button onClick={() => setShowPreview(true)} className="flex items-center gap-2 text-slate-700 font-bold px-5 py-3 rounded-2xl border border-slate-200 hover:bg-slate-50 transition-all text-sm"><Eye className="w-4 h-4"/> {t.preview}</button>
+              <button onClick={() => openFactorySheetPreview({ cart, user, language, showPrice: true, address: selectedAddress || undefined, shippingMethod: SHIPPING_METHOD_NAMES[activeCourier][language], shippingFee, overlengthFee })} className="flex items-center gap-2 text-slate-700 font-bold px-5 py-3 rounded-2xl border border-slate-200 hover:bg-slate-50 transition-all text-sm"><Eye className="w-4 h-4"/> {t.preview}</button>
               {user?.role === 'admin' && (
                 <button onClick={() => handleGeneratePDF(false)} className="flex items-center gap-2 text-orange-600 font-bold px-5 py-3 rounded-2xl border border-orange-100 bg-orange-50 hover:bg-orange-100 transition-all text-sm"><FileDown className="w-4 h-4"/> {t.downloadNoPrice}</button>
               )}
@@ -842,6 +946,8 @@ const Cart: React.FC<{
                         <span className="text-[10px] font-black px-3 py-1 bg-slate-100 rounded-full text-slate-500 uppercase">{profileConfig.variantId}</span>
                         <span className="text-[10px] font-black px-3 py-1 bg-blue-50 rounded-full text-blue-600 uppercase">{profileConfig.length}mm</span>
                         {colorDef && <span className="text-[10px] font-black px-3 py-1 bg-orange-50 rounded-full text-orange-600 uppercase">{colorDef.name[language]}</span>}
+                        {profileConfig.miterCut?.left?.enabled && <span className="text-[10px] font-black px-3 py-1 bg-amber-100 rounded-full text-amber-700 uppercase">L-45°({profileConfig.miterCut.left.side || 'AC'})</span>}
+                        {profileConfig.miterCut?.right?.enabled && <span className="text-[10px] font-black px-3 py-1 bg-amber-100 rounded-full text-amber-700 uppercase">R-45°({profileConfig.miterCut.right.side || 'AC'})</span>}
                       </div>
                       <div className="h-28 w-full max-w-lg bg-slate-50/50 rounded-[2rem] p-4">
                         <ProfileVisualizer config={item.config} selectedSide="A" onSideChange={() => {}} interactive={false} tapLabel={t.tapAction} showSideSelector={false} />
@@ -857,9 +963,40 @@ const Cart: React.FC<{
         <div className="space-y-6">
           <div className="bg-slate-900 text-white p-10 rounded-[3rem] sticky top-24 shadow-2xl border border-slate-800">
             <h3 className="text-2xl font-black mb-10 border-b border-slate-800 pb-6 flex items-center gap-3"><ShoppingCart className="w-6 h-6 text-blue-500"/> Order Summary</h3>
-            <div className="space-y-6 mb-12">
+            <div className="space-y-6 mb-8">
               <div className="flex justify-between text-slate-400 font-bold"><span>Subtotal</span><span className="text-white font-black text-lg">{currency}{baseTotal.toFixed(1)}</span></div>
-              <div className="flex justify-between text-slate-400 font-bold"><span>Shipping</span><span className="text-white font-black text-lg">{currency}{shippingFee.toFixed(1)}</span></div>
+              
+              {/* Courier Selector */}
+              <div>
+                <div className="flex justify-between items-center text-slate-400 font-bold mb-3">
+                  <span className="flex items-center gap-2"><Truck className="w-4 h-4"/>{t.courierSelect}</span>
+                </div>
+                <select 
+                  value={selectedCourier} 
+                  onChange={e => setSelectedCourier(e.target.value as ShippingMethod | 'auto')} 
+                  className="w-full bg-slate-800 text-white border border-slate-700 rounded-2xl px-4 py-3 text-sm font-bold outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer"
+                >
+                  <option value="auto">🏷️ {language === 'cn' ? '自动最便宜' : language === 'jp' ? '自動最安' : 'Auto (Cheapest)'}</option>
+                  <option value="standard">📦 {SHIPPING_METHOD_NAMES.standard[language]} — {currency}{shippingOptions.standard.fee.toFixed(1)}</option>
+                  <option value="sf">🚀 {SHIPPING_METHOD_NAMES.sf[language]} — {currency}{shippingOptions.sf.fee.toFixed(1)}</option>
+                  <option value="anneng">🚛 {SHIPPING_METHOD_NAMES.anneng[language]} — {currency}{shippingOptions.anneng.fee.toFixed(1)}</option>
+                </select>
+                <div className="mt-2 text-xs text-slate-500">
+                  {selectedCourier === 'auto' && <span>✅ {SHIPPING_METHOD_NAMES[shippingOptions.cheapest][language]}</span>}
+                </div>
+              </div>
+
+              <div className="flex justify-between text-slate-400 font-bold">
+                <span>{t.shippingFee} ({SHIPPING_METHOD_NAMES[activeCourier][language]})</span>
+                <span className="text-white font-black text-lg">{currency}{shippingFee.toFixed(1)}</span>
+              </div>
+              {overlengthFee > 0 && (
+                <div className="flex justify-between text-amber-400 font-bold text-sm">
+                  <span>{t.overlengthNote}</span>
+                  <span className="font-black">(含)</span>
+                </div>
+              )}
+              <div className="text-xs text-slate-500 font-bold">{t.totalWeight}: {totalWeightKg.toFixed(2)} kg</div>
             </div>
             <div className="flex justify-between text-4xl font-black mb-12 text-blue-400">
               <span className="text-white text-2xl">{t.total}</span>
@@ -1032,51 +1169,60 @@ const App: React.FC = () => {
 
   const onEditOrder = (o: Order) => {
     setCart(mergeCartItems([], o.items));
-    window.location.hash = '/cart';
+    // Navigate with the order's address info so the cart pre-selects the correct address
+    window.location.hash = `/cart?addressId=${encodeURIComponent(o.addressId || o.address?.id || '')}`;
   };
+
+  const isPreviewRoute = window.location.hash.startsWith('#/preview');
 
   return (
     <HashRouter>
-      <div className="min-h-screen bg-slate-50 font-sans text-slate-900 selection:bg-blue-100 selection:text-blue-900 pb-20">
-        <nav className="bg-white/90 backdrop-blur-xl sticky top-0 z-40 border-b border-slate-100 shadow-sm">
+      <div className={`min-h-screen font-sans text-slate-900 selection:bg-blue-100 selection:text-blue-900 ${isPreviewRoute ? '' : 'bg-slate-50 pb-20'}`}>
+        {!isPreviewRoute && <nav className="bg-white/90 backdrop-blur-xl sticky top-0 z-40 border-b border-slate-100 shadow-sm">
           <div className="max-w-7xl mx-auto px-6 h-24 flex items-center justify-between">
             <Link to="/" className="flex items-center gap-5 group">
               <div className="w-14 h-14 bg-slate-900 rounded-[1.25rem] flex items-center justify-center text-white font-black text-3xl shadow-2xl shadow-slate-900/20 group-hover:scale-110 group-hover:bg-blue-600 transition-all duration-500">M</div>
               <span className="font-black text-2xl tracking-tight hidden sm:block">{t.title}</span>
             </Link>
             
-            <div className="flex items-center gap-4 sm:gap-10">
+            <div className="flex items-center gap-2 sm:gap-6">
               <div className="hidden lg:flex gap-10 items-center">
                 {/*<Link to="/" className="text-sm font-black text-slate-500 hover:text-blue-600 transition-all tracking-widest uppercase">{t.catalog}</Link>*/}
                 {user && <Link to="/history" className="text-sm font-black text-slate-500 hover:text-blue-600 transition-all tracking-widest uppercase">{t.history}</Link>}
               </div>
-              {/* Mobile: quick history icon */}
+              {/* Mobile: prominent history button */}
               {user && (
-                <Link to="/history" className="sm:hidden p-3 bg-slate-50 border border-slate-100 rounded-xl flex items-center justify-center hover:bg-white transition-all" aria-label={t.history}>
-                  <History className="w-5 h-5 text-slate-600" />
+                <Link to="/history" className="hidden sm:flex md:hidden items-center gap-1 px-3 py-2 bg-blue-50 border-2 border-blue-300 text-blue-600 rounded-lg hover:bg-blue-100 transition-all font-bold text-xs" aria-label={t.history}>
+                  <History className="w-4 h-4" />
+                  <span>{t.history}</span>
+                </Link>
+              )}
+              {user && (
+                <Link to="/history" className="sm:hidden p-2 bg-blue-100 border-2 border-blue-400 text-blue-600 rounded-lg flex items-center justify-center hover:bg-blue-200 transition-all font-bold" aria-label={t.history}>
+                  <History className="w-5 h-5" />
                 </Link>
               )}
               <LanguageSwitcher current={language} onChange={setLanguage} />
               
               {user ? (
-                <div className="flex items-center gap-4">
-                  <Link to="/history" className="hidden sm:flex items-center gap-3 px-6 py-3 bg-slate-50 border border-slate-100 rounded-2xl hover:bg-white hover:shadow-xl transition-all group">
+                <div className="flex items-center gap-2 sm:gap-4">
+                  <Link to="/history" className="hidden md:flex items-center gap-3 px-6 py-3 bg-slate-50 border border-slate-100 rounded-2xl hover:bg-white hover:shadow-xl transition-all group">
                      <UserIcon className="w-5 h-5 text-slate-400 group-hover:text-blue-600" />
                      <span className="text-sm font-black text-slate-800">{user.name}</span>
                   </Link>
-                  <button onClick={() => ApiService.logout().then(() => setUser(null))} className="p-4 bg-red-50 text-red-400 hover:bg-red-500 hover:text-white rounded-[1.25rem] transition-all shadow-lg shadow-red-500/5"><LogOut className="w-6 h-6"/></button>
+                  <button onClick={() => ApiService.logout().then(() => setUser(null))} className="p-3 sm:p-4 bg-red-50 text-red-400 hover:bg-red-500 hover:text-white rounded-[1.25rem] transition-all shadow-lg shadow-red-500/5"><LogOut className="w-5 sm:w-6 h-5 sm:h-6"/></button>
                 </div>
               ) : (
-                <Link to="/login" className="bg-slate-900 text-white px-8 py-4 rounded-[1.25rem] text-sm font-black shadow-2xl shadow-slate-900/10 hover:bg-blue-600 transition-all tracking-widest uppercase">{t.login}</Link>
+                <Link to="/login" className="bg-slate-900 text-white px-6 sm:px-8 py-3 sm:py-4 rounded-[1.25rem] text-xs sm:text-sm font-black shadow-2xl shadow-slate-900/10 hover:bg-blue-600 transition-all tracking-widest uppercase">{t.login}</Link>
               )}
 
-              <Link to="/cart" className="relative p-4 bg-blue-600 text-white rounded-[1.25rem] shadow-2xl shadow-blue-600/30 hover:bg-blue-500 transition-all hover:scale-110 active:scale-90">
-                <ShoppingCart className="w-6 h-6" />
+              <Link to="/cart" className="relative p-3 sm:p-4 bg-blue-600 text-white rounded-[1.25rem] shadow-2xl shadow-blue-600/30 hover:bg-blue-500 transition-all hover:scale-110 active:scale-90">
+                <ShoppingCart className="w-5 sm:w-6 h-5 sm:h-6" />
                 {cart.length > 0 && <span className="absolute -top-3 -right-3 bg-red-500 text-white text-[12px] w-8 h-8 flex items-center justify-center rounded-full border-4 border-white font-black shadow-2xl animate-bounce">{cart.length}</span>}
               </Link>
             </div>
           </div>
-        </nav>
+        </nav>}
 
         <Routes>
           <Route path="/" element={<Catalog language={language} />} />
@@ -1084,6 +1230,7 @@ const App: React.FC = () => {
           <Route path="/history" element={user ? <UserProfile user={user} language={language} setUser={setUser} onEditOrder={onEditOrder} /> : <div className="p-40 text-center flex flex-col items-center"><UserIcon className="w-20 h-20 text-slate-100 mb-6"/><p className="font-black text-slate-300 text-2xl">Please login to view your orders</p></div>} />
           <Route path="/product/:id" element={<ProductDetail language={language} onAddToCart={(item) => setCart(mergeCartItems(cart, [item]))} onAddBatchToCart={(items) => setCart(mergeCartItems(cart, items))} onUpdateCartItem={(item) => setCart(cart.map(x => x.id === item.id ? item : x))} draftProfiles={draftProfiles} setDraftProfiles={setDraftProfiles} />} />
           <Route path="/cart" element={<Cart cart={cart} language={language} setCart={setCart} user={user} updateUser={setUser} />} />
+          <Route path="/preview" element={<FactorySheetPreviewPage />} />
         </Routes>
       </div>
     </HashRouter>

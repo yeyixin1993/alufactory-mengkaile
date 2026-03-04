@@ -65,6 +65,7 @@ def create_order():
         order = Order(
             order_number=order_number,
             user_id=current_user_id,
+            address_id=data.get('address_id'),
             recipient_name=data['recipient_name'],
             phone=data['phone'],
             province=data['province'],
@@ -72,6 +73,8 @@ def create_order():
             subtotal=data.get('subtotal', 0),
             shipping_fee=data.get('shipping_fee', 0),
             total_amount=data['total_amount'],
+            shipping_method=data.get('shipping_method'),
+            overlength_fee=data.get('overlength_fee', 0),
             status='pending',
             memo=data.get('memo')
         )
@@ -134,6 +137,9 @@ def update_order(order_id):
         
         if 'memo' in data:
             order.memo = data['memo']
+        
+        if 'admin_memo' in data:
+            order.admin_memo = data['admin_memo']
         
         order.updated_at = datetime.utcnow()
         db.session.commit()
@@ -232,6 +238,48 @@ def upload_order_pdf(order_id):
     except Exception as e:
         db.session.rollback()
         return jsonify({'error': str(e)}), 500
+
+
+@order_bp.route('/<order_id>/pdf', methods=['GET'])
+@jwt_required()
+def get_order_pdf(order_id):
+    """Download PDF for customer's own order"""
+    current_user_id = get_jwt_identity()
+    current_user = User.query.get(current_user_id)
+
+    order = Order.query.get(order_id)
+    if not order:
+        return jsonify({'error': 'Order not found'}), 404
+
+    if order.user_id != current_user_id and not current_user.is_admin:
+        return jsonify({'error': 'Unauthorized'}), 403
+
+    from flask import send_file, Response
+    # Try file system first
+    pdf_dir = os.path.join(current_app.instance_path, 'order_pdfs')
+    pdf_path = os.path.join(pdf_dir, f"{order.id}.pdf")
+    if os.path.exists(pdf_path):
+        filename = f"{order.order_number}.pdf"
+        return send_file(pdf_path, mimetype='application/pdf', as_attachment=False, download_name=filename)
+
+    # Try database
+    profile = Profile.query.filter_by(user_id=order.user_id).first()
+    if not profile or not profile.pdf_base64:
+        return jsonify({'error': 'PDF not found'}), 404
+
+    try:
+        pdf_bytes = base64.b64decode(profile.pdf_base64)
+    except Exception:
+        return jsonify({'error': 'Invalid PDF data'}), 500
+
+    filename = profile.pdf_filename or f"{order.order_number}.pdf"
+    return Response(
+        pdf_bytes,
+        mimetype='application/pdf',
+        headers={
+            'Content-Disposition': f'inline; filename="{filename}"'
+        }
+    )
 
 
 @order_bp.route('/stats', methods=['GET'])
