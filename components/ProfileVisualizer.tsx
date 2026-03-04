@@ -15,6 +15,94 @@ interface ProfileVisualizerProps {
   showSideSelector?: boolean;
 }
 
+/**
+ * Renders a 45° miter-cut triangle using an HTML <canvas> element.
+ * Canvas is used instead of SVG because html2canvas (used for PDF/PNG/JPG export)
+ * does not reliably render inline SVG elements.
+ */
+const MiterCutCanvas: React.FC<{
+  side: 'left' | 'right';
+  direction: 'up' | 'down';
+  size: number;
+  label: string;
+}> = ({ side, direction, size, label }) => {
+  const canvasRef = React.useRef<HTMLCanvasElement>(null);
+
+  React.useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const dpr = 2;
+    canvas.width = size * dpr;
+    canvas.height = size * dpr;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+    ctx.scale(dpr, dpr);
+    ctx.clearRect(0, 0, size, size);
+
+    // Draw filled triangle
+    ctx.beginPath();
+    if (side === 'left') {
+      if (direction === 'up') {
+        ctx.moveTo(0, 0); ctx.lineTo(size, 0); ctx.lineTo(0, size);
+      } else {
+        ctx.moveTo(0, size); ctx.lineTo(size, size); ctx.lineTo(0, 0);
+      }
+    } else {
+      if (direction === 'up') {
+        ctx.moveTo(size, 0); ctx.lineTo(0, 0); ctx.lineTo(size, size);
+      } else {
+        ctx.moveTo(size, size); ctx.lineTo(0, size); ctx.lineTo(size, 0);
+      }
+    }
+    ctx.closePath();
+    ctx.fillStyle = '#f8fafc';
+    ctx.fill();
+    ctx.strokeStyle = '#f59e0b';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+
+    // Draw rotated label
+    const fontSize = Math.max(7, size * 0.15);
+    ctx.font = `bold ${fontSize}px sans-serif`;
+    ctx.fillStyle = '#d97706';
+    ctx.save();
+    if (side === 'left') {
+      if (direction === 'up') {
+        ctx.translate(size * 0.15, size * 0.3);
+        ctx.rotate(-Math.PI / 4);
+      } else {
+        ctx.translate(size * 0.15, size * 0.78);
+        ctx.rotate(Math.PI / 4);
+      }
+    } else {
+      if (direction === 'up') {
+        ctx.translate(size * 0.5, size * 0.3);
+        ctx.rotate(Math.PI / 4);
+      } else {
+        ctx.translate(size * 0.5, size * 0.78);
+        ctx.rotate(-Math.PI / 4);
+      }
+    }
+    ctx.fillText(label, 0, 0);
+    ctx.restore();
+  }, [side, direction, size, label]);
+
+  return (
+    <canvas
+      ref={canvasRef}
+      style={{
+        position: 'absolute',
+        ...(side === 'left' ? { left: 0 } : { right: 0 }),
+        top: 0,
+        width: `${size}px`,
+        height: '100%',
+        pointerEvents: 'none',
+        zIndex: 10,
+      }}
+    />
+  );
+};
+
 const ProfileVisualizer: React.FC<ProfileVisualizerProps> = ({
   config,
   selectedSide,
@@ -162,29 +250,13 @@ const ProfileVisualizer: React.FC<ProfileVisualizerProps> = ({
               if (selectedSide === 'A') dir = config.miterCut!.left.direction;
               else if (selectedSide === 'C') dir = config.miterCut!.left.direction === 'up' ? 'down' : 'up';
             } else {
-              // BD cut
               if (selectedSide === 'B') dir = config.miterCut!.left.direction;
               else if (selectedSide === 'D') dir = config.miterCut!.left.direction === 'up' ? 'down' : 'up';
             }
             if (!dir) return null;
-
             const h = isWideFace ? 96 : 48;
             const label = `45°${cutSide}`;
-            return (
-              <svg className="absolute left-0 top-0 h-full pointer-events-none z-10" style={{ width: `${h}px` }} viewBox={`0 0 ${h} ${h}`} preserveAspectRatio="none">
-                {dir === 'up' ? (
-                  <>
-                    <polygon points={`0,0 ${h},0 0,${h}`} fill="#f8fafc" stroke="#f59e0b" strokeWidth="2" />
-                    <text x={h * 0.15} y={h * 0.3} fontSize={h * 0.15} fill="#d97706" fontWeight="bold" transform={`rotate(-45, ${h * 0.15}, ${h * 0.3})`}>{label}</text>
-                  </>
-                ) : (
-                  <>
-                    <polygon points={`0,${h} ${h},${h} 0,0`} fill="#f8fafc" stroke="#f59e0b" strokeWidth="2" />
-                    <text x={h * 0.15} y={h * 0.78} fontSize={h * 0.15} fill="#d97706" fontWeight="bold" transform={`rotate(45, ${h * 0.15}, ${h * 0.78})`}>{label}</text>
-                  </>
-                )}
-              </svg>
-            );
+            return <MiterCutCanvas side="left" direction={dir} size={h} label={label} />;
           })()}
           {config.miterCut?.right?.enabled && (() => {
             const cutSide = config.miterCut!.right.side || 'AC';
@@ -197,24 +269,9 @@ const ProfileVisualizer: React.FC<ProfileVisualizerProps> = ({
               else if (selectedSide === 'D') dir = config.miterCut!.right.direction === 'up' ? 'down' : 'up';
             }
             if (!dir) return null;
-
             const h = isWideFace ? 96 : 48;
             const label = `45°${cutSide}`;
-            return (
-              <svg className="absolute top-0 right-0 h-full pointer-events-none z-10" style={{ width: `${h}px` }} viewBox={`0 0 ${h} ${h}`} preserveAspectRatio="none">
-                {dir === 'up' ? (
-                  <>
-                    <polygon points={`${h},0 0,0 ${h},${h}`} fill="#f8fafc" stroke="#f59e0b" strokeWidth="2" />
-                    <text x={h * 0.5} y={h * 0.3} fontSize={h * 0.15} fill="#d97706" fontWeight="bold" transform={`rotate(45, ${h * 0.5}, ${h * 0.3})`}>{label}</text>
-                  </>
-                ) : (
-                  <>
-                    <polygon points={`${h},${h} 0,${h} ${h},0`} fill="#f8fafc" stroke="#f59e0b" strokeWidth="2" />
-                    <text x={h * 0.5} y={h * 0.78} fontSize={h * 0.15} fill="#d97706" fontWeight="bold" transform={`rotate(-45, ${h * 0.5}, ${h * 0.78})`}>{label}</text>
-                  </>
-                )}
-              </svg>
-            );
+            return <MiterCutCanvas side="right" direction={dir} size={h} label={label} />;
           })()}
           {/* Grooves */}
           {grooveCount === 1 && (

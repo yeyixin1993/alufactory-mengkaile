@@ -162,33 +162,6 @@ const FactorySheetPreviewPage: React.FC = () => {
           </div>
 
           <div className="flex flex-wrap gap-2">
-            {/* PNG */}
-            <button
-              onClick={handleExportPNG}
-              disabled={exporting}
-              className="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 px-4 py-2 rounded text-sm font-bold shadow-lg transition-all"
-            >
-              <Image className="w-4 h-4" /> {t.downloadPng || 'PNG'}
-            </button>
-
-            {/* JPG */}
-            <button
-              onClick={handleExportJPG}
-              disabled={exporting}
-              className="flex items-center gap-2 bg-amber-600 hover:bg-amber-700 disabled:opacity-50 px-4 py-2 rounded text-sm font-bold shadow-lg transition-all"
-            >
-              <FileImage className="w-4 h-4" /> {t.downloadJpg || 'JPG'}
-            </button>
-
-            {/* PDF */}
-            <button
-              onClick={handleExportPDF}
-              disabled={exporting}
-              className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 px-4 py-2 rounded text-sm font-bold shadow-lg transition-all"
-            >
-              <FileDown className="w-4 h-4" /> {t.downloadPdf}
-            </button>
-
             {/* Print */}
             <button
               onClick={handlePrint}

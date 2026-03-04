@@ -372,32 +372,7 @@ const FactorySheet: React.FC<FactorySheetProps> = ({ cart, user, language, order
                       );
                     })()}
 
-                    {/* Miter Cut Details */}
-                    {(cfg.miterCut?.left?.enabled || cfg.miterCut?.right?.enabled) && (
-                      <div className="bg-amber-50 p-4 rounded-xl border border-amber-200">
-                        <h4 className="text-xs font-black text-amber-700 uppercase tracking-widest mb-3 flex items-center gap-2">
-                          <span className="text-amber-500 text-lg">◿</span> {t.miterCutLabel || '45° Cut'}
-                        </h4>
-                        <div className="grid grid-cols-2 gap-4 text-xs">
-                          {cfg.miterCut?.left?.enabled && (
-                            <div className="bg-white p-3 rounded-lg border border-amber-100">
-                              <span className="text-slate-400 text-[10px] font-black uppercase">{t.miterCutLeft}</span>
-                              <div className="font-black text-amber-800 mt-1">
-                                {(cfg.miterCut.left.side || 'AC')} · {cfg.miterCut.left.direction === 'up' ? t.miterCutUp : t.miterCutDown}
-                              </div>
-                            </div>
-                          )}
-                          {cfg.miterCut?.right?.enabled && (
-                            <div className="bg-white p-3 rounded-lg border border-amber-100">
-                              <span className="text-slate-400 text-[10px] font-black uppercase">{t.miterCutRight}</span>
-                              <div className="font-black text-amber-800 mt-1">
-                                {(cfg.miterCut.right.side || 'AC')} · {cfg.miterCut.right.direction === 'up' ? t.miterCutUp : t.miterCutDown}
-                              </div>
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    )}
+                    {/* Miter Cut Details – hidden per request */}
 
                     {/* Drilling Spreadsheet */}
                     {cfg.holes.length > 0 ? (
