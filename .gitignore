@@ -25,3 +25,4 @@ dist-ssr
 *.pdf
 *.db
 .env
+alufactory-backend/instance/alufactory.db
