@@ -248,47 +248,52 @@ def delete_user(user_id):
 @admin_required
 def get_all_orders():
     """Get all orders (admin only)"""
-    page = request.args.get('page', 1, type=int)
-    per_page = request.args.get('per_page', 50, type=int)
-    status = request.args.get('status')
-    
-    query = Order.query
-    if status:
-        query = query.filter_by(status=status)
-    
-    orders_paginated = query.order_by(Order.created_at.desc()).paginate(page=page, per_page=per_page)
-    
-    orders_data = []
-    for order in orders_paginated.items:
-        order_dict = order.to_dict()
-        user = User.query.get(order.user_id)
-        profile = Profile.query.filter_by(user_id=order.user_id).first()
+    try:
+        page = request.args.get('page', 1, type=int)
+        per_page = request.args.get('per_page', 50, type=int)
+        status = request.args.get('status')
+        
+        query = Order.query
+        if status:
+            query = query.filter_by(status=status)
+        
+        orders_paginated = query.order_by(Order.created_at.desc()).paginate(page=page, per_page=per_page)
+        
+        orders_data = []
+        for order in orders_paginated.items:
+            order_dict = order.to_dict()
+            user = User.query.get(order.user_id)
+            profile = Profile.query.filter_by(user_id=order.user_id).first()
 
-        pdf_dir = os.path.join(current_app.instance_path, 'order_pdfs')
-        pdf_path = os.path.join(pdf_dir, f"{order.id}.pdf")
-        pdf_available = os.path.exists(pdf_path) or bool(profile and profile.pdf_base64)
+            pdf_dir = os.path.join(current_app.instance_path, 'order_pdfs')
+            pdf_path = os.path.join(pdf_dir, f"{order.id}.pdf")
+            pdf_available = os.path.exists(pdf_path) or bool(profile and profile.pdf_base64)
 
-        order_dict['user'] = {
-            'id': user.id if user else None,
-            'username': user.username if user else None,
-            'phone': user.phone if user else None,
-            'full_name': user.full_name if user else None,
-        }
-        order_dict['customer_phone'] = order.phone
-        order_dict['pdf'] = {
-            'filename': profile.pdf_filename if profile and profile.pdf_filename else f"{order.order_number}.pdf",
-            'available': pdf_available,
-            'url': f"/api/admin/orders/{order.id}/pdf" if pdf_available else None
-        }
+            order_dict['user'] = {
+                'id': user.id if user else None,
+                'username': user.username if user else None,
+                'phone': user.phone if user else None,
+                'full_name': user.full_name if user else None,
+            }
+            order_dict['customer_phone'] = order.phone
+            order_dict['pdf'] = {
+                'filename': profile.pdf_filename if profile and profile.pdf_filename else f"{order.order_number}.pdf",
+                'available': pdf_available,
+                'url': f"/api/admin/orders/{order.id}/pdf" if pdf_available else None
+            }
 
-        orders_data.append(order_dict)
+            orders_data.append(order_dict)
 
-    return jsonify({
-        'orders': orders_data,
-        'total': orders_paginated.total,
-        'pages': orders_paginated.pages,
-        'current_page': page
-    }), 200
+        return jsonify({
+            'orders': orders_data,
+            'total': orders_paginated.total,
+            'pages': orders_paginated.pages,
+            'current_page': page
+        }), 200
+    except Exception as e:
+        import traceback
+        current_app.logger.error(f'Orders error: {traceback.format_exc()}')
+        return jsonify({'error': f'Failed to load orders: {str(e)}'}), 500
 
 
 @admin_bp.route('/orders/<order_id>/pdf', methods=['GET'])
@@ -373,26 +378,31 @@ def update_order_status(order_id):
 @admin_required
 def get_statistics():
     """Get admin dashboard statistics"""
-    total_users = User.query.count()
-    active_users = User.query.filter_by(is_active=True).count()
-    total_orders = Order.query.count()
-    pending_orders = Order.query.filter_by(status='pending').count()
-    shipped_orders = Order.query.filter_by(status='shipped').count()
-    delivered_orders = Order.query.filter_by(status='delivered').count()
-    
-    total_revenue = db.session.query(db.func.sum(Order.total_amount)).filter(
-        Order.status.in_(['confirmed', 'shipped', 'delivered'])
-    ).scalar() or 0
-    
-    return jsonify({
-        'total_users': total_users,
-        'active_users': active_users,
-        'total_orders': total_orders,
-        'pending_orders': pending_orders,
-        'shipped_orders': shipped_orders,
-        'delivered_orders': delivered_orders,
-        'total_revenue': float(total_revenue)
-    }), 200
+    try:
+        total_users = User.query.count()
+        active_users = User.query.filter_by(is_active=True).count()
+        total_orders = Order.query.count()
+        pending_orders = Order.query.filter_by(status='pending').count()
+        shipped_orders = Order.query.filter_by(status='shipped').count()
+        delivered_orders = Order.query.filter_by(status='delivered').count()
+        
+        total_revenue = db.session.query(db.func.sum(Order.total_amount)).filter(
+            Order.status.in_(['confirmed', 'shipped', 'delivered'])
+        ).scalar() or 0
+        
+        return jsonify({
+            'total_users': total_users,
+            'active_users': active_users,
+            'total_orders': total_orders,
+            'pending_orders': pending_orders,
+            'shipped_orders': shipped_orders,
+            'delivered_orders': delivered_orders,
+            'total_revenue': float(total_revenue)
+        }), 200
+    except Exception as e:
+        import traceback
+        current_app.logger.error(f'Statistics error: {traceback.format_exc()}')
+        return jsonify({'error': f'Failed to load statistics: {str(e)}'}), 500
 
 
 @admin_bp.route('/profiles', methods=['GET'])

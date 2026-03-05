@@ -189,11 +189,10 @@ class Order(db.Model):
     items = db.relationship('OrderItem', backref='order', lazy=True, cascade='all, delete-orphan')
     
     def to_dict(self):
-        return {
+        result = {
             'id': self.id,
             'order_number': self.order_number,
             'user_id': self.user_id,
-            'address_id': self.address_id,
             'recipient_name': self.recipient_name,
             'phone': self.phone,
             'province': self.province,
@@ -201,19 +200,22 @@ class Order(db.Model):
             'subtotal': self.subtotal,
             'shipping_fee': self.shipping_fee,
             'total_amount': self.total_amount,
-            'shipping_method': self.shipping_method,
-            'overlength_fee': self.overlength_fee,
             'status': self.status,
-            'tracking_number': self.tracking_number,
-            'memo': self.memo,
-            'admin_memo': self.admin_memo,
             'items': [item.to_dict() for item in self.items],
-            'created_at': self.created_at.isoformat(),
-            'updated_at': self.updated_at.isoformat(),
-            'shipped_at': self.shipped_at.isoformat() if self.shipped_at else None,
-            'delivered_at': self.delivered_at.isoformat() if self.delivered_at else None,
-            'cancelled_at': self.cancelled_at.isoformat() if self.cancelled_at else None,
+            'created_at': self.created_at.isoformat() if self.created_at else None,
+            'updated_at': self.updated_at.isoformat() if self.updated_at else None,
         }
+        # Safely access columns that may not exist in older DB schemas
+        for attr in ('address_id', 'shipping_method', 'overlength_fee', 'tracking_number',
+                      'memo', 'admin_memo', 'shipped_at', 'delivered_at', 'cancelled_at'):
+            try:
+                val = getattr(self, attr, None)
+                if val is not None and hasattr(val, 'isoformat'):
+                    val = val.isoformat()
+                result[attr] = val
+            except Exception:
+                result[attr] = None
+        return result
 
 
 class OrderItem(db.Model):

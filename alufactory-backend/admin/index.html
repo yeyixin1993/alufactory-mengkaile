@@ -723,7 +723,10 @@
                     headers: { 'Authorization': `Bearer ${authToken}` }
                 });
                 
-                if (!response.ok) throw new Error('Failed to load statistics');
+                if (!response.ok) {
+                    const errData = await response.json().catch(() => ({}));
+                    throw new Error(errData.error || `Failed to load statistics (${response.status})`);
+                }
                 
                 const data = await response.json();
                 
@@ -787,7 +790,10 @@
                     headers: { 'Authorization': `Bearer ${authToken}` }
                 });
                 
-                if (!response.ok) throw new Error('Failed to load orders');
+                if (!response.ok) {
+                    const errData = await response.json().catch(() => ({}));
+                    throw new Error(errData.error || `Failed to load orders (${response.status})`);
+                }
                 
                 const data = await response.json();
                 const tbody = document.getElementById('ordersTableBody');

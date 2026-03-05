@@ -46,9 +46,38 @@ def create_app(config_name='development'):
     app.register_blueprint(admin_bp)
     app.register_blueprint(profile_bp)
     
-    # Create database tables
+    # Create database tables and run auto-migrations
     with app.app_context():
         db.create_all()
+        
+        # Auto-migrate: ensure all expected columns exist in orders table
+        try:
+            from sqlalchemy import text, inspect as sa_inspect
+            inspector = sa_inspect(db.engine)
+            if 'orders' in inspector.get_table_names():
+                existing_cols = [col['name'] for col in inspector.get_columns('orders')]
+                migrations = [
+                    ('shipping_method', 'VARCHAR(50)'),
+                    ('overlength_fee', 'FLOAT DEFAULT 0'),
+                    ('address_id', 'VARCHAR(36)'),
+                    ('admin_memo', 'TEXT'),
+                    ('memo', 'TEXT'),
+                    ('tracking_number', 'VARCHAR(100)'),
+                    ('shipped_at', 'DATETIME'),
+                    ('delivered_at', 'DATETIME'),
+                    ('cancelled_at', 'DATETIME'),
+                ]
+                with db.engine.connect() as conn:
+                    for col_name, col_type in migrations:
+                        if col_name not in existing_cols:
+                            try:
+                                conn.execute(text(f'ALTER TABLE orders ADD COLUMN {col_name} {col_type}'))
+                                conn.commit()
+                                print(f'  ✅ Auto-migrated: added {col_name} to orders')
+                            except Exception:
+                                pass  # Column might already exist or DB doesn't support ALTER
+        except Exception as e:
+            print(f'  ⚠️ Auto-migration check skipped: {e}')
     
     # Health check endpoint
     @app.route('/api/health', methods=['GET'])
