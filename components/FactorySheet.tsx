@@ -144,7 +144,8 @@ const FactorySheet: React.FC<FactorySheetProps> = ({ cart, user, language, order
     return false;
   });
 
-  const calcForMethod = (method: 'standard' | 'sf' | 'anneng', province: string, weightKg: number) => {
+  const calcForMethod = (method: 'standard' | 'sf' | 'anneng' | 'sf_collect', province: string, weightKg: number) => {
+    if (method === 'sf_collect') return 0;
     const olFee = (method === 'standard' || method === 'sf') && hasOverlength ? 20 : 0;
     if (method === 'anneng') {
       const rate = SHIPPING_RATES_AN[province] || { first: 50, next: 3 };

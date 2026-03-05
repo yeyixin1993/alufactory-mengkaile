@@ -647,12 +647,13 @@ export const SHIPPING_RATES_AN: Record<string, { first: number, next: number }> 
   '浙江': { first: 42, next: 1.7 }
 };
 
-export type ShippingMethod = 'standard' | 'sf' | 'anneng';
+export type ShippingMethod = 'standard' | 'sf' | 'anneng' | 'sf_collect';
 
 export const SHIPPING_METHOD_NAMES: Record<ShippingMethod, Record<Language, string>> = {
   standard: { en: 'Standard Express', cn: '普通快递', jp: '通常配送' },
   sf: { en: 'SF Express', cn: '顺丰快递', jp: 'SF Express' },
   anneng: { en: 'ANE Logistics', cn: '安能物流', jp: 'ANE物流' },
+  sf_collect: { en: 'Freight Collect', cn: '到付', jp: '着払い' },
 };
 
 export const INITIAL_PRODUCTS: Product[] = [

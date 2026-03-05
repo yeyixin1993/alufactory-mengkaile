@@ -698,6 +698,10 @@ const Cart: React.FC<{
 
   // Calculate shipping fee for a given courier method
   const calcShippingForMethod = (method: ShippingMethod, province: string): { fee: number, overlength: number } => {
+    // 到付: 运费为0，由收件人支付
+    if (method === 'sf_collect') {
+      return { fee: 0, overlength: 0 };
+    }
     const overlength = (method === 'standard' || method === 'sf') && hasOverlength ? 20 : 0;
     
     if (method === 'anneng') {
@@ -724,13 +728,14 @@ const Cart: React.FC<{
 
   // Calculate all 3 shipping fees
   const shippingOptions = React.useMemo(() => {
-    if (!selectedAddress) return { standard: { fee: 0, overlength: 0 }, sf: { fee: 0, overlength: 0 }, anneng: { fee: 0, overlength: 0 }, cheapest: 'standard' as ShippingMethod };
+    if (!selectedAddress) return { standard: { fee: 0, overlength: 0 }, sf: { fee: 0, overlength: 0 }, anneng: { fee: 0, overlength: 0 }, sf_collect: { fee: 0, overlength: 0 }, cheapest: 'standard' as ShippingMethod };
     const province = selectedAddress.province;
     const std = calcShippingForMethod('standard', province);
     const sf = calcShippingForMethod('sf', province);
     const an = calcShippingForMethod('anneng', province);
+    const sfc = calcShippingForMethod('sf_collect', province);
     const cheapest: ShippingMethod = std.fee <= sf.fee && std.fee <= an.fee ? 'standard' : sf.fee <= an.fee ? 'sf' : 'anneng';
-    return { standard: std, sf, anneng: an, cheapest };
+    return { standard: std, sf, anneng: an, sf_collect: sfc, cheapest };
   }, [selectedAddress, totalWeightKg, hasOverlength]);
 
   const activeCourier: ShippingMethod = selectedCourier === 'auto' ? shippingOptions.cheapest : selectedCourier;
@@ -980,6 +985,7 @@ const Cart: React.FC<{
                   <option value="standard">📦 {SHIPPING_METHOD_NAMES.standard[language]} — {currency}{shippingOptions.standard.fee.toFixed(1)}</option>
                   <option value="sf">🚀 {SHIPPING_METHOD_NAMES.sf[language]} — {currency}{shippingOptions.sf.fee.toFixed(1)}</option>
                   <option value="anneng">🚛 {SHIPPING_METHOD_NAMES.anneng[language]} — {currency}{shippingOptions.anneng.fee.toFixed(1)}</option>
+                  <option value="sf_collect">📮 {SHIPPING_METHOD_NAMES.sf_collect[language]} — {currency}0</option>
                 </select>
                 <div className="mt-2 text-xs text-slate-500">
                   {selectedCourier === 'auto' && <span>✅ {SHIPPING_METHOD_NAMES[shippingOptions.cheapest][language]}</span>}
