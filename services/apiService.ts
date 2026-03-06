@@ -20,7 +20,8 @@ const resolveApiBaseUrl = () => {
     }
   }
 
-  return 'http://localhost:5000/api';
+  return 'http://47.98.229.152/api'; // Default fallback
+  //return 'http://localhost:5000/api';
 };
 
 class ApiServiceClass {
