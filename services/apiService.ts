@@ -45,7 +45,7 @@ const resolveApiBaseUrl = () => {
     }
   }
 
-  return 'http://47.98.229.152/api'; // Default fallback
+  return 'https://mengkaile.top/api'; // Default fallback
 };
 
 class ApiServiceClass {
