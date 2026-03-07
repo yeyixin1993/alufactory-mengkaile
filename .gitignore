@@ -28,3 +28,6 @@ dist-ssr
 *.pyc
 alufactory-backend/instance/alufactory.db
 *.pyc
+alufactory-backend/app/__pycache__/__init__.cpython-310.pyc
+alufactory-backend/app/models/__pycache__/user.cpython-310.pyc
+alufactory-backend/app/routes/__pycache__/admin.cpython-310.pyc
