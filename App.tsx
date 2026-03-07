@@ -313,7 +313,10 @@ const UserProfile: React.FC<{
                      cancelled: { label: t.statusCancelled, color: 'text-red-700', bg: 'bg-red-50', border: 'border-red-200' },
                    };
                    const statusStyle = statusMap[o.status] || statusMap.pending;
-                   const apiBaseUrl = (import.meta.env.VITE_API_URL || '').trim().replace(/\/+$/, '') || `${window.location.origin}/api`;
+                   const rawApiUrl = (import.meta.env.VITE_API_URL || '').trim().replace(/\/+$/, '');
+                   const isLocalApi = rawApiUrl && /^https?:\/\/(localhost|127\.0\.0\.1)/.test(rawApiUrl);
+                   const isRemoteHost = window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1';
+                   const apiBaseUrl = (isLocalApi && isRemoteHost) ? `${window.location.origin}/api` : (rawApiUrl || `${window.location.origin}/api`);
                    const pdfUrl = `${apiBaseUrl}/orders/${o.id}/pdf`;
                    
                    return (

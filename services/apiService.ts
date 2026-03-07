@@ -3,10 +3,35 @@ import { Order, User, Address } from '../types';
 
 const normalizeBaseUrl = (url: string) => url.replace(/\/+$/, '');
 
+/** 检测 URL 是否指向 localhost */
+const isLocalhostUrl = (url: string) => {
+  try {
+    const u = new URL(url);
+    return u.hostname === 'localhost' || u.hostname === '127.0.0.1';
+  } catch {
+    return false;
+  }
+};
+
+/** 检测当前页面是否运行在非 localhost 环境 */
+const isRunningRemotely = () => {
+  if (typeof window === 'undefined') return false;
+  const host = window.location?.hostname;
+  return !!host && host !== 'localhost' && host !== '127.0.0.1';
+};
+
 const resolveApiBaseUrl = () => {
   const envUrl = (import.meta.env.VITE_API_URL || '').trim();
   if (envUrl) {
-    return normalizeBaseUrl(envUrl);
+    const normalized = normalizeBaseUrl(envUrl);
+    // 防止部署到远程服务器后仍然调用 localhost
+    if (isLocalhostUrl(normalized) && isRunningRemotely()) {
+      console.warn(
+        `[apiService] VITE_API_URL 指向 localhost (${normalized})，但页面运行在 ${window.location.origin}，自动切换为当前域名`
+      );
+      return `${normalizeBaseUrl(window.location.origin)}/api`;
+    }
+    return normalized;
   }
 
   if (typeof window !== 'undefined') {
@@ -21,7 +46,6 @@ const resolveApiBaseUrl = () => {
   }
 
   return 'http://47.98.229.152/api'; // Default fallback
-  //return 'http://localhost:5000/api';
 };
 
 class ApiServiceClass {

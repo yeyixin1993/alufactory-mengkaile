@@ -27,3 +27,4 @@ dist-ssr
 .env
 *.pyc
 alufactory-backend/instance/alufactory.db
+*.pyc
