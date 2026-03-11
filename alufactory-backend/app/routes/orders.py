@@ -2,6 +2,7 @@ from flask import Blueprint, request, jsonify, current_app
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from datetime import datetime
 from app.models.user import db, User, Cart, CartItem, Order, OrderItem, Profile
+from app.order_utils import build_order_pdf_filename
 import uuid
 import os
 import base64
@@ -159,15 +160,16 @@ def delete_order(order_id):
     """Delete order (admin only)"""
     current_user_id = get_jwt_identity()
     current_user = User.query.get(current_user_id)
+
+    if not current_user or not current_user.is_admin:
+        return jsonify({'error': 'Admin access required'}), 403
     
     order = Order.query.get(order_id)
     if not order:
         return jsonify({'error': 'Order not found'}), 404
-
-    if order.user_id != current_user_id and not current_user.is_admin:
-        return jsonify({'error': 'Admin access required'}), 403
     
     try:
+        # Intentionally keep any stored PDF files and PDF fallback data untouched.
         db.session.delete(order)
         db.session.commit()
         
@@ -193,7 +195,7 @@ def upload_order_pdf(order_id):
 
     data = request.get_json() or {}
     pdf_base64 = data.get('pdf_base64')
-    pdf_filename = data.get('pdf_filename') or f"{order.order_number}.pdf"
+    pdf_filename = build_order_pdf_filename(order)
 
     if not pdf_base64:
         return jsonify({'error': 'Missing pdf_base64'}), 400
@@ -259,7 +261,7 @@ def get_order_pdf(order_id):
     pdf_dir = os.path.join(current_app.instance_path, 'order_pdfs')
     pdf_path = os.path.join(pdf_dir, f"{order.id}.pdf")
     if os.path.exists(pdf_path):
-        filename = f"{order.order_number}.pdf"
+        filename = build_order_pdf_filename(order)
         return send_file(pdf_path, mimetype='application/pdf', as_attachment=False, download_name=filename)
 
     # Try database
@@ -272,7 +274,7 @@ def get_order_pdf(order_id):
     except Exception:
         return jsonify({'error': 'Invalid PDF data'}), 500
 
-    filename = profile.pdf_filename or f"{order.order_number}.pdf"
+    filename = profile.pdf_filename or build_order_pdf_filename(order)
     return Response(
         pdf_bytes,
         mimetype='application/pdf',

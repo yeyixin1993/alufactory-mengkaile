@@ -218,12 +218,12 @@ const FactorySheet: React.FC<FactorySheetProps> = ({ cart, user, language, order
             <thead>
               <tr className="bg-white/50 text-left text-xs">
                 <th className="p-2 border border-slate-200">长度 (mm)</th>
-                <th className="p-2 border border-slate-200">Profile Model</th>
-                <th className="p-2 border border-slate-200">Color</th>
-                <th className="p-2 border border-slate-200">Finish</th>
-                <th className="p-2 border border-slate-200">Tap</th>
-                <th className="p-2 border border-slate-200">Quantity</th>
-                <th className="p-2 border border-slate-200">Remarks</th>
+                <th className="p-2 border border-slate-200">型材型号</th>
+                <th className="p-2 border border-slate-200">颜色</th>
+                <th className="p-2 border border-slate-200">表面处理</th>
+                <th className="p-2 border border-slate-200">攻丝</th>
+                <th className="p-2 border border-slate-200">数量</th>
+                <th className="p-2 border border-slate-200">备注</th>
               </tr>
             </thead>
             <tbody>
@@ -247,7 +247,7 @@ const FactorySheet: React.FC<FactorySheetProps> = ({ cart, user, language, order
                   <td className="p-2 border border-slate-100"></td>
                   <td className="p-2 border border-slate-100"></td>
                   <td className="p-2 border border-slate-100"></td>
-                  <td className="p-2 border border-slate-100 font-bold underline text-left">Total</td>
+                  <td className="p-2 border border-slate-100 font-bold underline text-left">合计</td>
                   <td className="p-2 border border-slate-100 font-bold underline text-right">
                     {profileSummary.reduce((sum, r) => sum + r.quantity, 0)}
                   </td>

@@ -2,6 +2,7 @@ from flask import Blueprint, request, jsonify, Response, current_app, send_file
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from datetime import datetime
 from app.models.user import db, User, Order, Profile
+from app.order_utils import build_order_pdf_filename
 import uuid
 import base64
 import os
@@ -277,7 +278,7 @@ def get_all_orders():
             }
             order_dict['customer_phone'] = order.phone
             order_dict['pdf'] = {
-                'filename': profile.pdf_filename if profile and profile.pdf_filename else f"{order.order_number}.pdf",
+                'filename': build_order_pdf_filename(order),
                 'available': pdf_available,
                 'url': f"/api/admin/orders/{order.id}/pdf" if pdf_available else None
             }
@@ -307,7 +308,7 @@ def get_order_pdf(order_id):
     pdf_dir = os.path.join(current_app.instance_path, 'order_pdfs')
     pdf_path = os.path.join(pdf_dir, f"{order.id}.pdf")
     if os.path.exists(pdf_path):
-        filename = f"{order.order_number}.pdf"
+        filename = build_order_pdf_filename(order)
         return send_file(pdf_path, mimetype='application/pdf', as_attachment=False, download_name=filename)
 
     profile = Profile.query.filter_by(user_id=order.user_id).first()
@@ -319,7 +320,7 @@ def get_order_pdf(order_id):
     except Exception:
         return jsonify({'error': 'Invalid PDF data'}), 500
 
-    filename = profile.pdf_filename or f"{order.order_number}.pdf"
+    filename = profile.pdf_filename or build_order_pdf_filename(order)
     return Response(
         pdf_bytes,
         mimetype='application/pdf',

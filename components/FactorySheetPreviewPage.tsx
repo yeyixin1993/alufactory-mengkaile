@@ -5,6 +5,7 @@ import { FileDown, Image, FileImage, Printer, X } from 'lucide-react';
 import FactorySheet from './FactorySheet';
 import html2canvas from 'html2canvas';
 import { jsPDF } from 'jspdf';
+import { buildOrderPdfFilename, formatEast8Date } from '../utils/orderFormatting';
 
 /**
  * Standalone preview page – rendered in a new browser window.
@@ -50,11 +51,16 @@ const FactorySheetPreviewPage: React.FC = () => {
 
   const { cart, user, language, showPrice, address, shippingMethod, shippingFee, overlengthFee } = data;
   const t = TRANSLATIONS[language];
-  const dateStr = new Date().toLocaleDateString();
+  const dateStr = formatEast8Date(new Date());
   const orderRef = React.useMemo(() => Math.random().toString(36).substr(2, 6).toUpperCase(), []);
-
-  const userLabel = user?.id || user?.name || 'guest';
-  const fileBaseName = `${userLabel}_Mengkaile_${new Date().toISOString().split('T')[0]}`;
+  const totalAmount = cart.reduce((sum, item) => sum + (item.totalPrice || 0), 0) + (shippingFee || 0);
+  const fileBaseName = buildOrderPdfFilename({
+    createdAt: new Date(),
+    userName: address?.recipient_name || user?.name || user?.id,
+    amount: totalAmount,
+    orderRef,
+    withPrice: showPrice,
+  }).replace(/\.pdf$/i, '');
 
   // ---- Export helpers ----
 

@@ -14,6 +14,7 @@ import FactorySheetPreviewPage from './components/FactorySheetPreviewPage';
 import FactorySheet from './components/FactorySheet';
 import { jsPDF } from 'jspdf';
 import html2canvas from 'html2canvas';
+import { buildOrderPdfFilename, formatEast8Date, formatEast8DateTime } from './utils/orderFormatting';
 
 const getCurrency = (lang: Language) => lang === 'cn' ? '￥' : '$';
 
@@ -243,7 +244,13 @@ const UserProfile: React.FC<{
     setPrintOrder(o);
     setPrintWithPrice(withPrice);
     await new Promise(r => setTimeout(r, 600));
-    await exportToPDF(adminPrintRef.current, `Mengkaile_Order_${o.id}_${withPrice ? 'Price' : 'NoPrice'}.pdf`);
+    await exportToPDF(adminPrintRef.current, buildOrderPdfFilename({
+      createdAt: o.date,
+      userName: o.address?.recipient_name || user.name || user.id,
+      amount: getOrderTotal(o),
+      orderRef: o.orderNumber || o.id,
+      withPrice,
+    }));
     setIsGenerating(null);
   };
 
@@ -256,8 +263,8 @@ const UserProfile: React.FC<{
               cart={printOrder.items} 
               user={user} 
               language={language} 
-              orderRef={printOrder.id} 
-              dateStr={new Date(printOrder.date).toLocaleDateString()} 
+              orderRef={printOrder.orderNumber || printOrder.id} 
+              dateStr={formatEast8Date(printOrder.date)} 
               showPrice={printWithPrice}
               address={printOrder.address}
               shippingMethod={printOrder.shippingMethod}
@@ -324,7 +331,7 @@ const UserProfile: React.FC<{
                       <div className="flex flex-col justify-between gap-4">
                         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center">
                           <div>
-                            <div className="text-xs text-slate-400 mb-1">{new Date(o.date).toLocaleString()}</div>
+                            <div className="text-xs text-slate-400 mb-1">{formatEast8DateTime(o.date)}</div>
                             <div className="font-black text-slate-800">Order #{o.orderNumber || o.id}</div>
                             <div className="text-lg font-black text-blue-600 mt-1">{getCurrency(language)}{getOrderTotal(o).toFixed(1)}</div>
                             <span className={`inline-block mt-2 text-[11px] font-black px-3 py-1 rounded-full border ${statusStyle.bg} ${statusStyle.color} ${statusStyle.border}`}>{statusStyle.label}</span>
@@ -344,9 +351,6 @@ const UserProfile: React.FC<{
                                <Eye className="w-3 h-3"/> {t.viewPdf}
                              </a>*/}
                              <button onClick={() => onEditOrder(o)} className="p-2.5 bg-slate-50 hover:bg-slate-100 text-slate-600 rounded-xl transition-colors border border-slate-200"><Edit2 className="w-4 h-4"/></button>
-                             {!['confirmed', 'shipped', 'delivered'].includes(o.status) && (
-                               <button onClick={() => deleteOrder(o.id)} className="p-2.5 bg-red-50 hover:bg-red-100 text-red-500 rounded-xl transition-colors border border-red-100"><Trash2 className="w-4 h-4"/></button>
-                             )}
                           </div>
                         </div>
                         
@@ -367,7 +371,7 @@ const UserProfile: React.FC<{
                              <div>
                                <span className="text-[10px] font-black text-slate-400 uppercase">{t.orderUpdatedAt}</span>
                                <div className="text-xs font-bold text-slate-600 mt-0.5">
-                                 {o.updatedAt ? new Date(o.updatedAt).toLocaleString() : '-'}
+                                 {o.updatedAt ? formatEast8DateTime(o.updatedAt) : '-'}
                                </div>
                              </div>
                              {o.adminMemo && (
@@ -754,8 +758,13 @@ const Cart: React.FC<{
   const handleGeneratePDF = async (includePrice: boolean = true, returnBase64: boolean = false) => {
     setPdfIncludePrice(includePrice);
     await new Promise(r => setTimeout(r, 600));
-    const userLabel = user?.id || user?.name || 'guest';
-    const filename = `${userLabel}_${finalTotal.toFixed(1)}_Mengkaile_${includePrice ? 'OrderWithPrice' : 'OrderNoPrice'}_${new Date().toISOString().split('T')[0]}.pdf`;
+    const filename = buildOrderPdfFilename({
+      createdAt: new Date(),
+      userName: selectedAddress?.recipient_name || user?.name || user?.id,
+      amount: finalTotal,
+      orderRef: 'PREVIEW',
+      withPrice: includePrice,
+    });
     const pdfBase64 = await exportToPDF(printRef.current, filename, { returnBase64 });
     return { pdfBase64, filename };
   };
@@ -848,7 +857,7 @@ const Cart: React.FC<{
             user={user} 
             language={language} 
             orderRef="PREVIEW" 
-            dateStr={new Date().toLocaleDateString()} 
+            dateStr={formatEast8Date(new Date())} 
             showPrice={pdfIncludePrice}
             address={selectedAddress || undefined}
             shippingMethod={SHIPPING_METHOD_NAMES[activeCourier][language]}

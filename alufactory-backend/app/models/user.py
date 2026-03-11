@@ -2,6 +2,7 @@ from flask_sqlalchemy import SQLAlchemy
 from datetime import datetime
 from werkzeug.security import generate_password_hash, check_password_hash
 import uuid
+from app.order_utils import to_east8_isoformat
 
 db = SQLAlchemy()
 
@@ -202,8 +203,8 @@ class Order(db.Model):
             'total_amount': self.total_amount,
             'status': self.status,
             'items': [item.to_dict() for item in self.items],
-            'created_at': self.created_at.isoformat() if self.created_at else None,
-            'updated_at': self.updated_at.isoformat() if self.updated_at else None,
+            'created_at': to_east8_isoformat(self.created_at),
+            'updated_at': to_east8_isoformat(self.updated_at),
         }
         # Safely access columns that may not exist in older DB schemas
         for attr in ('address_id', 'shipping_method', 'overlength_fee', 'tracking_number',
@@ -211,7 +212,7 @@ class Order(db.Model):
             try:
                 val = getattr(self, attr, None)
                 if val is not None and hasattr(val, 'isoformat'):
-                    val = val.isoformat()
+                    val = to_east8_isoformat(val)
                 result[attr] = val
             except Exception:
                 result[attr] = None

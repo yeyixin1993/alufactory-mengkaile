@@ -335,7 +335,7 @@ class ApiServiceClass {
     return {
       id: data.order.id,
       orderNumber: data.order.order_number,
-      date: new Date().toISOString(),
+      date: data.order.created_at,
       items: order.items,
       total: data.order.total_amount,
       shippingFee: data.order.shipping_fee,
