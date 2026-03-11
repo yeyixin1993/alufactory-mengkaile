@@ -31,3 +31,7 @@ alufactory-backend/instance/alufactory.db
 alufactory-backend/app/__pycache__/__init__.cpython-310.pyc
 alufactory-backend/app/models/__pycache__/user.cpython-310.pyc
 alufactory-backend/app/routes/__pycache__/admin.cpython-310.pyc
+/alufactory-backend/app/routes/__pycache__
+.env
+*.db
+/alufactory-backend/instance
