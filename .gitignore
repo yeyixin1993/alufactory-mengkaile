@@ -35,3 +35,8 @@ alufactory-backend/app/routes/__pycache__/admin.cpython-310.pyc
 .env
 *.db
 /alufactory-backend/instance
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.sqlite3
