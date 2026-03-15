@@ -174,6 +174,16 @@ const ProfileVisualizer: React.FC<ProfileVisualizerProps> = ({
 
   const grooveCount = getGrooveCount(selectedSide);
 
+  // Visual groove count: how many groove lines to actually draw.
+  // For sealed faces that still allow drill positioning (e.g. 2040-N1-40 D), visual = 0.
+  const getVisualGrooveCount = (side: ProfileSide): number => {
+    const id = selectedVariant.id;
+    // 2040-N1-40 D side is sealed (no visible groove) but uses 2 drill positions
+    if (id === '2040-N1-40' && side === 'D') return 0;
+    return getGrooveCount(side);
+  };
+  const visualGrooveCount = getVisualGrooveCount(selectedSide);
+
   const getVisibleHoles = (side: ProfileSide) => {
     const oppositeMap: Record<ProfileSide, ProfileSide> = { 'A': 'C', 'B': 'D', 'C': 'A', 'D': 'B' };
     const opposite = oppositeMap[side];
@@ -308,14 +318,14 @@ const ProfileVisualizer: React.FC<ProfileVisualizerProps> = ({
             const label = `45°${cutSide}`;
             return <MiterCutCanvas side="right" direction={dir} size={h} label={label} />;
           })()}
-          {/* Grooves */}
-          {grooveCount === 1 && (
+          {/* Grooves (visual only - sealed faces with drill positions don't render lines) */}
+          {visualGrooveCount === 1 && (
             <div className="absolute top-1/2 left-0 right-0 h-3 -translate-y-1/2 bg-black/10 border-y border-black/5 pointer-events-none"></div>
           )}
-          {grooveCount >= 2 && (
+          {visualGrooveCount >= 2 && (
              <>
-               {Array.from({ length: grooveCount }, (_, i) => {
-                 const pct = ((i + 1) / (grooveCount + 1)) * 100;
+               {Array.from({ length: visualGrooveCount }, (_, i) => {
+                 const pct = ((i + 1) / (visualGrooveCount + 1)) * 100;
                  return (
                    <div key={`groove-${i}`} className="absolute left-0 right-0 h-3 -translate-y-1/2 bg-black/10 border-y border-black/5 pointer-events-none" style={{ top: `${pct}%` }}></div>
                  );

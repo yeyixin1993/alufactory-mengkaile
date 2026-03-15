@@ -214,6 +214,7 @@ const ProfileEditor: React.FC<ProfileEditorProps> = ({ language, product, initia
             <label className="block text-xs font-black text-slate-400 uppercase mb-2">{t.finish}</label>
             <select value={finish} onChange={(e) => setFinish(e.target.value as ProfileFinish)} className="w-full border border-slate-200 rounded-xl px-4 py-3 outline-none bg-slate-50 font-black text-slate-700">
               <option value="oxidized">{t.finishOxidized}</option>
+              <option value="electrophoretic">{t.finishElectrophoretic}</option>
               <option value="powder">{t.finishPowder}</option>
             </select>
           </div>
@@ -236,7 +237,7 @@ const ProfileEditor: React.FC<ProfileEditorProps> = ({ language, product, initia
           </div>
         </div>
 
-        {finish === 'powder' && (
+        {(finish === 'powder' || finish === 'electrophoretic') && (
           <div className="mb-8">
             <label className="block text-xs font-black text-slate-400 uppercase mb-2">{t.color}</label>
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
@@ -291,9 +292,12 @@ const ProfileEditor: React.FC<ProfileEditorProps> = ({ language, product, initia
                 <div>
                   <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">{t.groove}</label>
                   <select value={selectedGrooveIndex} onChange={e => setSelectedGrooveIndex(parseInt(e.target.value))} className="w-full border rounded px-2 py-1.5 text-sm bg-white">
-                    {Array.from({ length: grooveCount }, (_, i) => (
-                      <option key={i} value={i}>{t.groove1?.replace('1', String(i + 1)).replace('上', i === 0 ? '上' : '下') || `Groove ${i + 1}`}</option>
-                    ))}
+                    {Array.from({ length: grooveCount }, (_, i) => {
+                      const cnOrdinals = ['第一槽', '第二槽', '第三槽', '第四槽', '第五槽'];
+                      const jpOrdinals = ['第一溝', '第二溝', '第三溝', '第四溝', '第五溝'];
+                      const label = language === 'cn' ? (cnOrdinals[i] || `第${i+1}槽`) : language === 'jp' ? (jpOrdinals[i] || `第${i+1}溝`) : `Groove ${i + 1}`;
+                      return <option key={i} value={i}>{label}</option>;
+                    })}
                   </select>
                 </div>
               )}
