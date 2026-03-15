@@ -7,6 +7,7 @@ class Config:
     SQLALCHEMY_TRACK_MODIFICATIONS = False
     JWT_SECRET_KEY = os.getenv('JWT_SECRET_KEY', 'jwt-secret-key-change-in-production')
     JWT_ACCESS_TOKEN_EXPIRES = timedelta(days=30)
+    MAX_CONTENT_LENGTH = 50 * 1024 * 1024  # 50 MB max request size (for PDF uploads)
 
 class DevelopmentConfig(Config):
     """Development configuration"""
