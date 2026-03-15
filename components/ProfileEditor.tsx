@@ -49,6 +49,8 @@ const ProfileEditor: React.FC<ProfileEditorProps> = ({ language, product, initia
   const [selectedGrooveIndex, setSelectedGrooveIndex] = useState<number>(0);
 
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [profileImgError, setProfileImgError] = useState(false);
+  const [colorImgError, setColorImgError] = useState(false);
 
   const selectedVariant = PROFILE_VARIANTS.find(v => v.id === variantId) || PROFILE_VARIANTS[0];
   const selectedColor = PROFILE_COLORS.find(c => c.id === colorId) || PROFILE_COLORS[0];
@@ -63,7 +65,12 @@ const ProfileEditor: React.FC<ProfileEditorProps> = ({ language, product, initia
   useEffect(() => {
     if (variantId.endsWith('R') && (selectedSide === 'C' || selectedSide === 'D')) setSelectedSide('A');
     setSelectedGrooveIndex(0);
+    setProfileImgError(false);
   }, [variantId, selectedSide]);
+
+  useEffect(() => {
+    setColorImgError(false);
+  }, [colorId]);
 
   useEffect(() => {
     if (finish === 'oxidized') {
@@ -224,31 +231,39 @@ const ProfileEditor: React.FC<ProfileEditorProps> = ({ language, product, initia
         <div className="mb-8 flex justify-center gap-4 flex-wrap">
           {/* Cross-section diagram */}
           <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4 inline-flex flex-col items-center gap-2">
-            <img
-              src={`/images/profile_${variantId}.png`}
-              alt={`${selectedVariant.name} cross-section`}
-              className="max-h-32 object-contain"
-              onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; (e.target as HTMLImageElement).nextElementSibling?.classList.remove('hidden'); }}
-            />
-            <div className="hidden text-slate-400 text-xs font-bold text-center p-4">
-              📐 {selectedVariant.name} 截面图<br/>
-              <span className="text-[10px] text-slate-300">(images/profile_{variantId}.png)</span>
-            </div>
+            {!profileImgError && (
+              <img
+                src={`/images/profile_${variantId}.png`}
+                alt={`${selectedVariant.name} cross-section`}
+                className="max-h-32 md:max-h-48 object-contain"
+                onError={() => setProfileImgError(true)}
+              />
+            )}
+            {profileImgError && (
+              <div className="text-slate-400 text-xs font-bold text-center p-4 md:p-8">
+                📐 {selectedVariant.name} 截面图<br/>
+                <span className="text-[10px] text-slate-300">(images/profile_{variantId}.png)</span>
+              </div>
+            )}
             <span className="text-[10px] text-slate-400 font-bold">{selectedVariant.name} 截面图</span>
           </div>
           {/* Color swatch */}
           {finish !== 'oxidized' && (
             <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4 inline-flex flex-col items-center gap-2">
-              <img
-                src={`/images/color_${colorId}.png`}
-                alt={`${selectedColor.name[language]}`}
-                className="max-h-32 object-contain"
-                onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; (e.target as HTMLImageElement).nextElementSibling?.classList.remove('hidden'); }}
-              />
-              <div className="hidden text-slate-400 text-xs font-bold text-center p-4">
-                🎨 {selectedColor.name[language]}<br/>
-                <span className="text-[10px] text-slate-300">(images/color_{colorId}.png)</span>
-              </div>
+              {!colorImgError && (
+                <img
+                  src={`/images/color_${colorId}.png`}
+                  alt={`${selectedColor.name[language]}`}
+                  className="max-h-32 md:max-h-48 object-contain"
+                  onError={() => setColorImgError(true)}
+                />
+              )}
+              {colorImgError && (
+                <div className="text-slate-400 text-xs font-bold text-center p-4">
+                  🎨 {selectedColor.name[language]}<br/>
+                  <span className="text-[10px] text-slate-300">(images/color_{colorId}.png)</span>
+                </div>
+              )}
               <span className="text-[10px] text-slate-400 font-bold">{selectedColor.name[language]}</span>
             </div>
           )}
