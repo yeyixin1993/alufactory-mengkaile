@@ -12,6 +12,7 @@ import ProfileVisualizer from './components/ProfileVisualizer';
 import { openFactorySheetPreview } from './components/FactorySheetPreview';
 import FactorySheetPreviewPage from './components/FactorySheetPreviewPage';
 import FactorySheet from './components/FactorySheet';
+import ExportOverlay from './components/ExportOverlay';
 import { jsPDF } from 'jspdf';
 import html2canvas from 'html2canvas';
 import { buildOrderPdfFilename, formatEast8Date, formatEast8DateTime } from './utils/orderFormatting';
@@ -98,7 +99,7 @@ const exportToPDF = async (
       ctx.drawImage(canvas, 0, srcY, canvas.width, sliceHeightPx, 0, 0, canvas.width, sliceHeightPx);
 
       if (pageIndex > 0) pdf.addPage();
-      pdf.addImage(pageCanvas, 'PNG', 0, MARGIN_MM, contentWidth, sliceHeightMm, undefined, 'FAST');
+      pdf.addImage(pageCanvas, 'JPEG', 0, MARGIN_MM, contentWidth, sliceHeightMm, undefined, 'FAST');
 
       srcY += sliceHeightPx;
       pageIndex++;
@@ -256,6 +257,7 @@ const UserProfile: React.FC<{
 
   return (
     <div className="max-w-5xl mx-auto p-6 space-y-12">
+      <ExportOverlay visible={!!isGenerating} message={t.exportOverlayMessage} warning={t.exportOverlayWarning} />
       <div style={{ position: 'absolute', top: -9999, left: -9999 }}>
         <div ref={adminPrintRef} className="w-[210mm]">
           {printOrder && (
@@ -756,17 +758,22 @@ const Cart: React.FC<{
   const { base: baseTotal, ship: shippingFee, overlength: overlengthFee, total: finalTotal } = calculateTotal();
 
   const handleGeneratePDF = async (includePrice: boolean = true, returnBase64: boolean = false) => {
-    setPdfIncludePrice(includePrice);
-    await new Promise(r => setTimeout(r, 600));
-    const filename = buildOrderPdfFilename({
-      createdAt: new Date(),
-      userName: selectedAddress?.recipient_name || user?.name || user?.id,
-      amount: finalTotal,
-      orderRef: 'PREVIEW',
-      withPrice: includePrice,
-    });
-    const pdfBase64 = await exportToPDF(printRef.current, filename, { returnBase64 });
-    return { pdfBase64, filename };
+    if (!returnBase64) setIsExporting(true);
+    try {
+      setPdfIncludePrice(includePrice);
+      await new Promise(r => setTimeout(r, 600));
+      const filename = buildOrderPdfFilename({
+        createdAt: new Date(),
+        userName: selectedAddress?.recipient_name || user?.name || user?.id,
+        amount: finalTotal,
+        orderRef: 'PREVIEW',
+        withPrice: includePrice,
+      });
+      const pdfBase64 = await exportToPDF(printRef.current, filename, { returnBase64 });
+      return { pdfBase64, filename };
+    } finally {
+      if (!returnBase64) setIsExporting(false);
+    }
   };
 
   const handleCheckout = async () => {
@@ -848,6 +855,7 @@ const Cart: React.FC<{
 
   return (
     <div className="max-w-6xl mx-auto p-6 relative">
+      <ExportOverlay visible={isExporting} message={t.exportOverlayMessage} warning={t.exportOverlayWarning} />
       <h2 className="text-5xl font-black mb-10 text-slate-900 tracking-tight">{t.cart}</h2>
       
       <div style={{ position: 'absolute', top: -9999, left: -9999, pointerEvents: 'none' }}>

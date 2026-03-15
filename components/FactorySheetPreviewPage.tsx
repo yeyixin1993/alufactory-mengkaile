@@ -3,6 +3,7 @@ import { CartItem, User, Language, Address } from '../types';
 import { TRANSLATIONS } from '../constants';
 import { FileDown, Image, FileImage, Printer, X } from 'lucide-react';
 import FactorySheet from './FactorySheet';
+import ExportOverlay from './ExportOverlay';
 import html2canvas from 'html2canvas';
 import { jsPDF } from 'jspdf';
 import { buildOrderPdfFilename, formatEast8Date } from '../utils/orderFormatting';
@@ -128,9 +129,9 @@ const FactorySheetPreviewPage: React.FC = () => {
         const ctx = sliceCanvas.getContext('2d')!;
         ctx.drawImage(canvas, 0, srcY, canvas.width, sliceHeightPx, 0, 0, canvas.width, sliceHeightPx);
 
-        const sliceData = sliceCanvas.toDataURL('image/png');
+        const sliceData = sliceCanvas.toDataURL('image/jpeg', 0.92);
         const imgH = sliceHeightPx * imgScale;
-        pdf.addImage(sliceData, 'PNG', 0, MARGIN_MM, contentWidth, imgH);
+        pdf.addImage(sliceData, 'JPEG', 0, MARGIN_MM, contentWidth, imgH);
 
         srcY += sliceHeightPx;
         page++;
@@ -192,6 +193,8 @@ const FactorySheetPreviewPage: React.FC = () => {
           </div>
         )}
       </div>
+
+      <ExportOverlay visible={exporting} message={t.exportOverlayMessage} warning={t.exportOverlayWarning} />
 
       {/* Sheet content */}
       <div className="flex justify-center py-8 px-4 print:py-0 print:px-0">
