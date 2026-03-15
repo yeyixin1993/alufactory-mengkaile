@@ -23,7 +23,9 @@ const PRICE_HOLE_THROUGH = 1.0;
 const PRICE_HOLE_COUNTERSUNK = 1.8;
 const PRICE_TAPPING_PER_END = 1.5;
 const PRICE_MITER_CUT = 1.0;
-const MIN_PROFILE_LENGTH_MM = 100;
+const MIN_PROFILE_LENGTH_MM = 20;
+const DANGER_FEE_THRESHOLD_MM = 100;
+const DANGER_FEE_PER_PIECE = 5;
 
 const ProfileEditor: React.FC<ProfileEditorProps> = ({ language, product, initialItem, onAddBatchToCart, onUpdateItem, draftProfiles, setDraftProfiles }) => {
   const t = TRANSLATIONS[language];
@@ -51,6 +53,7 @@ const ProfileEditor: React.FC<ProfileEditorProps> = ({ language, product, initia
   const selectedVariant = PROFILE_VARIANTS.find(v => v.id === variantId) || PROFILE_VARIANTS[0];
   const selectedColor = PROFILE_COLORS.find(c => c.id === colorId) || PROFILE_COLORS[0];
   const isTooShort = length <= MIN_PROFILE_LENGTH_MM;
+  const isDangerous = length > MIN_PROFILE_LENGTH_MM && length <= DANGER_FEE_THRESHOLD_MM;
   const isTooLong = length > selectedColor.maxLength;
 
   useEffect(() => {
@@ -79,7 +82,9 @@ const ProfileEditor: React.FC<ProfileEditorProps> = ({ language, product, initia
       if (currentMiterCut.left.enabled) miterFee += PRICE_MITER_CUT;
       if (currentMiterCut.right.enabled) miterFee += PRICE_MITER_CUT;
     }
-    return parseFloat((materialPrice + holeFee + tappingFee + miterFee).toFixed(1));
+    // Danger fee for short profiles (20mm < length <= 100mm)
+    const dangerFee = (len > MIN_PROFILE_LENGTH_MM && len <= DANGER_FEE_THRESHOLD_MM) ? DANGER_FEE_PER_PIECE : 0;
+    return parseFloat((materialPrice + holeFee + tappingFee + miterFee + dangerFee).toFixed(1));
   };
 
   const addHole = () => {
@@ -152,7 +157,38 @@ const ProfileEditor: React.FC<ProfileEditorProps> = ({ language, product, initia
   };
 
   const currentUnitPrice = calculateItemUnitPrice(length, holes, tapping, miterCut);
-  const grooveCount = (['2040', '3060', '2040-N1-20', '2040-N1-40'].includes(selectedVariant.id) && (selectedSide === 'B' || selectedSide === 'D')) ? 2 : 1;
+  const getEditorGrooveCount = (vId: string, side: ProfileSide): number => {
+    // 2020 N4 (square/round) - all 4 sides sealed
+    if ((vId === '2020-N4-SQ' || vId === '2020-N4-RD') ) return 0;
+    // 2020 N2 对边 - AC sealed, BD has groove
+    if (vId === '2020-N2-OPP' && (side === 'A' || side === 'C')) return 0;
+    if (vId === '2020-N2-OPP' && (side === 'B' || side === 'D')) return 1;
+    // 1515 N1 - A side sealed
+    if (vId === '1515-N1' && side === 'A') return 0;
+    // 1515 N2 - A and B sides sealed
+    if (vId === '1515-N2' && (side === 'A' || side === 'B')) return 0;
+    // 2047 - A side sealed (like 2040-N1-20), B/D have 2 grooves
+    if (vId === '2047' && side === 'A') return 0;
+    if (vId === '2047' && (side === 'B' || side === 'D')) return 2;
+    // 2040-N1-20: A side sealed
+    if (vId === '2040-N1-20' && side === 'A') return 0;
+    // 2040-N1-40: A has 1 groove, D sealed but uses 2-groove positions for drilling
+    if (vId === '2040-N1-40' && side === 'A') return 1;
+    if (vId === '2040-N1-40' && side === 'D') return 2;
+    // 2060: B/D have 3 grooves
+    if (vId === '2060' && (side === 'B' || side === 'D')) return 3;
+    // 20100: B/D have 5 grooves
+    if (vId === '20100' && (side === 'B' || side === 'D')) return 5;
+    // Standard rectangular profiles (2040, 3060, 2040 variants): B/D have 2 grooves
+    if (['2040', '3060', '2040-N1-20', '2040-N1-40'].includes(vId) && (side === 'B' || side === 'D')) return 2;
+    // N1/N2/N3 rules
+    const name = (PROFILE_VARIANTS.find(v => v.id === vId)?.name || '').toLowerCase();
+    if (name.includes('n1') && side === 'A') return 0;
+    if (name.includes('n2') && (side === 'A' || side === 'B')) return 0;
+    if (name.includes('n3') && (side !== 'D')) return 0;
+    return 1;
+  };
+  const grooveCount = getEditorGrooveCount(selectedVariant.id, selectedSide);
 
   return (
     <div className="space-y-8">
@@ -183,6 +219,23 @@ const ProfileEditor: React.FC<ProfileEditorProps> = ({ language, product, initia
           </div>
         </div>
 
+        {/* Profile Cross-Section Image */}
+        <div className="mb-8 flex justify-center">
+          <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4 inline-flex flex-col items-center gap-2">
+            <img
+              src={`/images/profile_${variantId}.jpg`}
+              alt={`${selectedVariant.name} cross-section`}
+              className="max-h-32 object-contain"
+              onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; (e.target as HTMLImageElement).nextElementSibling?.classList.remove('hidden'); }}
+            />
+            <div className="hidden text-slate-400 text-xs font-bold text-center p-4">
+              📐 {selectedVariant.name} 截面图<br/>
+              <span className="text-[10px] text-slate-300">(images/profile_{variantId}.jpg)</span>
+            </div>
+            <span className="text-[10px] text-slate-400 font-bold">{selectedVariant.name} 截面图</span>
+          </div>
+        </div>
+
         {finish === 'powder' && (
           <div className="mb-8">
             <label className="block text-xs font-black text-slate-400 uppercase mb-2">{t.color}</label>
@@ -208,10 +261,11 @@ const ProfileEditor: React.FC<ProfileEditorProps> = ({ language, product, initia
         <div className="mb-8">
             <label className="block text-xs font-black text-slate-400 uppercase mb-2">{t.length} </label>
             <div className="relative">
-              <input type="number" min={MIN_PROFILE_LENGTH_MM + 1} value={length} onChange={(e) => setLength(Math.max(0, parseFloat(e.target.value)))} className={`w-full border rounded-xl px-4 py-3 outline-none font-black text-xl ${isTooLong || isTooShort ? 'border-red-300 text-red-600 bg-red-50' : 'border-slate-200 bg-slate-50'}`} />
+              <input type="number" min={MIN_PROFILE_LENGTH_MM + 1} value={length} onChange={(e) => setLength(Math.max(0, parseFloat(e.target.value)))} className={`w-full border rounded-xl px-4 py-3 outline-none font-black text-xl ${isTooLong || isTooShort ? 'border-red-300 text-red-600 bg-red-50' : isDangerous ? 'border-amber-300 text-amber-700 bg-amber-50' : 'border-slate-200 bg-slate-50'}`} />
               <div className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 text-sm font-black">MM</div>
             </div>
             {isTooShort && <div className="text-red-600 text-xs mt-2 font-black">{t.minLengthDangerous} (&gt;{MIN_PROFILE_LENGTH_MM}mm)</div>}
+            {isDangerous && <div className="text-amber-600 text-xs mt-2 font-black flex items-center gap-1">⚠️ {t.dangerFeeSurcharge}</div>}
             {isTooLong && <div className="text-red-500 text-xs mt-2 font-bold">{t.maxLengthExceeded} ({selectedColor.maxLength}mm)</div>}
         </div>
 
@@ -233,12 +287,13 @@ const ProfileEditor: React.FC<ProfileEditorProps> = ({ language, product, initia
               <button onClick={addHole} className="bg-slate-900 text-white px-4 py-2 rounded-xl text-xs font-black hover:bg-slate-700 transition-all h-[42px] uppercase">{t.addHole}</button>
            </div>
         </div>
-        {grooveCount === 2 && (
+        {grooveCount >= 2 && (
                 <div>
                   <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">{t.groove}</label>
                   <select value={selectedGrooveIndex} onChange={e => setSelectedGrooveIndex(parseInt(e.target.value))} className="w-full border rounded px-2 py-1.5 text-sm bg-white">
-                    <option value={0}>{t.groove1}</option>
-                    <option value={1}>{t.groove2}</option>
+                    {Array.from({ length: grooveCount }, (_, i) => (
+                      <option key={i} value={i}>{t.groove1?.replace('1', String(i + 1)).replace('上', i === 0 ? '上' : '下') || `Groove ${i + 1}`}</option>
+                    ))}
                   </select>
                 </div>
               )}
@@ -355,7 +410,7 @@ const ProfileEditor: React.FC<ProfileEditorProps> = ({ language, product, initia
              <div className="text-lg font-black text-blue-600">{currency}{currentUnitPrice.toFixed(1)} / pc</div>
           </div>
           <div className="bg-slate-50 p-4 rounded-3xl border border-slate-100">
-            <ProfileVisualizer config={{ length, variantId, holes, tapping, finish, colorId, miterCut }} selectedSide={selectedSide} onSideChange={setSelectedSide} interactive={true} tapLabel={t.tapAction} onTapToggle={(s, i) => setTapping(prev => { const n = [...prev[s]]; n[i] = !n[i]; return {...prev, [s]: n}; })} onHoleClick={(id) => setHoles(holes.filter(h => h.id !== id))} onBarClick={(e, l, r) => { const mm = Math.round(((e.clientX - r.left) / r.width) * l); if (grooveCount === 2) setSelectedGrooveIndex((e.clientY - r.top) / r.height > 0.5 ? 1 : 0); if (mm >= 0 && mm < l) setNewHolePos(mm.toString()); }} />
+            <ProfileVisualizer config={{ length, variantId, holes, tapping, finish, colorId, miterCut }} selectedSide={selectedSide} onSideChange={setSelectedSide} interactive={true} tapLabel={t.tapAction} onTapToggle={(s, i) => setTapping(prev => { const n = [...prev[s]]; while (n.length <= i) n.push(false); n[i] = !n[i]; return {...prev, [s]: n}; })} onHoleClick={(id) => setHoles(holes.filter(h => h.id !== id))} onBarClick={(e, l, r) => { const mm = Math.round(((e.clientX - r.left) / r.width) * l); if (grooveCount >= 2) { const relY = (e.clientY - r.top) / r.height; setSelectedGrooveIndex(Math.min(Math.floor(relY * grooveCount), grooveCount - 1)); } if (mm >= 0 && mm < l) setNewHolePos(mm.toString()); }} />
           </div>
         </div>
 

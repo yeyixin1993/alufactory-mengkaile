@@ -117,23 +117,49 @@ const ProfileVisualizer: React.FC<ProfileVisualizerProps> = ({
   const { length, variantId, holes, tapping } = config;
   const selectedVariant = PROFILE_VARIANTS.find(v => v.id === variantId) || PROFILE_VARIANTS[0];
 
-  const tapDisabledVariants = ['2040', '3060', '2040-N1-20', '2040-N1-40'];
+  const tapDisabledVariants = ['2040', '3060', '2040-N1-20', '2040-N1-40', '2047', '2060', '20100'];
 
   // Helper logic extracted from Editor
   const isRadiusProfile = selectedVariant.id.endsWith('R');
   const availableSides: ProfileSide[] = isRadiusProfile ? ['A', 'B'] : ['A', 'B', 'C', 'D'];
   
-  const isRectangular = ['2040', '3060', '2040-N1-20', '2040-N1-40'].includes(selectedVariant.id);
+  const isRectangular = ['2040', '3060', '2040-N1-20', '2040-N1-40', '2047', '2060', '20100'].includes(selectedVariant.id);
   const isWideFace = isRectangular && (selectedSide === 'B' || selectedSide === 'D');
+  // Even wider faces for 2060 and 20100
+  const isExtraWideFace = ['2060', '20100'].includes(selectedVariant.id) && (selectedSide === 'B' || selectedSide === 'D');
 
   const getGrooveCount = (side: ProfileSide): number => {
     const id = selectedVariant.id;
     const name = selectedVariant.name.toLowerCase();
 
+    // 2020 N4 (square/round) - all 4 sides sealed, no grooves
+    if ((id === '2020-N4-SQ' || id === '2020-N4-RD')) return 0;
+
+    // 2020 N2 对边 - AC sealed, BD has groove
+    if (id === '2020-N2-OPP' && (side === 'A' || side === 'C')) return 0;
+    if (id === '2020-N2-OPP' && (side === 'B' || side === 'D')) return 1;
+
+    // 1515 N1 - A side sealed (like 2020 N1)
+    if (id === '1515-N1' && side === 'A') return 0;
+
+    // 1515 N2 - A and B sides sealed (like 2020 N2)
+    if (id === '1515-N2' && (side === 'A' || side === 'B')) return 0;
+
+    // 2047 - A side sealed (like 2040-N1-20), B/D have 2 grooves
+    if (id === '2047' && side === 'A') return 0;
+    if (id === '2047' && (side === 'B' || side === 'D')) return 2;
+
     // Specific exceptions for 2040 N1 variants
     if (id === '2040-N1-20' && side === 'A') return 0;
     if (id === '2040-N1-40' && side === 'A') return 1;
-    if (id === '2040-N1-40' && side === 'D') return 0;
+    // 2040-N1-40 D side: sealed but uses 2-groove positions for drilling
+    if (id === '2040-N1-40' && side === 'D') return 2;
+
+    // 2060: B/D have 3 grooves
+    if (id === '2060' && (side === 'B' || side === 'D')) return 3;
+
+    // 20100: B/D have 5 grooves
+    if (id === '20100' && (side === 'B' || side === 'D')) return 5;
 
     // Legacy name-based rules (2020 / 3030 and other variants that include N1/N2/N3)
     if (name.includes('n1') && side === 'A') return 0;
@@ -208,29 +234,38 @@ const ProfileVisualizer: React.FC<ProfileVisualizerProps> = ({
 
       {/* Visual Bar Container - Restored to px-8 for tap indicator visibility */}
       <div 
-        className={`relative w-full px-8 bg-slate-50 border border-slate-200 rounded flex items-center justify-center select-none transition-all duration-300 overflow-visible ${isWideFace ? 'h-32' : 'h-24'}`}
+        className={`relative w-full px-8 bg-slate-50 border border-slate-200 rounded flex items-center justify-center select-none transition-all duration-300 overflow-visible ${isExtraWideFace ? 'h-48' : isWideFace ? 'h-32' : 'h-24'}`}
       >
         {/* Tapping Indicators */}
+        {grooveCount === 0 && (
+          <>
+            {renderTapIndicator('left', 0, '50%')}
+            {renderTapIndicator('right', 0, '50%')}
+          </>
+        )}
         {grooveCount === 1 && (
           <>
             {renderTapIndicator('left', 0, '50%')}
             {renderTapIndicator('right', 0, '50%')}
           </>
         )}
-        {grooveCount === 2 && (
+        {grooveCount >= 2 && (
           <>
-             {/* Left Side */}
-             {renderTapIndicator('left', 0, '25%')}
-             {renderTapIndicator('left', 1, '75%')}
-             {/* Right Side */}
-             {renderTapIndicator('right', 0, '25%')}
-             {renderTapIndicator('right', 1, '75%')}
+            {Array.from({ length: grooveCount }, (_, i) => {
+              const pct = `${((i + 1) / (grooveCount + 1)) * 100}%`;
+              return (
+                <React.Fragment key={`tap-${i}`}>
+                  {renderTapIndicator('left', i, pct)}
+                  {renderTapIndicator('right', i, pct)}
+                </React.Fragment>
+              );
+            })}
           </>
         )}
 
         {/* The Bar */}
         <div 
-          className={`relative w-full bg-gradient-to-b from-slate-200 to-slate-300 border-y border-slate-400 shadow-inner transition-all duration-300 overflow-visible ${isWideFace ? 'h-24' : 'h-12'} ${interactive ? 'cursor-crosshair' : ''}`}
+          className={`relative w-full bg-gradient-to-b from-slate-200 to-slate-300 border-y border-slate-400 shadow-inner transition-all duration-300 overflow-visible ${isExtraWideFace ? 'h-40' : isWideFace ? 'h-24' : 'h-12'} ${interactive ? 'cursor-crosshair' : ''}`}
           style={{ WebkitPrintColorAdjust: 'exact', printColorAdjust: 'exact' } as React.CSSProperties}
           onClick={(e) => {
              if (interactive && onBarClick) {
@@ -254,7 +289,7 @@ const ProfileVisualizer: React.FC<ProfileVisualizerProps> = ({
               else if (selectedSide === 'D') dir = config.miterCut!.left.direction === 'up' ? 'down' : 'up';
             }
             if (!dir) return null;
-            const h = isWideFace ? 96 : 48;
+            const h = isExtraWideFace ? 160 : isWideFace ? 96 : 48;
             const label = `45°${cutSide}`;
             return <MiterCutCanvas side="left" direction={dir} size={h} label={label} />;
           })()}
@@ -269,7 +304,7 @@ const ProfileVisualizer: React.FC<ProfileVisualizerProps> = ({
               else if (selectedSide === 'D') dir = config.miterCut!.right.direction === 'up' ? 'down' : 'up';
             }
             if (!dir) return null;
-            const h = isWideFace ? 96 : 48;
+            const h = isExtraWideFace ? 160 : isWideFace ? 96 : 48;
             const label = `45°${cutSide}`;
             return <MiterCutCanvas side="right" direction={dir} size={h} label={label} />;
           })()}
@@ -277,10 +312,14 @@ const ProfileVisualizer: React.FC<ProfileVisualizerProps> = ({
           {grooveCount === 1 && (
             <div className="absolute top-1/2 left-0 right-0 h-3 -translate-y-1/2 bg-black/10 border-y border-black/5 pointer-events-none"></div>
           )}
-          {grooveCount === 2 && (
+          {grooveCount >= 2 && (
              <>
-               <div className="absolute top-[25%] left-0 right-0 h-3 -translate-y-1/2 bg-black/10 border-y border-black/5 pointer-events-none"></div>
-               <div className="absolute top-[75%] left-0 right-0 h-3 -translate-y-1/2 bg-black/10 border-y border-black/5 pointer-events-none"></div>
+               {Array.from({ length: grooveCount }, (_, i) => {
+                 const pct = ((i + 1) / (grooveCount + 1)) * 100;
+                 return (
+                   <div key={`groove-${i}`} className="absolute left-0 right-0 h-3 -translate-y-1/2 bg-black/10 border-y border-black/5 pointer-events-none" style={{ top: `${pct}%` }}></div>
+                 );
+               })}
              </>
           )}
 
@@ -294,8 +333,9 @@ const ProfileVisualizer: React.FC<ProfileVisualizerProps> = ({
             const isCountersunkEntry = hole.type === 'countersunk' && !isExit;
             
             let verticalPos = '50%';
-            if (grooveCount === 2) {
-              verticalPos = hole.grooveIndex === 1 ? '75%' : '25%';
+            if (grooveCount >= 2) {
+              const gi = hole.grooveIndex ?? 0;
+              verticalPos = `${((gi + 1) / (grooveCount + 1)) * 100}%`;
             }
 
             return (

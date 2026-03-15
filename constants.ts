@@ -82,7 +82,8 @@ export const TRANSLATIONS: Record<Language, Record<string, string>> = {
     color: 'Color',
     maxLength: 'Max Length',
     maxLengthExceeded: 'Exceeds maximum length for this color!',
-    minLengthDangerous: 'Each profile is too short and too dangerous to cut. Length must be greater than 100mm.',
+    minLengthDangerous: 'Each profile is too short to cut. Length must be greater than 20mm.',
+    dangerFeeSurcharge: '+¥5 danger fee per piece (length ≤ 100mm)',
     factorySheet: 'Production Sheet',
     customer: 'username',
     contact: 'Contact',
@@ -244,7 +245,8 @@ export const TRANSLATIONS: Record<Language, Record<string, string>> = {
     color: '颜色',
     maxLength: '最大长度',
     maxLengthExceeded: '超过该颜色允许的最大长度！',
-    minLengthDangerous: '每根型材太短，切割危险。长度必须大于100mm。',
+    minLengthDangerous: '每根型材太短，无法切割。长度必须大于20mm。',
+    dangerFeeSurcharge: '每根加收5元危险费（长度≤100mm）',
     factorySheet: '工厂生产单',
     customer: '用户名',
     contact: '联系方式',
@@ -406,7 +408,8 @@ export const TRANSLATIONS: Record<Language, Record<string, string>> = {
     color: '色',
     maxLength: '最大長',
     maxLengthExceeded: 'この色の最大長を超えています！',
-    minLengthDangerous: '各プロファイルは短すぎて切断時に危険です。長さは100mmを超える必要があります。',
+    minLengthDangerous: '各プロファイルは短すぎて切断できません。長さは20mmを超える必要があります。',
+    dangerFeeSurcharge: '+¥5 危険料（長さ≤100mm）',
     factorySheet: '生産シート',
     customer: 'ユーザー名',
     contact: '連絡先',
@@ -507,30 +510,63 @@ export const PROFILE_COLORS: ColorDef[] = [
   { id: 'british_grey', name: { en: 'British Grey', cn: '英伦灰', jp: 'ブリティッシュグレー' }, maxLength: 3000 },
 ];
 
+// OLD PRICES (commented out 2026-03-15):
+// export const PROFILE_VARIANTS: ProfileVariant[] = [
+//   { id: '1515', name: '1515', wallThickness: 1, price: { oxidized: 10, electrophoretic: 15, powder: 18 } },
+//   { id: '2020', name: '2020', wallThickness: 1.45, price: { oxidized: 14, electrophoretic: 19, powder: 23 } },
+//   { id: '2020-N1', name: '2020 N1', wallThickness: 1.45, price: { oxidized: 15, electrophoretic: 20, powder: 24 } },
+//   { id: '2020-N2', name: '2020 N2', wallThickness: 1.45, price: { oxidized: 15.5, electrophoretic: 20.5, powder: 24.5 } },
+//   { id: '2020-N3', name: '2020 N3', wallThickness: 1.45, price: { oxidized: 16, electrophoretic: 21, powder: 25 } },
+//   { id: '2020R', name: '2020R', wallThickness: 1.5, price: { oxidized: 14.5, electrophoretic: 19, powder: 23 } },
+//   { id: '2040', name: '2040', wallThickness: 1.5, price: { oxidized: 26, electrophoretic: 31, powder: 37 } },
+//   { id: '2040-N1-20', name: '2040 N1-20', wallThickness: 1.5, price: { oxidized: 26.5, electrophoretic: 31.5, powder: 37.5 } },
+//   { id: '2040-N1-40', name: '2040 N1-40', wallThickness: 1.5, price: { oxidized: 27.5, electrophoretic: 32.5, powder: 38.5 } },
+//   { id: '3030', name: '3030', wallThickness: 1.75, price: { oxidized: 25, electrophoretic: 30, powder: 36 } },
+//   { id: '3030-N1', name: '3030 N1', wallThickness: 1.75, price: { oxidized: 26.5, electrophoretic: 32, powder: 38 } },
+//   { id: '3030-N2', name: '3030 N2', wallThickness: 1.75, price: { oxidized: 28, electrophoretic: 33.5, powder: 40 } },
+//   { id: '3030R', name: '3030R', wallThickness: 2, price: { oxidized: 28, electrophoretic: 32, powder: 38 } },
+//   { id: '3060', name: '3060', wallThickness: 1.8, price: { oxidized: 49, electrophoretic: 59, powder: 69 } },
+//   { id: '4040', name: '4040', wallThickness: 1.95, price: { oxidized: 42, electrophoretic: 51, powder: 60 } },
+// ];
+
+// NEW PRICES (updated 2026-03-15):
 export const PROFILE_VARIANTS: ProfileVariant[] = [
-  { id: '1515', name: '1515', wallThickness: 1, price: { oxidized: 10, electrophoretic: 15, powder: 18 } },
-  { id: '2020', name: '2020', wallThickness: 1.45, price: { oxidized: 14, electrophoretic: 19, powder: 23 } },
-  { id: '2020-N1', name: '2020 N1', wallThickness: 1.45, price: { oxidized: 15, electrophoretic: 20, powder: 24 } },
-  { id: '2020-N2', name: '2020 N2', wallThickness: 1.45, price: { oxidized: 15.5, electrophoretic: 20.5, powder: 24.5 } },
-  { id: '2020-N3', name: '2020 N3', wallThickness: 1.45, price: { oxidized: 16, electrophoretic: 21, powder: 25 } },
-  { id: '2020R', name: '2020R', wallThickness: 1.5, price: { oxidized: 14.5, electrophoretic: 19, powder: 23 } },
-  { id: '2040', name: '2040', wallThickness: 1.5, price: { oxidized: 26, electrophoretic: 31, powder: 37 } },
-  { id: '2040-N1-20', name: '2040 N1-20', wallThickness: 1.5, price: { oxidized: 26.5, electrophoretic: 31.5, powder: 37.5 } },
-  { id: '2040-N1-40', name: '2040 N1-40', wallThickness: 1.5, price: { oxidized: 27.5, electrophoretic: 32.5, powder: 38.5 } },    
-  { id: '3030', name: '3030', wallThickness: 1.75, price: { oxidized: 25, electrophoretic: 30, powder: 36 } },
-  { id: '3030-N1', name: '3030 N1', wallThickness: 1.75, price: { oxidized: 26.5, electrophoretic: 32, powder: 38 } },
-  { id: '3030-N2', name: '3030 N2', wallThickness: 1.75, price: { oxidized: 28, electrophoretic: 33.5, powder: 40 } },
-  { id: '3030R', name: '3030R', wallThickness: 2, price: { oxidized: 28, electrophoretic: 32, powder: 38 } },
-  { id: '3060', name: '3060', wallThickness: 1.8, price: { oxidized: 49, electrophoretic: 59, powder: 69 } },
-  { id: '4040', name: '4040', wallThickness: 1.95, price: { oxidized: 42, electrophoretic: 51, powder: 60 } },
+  { id: '1515', name: '1515', wallThickness: 1.0, price: { oxidized: 12, electrophoretic: 16, powder: 19 } },
+  { id: '1515-N1', name: '1515 N1', wallThickness: 1.0, price: { oxidized: 999, electrophoretic: 999, powder: 999 } },
+  { id: '1515-N2', name: '1515 N2', wallThickness: 1.0, price: { oxidized: 999, electrophoretic: 999, powder: 999 } },
+  { id: '2020', name: '2020', wallThickness: 1.5, price: { oxidized: 16, electrophoretic: 20, powder: 24 } },
+  { id: '2020-N1', name: '2020 N1', wallThickness: 1.5, price: { oxidized: 17, electrophoretic: 21, powder: 25 } },
+  { id: '2020-N2', name: '2020 N2', wallThickness: 1.5, price: { oxidized: 18, electrophoretic: 23, powder: 27 } },
+  { id: '2020-N2-OPP', name: '2020 N2 对边', wallThickness: 1.5, price: { oxidized: 18, electrophoretic: 23, powder: 27 } },
+  { id: '2020-N3', name: '2020 N3', wallThickness: 1.5, price: { oxidized: 19, electrophoretic: 23, powder: 27 } },
+  { id: '2020-N4-SQ', name: '2020 N4 方形', wallThickness: 1.5, price: { oxidized: 999, electrophoretic: 999, powder: 999 } },
+  { id: '2020-N4-RD', name: '2020 N4 圆形', wallThickness: 1.5, price: { oxidized: 999, electrophoretic: 999, powder: 999 } },
+  { id: '2020R', name: '2020R', wallThickness: 1.5, price: { oxidized: 17, electrophoretic: 21, powder: 25 } },
+  { id: '2040', name: '2040', wallThickness: 1.5, price: { oxidized: 27, electrophoretic: 32, powder: 38 } },
+  { id: '2040-N1-20', name: '2040 N1-20', wallThickness: 1.5, price: { oxidized: 28, electrophoretic: 34, powder: 40 } },
+  { id: '2040-N1-40', name: '2040 N1-40', wallThickness: 1.5, price: { oxidized: 29, electrophoretic: 35, powder: 41 } },
+  { id: '2047', name: '2047', wallThickness: 1.5, price: { oxidized: 999, electrophoretic: 999, powder: 999 } },
+  { id: '2060', name: '2060', wallThickness: 1.5, price: { oxidized: 65, electrophoretic: 90, powder: 120 } },
+  { id: '20100', name: '20100', wallThickness: 1.5, price: { oxidized: 80, electrophoretic: 110, powder: 140 } },
+  { id: '3030', name: '3030', wallThickness: 1.8, price: { oxidized: 29, electrophoretic: 35, powder: 41 } },
+  { id: '3030-N1', name: '3030 N1', wallThickness: 1.8, price: { oxidized: 31, electrophoretic: 36, powder: 42 } },
+  { id: '3030-N2', name: '3030 N2', wallThickness: 1.8, price: { oxidized: 32, electrophoretic: 38, powder: 44 } },
+  { id: '3030R', name: '3030R', wallThickness: 2.0, price: { oxidized: 32, electrophoretic: 38, powder: 44 } },
+  { id: '3060', name: '3060', wallThickness: 1.8, price: { oxidized: 53, electrophoretic: 60, powder: 70 } },
+  { id: '4040', name: '4040', wallThickness: 2.0, price: { oxidized: 45, electrophoretic: 52, powder: 62 } },
 ];
 
 export const PROFILE_WEIGHTS: Record<string, number> = {
   '1515': 0.5,
+  '1515-N1': 0.5,
+  '1515-N2': 0.5,
   '2020': 0.6,
   '2020-N1': 0.6,
   '2020-N2': 0.6,
+  '2020-N2-OPP': 0.6,
   '2020-N3': 0.6,
+  '2020-N4-SQ': 0.6,
+  '2020-N4-RD': 0.6,
   '2020R': 0.6,
   '3030': 1.0,
   '3030-N1': 1.0,
@@ -539,6 +575,9 @@ export const PROFILE_WEIGHTS: Record<string, number> = {
   '2040': 1.0,
   '2040-N1-20': 1.0,
   '2040-N1-40': 1.0,
+  '2047': 1.0,
+  '2060': 1.6,
+  '20100': 2.0,
   '4040': 1.6,
   '3060': 1.6
 };
@@ -664,31 +703,40 @@ export const INITIAL_PRODUCTS: Product[] = [
         description: {
       en: `Supports customized length cutting, drilling, and tapping.
 
-    N1 means no groove on one side, N2 means no groove on two sides, and N3 means no groove on three sides.
+    N1 means no groove on one side, N2 means no groove on two sides, N3 means no groove on three sides, N4 means no groove on all four sides.
+    2020 N2 对边 (Opposite): A/C sides sealed, B/D sides have grooves.
 
     By default, faces A, B, C, and D are adjacent in sequence. On the left side, the order is clockwise A-B-C-D; on the right side, the order is counterclockwise A-D-C-B.
 
     Drilling holes must be at least 5 mm away from the end edge.
 
-    For 1515, the default tapping is M4; for 2020 and 2040, the default tapping is M6; for 3030, 3060, and 4040, the default tapping is M8.`,
+    For 1515, the default tapping is M4; for 2020 and 2040, the default tapping is M6; for 3030, 3060, and 4040, the default tapping is M8.
+    
+    Lengths ≤100mm incur a ¥5 danger fee per piece.`,
       cn: `支持定制定长、打孔、攻丝。\t\n
 
-    N1 为一面封边, N2 为两面封边, N3 为三面封边。\t\n
+    N1 为一面封边, N2 为两面封边, N3 为三面封边, N4 为四面封边。\t\n
+    2020 N2 对边：AC面封边，BD面凹槽。\t\n
 
     默认ABCD面依次相邻, 左边是顺时针ABCD, 右边是逆时针ADCB。\t\n
 
     打孔需要和端边至少隔开5mm。\t\n
 
-    1515默认攻丝M4, 2020及2040默认攻丝M6, 3030, 3060和4040默认攻丝M8。`,
+    1515默认攻丝M4, 2020及2040默认攻丝M6, 3030, 3060和4040默认攻丝M8。\t\n
+    
+    长度≤100mm每根加收5元危险费。`,
       jp: `定寸カット、穴あけ、タップ加工のカスタム対応が可能です。
 
-    N1は一面封止、N2は両面封止、N3は三面封止を示します。
+    N1は一面封止、N2は両面封止、N3は三面封止、N4は四面封止を示します。
+    2020 N2 対辺：AC面封止、BD面溝あり。
 
     デフォルトではA・B・C・D面は順に隣接しており、左側は時計回りにABCD、右側は反時計回りにADCBとなります。
 
     穴あけ位置は端面から最低5mm以上離す必要があります。
 
-    1515は標準タップM4、2020および2040は標準タップM6、3030・3060・4040は標準タップM8です。`
+    1515は標準タップM4、2020および2040は標準タップM6、3030・3060・4040は標準タップM8です。
+    
+    長さ≤100mmの場合、1本あたり¥5の危険料金が発生します。`
         },
     basePrice: 0,
     imageUrl: 'https://picsum.photos/400/300?random=2'
