@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { DrillHole, ProfileConfig, ProfileSide, TappingConfig, Language, HoleType, ProfileFinish, CartItem, Product, MiterCutConfig, MiterCutDirection, MiterCutSide } from '../types';
-import { TRANSLATIONS, PROFILE_VARIANTS, PROFILE_COLORS } from '../constants';
+import { TRANSLATIONS, PROFILE_VARIANTS, PROFILE_COLORS, COLOR_ONLY_COLORED_SECTION_IDS } from '../constants';
 import { Plus, Trash2, List, ShoppingCart, Pencil, X, Hammer, Settings2 } from 'lucide-react';
 import ProfileVisualizer from './ProfileVisualizer';
 
@@ -26,6 +26,7 @@ const PRICE_MITER_CUT = 1.0;
 const MIN_PROFILE_LENGTH_MM = 20;
 const DANGER_FEE_THRESHOLD_MM = 100;
 const DANGER_FEE_PER_PIECE = 5;
+const MAX_PROFILE_LENGTH_MM = 3000;
 
 const ProfileEditor: React.FC<ProfileEditorProps> = ({ language, product, initialItem, onAddBatchToCart, onUpdateItem, draftProfiles, setDraftProfiles }) => {
   const t = TRANSLATIONS[language];
@@ -54,9 +55,10 @@ const ProfileEditor: React.FC<ProfileEditorProps> = ({ language, product, initia
 
   const selectedVariant = PROFILE_VARIANTS.find(v => v.id === variantId) || PROFILE_VARIANTS[0];
   const selectedColor = PROFILE_COLORS.find(c => c.id === colorId) || PROFILE_COLORS[0];
+  const colorOnlyColoredSection = COLOR_ONLY_COLORED_SECTION_IDS.includes(colorId as any);
   const isTooShort = length <= MIN_PROFILE_LENGTH_MM;
   const isDangerous = length > MIN_PROFILE_LENGTH_MM && length <= DANGER_FEE_THRESHOLD_MM;
-  const isTooLong = length > selectedColor.maxLength;
+  const isTooLong = length > MAX_PROFILE_LENGTH_MM;
 
   useEffect(() => {
     setHoles(prevHoles => prevHoles.filter(hole => hole.positionMm < length));
@@ -79,6 +81,12 @@ const ProfileEditor: React.FC<ProfileEditorProps> = ({ language, product, initia
       setColorId('black');
     }
   }, [finish]);
+
+  useEffect(() => {
+    if (colorOnlyColoredSection && finish === 'electrophoretic') {
+      setFinish('powder');
+    }
+  }, [colorOnlyColoredSection, finish]);
 
   const calculateItemUnitPrice = (len: number, currentHoles: DrillHole[], currentTapping: TappingConfig, currentMiterCut?: MiterCutConfig) => {
     const materialPrice = (len / 1000) * selectedVariant.price[finish];
@@ -221,7 +229,7 @@ const ProfileEditor: React.FC<ProfileEditorProps> = ({ language, product, initia
             <label className="block text-xs font-black text-slate-400 uppercase mb-2">{t.finish}</label>
             <select value={finish} onChange={(e) => setFinish(e.target.value as ProfileFinish)} className="w-full border border-slate-200 rounded-xl px-4 py-3 outline-none bg-slate-50 font-black text-slate-700">
               <option value="oxidized">{t.finishOxidized}</option>
-              <option value="electrophoretic">{t.finishElectrophoretic}</option>
+              {!colorOnlyColoredSection && <option value="electrophoretic">{t.finishElectrophoretic}</option>}
               <option value="powder">{t.finishPowder}</option>
             </select>
           </div>
@@ -294,12 +302,12 @@ const ProfileEditor: React.FC<ProfileEditorProps> = ({ language, product, initia
         <div className="mb-8">
             <label className="block text-xs font-black text-slate-400 uppercase mb-2">{t.length} </label>
             <div className="relative">
-              <input type="number" min={MIN_PROFILE_LENGTH_MM + 1} value={length} onChange={(e) => setLength(Math.max(0, parseFloat(e.target.value)))} className={`w-full border rounded-xl px-4 py-3 outline-none font-black text-xl ${isTooLong || isTooShort ? 'border-red-300 text-red-600 bg-red-50' : isDangerous ? 'border-amber-300 text-amber-700 bg-amber-50' : 'border-slate-200 bg-slate-50'}`} />
+              <input type="number" min={MIN_PROFILE_LENGTH_MM + 1} max={MAX_PROFILE_LENGTH_MM} value={length} onChange={(e) => setLength(Math.min(MAX_PROFILE_LENGTH_MM, Math.max(0, parseFloat(e.target.value))))} className={`w-full border rounded-xl px-4 py-3 outline-none font-black text-xl ${isTooLong || isTooShort ? 'border-red-300 text-red-600 bg-red-50' : isDangerous ? 'border-amber-300 text-amber-700 bg-amber-50' : 'border-slate-200 bg-slate-50'}`} />
               <div className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 text-sm font-black">MM</div>
             </div>
             {isTooShort && <div className="text-red-600 text-xs mt-2 font-black">{t.minLengthDangerous} (&gt;{MIN_PROFILE_LENGTH_MM}mm)</div>}
             {isDangerous && <div className="text-amber-600 text-xs mt-2 font-black flex items-center gap-1">⚠️ {t.dangerFeeSurcharge}</div>}
-            {isTooLong && <div className="text-red-500 text-xs mt-2 font-bold">{t.maxLengthExceeded} ({selectedColor.maxLength}mm)</div>}
+            {isTooLong && <div className="text-red-500 text-xs mt-2 font-bold">{t.maxLengthExceeded} ({MAX_PROFILE_LENGTH_MM}mm)</div>}
         </div>
 
         <div className="mb-8 bg-slate-50 p-6 rounded-2xl border border-slate-100">

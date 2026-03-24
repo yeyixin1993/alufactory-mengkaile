@@ -13,6 +13,7 @@ import { openFactorySheetPreview } from './components/FactorySheetPreview';
 import FactorySheetPreviewPage from './components/FactorySheetPreviewPage';
 import FactorySheet from './components/FactorySheet';
 import ExportOverlay from './components/ExportOverlay';
+import QuickQuote from './components/QuickQuote';
 import { jsPDF } from 'jspdf';
 import html2canvas from 'html2canvas';
 import { buildOrderPdfFilename, formatEast8Date, formatEast8DateTime } from './utils/orderFormatting';
@@ -425,6 +426,12 @@ const Catalog: React.FC<{ language: Language }> = ({ language }) => {
   const t = TRANSLATIONS[language];
   return (
     <div className="max-w-7xl mx-auto px-6 py-12">
+      <div className="mb-8">
+        <Link to="/quick-quote" className="inline-flex items-center gap-2 bg-blue-600 text-white px-6 py-3 rounded-2xl font-black shadow-xl shadow-blue-600/20 hover:bg-blue-500 transition-all">
+          {t.quickQuote}
+          <ChevronRight className="w-4 h-4" />
+        </Link>
+      </div>
       {/*<h2 className="text-5xl font-black text-slate-900 mb-12 tracking-tight">{t.catalog}</h2>*/}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
         {INITIAL_PRODUCTS.map(product => (
@@ -1252,6 +1259,7 @@ const App: React.FC = () => {
 
         <Routes>
           <Route path="/" element={<Catalog language={language} />} />
+          <Route path="/quick-quote" element={<QuickQuote language={language} />} />
           <Route path="/login" element={<Auth language={language} onLogin={(u) => { setUser(u); }} />} />
           <Route path="/history" element={user ? <UserProfile user={user} language={language} setUser={setUser} onEditOrder={onEditOrder} /> : <div className="p-40 text-center flex flex-col items-center"><UserIcon className="w-20 h-20 text-slate-100 mb-6"/><p className="font-black text-slate-300 text-2xl">Please login to view your orders</p></div>} />
           <Route path="/product/:id" element={<ProductDetail language={language} onAddToCart={(item) => setCart(mergeCartItems(cart, [item]))} onAddBatchToCart={(items) => setCart(mergeCartItems(cart, items))} onUpdateCartItem={(item) => setCart(cart.map(x => x.id === item.id ? item : x))} draftProfiles={draftProfiles} setDraftProfiles={setDraftProfiles} />} />
