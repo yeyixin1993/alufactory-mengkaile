@@ -662,9 +662,6 @@ const QuickQuote: React.FC<{ language: Language }> = ({ language }) => {
             <div className="bg-blue-50 border border-blue-100 rounded-2xl p-4 text-sm space-y-1">
               <div className="font-bold text-blue-700">{t.qq_profileShippingNote}</div>
               <div className="text-slate-700">
-                {t.qq_estimatedWeight}: <span className="font-black">{profileSummary.totalWeightKg.toFixed(1)} kg</span>
-              </div>
-              <div className="text-slate-700">
                 {t.qq_cheapestCourier}:{' '}
                 <span className="font-black">
                   {profileSummary.method ? SHIPPING_METHOD_NAMES[profileSummary.method][language] : '-'}
@@ -772,7 +769,13 @@ const QuickQuote: React.FC<{ language: Language }> = ({ language }) => {
         </button>
       </div>
 
-      {showSummary && (
+      {showSummary && !selectedProvince && (
+        <div className="mt-6 bg-amber-50 border border-amber-200 rounded-3xl shadow-sm p-4 sm:p-6 md:p-8">
+          <div className="text-amber-800 font-black text-base sm:text-lg">⚠ {t.qq_selectProvince}</div>
+        </div>
+      )}
+
+      {showSummary && selectedProvince && (
         <div className="mt-6 bg-white border border-slate-100 rounded-3xl shadow-xl p-4 sm:p-6 md:p-8">
           <h3 className="text-xl sm:text-2xl font-black text-slate-900 mb-4">{t.qq_categorySummary}</h3>
           {categorySummary.categories.length === 0 ? (
