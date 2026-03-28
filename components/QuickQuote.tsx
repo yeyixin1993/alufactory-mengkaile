@@ -27,12 +27,15 @@ interface ProfileRow {
   tappingCount: number;
   throughHoleCount: number;
   countersunkHoleCount: number;
+  threadedHoleCount: number;
+  miter45CutCount: number;
   quantity: number;
 }
 
 interface BoardRow {
   id: string;
   thickness: number;
+  colorId: string;
   width: number;
   height: number;
   quantity: number;
@@ -62,6 +65,10 @@ const MAX_BOARD_HEIGHT_MM = 1200;
 
 const round1 = (n: number) => Number(n.toFixed(1));
 const getCurrency = (lang: Language) => (lang === 'cn' ? '￥' : '$');
+const safeNonNegative = (value: number | null | undefined) => {
+  const n = Number(value);
+  return Number.isFinite(n) ? Math.max(0, n) : 0;
+};
 
 const createProfileRow = (): ProfileRow => ({
   id: Math.random().toString(36).slice(2, 10),
@@ -72,12 +79,15 @@ const createProfileRow = (): ProfileRow => ({
   tappingCount: 0,
   throughHoleCount: 0,
   countersunkHoleCount: 0,
+  threadedHoleCount: 0,
+  miter45CutCount: 0,
   quantity: 0,
 });
 
 const createBoardRow = (thickness: number): BoardRow => ({
   id: Math.random().toString(36).slice(2, 10),
   thickness,
+  colorId: 'natural',
   width: 0,
   height: 0,
   quantity: 0,
@@ -165,15 +175,17 @@ const QuickQuote: React.FC<{ language: Language }> = ({ language }) => {
     return profileRows.map((row) => {
       const variant = PROFILE_VARIANTS.find((v) => v.id === row.model) || PROFILE_VARIANTS[0];
       const finish = getProfileFinishByRow(row);
-      const effectiveLength = Math.min(MAX_PROFILE_LENGTH_MM, Math.max(0, row.length));
+      const effectiveLength = Math.min(MAX_PROFILE_LENGTH_MM, safeNonNegative(row.length));
       const materialPrice = (effectiveLength / 1000) * variant.price[finish];
       const processPrice =
-        Math.max(0, row.tappingCount) * PROFILE_PRICE_TAPPING +
-        Math.max(0, row.throughHoleCount) * PROFILE_PRICE_THROUGH_HOLE +
-        Math.max(0, row.countersunkHoleCount) * PROFILE_PRICE_COUNTERSUNK;
+        safeNonNegative(row.tappingCount) * PROFILE_PRICE_TAPPING +
+        safeNonNegative(row.throughHoleCount) * PROFILE_PRICE_THROUGH_HOLE +
+        safeNonNegative(row.countersunkHoleCount) * PROFILE_PRICE_COUNTERSUNK +
+        safeNonNegative(row.threadedHoleCount) * PROFILE_PRICE_COUNTERSUNK +
+        safeNonNegative(row.miter45CutCount) * PROFILE_PRICE_THROUGH_HOLE;
       const dangerFee = row.length > 0 && row.length <= PROFILE_DANGER_FEE_THRESHOLD_MM ? PROFILE_DANGER_FEE : 0;
       const unitPrice = round1(materialPrice + processPrice + dangerFee);
-      const qty = Math.max(0, row.quantity || 0);
+      const qty = safeNonNegative(row.quantity || 0);
       const subtotal = round1(unitPrice * qty);
       const weightPerMeter = PROFILE_WEIGHTS[row.model] || 0.6;
       const totalWeightKg = weightPerMeter * (effectiveLength / 1000) * qty;
@@ -269,6 +281,72 @@ const QuickQuote: React.FC<{ language: Language }> = ({ language }) => {
       frameMetersMap.set(row.frameType, prev + ((w + h) * qty) / 100);
     });
 
+    const profileDetails = profileRows
+      .map((row) => {
+        const qty = safeNonNegative(row.quantity || 0);
+        const lengthMm = safeNonNegative(row.length || 0);
+        if (qty <= 0 || lengthMm <= 0) return null;
+        const colorName = (PROFILE_COLORS.find((c) => c.id === row.colorId) || PROFILE_COLORS[0]).name[language];
+        const countParts = [
+          { label: t.qq_tappingCount, value: safeNonNegative(row.tappingCount) },
+          { label: t.qq_throughHoleCount, value: safeNonNegative(row.throughHoleCount) },
+          { label: t.qq_countersunkCount, value: safeNonNegative(row.countersunkHoleCount) },
+          { label: t.qq_threadedHoleCount, value: safeNonNegative(row.threadedHoleCount) },
+          { label: t.qq_miter45CutCount, value: safeNonNegative(row.miter45CutCount) },
+        ]
+          .filter((x) => x.value > 0)
+          .map((x) => `${x.label}:${x.value}`)
+          .join(' · ');
+        return {
+          id: row.id,
+          text: `${row.model} · ${colorName} · ${row.section === 'natural' ? t.qq_sectionNatural : t.qq_sectionColored} · ${lengthMm}mm × ${qty}${countParts ? ` · ${countParts}` : ''}`,
+        };
+      })
+      .filter((x): x is { id: string; text: string } => Boolean(x));
+
+    const profileProcessTotals = profileRows.reduce(
+      (acc, row) => {
+        const qty = safeNonNegative(row.quantity || 0);
+        acc.tapping += safeNonNegative(row.tappingCount || 0) * qty;
+        acc.through += safeNonNegative(row.throughHoleCount || 0) * qty;
+        acc.countersunk += safeNonNegative(row.countersunkHoleCount || 0) * qty;
+        acc.threaded += safeNonNegative(row.threadedHoleCount || 0) * qty;
+        acc.miter45 += safeNonNegative(row.miter45CutCount || 0) * qty;
+        return acc;
+      },
+      { tapping: 0, through: 0, countersunk: 0, threaded: 0, miter45: 0 }
+    );
+
+    const buildBoardDetails = (rows: BoardRow[]) =>
+      rows
+        .map((row) => {
+          const qty = Math.max(0, row.quantity || 0);
+          const width = Math.max(0, row.width || 0);
+          const height = Math.max(0, row.height || 0);
+          if (qty <= 0 || width <= 0 || height <= 0) return null;
+          const colorName = (PROFILE_COLORS.find((c) => c.id === row.colorId) || PROFILE_COLORS[0]).name[language];
+          return {
+            id: row.id,
+            text: `${row.thickness}mm · ${colorName} · ${width}×${height}mm × ${qty}`,
+          };
+        })
+        .filter((x): x is { id: string; text: string } => Boolean(x));
+
+    const frameDetails = frameRows
+      .map((row) => {
+        const qty = Math.max(0, row.quantity || 0);
+        const w = Math.max(0, row.innerWidth || 0);
+        const h = Math.max(0, row.innerHeight || 0);
+        if (qty <= 0 || (w + h) <= 0) return null;
+        const frameTypeLabel =
+          row.frameType === 'wood' ? t.qq_woodFrame : row.frameType === 'aluminum' ? t.qq_aluFrame : t.qq_aluWoodFrame;
+        return {
+          id: row.id,
+          text: `${frameTypeLabel} · ${w}×${h}mm × ${qty}`,
+        };
+      })
+      .filter((x): x is { id: string; text: string } => Boolean(x));
+
     return {
       profileMeters: Array.from(profileMetersMap.entries()).map(([name, meters]) => ({ name, meters: round1(meters) })),
       aluminumPlateArea: summarizeBoardArea(aluPlateCalculated),
@@ -281,8 +359,45 @@ const QuickQuote: React.FC<{ language: Language }> = ({ language }) => {
       ]
         .map((x) => ({ label: x.label, meters: round1(frameMetersMap.get(x.type) || 0) }))
         .filter((x) => x.meters > 0),
+      profileDetails,
+      aluminumPlateDetails: buildBoardDetails(aluPlateRows),
+      pegboardDetails: buildBoardDetails(pegboardRows),
+      marineBoardDetails: marineBoardRows
+        .map((row) => {
+          const qty = Math.max(0, row.quantity || 0);
+          const width = Math.max(0, row.width || 0);
+          const height = Math.max(0, row.height || 0);
+          if (qty <= 0 || width <= 0 || height <= 0) return null;
+          return {
+            id: row.id,
+            text: `${row.thickness}mm · ${width}×${height}mm × ${qty}`,
+          };
+        })
+        .filter((x): x is { id: string; text: string } => Boolean(x)),
+      frameDetails,
+      profileProcessTotals,
     };
-  }, [profileRows, language, aluPlateCalculated, pegboardCalculated, marineBoardCalculated, frameRows, t.qq_woodFrame, t.qq_aluFrame, t.qq_aluWoodFrame]);
+  }, [
+    profileRows,
+    language,
+    aluPlateCalculated,
+    pegboardCalculated,
+    marineBoardCalculated,
+    frameRows,
+    t.qq_woodFrame,
+    t.qq_aluFrame,
+    t.qq_aluWoodFrame,
+    t.qq_sectionNatural,
+    t.qq_sectionColored,
+    t.qq_tappingCount,
+    t.qq_throughHoleCount,
+    t.qq_countersunkCount,
+    t.qq_threadedHoleCount,
+    t.qq_miter45CutCount,
+    aluPlateRows,
+    pegboardRows,
+    marineBoardRows,
+  ]);
 
   const categorySummary = useMemo(() => {
     const aluminumPlateItemTotal = round1(aluPlateCalculated.reduce((sum, x) => sum + x.subtotal, 0));
@@ -360,12 +475,14 @@ const QuickQuote: React.FC<{ language: Language }> = ({ language }) => {
     rowsCalculated: ReturnType<typeof calcBoardRows>,
     setter: React.Dispatch<React.SetStateAction<BoardRow[]>>,
     thicknessOptions: number[],
-    defaultThickness: number
+    defaultThickness: number,
+    showColorSelector = false
   ) => {
     return (
       <div className="space-y-4">
         {rows.map((row, index) => {
           const calc = rowsCalculated[index];
+          const boardColor = PROFILE_COLORS.find((c) => c.id === row.colorId) || PROFILE_COLORS[0];
           return (
             <div key={row.id} className="bg-slate-50 border border-slate-200 rounded-2xl p-4 md:p-5 space-y-4">
               <div className="grid grid-cols-3 gap-2 sm:grid-cols-3 sm:gap-3">
@@ -407,7 +524,23 @@ const QuickQuote: React.FC<{ language: Language }> = ({ language }) => {
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-3 sm:grid-cols-2 lg:grid-cols-5">
+              <div className={`grid gap-2 sm:gap-3 ${showColorSelector ? 'grid-cols-3' : 'grid-cols-2'}`}>
+                {showColorSelector && (
+                  <div>
+                    <label className="block text-xs font-black text-slate-500 mb-1">{t.qq_color}</label>
+                    <select
+                      value={row.colorId}
+                      onChange={(e) => updateBoardRows(setter, row.id, { colorId: e.target.value })}
+                      className="w-full border border-slate-200 rounded-xl px-3 py-2.5 bg-white"
+                    >
+                      {PROFILE_COLORS.map((c) => (
+                        <option key={c.id} value={c.id}>
+                          {c.name[language]}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
                 <div>
                   <label className="block text-xs font-black text-slate-500 mb-1">{t.qq_quantity}</label>
                   <input
@@ -438,6 +571,11 @@ const QuickQuote: React.FC<{ language: Language }> = ({ language }) => {
                 <span className="font-black text-blue-600">
                   {t.qq_subtotal}: {currency}{calc.subtotal.toFixed(1)}
                 </span>
+                {showColorSelector && (
+                  <span>
+                    {t.qq_color}: {boardColor.name[language]}
+                  </span>
+                )}
               </div>
               <div className="text-xs font-bold text-slate-500">{t.qq_boardMaxSizeNote}</div>
               {calc.minAreaApplied && <div className="text-xs font-bold text-amber-600">⚠ {t.qq_minAreaWarning}</div>}
@@ -446,7 +584,7 @@ const QuickQuote: React.FC<{ language: Language }> = ({ language }) => {
         })}
 
         <button
-          onClick={() => setter((prev) => [...prev, createBoardRow(defaultThickness)])}
+          onClick={() => setter((prev) => [...prev, { ...createBoardRow(defaultThickness), quantity: 1 }])}
           className="w-full sm:w-auto px-4 py-2.5 rounded-xl bg-slate-900 text-white font-bold text-sm inline-flex items-center gap-2"
         >
           <Plus className="w-4 h-4" /> {t.qq_addRow}
@@ -577,36 +715,58 @@ const QuickQuote: React.FC<{ language: Language }> = ({ language }) => {
                     <div className="text-xs font-bold text-slate-500">{t.qq_coloredSectionOnly}</div>
                   )}
 
-                  <div className="grid grid-cols-3 gap-2">
+                  <div className="overflow-x-auto -mx-1 px-1">
+                    <div className="grid grid-cols-5 gap-1.5 min-w-[560px]">
                     <div>
-                      <label className="block text-[10px] font-black text-slate-500 mb-1 leading-tight">{t.qq_tappingCount}</label>
+                      <label className="block text-[9px] font-black text-slate-500 mb-1 leading-tight">{t.qq_tappingCount}</label>
                       <input
                         type="number"
                         min={0}
                         value={row.tappingCount === 0 ? '' : row.tappingCount}
                         onChange={(e) => updateProfileRow(row.id, { tappingCount: e.target.value === '' ? 0 : Math.max(0, Number(e.target.value) || 0) })}
-                        className="w-full border border-slate-200 rounded-xl px-2 py-2 text-sm bg-white"
+                        className="w-full border border-slate-200 rounded-lg px-1.5 py-1.5 text-xs bg-white"
                       />
                     </div>
                     <div>
-                      <label className="block text-[10px] font-black text-slate-500 mb-1 leading-tight">{t.qq_throughHoleCount}</label>
+                      <label className="block text-[9px] font-black text-slate-500 mb-1 leading-tight">{t.qq_throughHoleCount}</label>
                       <input
                         type="number"
                         min={0}
                         value={row.throughHoleCount === 0 ? '' : row.throughHoleCount}
                         onChange={(e) => updateProfileRow(row.id, { throughHoleCount: e.target.value === '' ? 0 : Math.max(0, Number(e.target.value) || 0) })}
-                        className="w-full border border-slate-200 rounded-xl px-2 py-2 text-sm bg-white"
+                        className="w-full border border-slate-200 rounded-lg px-1.5 py-1.5 text-xs bg-white"
                       />
                     </div>
                     <div>
-                      <label className="block text-[10px] font-black text-slate-500 mb-1 leading-tight">{t.qq_countersunkCount}</label>
+                      <label className="block text-[9px] font-black text-slate-500 mb-1 leading-tight">{t.qq_countersunkCount}</label>
                       <input
                         type="number"
                         min={0}
                         value={row.countersunkHoleCount === 0 ? '' : row.countersunkHoleCount}
                         onChange={(e) => updateProfileRow(row.id, { countersunkHoleCount: e.target.value === '' ? 0 : Math.max(0, Number(e.target.value) || 0) })}
-                        className="w-full border border-slate-200 rounded-xl px-2 py-2 text-sm bg-white"
+                        className="w-full border border-slate-200 rounded-lg px-1.5 py-1.5 text-xs bg-white"
                       />
+                    </div>
+                    <div>
+                      <label className="block text-[9px] font-black text-slate-500 mb-1 leading-tight">{t.qq_threadedHoleCount}</label>
+                      <input
+                        type="number"
+                        min={0}
+                        value={row.threadedHoleCount === 0 ? '' : row.threadedHoleCount}
+                        onChange={(e) => updateProfileRow(row.id, { threadedHoleCount: e.target.value === '' ? 0 : Math.max(0, Number(e.target.value) || 0) })}
+                        className="w-full border border-slate-200 rounded-lg px-1.5 py-1.5 text-xs bg-white"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[9px] font-black text-slate-500 mb-1 leading-tight">{t.qq_miter45CutCount}</label>
+                      <input
+                        type="number"
+                        min={0}
+                        value={row.miter45CutCount === 0 ? '' : row.miter45CutCount}
+                        onChange={(e) => updateProfileRow(row.id, { miter45CutCount: e.target.value === '' ? 0 : Math.max(0, Number(e.target.value) || 0) })}
+                        className="w-full border border-slate-200 rounded-lg px-1.5 py-1.5 text-xs bg-white"
+                      />
+                    </div>
                     </div>
                   </div>
 
@@ -653,7 +813,21 @@ const QuickQuote: React.FC<{ language: Language }> = ({ language }) => {
             })}
 
             <button
-              onClick={() => setProfileRows((prev) => [...prev, createProfileRow()])}
+              onClick={() =>
+                setProfileRows((prev) => {
+                  const first = prev[0] || createProfileRow();
+                  return [
+                    ...prev,
+                    {
+                      ...createProfileRow(),
+                      model: first.model,
+                      colorId: first.colorId,
+                      section: first.section,
+                      quantity: 1,
+                    },
+                  ];
+                })
+              }
               className="w-full sm:w-auto px-4 py-2.5 rounded-xl bg-slate-900 text-white font-bold text-sm inline-flex items-center gap-2"
             >
               <Plus className="w-4 h-4" /> {t.qq_addRow}
@@ -672,8 +846,8 @@ const QuickQuote: React.FC<{ language: Language }> = ({ language }) => {
           </div>
         )}
 
-        {selectedProduct === 'aluminum_plate' && renderBoardEditor(aluPlateRows, aluPlateCalculated, setAluPlateRows, [1, 2, 3, 4, 5], 2)}
-        {selectedProduct === 'pegboard' && renderBoardEditor(pegboardRows, pegboardCalculated, setPegboardRows, [1, 2, 3, 4, 5], 2)}
+        {selectedProduct === 'aluminum_plate' && renderBoardEditor(aluPlateRows, aluPlateCalculated, setAluPlateRows, [1, 2, 3, 4, 5], 2, true)}
+        {selectedProduct === 'pegboard' && renderBoardEditor(pegboardRows, pegboardCalculated, setPegboardRows, [1, 2, 3, 4, 5], 2, true)}
         {selectedProduct === 'marine_board' && renderBoardEditor(marineBoardRows, marineBoardCalculated, setMarineBoardRows, [6, 9, 12, 15, 18], 18)}
 
         {selectedProduct === 'frame' && (
@@ -753,7 +927,7 @@ const QuickQuote: React.FC<{ language: Language }> = ({ language }) => {
             })}
 
             <button
-              onClick={() => setFrameRows((prev) => [...prev, createFrameRow()])}
+              onClick={() => setFrameRows((prev) => [...prev, { ...createFrameRow(), quantity: 1 }])}
               className="w-full sm:w-auto px-4 py-2.5 rounded-xl bg-slate-900 text-white font-bold text-sm inline-flex items-center gap-2"
             >
               <Plus className="w-4 h-4" /> {t.qq_addRow}
@@ -817,59 +991,106 @@ const QuickQuote: React.FC<{ language: Language }> = ({ language }) => {
 
               <div className="mt-4 border-t border-slate-200 pt-4 space-y-2">
                 <div className="text-base font-black text-slate-800">{t.qq_compactSummary}</div>
+                {selectedProvince && (
+                  <div className="text-sm font-semibold text-slate-700">
+                    {t.qq_shippingProvince}: <span className="text-slate-900">{selectedProvince}</span>
+                  </div>
+                )}
 
                 {compactSummary.profileMeters.length > 0 && (
                   <div className="text-sm text-slate-700">
                     <div className="font-bold text-slate-800">{t.qq_profileMetersByModelColor}</div>
-                    <ul className="list-disc pl-5 mt-1 space-y-1">
+                    <ul className="list-disc pl-5 mt-1 space-y-1 font-semibold text-slate-700">
                       {compactSummary.profileMeters.map((x) => (
                         <li key={x.name}>{x.name}: {x.meters.toFixed(1)} {t.qq_meter}</li>
                       ))}
                     </ul>
+                    <ul className="list-disc pl-5 mt-2 space-y-1 font-semibold text-slate-700">
+                      {compactSummary.profileProcessTotals.tapping > 0 && <li>{t.qq_tappingCount}: {compactSummary.profileProcessTotals.tapping}</li>}
+                      {compactSummary.profileProcessTotals.through > 0 && <li>{t.qq_throughHoleCount}: {compactSummary.profileProcessTotals.through}</li>}
+                      {compactSummary.profileProcessTotals.countersunk > 0 && <li>{t.qq_countersunkCount}: {compactSummary.profileProcessTotals.countersunk}</li>}
+                      {compactSummary.profileProcessTotals.threaded > 0 && <li>{t.qq_threadedHoleCount}: {compactSummary.profileProcessTotals.threaded}</li>}
+                      {compactSummary.profileProcessTotals.miter45 > 0 && <li>{t.qq_miter45CutCount}: {compactSummary.profileProcessTotals.miter45}</li>}
+                    </ul>
+                    {compactSummary.profileDetails.length > 0 && (
+                      <ul className="list-disc pl-5 mt-2 space-y-1 text-xs text-slate-500">
+                        {compactSummary.profileDetails.map((x) => (
+                          <li key={`profile-detail-${x.id}`}>{x.text}</li>
+                        ))}
+                      </ul>
+                    )}
                   </div>
                 )}
 
                 {compactSummary.aluminumPlateArea.length > 0 && (
                   <div className="text-sm text-slate-700">
                     <div className="font-bold text-slate-800">{t.qq_aluminumPlate} - {t.qq_boardAreaByThickness}</div>
-                    <ul className="list-disc pl-5 mt-1 space-y-1">
+                    <ul className="list-disc pl-5 mt-1 space-y-1 font-semibold text-slate-700">
                       {compactSummary.aluminumPlateArea.map((x) => (
                         <li key={`alu-${x.thickness}`}>{x.thickness}mm: {x.area.toFixed(1)} {t.qq_sqm}</li>
                       ))}
                     </ul>
+                    {compactSummary.aluminumPlateDetails.length > 0 && (
+                      <ul className="list-disc pl-5 mt-2 space-y-1 text-xs text-slate-500">
+                        {compactSummary.aluminumPlateDetails.map((x) => (
+                          <li key={`alu-detail-${x.id}`}>{x.text}</li>
+                        ))}
+                      </ul>
+                    )}
                   </div>
                 )}
 
                 {compactSummary.pegboardArea.length > 0 && (
                   <div className="text-sm text-slate-700">
                     <div className="font-bold text-slate-800">{t.qq_pegboard} - {t.qq_boardAreaByThickness}</div>
-                    <ul className="list-disc pl-5 mt-1 space-y-1">
+                    <ul className="list-disc pl-5 mt-1 space-y-1 font-semibold text-slate-700">
                       {compactSummary.pegboardArea.map((x) => (
                         <li key={`peg-${x.thickness}`}>{x.thickness}mm: {x.area.toFixed(1)} {t.qq_sqm}</li>
                       ))}
                     </ul>
+                    {compactSummary.pegboardDetails.length > 0 && (
+                      <ul className="list-disc pl-5 mt-2 space-y-1 text-xs text-slate-500">
+                        {compactSummary.pegboardDetails.map((x) => (
+                          <li key={`peg-detail-${x.id}`}>{x.text}</li>
+                        ))}
+                      </ul>
+                    )}
                   </div>
                 )}
 
                 {compactSummary.marineBoardArea.length > 0 && (
                   <div className="text-sm text-slate-700">
                     <div className="font-bold text-slate-800">{t.qq_marineBoard} - {t.qq_boardAreaByThickness}</div>
-                    <ul className="list-disc pl-5 mt-1 space-y-1">
+                    <ul className="list-disc pl-5 mt-1 space-y-1 font-semibold text-slate-700">
                       {compactSummary.marineBoardArea.map((x) => (
                         <li key={`marine-${x.thickness}`}>{x.thickness}mm: {x.area.toFixed(1)} {t.qq_sqm}</li>
                       ))}
                     </ul>
+                    {compactSummary.marineBoardDetails.length > 0 && (
+                      <ul className="list-disc pl-5 mt-2 space-y-1 text-xs text-slate-500">
+                        {compactSummary.marineBoardDetails.map((x) => (
+                          <li key={`marine-detail-${x.id}`}>{x.text}</li>
+                        ))}
+                      </ul>
+                    )}
                   </div>
                 )}
 
                 {compactSummary.frameMeters.length > 0 && (
                   <div className="text-sm text-slate-700">
                     <div className="font-bold text-slate-800">{t.qq_frameLengthByType}</div>
-                    <ul className="list-disc pl-5 mt-1 space-y-1">
+                    <ul className="list-disc pl-5 mt-1 space-y-1 font-semibold text-slate-700">
                       {compactSummary.frameMeters.map((x) => (
                         <li key={x.label}>{x.label}: {x.meters.toFixed(1)} {t.qq_meter}</li>
                       ))}
                     </ul>
+                    {compactSummary.frameDetails.length > 0 && (
+                      <ul className="list-disc pl-5 mt-2 space-y-1 text-xs text-slate-500">
+                        {compactSummary.frameDetails.map((x) => (
+                          <li key={`frame-detail-${x.id}`}>{x.text}</li>
+                        ))}
+                      </ul>
+                    )}
                   </div>
                 )}
               </div>
