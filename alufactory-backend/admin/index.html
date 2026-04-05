@@ -649,7 +649,22 @@
         let currentUser = null;
         let currentEditingOrder = null;
         let ordersCache = {};  // Cache orders data for pre-filling edit form
+        let usersCache = {};   // Cache users data for edit modal pre-fill
         let currentEditingUser = null;
+
+        function normalizeMembershipLevel(value) {
+            const raw = String(value || '').trim().toLowerCase();
+            if (['vip_plus', 'vip+', 'vip plus', 'vipp', 'vplus'].includes(raw)) return 'vip_plus';
+            if (['vip', '会员', '会员vip'].includes(raw)) return 'vip';
+            return 'standard';
+        }
+
+        function getMembershipText(level) {
+            const normalized = normalizeMembershipLevel(level);
+            if (normalized === 'vip_plus') return 'VIP+';
+            if (normalized === 'vip') return 'VIP';
+            return '标准';
+        }
         
         // Initialize
         document.addEventListener('DOMContentLoaded', function() {
@@ -755,12 +770,13 @@
                 tbody.innerHTML = '';
                 
                 data.users.forEach(user => {
+                    usersCache[user.id] = user;
                     const row = tbody.insertRow();
                     row.innerHTML = `
                         <td>${user.username}</td>
                         <td>${user.phone}</td>
                         <td>${user.email || '-'}</td>
-                        <td>${user.membership_level}</td>
+                        <td>${getMembershipText(user.membership_level)}</td>
                         <td>${user.is_active ? '激活' : '禁用'}</td>
                         <td>
                             <button class="btn btn-primary" onclick="viewUserDetails('${user.id}')">查看详情</button>
@@ -994,8 +1010,27 @@
         }
         
         // Edit user
-        function editUser(userId) {
+        async function editUser(userId) {
             currentEditingUser = userId;
+            let user = usersCache[userId];
+
+            if (!user) {
+                try {
+                    const response = await fetch(`${API_BASE}/admin/users?page=1&per_page=1000`, {
+                        headers: { 'Authorization': `Bearer ${authToken}` }
+                    });
+                    if (response.ok) {
+                        const data = await response.json();
+                        (data.users || []).forEach(u => { usersCache[u.id] = u; });
+                        user = usersCache[userId];
+                    }
+                } catch (error) {
+                    console.error('Failed to fetch user before edit:', error);
+                }
+            }
+
+            document.getElementById('userMembership').value = normalizeMembershipLevel(user?.membership_level);
+            document.getElementById('userActive').checked = !!user?.is_active;
             openModal('editUserModal');
         }
         
@@ -1050,22 +1085,55 @@
         // Save user
         async function saveUser() {
             try {
-                const response = await fetch(`${API_BASE}/admin/users/${currentEditingUser}/membership`, {
+                const selectedMembership = normalizeMembershipLevel(document.getElementById('userMembership').value);
+                const selectedActive = !!document.getElementById('userActive').checked;
+
+                const membershipResp = await fetch(`${API_BASE}/admin/users/${currentEditingUser}/membership`, {
                     method: 'PUT',
                     headers: {
                         'Authorization': `Bearer ${authToken}`,
                         'Content-Type': 'application/json'
                     },
                     body: JSON.stringify({
-                        membership_level: document.getElementById('userMembership').value
+                        membership_level: selectedMembership
                     })
                 });
-                
-                if (!response.ok) throw new Error('Failed to save user');
+
+                if (!membershipResp.ok) {
+                    const err = await membershipResp.json().catch(() => ({}));
+                    throw new Error(err.error || 'Failed to save membership');
+                }
+
+                const membershipData = await membershipResp.json().catch(() => ({}));
+                const returnedMembership = normalizeMembershipLevel(membershipData?.user?.membership_level);
+                if (returnedMembership !== selectedMembership) {
+                    throw new Error(`Membership not updated as expected (wanted: ${selectedMembership}, got: ${returnedMembership})`);
+                }
+
+                if (!usersCache[currentEditingUser]) usersCache[currentEditingUser] = {};
+                usersCache[currentEditingUser].membership_level = returnedMembership;
+
+                const cached = usersCache[currentEditingUser];
+                const currentActive = cached ? !!cached.is_active : null;
+                if (currentActive !== null && currentActive !== selectedActive) {
+                    const activeEndpoint = selectedActive ? 'activate' : 'deactivate';
+                    const activeResp = await fetch(`${API_BASE}/admin/users/${currentEditingUser}/${activeEndpoint}`, {
+                        method: 'POST',
+                        headers: { 'Authorization': `Bearer ${authToken}` }
+                    });
+
+                    if (!activeResp.ok) {
+                        const err = await activeResp.json().catch(() => ({}));
+                        throw new Error(err.error || 'Failed to update active status');
+                    }
+
+                    usersCache[currentEditingUser].is_active = selectedActive;
+                }
                 
                 alert('用户已保存');
                 closeModal('editUserModal');
                 loadUsers();
+                loadDashboard();
             } catch (error) {
                 alert('错误: ' + error.message);
             }

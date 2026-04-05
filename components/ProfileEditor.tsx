@@ -4,6 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { DrillHole, ProfileConfig, ProfileSide, TappingConfig, Language, HoleType, ProfileFinish, CartItem, Product, MiterCutConfig, MiterCutDirection, MiterCutSide, User } from '../types';
 import { TRANSLATIONS, PROFILE_VARIANTS, PROFILE_COLORS, COLOR_ONLY_COLORED_SECTION_IDS } from '../constants';
+import { isVipMembership } from '../utils/membership';
 import { Plus, Trash2, List, ShoppingCart, Pencil, X, Hammer, Settings2 } from 'lucide-react';
 import ProfileVisualizer from './ProfileVisualizer';
 
@@ -34,7 +35,7 @@ const ProfileEditor: React.FC<ProfileEditorProps> = ({ language, product, user, 
   const t = TRANSLATIONS[language];
   const currency = getCurrency(language);
   const navigate = useNavigate();
-  const isVipMember = user?.membershipLevel === 'vip' || user?.membershipLevel === 'vip_plus';
+  const isVipMember = isVipMembership(user?.membershipLevel);
   
   const initialConfig = initialItem?.config as ProfileConfig | undefined;
 

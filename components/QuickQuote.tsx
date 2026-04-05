@@ -13,6 +13,7 @@ import {
   TRANSLATIONS,
 } from '../constants';
 import type { ShippingMethod } from '../constants';
+import { isVipMembership } from '../utils/membership';
 
 type QuickQuoteProduct = 'profile' | 'aluminum_plate' | 'pegboard' | 'marine_board' | 'frame';
 type ProfileSection = 'natural' | 'colored';
@@ -137,7 +138,7 @@ const calcProfileShippingByProvince = (province: string, totalWeightKg: number, 
 const QuickQuote: React.FC<{ language: Language; user?: User | null }> = ({ language, user }) => {
   const t = TRANSLATIONS[language];
   const currency = getCurrency(language);
-  const isVipMember = user?.membershipLevel === 'vip' || user?.membershipLevel === 'vip_plus';
+  const isVipMember = isVipMembership(user?.membershipLevel);
   const perPiecePrefix = t.qq_perPiecePrefix || '';
   const buildPerPieceLabel = (label: string) => {
     if (!perPiecePrefix) return label;

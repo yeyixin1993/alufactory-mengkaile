@@ -1,7 +1,7 @@
 from flask import Blueprint, request, jsonify
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from datetime import datetime
-from app.models.user import db, User, Address
+from app.models.user import db, User, Address, normalize_membership_level
 import uuid
 
 user_bp = Blueprint('users', __name__, url_prefix='/api/users')
@@ -53,7 +53,7 @@ def update_user(user_id):
         # Only admin can update membership and status
         if current_user.is_admin:
             if 'membership_level' in data:
-                user.membership_level = data['membership_level']
+                user.membership_level = normalize_membership_level(data['membership_level'])
             if 'is_active' in data:
                 user.is_active = data['is_active']
         

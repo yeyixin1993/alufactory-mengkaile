@@ -1,5 +1,6 @@
 // Real API Service connecting to Flask backend
 import { Order, User, Address } from '../types';
+import { normalizeMembershipLevel } from '../utils/membership';
 
 const normalizeBaseUrl = (url: string) => url.replace(/\/+$/, '');
 
@@ -51,10 +52,24 @@ const resolveApiBaseUrl = () => {
 class ApiServiceClass {
   private authToken: string | null = localStorage.getItem('authToken');
   private apiBaseUrl: string | null = null;
+  private hasLoggedApiBase = false;
+
+  private extractMembershipLevel(source: any): string {
+    return normalizeMembershipLevel(
+      source?.membership_level ??
+      source?.membershipLevel ??
+      source?.membership ??
+      source?.level
+    );
+  }
 
   private getApiBaseUrl(): string {
     if (!this.apiBaseUrl) {
       this.apiBaseUrl = resolveApiBaseUrl();
+    }
+    if (!this.hasLoggedApiBase) {
+      this.hasLoggedApiBase = true;
+      console.info(`[apiService] Using API base URL: ${this.apiBaseUrl}`);
     }
     return this.apiBaseUrl;
   }
@@ -111,7 +126,7 @@ class ApiServiceClass {
       name: data.user.username,
       password: '',
       role: 'customer' as const,
-      membershipLevel: data.user.membership_level || 'standard',
+      membershipLevel: this.extractMembershipLevel(data.user),
       addresses: [],
     };
   }
@@ -133,7 +148,7 @@ class ApiServiceClass {
       name: data.user.username,
       password: '',
       role: 'customer' as const,
-      membershipLevel: data.user.membership_level || 'standard',
+      membershipLevel: this.extractMembershipLevel(data.user),
       addresses: data.user.addresses || [],
     };
   }
@@ -154,7 +169,7 @@ class ApiServiceClass {
         name: user.username,
         password: '',
         role: 'customer' as const,
-        membershipLevel: user.membership_level || 'standard',
+        membershipLevel: this.extractMembershipLevel(user),
         addresses: data.addresses || user.addresses || [],
       };
     } catch (e) {
@@ -191,7 +206,10 @@ class ApiServiceClass {
       name: data.username,
       password: '',
       role: 'customer' as const,
-      membershipLevel: data.membership_level || user.membershipLevel || 'standard',
+      membershipLevel: this.extractMembershipLevel({
+        membership_level: data.membership_level,
+        membershipLevel: user.membershipLevel,
+      }),
       addresses: data.addresses || [],
     };
   }

@@ -2,6 +2,7 @@ from flask import Blueprint, request, jsonify, Response, current_app, send_file
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from datetime import datetime
 from app.models.user import db, User, Order, Profile
+from app.models.user import normalize_membership_level
 from app.order_utils import build_order_pdf_filename
 import uuid
 import base64
@@ -117,8 +118,8 @@ def update_membership(user_id):
         return jsonify({'error': 'User not found'}), 404
     
     data = request.get_json()
-    membership_level = data.get('membership_level')
-    
+    membership_level = normalize_membership_level(data.get('membership_level'))
+
     if membership_level not in ['standard', 'vip', 'vip_plus']:
         return jsonify({'error': 'Invalid membership level'}), 400
     

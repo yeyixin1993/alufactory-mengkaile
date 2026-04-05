@@ -6,6 +6,16 @@ from app.order_utils import to_east8_isoformat
 
 db = SQLAlchemy()
 
+
+def normalize_membership_level(value):
+    raw = str(value or '').strip().lower()
+
+    if raw in ('vip_plus', 'vip+', 'vip plus', 'vipp', 'vplus', '会员plus', '高级vip'):
+        return 'vip_plus'
+    if raw in ('vip', '会员', '会员vip'):
+        return 'vip'
+    return 'standard'
+
 class User(db.Model):
     __tablename__ = 'users'
     
@@ -41,13 +51,14 @@ class User(db.Model):
         return check_password_hash(self.password_hash, password)
     
     def to_dict(self, include_password=False):
+        normalized_level = normalize_membership_level(self.membership_level)
         data = {
             'id': self.id,
             'username': self.username,
             'phone': self.phone,
             'email': self.email,
             'full_name': self.full_name,
-            'membership_level': self.membership_level,
+            'membership_level': normalized_level,
             'membership_points': self.membership_points,
             'is_active': self.is_active,
             'is_admin': self.is_admin,

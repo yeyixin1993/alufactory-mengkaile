@@ -17,6 +17,7 @@ import QuickQuote from './components/QuickQuote';
 import { jsPDF } from 'jspdf';
 import html2canvas from 'html2canvas';
 import { buildOrderPdfFilename, formatEast8Date, formatEast8DateTime } from './utils/orderFormatting';
+import { normalizeMembershipLevel } from './utils/membership';
 
 const getCurrency = (lang: Language) => lang === 'cn' ? '￥' : '$';
 
@@ -1197,7 +1198,7 @@ const App: React.FC = () => {
   const [draftProfiles, setDraftProfiles] = useState<CartItem[]>([]);
   const [user, setUser] = useState<User | null>(null);
   const t = TRANSLATIONS[language];
-  const userMembership = user?.membershipLevel || 'standard';
+  const userMembership = normalizeMembershipLevel(user?.membershipLevel);
   const userStatusLabel = userMembership === 'vip_plus' ? 'VIP+' : userMembership === 'vip' ? 'VIP' : 'standard';
 
   useEffect(() => {
