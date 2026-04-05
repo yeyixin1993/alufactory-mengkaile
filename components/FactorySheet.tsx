@@ -120,6 +120,37 @@ const FactorySheet: React.FC<FactorySheetProps> = ({ cart, user, language, order
 
   const baseTotal = cart.reduce((acc, i) => acc + i.totalPrice, 0);
 
+  const profileMetersSummary = React.useMemo(() => {
+    const meterMap = new Map<string, number>();
+
+    cart.forEach((item) => {
+      if (item.product.type !== ProductType.PROFILE) return;
+      const cfg = item.config as ProfileConfig;
+      const lengthMm = Number(cfg.length) || 0;
+      const qty = Number(item.quantity) || 0;
+      if (lengthMm <= 0 || qty <= 0) return;
+
+      const colorDef = PROFILE_COLORS.find((c) => c.id === cfg.colorId);
+      const colorName = colorDef?.name?.[language] || cfg.colorId || '-';
+      const finishLabel =
+        cfg.finish === 'oxidized'
+          ? t.finishOxidized
+          : cfg.finish === 'powder'
+            ? t.finishPowder
+            : cfg.finish === 'electrophoretic'
+              ? t.finishElectrophoretic
+              : cfg.finish || '-';
+      const key = `${cfg.variantId || '-'} · ${colorName} · ${finishLabel}`;
+
+      const prev = meterMap.get(key) || 0;
+      meterMap.set(key, prev + (lengthMm * qty) / 1000);
+    });
+
+    return Array.from(meterMap.entries())
+      .map(([name, meters]) => ({ name, meters }))
+      .sort((a, b) => b.meters - a.meters);
+  }, [cart, language, t.finishOxidized, t.finishPowder, t.finishElectrophoretic]);
+
   // 1. 先计算总重量（如果还没计算的话）
   const calculateTotalWeight = () => {
     let totalWeightKg = 0;
@@ -419,20 +450,36 @@ const FactorySheet: React.FC<FactorySheetProps> = ({ cart, user, language, order
 
       {/* Totals */}
       {showPrice && (
-        <div className="mt-12 border-t-4 border-slate-900 pt-8 flex justify-end">
+        <div className="mt-12 border-t-4 border-slate-900 pt-8 flex justify-between items-start gap-8">
+           <div className="flex-1">
+             {profileMetersSummary.length > 0 && (
+               <div className="max-w-[420px] bg-slate-50 border border-slate-200 rounded-xl p-4">
+                 <div className="text-xs font-black text-slate-500 uppercase tracking-widest mb-2">{t.qq_profileMetersByModelColor || '型材米数汇总'}</div>
+                 <ul className="space-y-1.5 text-xs text-slate-700">
+                   {profileMetersSummary.map((row) => (
+                     <li key={row.name} className="flex justify-between gap-3">
+                       <span className="truncate">{row.name}</span>
+                       <span className="font-black whitespace-nowrap">{row.meters.toFixed(1)}m</span>
+                     </li>
+                   ))}
+                 </ul>
+               </div>
+             )}
+           </div>
+
            <div className="w-80 space-y-3 text-right">
-              <div className="flex justify-between text-slate-500 text-xs"><span>{t.total}:</span><span className="font-bold text-slate-800">{currency}{baseTotal.toFixed(1)}</span></div>
-              <div className="flex justify-between text-slate-500 text-xs">
-                <span>{t.shippingFee}{shippingLabel ? ` (${shippingLabel})` : ''}:</span>
-                <span className="font-bold text-slate-800">{currency}{shippingFee.toFixed(1)}</span>
-              </div>
-              {(passedOverlengthFee ?? 0) > 0 && (
-                <div className="flex justify-between text-amber-600 text-xs"><span>{t.overlengthFee} (含):</span><span className="font-bold">+{currency}{passedOverlengthFee!.toFixed(0)}</span></div>
-              )}
-              <div className="flex justify-between text-3xl font-black pt-4 border-t border-slate-100 text-blue-600">
-                <span>{t.total}</span>
-                <span>{currency}{finalTotal.toFixed(1)}</span>
-              </div>
+             <div className="flex justify-between text-slate-500 text-xs"><span>{t.total}:</span><span className="font-bold text-slate-800">{currency}{baseTotal.toFixed(1)}</span></div>
+             <div className="flex justify-between text-slate-500 text-xs">
+               <span>{t.shippingFee}{shippingLabel ? ` (${shippingLabel})` : ''}:</span>
+               <span className="font-bold text-slate-800">{currency}{shippingFee.toFixed(1)}</span>
+             </div>
+             {(passedOverlengthFee ?? 0) > 0 && (
+               <div className="flex justify-between text-amber-600 text-xs"><span>{t.overlengthFee} (含):</span><span className="font-bold">+{currency}{passedOverlengthFee!.toFixed(0)}</span></div>
+             )}
+             <div className="flex justify-between text-3xl font-black pt-4 border-t border-slate-100 text-blue-600">
+               <span>{t.total}</span>
+               <span>{currency}{finalTotal.toFixed(1)}</span>
+             </div>
            </div>
         </div>
       )}

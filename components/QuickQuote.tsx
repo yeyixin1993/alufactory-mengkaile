@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { Plus, Trash2 } from 'lucide-react';
-import { Language } from '../types';
+import { Language, User } from '../types';
 import {
   COLOR_ONLY_COLORED_SECTION_IDS,
   PROFILE_COLORS,
@@ -54,6 +54,7 @@ const PROFILE_PRICE_THROUGH_HOLE = 1.0;
 const PROFILE_PRICE_COUNTERSUNK = 1.8;
 const PROFILE_DANGER_FEE_THRESHOLD_MM = 100;
 const PROFILE_DANGER_FEE = 5;
+const PROFILE_VIP_DISCOUNT_PER_METER = 2;
 
 const PEGBOARD_PRICE_PER_SQM: Record<number, number> = { 1: 780, 2: 1080, 3: 1380, 4: 1680, 5: 1980 };
 const ALUMINUM_PLATE_PRICE_PER_SQM: Record<number, number> = { 1: 500, 2: 700, 3: 1000, 4: 1300, 5: 1600 };
@@ -133,9 +134,15 @@ const calcProfileShippingByProvince = (province: string, totalWeightKg: number, 
   return { method: cheapest.method, fee: cheapest.fee, overlengthFee };
 };
 
-const QuickQuote: React.FC<{ language: Language }> = ({ language }) => {
+const QuickQuote: React.FC<{ language: Language; user?: User | null }> = ({ language, user }) => {
   const t = TRANSLATIONS[language];
   const currency = getCurrency(language);
+  const isVipMember = user?.membershipLevel === 'vip' || user?.membershipLevel === 'vip_plus';
+  const perPiecePrefix = t.qq_perPiecePrefix || '';
+  const buildPerPieceLabel = (label: string) => {
+    if (!perPiecePrefix) return label;
+    return language === 'cn' ? `${perPiecePrefix}${label}` : `${perPiecePrefix} ${label}`;
+  };
 
   const [selectedProvince, setSelectedProvince] = useState('');
   const [selectedProduct, setSelectedProduct] = useState<QuickQuoteProduct>('profile');
@@ -176,7 +183,9 @@ const QuickQuote: React.FC<{ language: Language }> = ({ language }) => {
       const variant = PROFILE_VARIANTS.find((v) => v.id === row.model) || PROFILE_VARIANTS[0];
       const finish = getProfileFinishByRow(row);
       const effectiveLength = Math.min(MAX_PROFILE_LENGTH_MM, safeNonNegative(row.length));
-      const materialPrice = (effectiveLength / 1000) * variant.price[finish];
+      const basePricePerMeter = variant.price[finish];
+      const effectivePricePerMeter = Math.max(0, basePricePerMeter - (isVipMember ? PROFILE_VIP_DISCOUNT_PER_METER : 0));
+      const materialPrice = (effectiveLength / 1000) * effectivePricePerMeter;
       const processPrice =
         safeNonNegative(row.tappingCount) * PROFILE_PRICE_TAPPING +
         safeNonNegative(row.throughHoleCount) * PROFILE_PRICE_THROUGH_HOLE +
@@ -191,7 +200,7 @@ const QuickQuote: React.FC<{ language: Language }> = ({ language }) => {
       const totalWeightKg = weightPerMeter * (effectiveLength / 1000) * qty;
       return { row, unitPrice, subtotal, totalWeightKg };
     });
-  }, [profileRows]);
+  }, [profileRows, isVipMember]);
 
   const profileSummary = useMemo(() => {
     const itemTotal = round1(profileRowsCalculated.reduce((sum, x) => sum + x.subtotal, 0));
@@ -686,7 +695,7 @@ const QuickQuote: React.FC<{ language: Language }> = ({ language }) => {
                           const restricted = COLOR_ONLY_COLORED_SECTION_IDS.includes(nextColorId as any);
                           updateProfileRow(row.id, {
                             colorId: nextColorId,
-                            section: restricted ? 'colored' : row.section,
+                            section: nextColorId === 'natural' ? 'natural' : restricted ? 'colored' : row.section,
                           });
                         }}
                         className="w-full border border-slate-200 rounded-xl px-3 py-2.5 bg-white"
@@ -705,8 +714,14 @@ const QuickQuote: React.FC<{ language: Language }> = ({ language }) => {
                         onChange={(e) => updateProfileRow(row.id, { section: e.target.value as ProfileSection })}
                         className="w-full border border-slate-200 rounded-xl px-3 py-2.5 bg-white"
                       >
-                        {!colorOnlyColoredSection && <option value="natural">{t.qq_sectionNatural}</option>}
-                        <option value="colored">{t.qq_sectionColored}</option>
+                        {row.colorId === 'natural' ? (
+                          <option value="natural">{t.qq_sectionNatural}</option>
+                        ) : (
+                          <>
+                            {!colorOnlyColoredSection && <option value="natural">{t.qq_sectionNatural}</option>}
+                            <option value="colored">{t.qq_sectionColored}</option>
+                          </>
+                        )}
                       </select>
                     </div>
                   </div>
@@ -718,7 +733,7 @@ const QuickQuote: React.FC<{ language: Language }> = ({ language }) => {
                   <div className="overflow-x-auto -mx-1 px-1">
                     <div className="grid grid-cols-5 gap-1.5 min-w-[560px]">
                     <div>
-                      <label className="block text-[9px] font-black text-slate-500 mb-1 leading-tight">{t.qq_tappingCount}</label>
+                      <label className="block text-[9px] font-black text-slate-500 mb-1 leading-tight">{buildPerPieceLabel(t.qq_tappingCount)}</label>
                       <input
                         type="number"
                         min={0}
@@ -728,7 +743,7 @@ const QuickQuote: React.FC<{ language: Language }> = ({ language }) => {
                       />
                     </div>
                     <div>
-                      <label className="block text-[9px] font-black text-slate-500 mb-1 leading-tight">{t.qq_throughHoleCount}</label>
+                      <label className="block text-[9px] font-black text-slate-500 mb-1 leading-tight">{buildPerPieceLabel(t.qq_throughHoleCount)}</label>
                       <input
                         type="number"
                         min={0}
@@ -738,7 +753,7 @@ const QuickQuote: React.FC<{ language: Language }> = ({ language }) => {
                       />
                     </div>
                     <div>
-                      <label className="block text-[9px] font-black text-slate-500 mb-1 leading-tight">{t.qq_countersunkCount}</label>
+                      <label className="block text-[9px] font-black text-slate-500 mb-1 leading-tight">{buildPerPieceLabel(t.qq_countersunkCount)}</label>
                       <input
                         type="number"
                         min={0}
@@ -748,7 +763,7 @@ const QuickQuote: React.FC<{ language: Language }> = ({ language }) => {
                       />
                     </div>
                     <div>
-                      <label className="block text-[9px] font-black text-slate-500 mb-1 leading-tight">{t.qq_threadedHoleCount}</label>
+                      <label className="block text-[9px] font-black text-slate-500 mb-1 leading-tight">{buildPerPieceLabel(t.qq_threadedHoleCount)}</label>
                       <input
                         type="number"
                         min={0}
@@ -758,7 +773,7 @@ const QuickQuote: React.FC<{ language: Language }> = ({ language }) => {
                       />
                     </div>
                     <div>
-                      <label className="block text-[9px] font-black text-slate-500 mb-1 leading-tight">{t.qq_miter45CutCount}</label>
+                      <label className="block text-[9px] font-black text-slate-500 mb-1 leading-tight">{buildPerPieceLabel(t.qq_miter45CutCount)}</label>
                       <input
                         type="number"
                         min={0}

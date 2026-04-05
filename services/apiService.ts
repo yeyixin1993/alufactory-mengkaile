@@ -111,6 +111,7 @@ class ApiServiceClass {
       name: data.user.username,
       password: '',
       role: 'customer' as const,
+      membershipLevel: data.user.membership_level || 'standard',
       addresses: [],
     };
   }
@@ -132,6 +133,7 @@ class ApiServiceClass {
       name: data.user.username,
       password: '',
       role: 'customer' as const,
+      membershipLevel: data.user.membership_level || 'standard',
       addresses: data.user.addresses || [],
     };
   }
@@ -152,6 +154,7 @@ class ApiServiceClass {
         name: user.username,
         password: '',
         role: 'customer' as const,
+        membershipLevel: user.membership_level || 'standard',
         addresses: data.addresses || user.addresses || [],
       };
     } catch (e) {
@@ -188,6 +191,7 @@ class ApiServiceClass {
       name: data.username,
       password: '',
       role: 'customer' as const,
+      membershipLevel: data.membership_level || user.membershipLevel || 'standard',
       addresses: data.addresses || [],
     };
   }

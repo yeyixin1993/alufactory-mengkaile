@@ -1128,12 +1128,13 @@ const Cart: React.FC<{
 
 const ProductDetail: React.FC<{
   language: Language,
+  user: User | null,
   onAddToCart: (item: CartItem) => void,
   onAddBatchToCart: (items: CartItem[]) => void,
   onUpdateCartItem: (item: CartItem) => void,
   draftProfiles: CartItem[],
   setDraftProfiles: React.Dispatch<React.SetStateAction<CartItem[]>>
-}> = ({ language, onAddToCart, onAddBatchToCart, onUpdateCartItem, draftProfiles, setDraftProfiles }) => {
+}> = ({ language, user, onAddToCart, onAddBatchToCart, onUpdateCartItem, draftProfiles, setDraftProfiles }) => {
   const { id } = useParams();
   const location = useLocation();
   const product = INITIAL_PRODUCTS.find(p => p.id === id);
@@ -1167,6 +1168,7 @@ const ProductDetail: React.FC<{
             <ProfileEditor 
               language={language} 
               product={product} 
+              user={user}
               initialItem={editItem}
               onAddBatchToCart={onAddBatchToCart}
               onUpdateItem={onUpdateCartItem}
@@ -1195,9 +1197,51 @@ const App: React.FC = () => {
   const [draftProfiles, setDraftProfiles] = useState<CartItem[]>([]);
   const [user, setUser] = useState<User | null>(null);
   const t = TRANSLATIONS[language];
+  const userMembership = user?.membershipLevel || 'standard';
+  const userStatusLabel = userMembership === 'vip_plus' ? 'VIP+' : userMembership === 'vip' ? 'VIP' : 'standard';
 
-  useEffect(() => { 
-    ApiService.getCurrentUser().then(setUser);
+  useEffect(() => {
+    let mounted = true;
+
+    const syncCurrentUser = async () => {
+      // If there is no token, keep frontend user logged out.
+      if (!ApiService.isAuthenticated()) {
+        if (mounted) setUser(null);
+        return;
+      }
+
+      const latest = await ApiService.getCurrentUser();
+      if (!mounted) return;
+
+      // Always adopt latest backend user snapshot (including membershipLevel).
+      setUser(latest);
+    };
+
+    // Initial load
+    syncCurrentUser();
+
+    // Keep VIP/membership status in sync with backend changes.
+    const pollId = window.setInterval(syncCurrentUser, 5000);
+
+    // Refresh immediately when user returns to the page.
+    const handleFocus = () => {
+      syncCurrentUser();
+    };
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        syncCurrentUser();
+      }
+    };
+
+    window.addEventListener('focus', handleFocus);
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    return () => {
+      mounted = false;
+      window.clearInterval(pollId);
+      window.removeEventListener('focus', handleFocus);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
   }, []);
 
   const onEditOrder = (o: Order) => {
@@ -1215,7 +1259,22 @@ const App: React.FC = () => {
           <div className="max-w-7xl mx-auto px-6 h-24 flex items-center justify-between">
             <Link to="/" className="flex items-center gap-5 group">
               <div className="w-14 h-14 bg-slate-900 rounded-[1.25rem] flex items-center justify-center text-white font-black text-3xl shadow-2xl shadow-slate-900/20 group-hover:scale-110 group-hover:bg-blue-600 transition-all duration-500">M</div>
-              <span className="font-black text-2xl tracking-tight hidden sm:block">{t.title}</span>
+              <div className="flex items-center gap-2">
+                <span className="font-black text-2xl tracking-tight hidden sm:block">{t.title}</span>
+                {user && (
+                  <span
+                    className={`inline-flex items-center px-2.5 py-1 rounded-full text-[10px] sm:text-xs font-black tracking-wider border shadow-sm ${
+                      userMembership === 'vip_plus'
+                        ? 'bg-gradient-to-r from-amber-400 to-yellow-300 text-amber-900 border-amber-300'
+                        : userMembership === 'vip'
+                          ? 'bg-amber-100 text-amber-800 border-amber-200'
+                          : 'bg-slate-100 text-slate-700 border-slate-200'
+                    }`}
+                  >
+                    {userStatusLabel}
+                  </span>
+                )}
+              </div>
             </Link>
             
             <div className="flex items-center gap-2 sm:gap-6">
@@ -1259,10 +1318,10 @@ const App: React.FC = () => {
 
         <Routes>
           <Route path="/" element={<Catalog language={language} />} />
-          <Route path="/quick-quote" element={<QuickQuote language={language} />} />
+          <Route path="/quick-quote" element={<QuickQuote language={language} user={user} />} />
           <Route path="/login" element={<Auth language={language} onLogin={(u) => { setUser(u); }} />} />
           <Route path="/history" element={user ? <UserProfile user={user} language={language} setUser={setUser} onEditOrder={onEditOrder} /> : <div className="p-40 text-center flex flex-col items-center"><UserIcon className="w-20 h-20 text-slate-100 mb-6"/><p className="font-black text-slate-300 text-2xl">Please login to view your orders</p></div>} />
-          <Route path="/product/:id" element={<ProductDetail language={language} onAddToCart={(item) => setCart(mergeCartItems(cart, [item]))} onAddBatchToCart={(items) => setCart(mergeCartItems(cart, items))} onUpdateCartItem={(item) => setCart(cart.map(x => x.id === item.id ? item : x))} draftProfiles={draftProfiles} setDraftProfiles={setDraftProfiles} />} />
+          <Route path="/product/:id" element={<ProductDetail language={language} user={user} onAddToCart={(item) => setCart(mergeCartItems(cart, [item]))} onAddBatchToCart={(items) => setCart(mergeCartItems(cart, items))} onUpdateCartItem={(item) => setCart(cart.map(x => x.id === item.id ? item : x))} draftProfiles={draftProfiles} setDraftProfiles={setDraftProfiles} />} />
           <Route path="/cart" element={<Cart cart={cart} language={language} setCart={setCart} user={user} updateUser={setUser} />} />
           <Route path="/preview" element={<FactorySheetPreviewPage />} />
         </Routes>

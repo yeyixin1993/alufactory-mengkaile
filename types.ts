@@ -31,6 +31,7 @@ export interface User {
   name: string;
   password?: string;
   role: 'admin' | 'customer';
+  membershipLevel?: 'standard' | 'vip' | 'vip_plus' | string;
   addresses: Address[];
 }
 

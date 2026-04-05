@@ -27,7 +27,7 @@ const setStored = <T>(key: string, data: T) => {
 
 // Initial admin setup
 const initialUsers: User[] = [
-  { id: 'admin', name: 'System Admin', password: 'admin', role: 'admin', addresses: [] }
+  { id: 'admin', name: 'System Admin', password: 'admin', role: 'admin', membershipLevel: 'standard', addresses: [] }
 ];
 
 export const MockService = {
@@ -35,9 +35,9 @@ export const MockService = {
   register: (user: User) => {
     const users = getStored<User[]>(DB_KEYS.USERS, initialUsers);
     if (users.find(u => u.id === user.id)) return Promise.reject("Phone number already registered");
-    users.push(user);
+    users.push({ ...user, membershipLevel: user.membershipLevel || 'standard' });
     setStored(DB_KEYS.USERS, users);
-    return Promise.resolve(user);
+    return Promise.resolve({ ...user, membershipLevel: user.membershipLevel || 'standard' });
   },
 
   login: (id: string, pass: string) => {

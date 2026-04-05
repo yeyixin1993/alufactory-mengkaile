@@ -2,7 +2,7 @@
 // Add missing React import to fix namespace errors
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { DrillHole, ProfileConfig, ProfileSide, TappingConfig, Language, HoleType, ProfileFinish, CartItem, Product, MiterCutConfig, MiterCutDirection, MiterCutSide } from '../types';
+import { DrillHole, ProfileConfig, ProfileSide, TappingConfig, Language, HoleType, ProfileFinish, CartItem, Product, MiterCutConfig, MiterCutDirection, MiterCutSide, User } from '../types';
 import { TRANSLATIONS, PROFILE_VARIANTS, PROFILE_COLORS, COLOR_ONLY_COLORED_SECTION_IDS } from '../constants';
 import { Plus, Trash2, List, ShoppingCart, Pencil, X, Hammer, Settings2 } from 'lucide-react';
 import ProfileVisualizer from './ProfileVisualizer';
@@ -10,6 +10,7 @@ import ProfileVisualizer from './ProfileVisualizer';
 interface ProfileEditorProps {
   language: Language;
   product: Product;
+  user?: User | null;
   initialItem?: CartItem;
   onAddBatchToCart: (items: CartItem[]) => void;
   onUpdateItem: (item: CartItem) => void;
@@ -27,11 +28,13 @@ const MIN_PROFILE_LENGTH_MM = 20;
 const DANGER_FEE_THRESHOLD_MM = 100;
 const DANGER_FEE_PER_PIECE = 5;
 const MAX_PROFILE_LENGTH_MM = 3000;
+const PROFILE_VIP_DISCOUNT_PER_METER = 2;
 
-const ProfileEditor: React.FC<ProfileEditorProps> = ({ language, product, initialItem, onAddBatchToCart, onUpdateItem, draftProfiles, setDraftProfiles }) => {
+const ProfileEditor: React.FC<ProfileEditorProps> = ({ language, product, user, initialItem, onAddBatchToCart, onUpdateItem, draftProfiles, setDraftProfiles }) => {
   const t = TRANSLATIONS[language];
   const currency = getCurrency(language);
   const navigate = useNavigate();
+  const isVipMember = user?.membershipLevel === 'vip' || user?.membershipLevel === 'vip_plus';
   
   const initialConfig = initialItem?.config as ProfileConfig | undefined;
 
@@ -89,7 +92,9 @@ const ProfileEditor: React.FC<ProfileEditorProps> = ({ language, product, initia
   }, [colorOnlyColoredSection, finish]);
 
   const calculateItemUnitPrice = (len: number, currentHoles: DrillHole[], currentTapping: TappingConfig, currentMiterCut?: MiterCutConfig) => {
-    const materialPrice = (len / 1000) * selectedVariant.price[finish];
+    const basePricePerMeter = selectedVariant.price[finish];
+    const effectivePricePerMeter = Math.max(0, basePricePerMeter - (isVipMember ? PROFILE_VIP_DISCOUNT_PER_METER : 0));
+    const materialPrice = (len / 1000) * effectivePricePerMeter;
     let holeFee = currentHoles.reduce((acc, h) => acc + (h.type === 'countersunk' ? PRICE_HOLE_COUNTERSUNK : PRICE_HOLE_THROUGH), 0);
     let tappingFee = (currentTapping.left.filter(Boolean).length + currentTapping.right.filter(Boolean).length) * PRICE_TAPPING_PER_END;
     let miterFee = 0;
