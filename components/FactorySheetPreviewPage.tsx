@@ -7,6 +7,7 @@ import ExportOverlay from './ExportOverlay';
 import html2canvas from 'html2canvas';
 import { jsPDF } from 'jspdf';
 import { buildOrderPdfFilename, formatEast8Date } from '../utils/orderFormatting';
+import { calculateScrewPlan } from '../utils/screwCalculator';
 
 /**
  * Standalone preview page – rendered in a new browser window.
@@ -21,6 +22,7 @@ interface PreviewData {
   address?: Address;
   shippingMethod?: string;
   shippingFee?: number;
+  include304Screws?: boolean;
   overlengthFee?: number;
 }
 
@@ -50,11 +52,12 @@ const FactorySheetPreviewPage: React.FC = () => {
     );
   }
 
-  const { cart, user, language, showPrice, address, shippingMethod, shippingFee, overlengthFee } = data;
+  const { cart, user, language, showPrice, address, shippingMethod, shippingFee, include304Screws, overlengthFee } = data;
   const t = TRANSLATIONS[language];
   const dateStr = formatEast8Date(new Date());
   const orderRef = React.useMemo(() => Math.random().toString(36).substr(2, 6).toUpperCase(), []);
-  const totalAmount = cart.reduce((sum, item) => sum + (item.totalPrice || 0), 0) + (shippingFee || 0);
+  const screwFee = React.useMemo(() => calculateScrewPlan(cart, !!include304Screws).totalFee, [cart, include304Screws]);
+  const totalAmount = cart.reduce((sum, item) => sum + (item.totalPrice || 0), 0) + (shippingFee || 0) + screwFee;
   const fileBaseName = buildOrderPdfFilename({
     createdAt: new Date(),
     userName: address?.recipient_name || user?.name || user?.id,
@@ -209,6 +212,7 @@ const FactorySheetPreviewPage: React.FC = () => {
             address={address}
             shippingMethod={shippingMethod}
             shippingFee={shippingFee}
+            include304Screws={include304Screws}
             overlengthFee={overlengthFee}
           />
         </div>

@@ -4,6 +4,7 @@ import { CartItem, User, ProductType, ProfileConfig, PlateConfig, Language, Prof
 import { TRANSLATIONS, PROFILE_COLORS, SHIPPING_RATES, SHIPPING_RATES_SF, SHIPPING_RATES_AN, PROFILE_WEIGHTS, SHIPPING_METHOD_NAMES } from '../constants';
 import type { ShippingMethod } from '../constants';
 import ProfileVisualizer from './ProfileVisualizer';
+import { calculateScrewPlan } from '../utils/screwCalculator';
 
 interface FactorySheetProps {
   cart: CartItem[];
@@ -16,12 +17,13 @@ interface FactorySheetProps {
   address?: Address;
   shippingMethod?: string;
   shippingFee?: number;
+  include304Screws?: boolean;
   overlengthFee?: number;
 }
 
 const getCurrency = (lang: Language) => lang === 'cn' ? '￥' : '$';
 
-const FactorySheet: React.FC<FactorySheetProps> = ({ cart, user, language, orderRef, dateStr, id, showPrice = true, address, shippingMethod, shippingFee: passedShippingFee, overlengthFee: passedOverlengthFee }) => {
+const FactorySheet: React.FC<FactorySheetProps> = ({ cart, user, language, orderRef, dateStr, id, showPrice = true, address, shippingMethod, shippingFee: passedShippingFee, include304Screws = false, overlengthFee: passedOverlengthFee }) => {
   const t = TRANSLATIONS[language];
   const currency = getCurrency(language);
  
@@ -151,6 +153,20 @@ const FactorySheet: React.FC<FactorySheetProps> = ({ cart, user, language, order
       .sort((a, b) => b.meters - a.meters);
   }, [cart, language, t.finishOxidized, t.finishPowder, t.finishElectrophoretic]);
 
+  const screwPlan = React.useMemo(() => calculateScrewPlan(cart, include304Screws), [cart, include304Screws]);
+  const screwByModel = React.useMemo(() => {
+    const m = new Map<string, { countersunk: number; through: number; totalHoles: number; recommended: number }>();
+    screwPlan.models.forEach((row) => {
+      m.set(row.model, {
+        countersunk: row.countersunkHoles,
+        through: row.throughHoles,
+        totalHoles: row.totalHoles,
+        recommended: row.recommendedScrewCount,
+      });
+    });
+    return m;
+  }, [screwPlan.models]);
+
   // 1. 先计算总重量（如果还没计算的话）
   const calculateTotalWeight = () => {
     let totalWeightKg = 0;
@@ -212,7 +228,7 @@ const FactorySheet: React.FC<FactorySheetProps> = ({ cart, user, language, order
     shippingLabel = SHIPPING_METHOD_NAMES[normalizedShippingMethod as ShippingMethod][language];
   }
 
-  const finalTotal = baseTotal + shippingFee;
+  const finalTotal = baseTotal + shippingFee + (include304Screws ? screwPlan.totalFee : 0);
 
   //const shipRate = activeAddress ? (SHIPPING_RATES[activeAddress.province] || { first: 15, next: 0 }) : { first: 0, next: 0 };
   //const shippingFee = activeAddress ? shipRate.first : 0;
@@ -458,7 +474,20 @@ const FactorySheet: React.FC<FactorySheetProps> = ({ cart, user, language, order
                  <ul className="space-y-1.5 text-xs text-slate-700">
                    {profileMetersSummary.map((row) => (
                      <li key={row.name} className="flex justify-between gap-3">
-                       <span className="truncate">{row.name}</span>
+                       <span className="truncate">
+                         {row.name}
+                         {(() => {
+                           if (!include304Screws) return null;
+                           const model = String(row.name || '').split('·')[0].trim();
+                           const screw = screwByModel.get(model);
+                           if (!screw || screw.recommended <= 0) return null;
+                           return (
+                             <span className="ml-2 text-[10px] text-slate-500">
+                               ｜304螺丝: 总孔{screw.totalHoles}，配件{screw.recommended}（沉头{screw.countersunk}/通孔{screw.through}）
+                             </span>
+                           );
+                         })()}
+                       </span>
                        <span className="font-black whitespace-nowrap">{row.meters.toFixed(1)}m</span>
                      </li>
                    ))}
@@ -473,6 +502,12 @@ const FactorySheet: React.FC<FactorySheetProps> = ({ cart, user, language, order
                <span>{t.shippingFee}{shippingLabel ? ` (${shippingLabel})` : ''}:</span>
                <span className="font-bold text-slate-800">{currency}{shippingFee.toFixed(1)}</span>
              </div>
+             {include304Screws && screwPlan.totalRecommendedScrewCount > 0 && (
+               <div className="flex justify-between text-slate-500 text-xs">
+                 <span>304螺丝及弹性配件费（总孔{screwPlan.totalHoles}）:</span>
+                 <span className="font-bold text-slate-800">{currency}{screwPlan.totalFee.toFixed(1)}</span>
+               </div>
+             )}
              {(passedOverlengthFee ?? 0) > 0 && (
                <div className="flex justify-between text-amber-600 text-xs"><span>{t.overlengthFee} (含):</span><span className="font-bold">+{currency}{passedOverlengthFee!.toFixed(0)}</span></div>
              )}

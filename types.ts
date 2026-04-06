@@ -123,6 +123,8 @@ export interface Order {
   items: CartItem[];
   total: number;
   shippingFee: number;
+  screwFee?: number;
+  include304Screws?: boolean;
   overlengthFee?: number;
   shippingMethod?: string;
   status: 'pending' | 'confirmed' | 'processing' | 'shipped' | 'delivered' | 'cancelled';

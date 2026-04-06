@@ -18,6 +18,7 @@ import { jsPDF } from 'jspdf';
 import html2canvas from 'html2canvas';
 import { buildOrderPdfFilename, formatEast8Date, formatEast8DateTime } from './utils/orderFormatting';
 import { normalizeMembershipLevel } from './utils/membership';
+import { calculateScrewPlan, inferInclude304ScrewsByTotal } from './utils/screwCalculator';
 
 const getCurrency = (lang: Language) => lang === 'cn' ? '￥' : '$';
 
@@ -273,6 +274,11 @@ const UserProfile: React.FC<{
               address={printOrder.address}
               shippingMethod={printOrder.shippingMethod}
               shippingFee={printOrder.shippingFee}
+              include304Screws={
+                typeof printOrder.include304Screws === 'boolean'
+                  ? printOrder.include304Screws
+                  : inferInclude304ScrewsByTotal(printOrder.items, printOrder.shippingFee || 0, getOrderTotal(printOrder))
+              }
               overlengthFee={printOrder.overlengthFee}
             />
           )}
@@ -678,6 +684,7 @@ const Cart: React.FC<{
   );
   const [isEditingAddress, setIsEditingAddress] = useState<Address | null | 'new'>(null);
   const [selectedCourier, setSelectedCourier] = useState<ShippingMethod | 'auto'>('auto');
+  const [include304Screws, setInclude304Screws] = useState(false);
 
   const printRef = useRef<HTMLDivElement>(null);
   const addresses = user?.addresses || [];
@@ -757,10 +764,12 @@ const Cart: React.FC<{
 
   const activeCourier: ShippingMethod = selectedCourier === 'auto' ? shippingOptions.cheapest : selectedCourier;
   const activeShipping = shippingOptions[activeCourier];
+  const screwPlan = React.useMemo(() => calculateScrewPlan(cart, include304Screws), [cart, include304Screws]);
+  const screwFee = screwPlan.totalFee;
 
   const calculateTotal = () => {
     const base = cart.reduce((acc, i) => acc + i.totalPrice, 0);
-    return { base, ship: activeShipping.fee, overlength: activeShipping.overlength, total: base + activeShipping.fee };
+    return { base, ship: activeShipping.fee, overlength: activeShipping.overlength, total: base + activeShipping.fee + screwFee };
   };
 
   const { base: baseTotal, ship: shippingFee, overlength: overlengthFee, total: finalTotal } = calculateTotal();
@@ -799,6 +808,8 @@ const Cart: React.FC<{
         items: [...cart], 
         total: finalTotal, 
         shippingFee,
+        screwFee,
+        include304Screws,
         overlengthFee,
         shippingMethod: SHIPPING_METHOD_NAMES[activeCourier][language],
         status: 'pending', 
@@ -878,6 +889,7 @@ const Cart: React.FC<{
             address={selectedAddress || undefined}
             shippingMethod={SHIPPING_METHOD_NAMES[activeCourier][language]}
             shippingFee={shippingFee}
+            include304Screws={include304Screws}
             overlengthFee={overlengthFee}
           />
         </div>
@@ -919,7 +931,7 @@ const Cart: React.FC<{
           <div className="flex justify-between items-center bg-white p-5 rounded-[2rem] shadow-xl border border-slate-100">
             <Link to="/product/p2" className="flex items-center gap-2 text-blue-600 font-black px-5 py-3 rounded-2xl hover:bg-blue-50 transition-all text-sm"><ArrowLeft className="w-4 h-4"/> {t.continueShopping}</Link>
             <div className="flex gap-2">
-              <button onClick={() => openFactorySheetPreview({ cart, user, language, showPrice: true, address: selectedAddress || undefined, shippingMethod: SHIPPING_METHOD_NAMES[activeCourier][language], shippingFee, overlengthFee })} className="flex items-center gap-2 text-slate-700 font-bold px-5 py-3 rounded-2xl border border-slate-200 hover:bg-slate-50 transition-all text-sm"><Eye className="w-4 h-4"/> {t.preview}</button>
+              <button onClick={() => openFactorySheetPreview({ cart, user, language, showPrice: true, address: selectedAddress || undefined, shippingMethod: SHIPPING_METHOD_NAMES[activeCourier][language], shippingFee, include304Screws, overlengthFee })} className="flex items-center gap-2 text-slate-700 font-bold px-5 py-3 rounded-2xl border border-slate-200 hover:bg-slate-50 transition-all text-sm"><Eye className="w-4 h-4"/> {t.preview}</button>
               {user?.role === 'admin' && (
                 <button onClick={() => handleGeneratePDF(false)} className="flex items-center gap-2 text-orange-600 font-bold px-5 py-3 rounded-2xl border border-orange-100 bg-orange-50 hover:bg-orange-100 transition-all text-sm"><FileDown className="w-4 h-4"/> {t.downloadNoPrice}</button>
               )}
@@ -1023,6 +1035,32 @@ const Cart: React.FC<{
               <div className="flex justify-between text-slate-400 font-bold">
                 <span>{t.shippingFee} ({SHIPPING_METHOD_NAMES[activeCourier][language]})</span>
                 <span className="text-white font-black text-lg">{currency}{shippingFee.toFixed(1)}</span>
+              </div>
+              <div className="bg-slate-800/70 border border-slate-700 rounded-2xl px-4 py-3 space-y-2">
+                <label className="flex items-start gap-3 text-sm font-bold text-slate-200 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={include304Screws}
+                    onChange={(e) => setInclude304Screws(e.target.checked)}
+                    className="w-4 h-4 mt-0.5 rounded border-slate-500 text-blue-500 focus:ring-blue-500"
+                  />
+                  <span>需要配304螺丝（沉头孔=圆柱头；通孔=半圆头螺丝+弹性配件）</span>
+                </label>
+                {include304Screws && (
+                  <>
+                    <div className="flex justify-between text-slate-300 text-sm">
+                      <span>304螺丝及弹性配件费（总孔数 × ¥0.5）</span>
+                      <span className="font-black text-white">{currency}{screwFee.toFixed(1)}</span>
+                    </div>
+                    <div className="text-[11px] text-slate-400 leading-relaxed">
+                      {screwPlan.models.length > 0
+                        ? screwPlan.models
+                            .map((m) => `${m.model}: 总孔${m.totalHoles}（沉头${m.countersunkHoles}，通孔${m.throughHoles}），配件${m.recommendedScrewCount}`)
+                            .join('；')
+                        : '当前购物车没有可统计孔位的型材打孔项'}
+                    </div>
+                  </>
+                )}
               </div>
               {overlengthFee > 0 && (
                 <div className="flex justify-between text-amber-400 font-bold text-sm">

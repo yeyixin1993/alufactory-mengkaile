@@ -12,6 +12,7 @@ interface FactorySheetPreviewProps {
   address?: Address;
   shippingMethod?: string;
   shippingFee?: number;
+  include304Screws?: boolean;
   overlengthFee?: number;
 }
 
@@ -28,6 +29,7 @@ const openFactorySheetPreview = (props: Omit<FactorySheetPreviewProps, 'onClose'
     address: props.address,
     shippingMethod: props.shippingMethod,
     shippingFee: props.shippingFee,
+    include304Screws: props.include304Screws,
     overlengthFee: props.overlengthFee,
   };
   localStorage.setItem('__factorySheetPreviewData', JSON.stringify(payload));
