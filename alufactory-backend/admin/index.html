@@ -218,6 +218,11 @@
             background: #c7d2fe;
             color: #3730a3;
         }
+
+        .status-cancelled {
+            background: #fee2e2;
+            color: #991b1b;
+        }
         
         .modal {
             display: none;
@@ -423,6 +428,7 @@
                             <option value="confirmed">已付款</option>
                             <option value="shipped">已发货</option>
                             <option value="delivered">已送达</option>
+                            <option value="cancelled">已取消</option>
                         </select>
                     </div>
                     <table id="ordersTable">
@@ -435,6 +441,8 @@
                                 <th>客户</th>
                                 <th>地址</th>
                                 <th>发货方式</th>
+                                <th>型材费</th>
+                                <th>运费</th>
                                 <th>总金额</th>
                                 <th>状态</th>
                                 <th>日期</th>
@@ -651,6 +659,7 @@
         let ordersCache = {};  // Cache orders data for pre-filling edit form
         let usersCache = {};   // Cache users data for edit modal pre-fill
         let currentEditingUser = null;
+        let currentOrderStatusFilter = '';
 
         function normalizeMembershipLevel(value) {
             const raw = String(value || '').trim().toLowerCase();
@@ -796,10 +805,16 @@
         }
         
         // Load orders
-        async function loadOrders(page = 1, status = '') {
+        async function loadOrders(page = 1, status = null) {
             try {
-                const url = status 
-                    ? `${API_BASE}/admin/orders?page=${page}&per_page=20&status=${status}`
+                const activeStatus = status === null
+                    ? (document.getElementById('orderFilter')?.value || currentOrderStatusFilter || '')
+                    : status;
+
+                currentOrderStatusFilter = activeStatus;
+
+                const url = activeStatus
+                    ? `${API_BASE}/admin/orders?page=${page}&per_page=20&status=${activeStatus}`
                     : `${API_BASE}/admin/orders?page=${page}&per_page=20`;
                 
                 const response = await fetch(url, {
@@ -824,6 +839,9 @@
                     const customerPhone = order.customer_phone || '-';
                     const addressInfo = `${userName} ${order.province} ${order.address_detail} ${customerPhone}`;
                     const shippingMethodText = getShippingMethodText(order.shipping_method);
+                    const profileFee = Number(order.subtotal || 0);
+                    const shippingFee = Number(order.shipping_fee || 0);
+                    const totalAmount = Number(order.total_amount || 0);
                           const pdfLink = order.pdf?.available && order.pdf?.url
                                 ? `<button class="btn btn-success" style="padding: 6px 8px;" onclick="openOrderPdf('${order.pdf.url}', '${order.pdf.filename || ''}', false)">打开</button>
                                     <button class="btn btn-primary" style="padding: 6px 8px;" onclick="openOrderPdf('${order.pdf.url}', '${order.pdf.filename || ''}', true)">下载</button>`
@@ -836,7 +854,9 @@
                         <td>${order.recipient_name}</td>
                         <td>${addressInfo}</td>
                         <td>${shippingMethodText}</td>
-                        <td>¥${order.total_amount.toFixed(2)}</td>
+                        <td>¥${profileFee.toFixed(2)}</td>
+                        <td>¥${shippingFee.toFixed(2)}</td>
+                        <td>¥${totalAmount.toFixed(2)}</td>
                         <td><span class="status-badge status-${order.status}">${getStatusText(order.status)}</span></td>
                         <td>${date}</td>
                         <td>${pdfLink}</td>
@@ -847,7 +867,7 @@
                 });
                 
                 // Pagination
-                renderPagination('ordersPagination', page, data.pages, (p) => loadOrders(p, status));
+                renderPagination('ordersPagination', page, data.pages, (p) => loadOrders(p, currentOrderStatusFilter));
             } catch (error) {
                 console.error('Error loading orders:', error);
             }
@@ -1276,6 +1296,7 @@
         // Filter orders
         function filterOrders() {
             const status = document.getElementById('orderFilter').value;
+            currentOrderStatusFilter = status;
             loadOrders(1, status);
         }
 
