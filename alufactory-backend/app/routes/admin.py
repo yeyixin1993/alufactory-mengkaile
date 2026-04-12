@@ -2,6 +2,7 @@ from flask import Blueprint, request, jsonify, Response, current_app, send_file
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from datetime import datetime
 from app.models.user import db, User, Order, Profile
+from app.models.user import Cart
 from app.models.user import normalize_membership_level
 from app.order_utils import build_order_pdf_filename
 import uuid
@@ -96,6 +97,8 @@ def promote_user(user_id):
         return jsonify({'error': 'User not found'}), 404
     
     try:
+
+
         user.is_admin = True
         user.updated_at = datetime.utcnow()
         db.session.commit()
@@ -128,6 +131,8 @@ def update_membership(user_id):
         user.updated_at = datetime.utcnow()
         db.session.commit()
         
+
+
         return jsonify({
             'message': 'Membership updated',
             'user': user.to_dict()
@@ -329,6 +334,79 @@ def get_order_pdf(order_id):
             'Content-Disposition': f'inline; filename="{filename}"'
         }
     )
+
+
+@admin_bp.route('/carts', methods=['GET'])
+@admin_required
+def get_all_carts():
+    """Get all user carts (admin only)."""
+    try:
+        page = request.args.get('page', 1, type=int)
+        per_page = request.args.get('per_page', 50, type=int)
+
+        carts_paginated = Cart.query.order_by(Cart.updated_at.desc()).paginate(page=page, per_page=per_page)
+
+        carts_data = []
+        for cart in carts_paginated.items:
+            user = User.query.get(cart.user_id)
+            cart_dict = cart.to_dict()
+            carts_data.append({
+                'cart': cart_dict,
+                'item_count': len(cart_dict.get('items', [])),
+                'user': {
+                    'id': user.id if user else cart.user_id,
+                    'username': user.username if user else None,
+                    'phone': user.phone if user else None,
+                }
+            })
+
+        return jsonify({
+            'carts': carts_data,
+            'total': carts_paginated.total,
+            'pages': carts_paginated.pages,
+            'current_page': page
+        }), 200
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@admin_bp.route('/carts/<user_id>', methods=['GET'])
+@admin_required
+def get_user_cart(user_id):
+    """Get a specific user's cart snapshot (admin only)."""
+    user = User.query.get(user_id)
+    if not user:
+        return jsonify({'error': 'User not found'}), 404
+
+    cart = Cart.query.filter_by(user_id=user_id).first()
+    if not cart:
+        return jsonify({
+            'user': {
+                'id': user.id,
+                'username': user.username,
+                'phone': user.phone,
+            },
+            'cart': {
+                'id': None,
+                'user_id': user.id,
+                'items': [],
+                'total_price': 0,
+                'created_at': None,
+                'updated_at': None,
+            },
+            'item_count': 0
+        }), 200
+
+    cart_dict = cart.to_dict()
+    return jsonify({
+        'user': {
+            'id': user.id,
+            'username': user.username,
+            'phone': user.phone,
+        },
+        'cart': cart_dict,
+        'item_count': len(cart_dict.get('items', []))
+    }), 200
 
 
 @admin_bp.route('/orders/<order_id>/status', methods=['PUT'])

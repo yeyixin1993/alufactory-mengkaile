@@ -161,3 +161,80 @@ def clear_cart():
     except Exception as e:
         db.session.rollback()
         return jsonify({'error': str(e)}), 500
+
+
+@cart_bp.route('/sync', methods=['PUT'])
+@jwt_required()
+def sync_cart():
+    """Replace user cart with provided items (for cross-device cart sync)."""
+    current_user_id = get_jwt_identity()
+    data = request.get_json() or {}
+    items = data.get('items', [])
+
+    if not isinstance(items, list):
+        return jsonify({'error': 'items must be an array'}), 400
+
+    try:
+        cart = Cart.query.filter_by(user_id=current_user_id).first()
+        if not cart:
+            cart = Cart(user_id=current_user_id)
+            db.session.add(cart)
+            db.session.flush()
+
+        # Replace current cart items with client snapshot.
+        CartItem.query.filter_by(cart_id=cart.id).delete()
+
+        for idx, item in enumerate(items):
+            if not isinstance(item, dict):
+                return jsonify({'error': f'Invalid item at index {idx}'}), 400
+
+            product_id = str(item.get('product_id') or '').strip()
+            product_name = str(item.get('product_name') or product_id).strip()
+            product_type = str(item.get('product_type') or 'PROFILE').strip()
+
+            if not product_id:
+                return jsonify({'error': f'Missing product_id at index {idx}'}), 400
+
+            quantity = max(1, int(item.get('quantity', 1) or 1))
+
+            unit_price = item.get('unit_price', 0)
+            try:
+                unit_price = float(unit_price)
+            except (TypeError, ValueError):
+                unit_price = 0.0
+
+            # Fallback to config.unitPrice if provided
+            config = item.get('config')
+            if unit_price <= 0 and isinstance(config, dict):
+                try:
+                    unit_price = float(config.get('unitPrice', 0))
+                except (TypeError, ValueError):
+                    unit_price = 0.0
+
+            if unit_price < 0:
+                unit_price = 0.0
+
+            total_price = round(unit_price * quantity, 4)
+
+            cart_item = CartItem(
+                cart_id=cart.id,
+                product_id=product_id,
+                product_name=product_name,
+                product_type=product_type,
+                quantity=quantity,
+                unit_price=unit_price,
+                total_price=total_price,
+                config=config
+            )
+            db.session.add(cart_item)
+
+        cart.updated_at = datetime.utcnow()
+        db.session.commit()
+
+        return jsonify({
+            'message': 'Cart synced',
+            'cart': cart.to_dict()
+        }), 200
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': str(e)}), 500

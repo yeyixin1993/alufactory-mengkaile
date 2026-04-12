@@ -1,5 +1,5 @@
 // Real API Service connecting to Flask backend
-import { Order, User, Address } from '../types';
+import { Order, User, Address, CartItem, ProductType } from '../types';
 import { normalizeMembershipLevel } from '../utils/membership';
 import { PayloadSecurity } from './payloadSecurity';
 
@@ -295,21 +295,67 @@ class ApiServiceClass {
   }
 
   // ===== CART =====
+  private mapServerCartItem(item: any): CartItem {
+    const quantity = Math.max(1, Number(item?.quantity) || 1);
+    const unitPriceFromConfig = Number(item?.config?.unitPrice);
+    const unitPrice = Number(item?.unit_price) || (Number.isFinite(unitPriceFromConfig) ? unitPriceFromConfig : 0);
+    const totalPrice = Number(item?.total_price) || Number((unitPrice * quantity).toFixed(2));
+    const productId = String(item?.product_id || item?.id || 'unknown');
+    const productName = String(item?.product_name || productId);
+    const productType = String(item?.product_type || ProductType.PROFILE);
+
+    return {
+      id: String(item?.id || `${productId}_${Math.random().toString(36).slice(2, 8)}`),
+      product: {
+        id: productId,
+        type: productType as ProductType,
+        name: { en: productName, cn: productName, jp: productName },
+        description: { en: '', cn: '', jp: '' },
+        basePrice: unitPrice,
+        imageUrl: '',
+      },
+      quantity,
+      config: item?.config || {},
+      totalPrice,
+    };
+  }
+
   async getCart() {
     try {
       const data = await this.request('GET', '/cart');
       return {
-        items: data.items?.map((item: any) => ({
-          id: item.id,
-          product: { id: item.product_id, type: '', name: {}, description: {}, basePrice: 0, imageUrl: '' },
-          quantity: item.quantity,
-          config: item.config || {},
-          totalPrice: item.total_price,
-        })) || [],
+        items: (data.items || []).map((item: any) => this.mapServerCartItem(item)),
       };
     } catch (e) {
       return { items: [] };
     }
+  }
+
+  async syncCart(items: CartItem[]) {
+    const payload = {
+      items: (items || []).map((item) => {
+        const quantity = Math.max(1, Number(item.quantity) || 1);
+        const unitPriceFromConfig = Number(item?.config?.unitPrice);
+        const unitPrice = Number.isFinite(unitPriceFromConfig) && unitPriceFromConfig > 0
+          ? unitPriceFromConfig
+          : Number((item.totalPrice / quantity).toFixed(4));
+        const productName = item.product?.name?.en || item.product?.name?.cn || item.product?.name?.jp || item.product?.id || 'Unknown Product';
+
+        return {
+          product_id: item.product?.id,
+          product_name: productName,
+          product_type: item.product?.type || ProductType.PROFILE,
+          quantity,
+          unit_price: unitPrice,
+          config: item.config || {},
+        };
+      }),
+    };
+
+    const data = await this.request('PUT', '/cart/sync', payload);
+    return {
+      items: (data?.cart?.items || data?.items || []).map((item: any) => this.mapServerCartItem(item)),
+    };
   }
 
   async addToCart(product: any, quantity: number, config: any) {

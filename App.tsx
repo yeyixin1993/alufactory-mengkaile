@@ -46,6 +46,38 @@ const mergeCartItems = (currentCart: CartItem[], newItems: CartItem[]): CartItem
   return nextCart;
 };
 
+const CART_CACHE_PREFIX = 'mengkaile_cart_cache_v1';
+const DRAFT_CACHE_PREFIX = 'mengkaile_profile_draft_cache_v1';
+const GUEST_CACHE_SCOPE = 'guest';
+
+const getCacheKey = (prefix: string, userId?: string | null) => {
+  const scope = userId?.trim() || GUEST_CACHE_SCOPE;
+  return `${prefix}:${scope}`;
+};
+
+const readCachedArray = <T,>(key: string): T[] => {
+  if (typeof window === 'undefined') return [];
+  const raw = localStorage.getItem(key);
+  if (!raw) return [];
+  try {
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch (error) {
+    console.warn(`Failed to parse cache key: ${key}`, error);
+    return [];
+  }
+};
+
+const writeCachedArray = <T,>(key: string, value: T[]) => {
+  if (typeof window === 'undefined') return;
+  localStorage.setItem(key, JSON.stringify(value));
+};
+
+const removeCachedArray = (key: string) => {
+  if (typeof window === 'undefined') return;
+  localStorage.removeItem(key);
+};
+
 const LanguageSwitcher: React.FC<{ current: Language, onChange: (l: Language) => void }> = ({ current, onChange }) => (
   <select 
     value={current} 
@@ -1232,12 +1264,111 @@ const ProductDetail: React.FC<{
 
 const App: React.FC = () => {
   const [language, setLanguage] = useState<Language>('cn');
-  const [cart, setCart] = useState<CartItem[]>([]);
-  const [draftProfiles, setDraftProfiles] = useState<CartItem[]>([]);
+  const [cart, setCart] = useState<CartItem[]>(() => readCachedArray<CartItem>(getCacheKey(CART_CACHE_PREFIX)));
+  const [draftProfiles, setDraftProfiles] = useState<CartItem[]>(() => readCachedArray<CartItem>(getCacheKey(DRAFT_CACHE_PREFIX)));
   const [user, setUser] = useState<User | null>(null);
   const t = TRANSLATIONS[language];
   const userMembership = normalizeMembershipLevel(user?.membershipLevel);
   const userStatusLabel = userMembership === 'vip_plus' ? 'VIP+' : userMembership === 'vip' ? 'VIP' : 'standard';
+  const lastCacheScopeRef = useRef<string | null>(null);
+  const skipNextCartPersistRef = useRef(false);
+  const skipNextDraftPersistRef = useRef(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    const scopeUserId = user?.id || null;
+    const previousScope = lastCacheScopeRef.current;
+
+    if (scopeUserId === previousScope) return;
+
+    const hydrateForScope = async () => {
+      skipNextCartPersistRef.current = true;
+      skipNextDraftPersistRef.current = true;
+
+      if (scopeUserId) {
+        const guestCartKey = getCacheKey(CART_CACHE_PREFIX, null);
+        const userCartKey = getCacheKey(CART_CACHE_PREFIX, scopeUserId);
+        const guestDraftKey = getCacheKey(DRAFT_CACHE_PREFIX, null);
+        const userDraftKey = getCacheKey(DRAFT_CACHE_PREFIX, scopeUserId);
+
+        const mergedLocalCart = mergeCartItems(
+          readCachedArray<CartItem>(userCartKey),
+          readCachedArray<CartItem>(guestCartKey)
+        );
+        const mergedDrafts = [
+          ...readCachedArray<CartItem>(userDraftKey),
+          ...readCachedArray<CartItem>(guestDraftKey),
+        ];
+
+        writeCachedArray(userCartKey, mergedLocalCart);
+        writeCachedArray(userDraftKey, mergedDrafts);
+        removeCachedArray(guestCartKey);
+        removeCachedArray(guestDraftKey);
+
+        if (!cancelled) {
+          setCart(mergedLocalCart);
+          setDraftProfiles(mergedDrafts);
+        }
+
+        try {
+          const remoteCart = await ApiService.getCart();
+          if (cancelled) return;
+
+          const mergedWithRemote = mergeCartItems(mergedLocalCart, remoteCart.items || []);
+
+          skipNextCartPersistRef.current = true;
+          setCart(mergedWithRemote);
+          writeCachedArray(userCartKey, mergedWithRemote);
+
+          await ApiService.syncCart(mergedWithRemote);
+        } catch (error) {
+          console.warn('Cart server hydration/sync skipped:', error);
+        }
+      } else {
+        if (cancelled) return;
+        setCart(readCachedArray<CartItem>(getCacheKey(CART_CACHE_PREFIX, null)));
+        setDraftProfiles(readCachedArray<CartItem>(getCacheKey(DRAFT_CACHE_PREFIX, null)));
+      }
+    };
+
+    hydrateForScope();
+
+    lastCacheScopeRef.current = scopeUserId;
+
+    return () => {
+      cancelled = true;
+    };
+  }, [user?.id]);
+
+  useEffect(() => {
+    if (skipNextCartPersistRef.current) {
+      skipNextCartPersistRef.current = false;
+      return;
+    }
+    writeCachedArray(getCacheKey(CART_CACHE_PREFIX, user?.id), cart);
+  }, [cart, user?.id]);
+
+  useEffect(() => {
+    if (skipNextDraftPersistRef.current) {
+      skipNextDraftPersistRef.current = false;
+      return;
+    }
+    writeCachedArray(getCacheKey(DRAFT_CACHE_PREFIX, user?.id), draftProfiles);
+  }, [draftProfiles, user?.id]);
+
+  useEffect(() => {
+    if (!user?.id) return;
+
+    const syncTimer = window.setTimeout(() => {
+      ApiService.syncCart(cart).catch((error) => {
+        console.warn('Background cart sync failed:', error);
+      });
+    }, 700);
+
+    return () => {
+      window.clearTimeout(syncTimer);
+    };
+  }, [cart, user?.id]);
 
   useEffect(() => {
     let mounted = true;
