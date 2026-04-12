@@ -2,14 +2,27 @@ from flask import Blueprint, request, jsonify
 from flask_jwt_extended import create_access_token, jwt_required, get_jwt_identity
 from datetime import datetime
 from app.models.user import db, User, Address
+from app.security import get_public_encryption_material, get_request_json_secure
 import uuid
 
 auth_bp = Blueprint('auth', __name__, url_prefix='/api/auth')
 
+
+@auth_bp.route('/public-key', methods=['GET'])
+def public_key():
+    """Get public key for client-side payload encryption"""
+    try:
+        return jsonify(get_public_encryption_material()), 200
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
 @auth_bp.route('/register', methods=['POST'])
 def register():
     """Register a new user"""
-    data = request.get_json()
+    try:
+        data = get_request_json_secure()
+    except ValueError as e:
+        return jsonify({'error': str(e)}), 400
     
     # Validation
     if not data or not data.get('username') or not data.get('phone') or not data.get('password'):
@@ -53,7 +66,10 @@ def register():
 @auth_bp.route('/login', methods=['POST'])
 def login():
     """Login user"""
-    data = request.get_json()
+    try:
+        data = get_request_json_secure()
+    except ValueError as e:
+        return jsonify({'error': str(e)}), 400
     
     if not data or not data.get('phone') or not data.get('password'):
         return jsonify({'error': 'Missing phone or password'}), 400
@@ -106,7 +122,10 @@ def get_current_user():
 def change_password():
     """Change user password"""
     user_id = get_jwt_identity()
-    data = request.get_json()
+    try:
+        data = get_request_json_secure()
+    except ValueError as e:
+        return jsonify({'error': str(e)}), 400
     
     if not data or not data.get('old_password') or not data.get('new_password'):
         return jsonify({'error': 'Missing old_password or new_password'}), 400

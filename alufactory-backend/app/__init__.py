@@ -9,6 +9,7 @@ from app.routes.cart import cart_bp
 from app.routes.orders import order_bp
 from app.routes.admin import admin_bp
 from app.routes.profiles import profile_bp
+from app.security import init_payload_encryption
 import os
 
 def create_app(config_name='development'):
@@ -24,6 +25,7 @@ def create_app(config_name='development'):
     
     # Initialize extensions
     db.init_app(app)
+    init_payload_encryption(app)
     
     # CORS configuration with explicit settings
     CORS(app, 

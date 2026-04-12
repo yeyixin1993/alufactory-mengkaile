@@ -1,6 +1,7 @@
 // Real API Service connecting to Flask backend
 import { Order, User, Address } from '../types';
 import { normalizeMembershipLevel } from '../utils/membership';
+import { PayloadSecurity } from './payloadSecurity';
 
 const normalizeBaseUrl = (url: string) => url.replace(/\/+$/, '');
 
@@ -53,6 +54,22 @@ class ApiServiceClass {
   private authToken: string | null = localStorage.getItem('authToken');
   private apiBaseUrl: string | null = null;
   private hasLoggedApiBase = false;
+  private payloadSecurity = new PayloadSecurity(() => this.getApiBaseUrl());
+  private hasLoggedEncryptionFallback = false;
+
+  private shouldEncryptPayload(method: string, endpoint: string): boolean {
+    const normalizedMethod = method.toUpperCase();
+
+    if (normalizedMethod === 'POST' && endpoint === '/auth/register') return true;
+    if (normalizedMethod === 'POST' && endpoint === '/auth/login') return true;
+    if (normalizedMethod === 'POST' && endpoint === '/auth/change-password') return true;
+    if (normalizedMethod === 'POST' && /\/users\/[^/]+\/addresses$/.test(endpoint)) return true;
+    if (normalizedMethod === 'PUT' && /\/users\/addresses\/[^/]+$/.test(endpoint)) return true;
+    if (normalizedMethod === 'PUT' && /\/users\/[^/]+$/.test(endpoint)) return true;
+    if (normalizedMethod === 'POST' && endpoint === '/orders') return true;
+
+    return false;
+  }
 
   private extractMembershipLevel(source: any): string {
     return normalizeMembershipLevel(
@@ -76,6 +93,23 @@ class ApiServiceClass {
 
   private async request(method: string, endpoint: string, data?: any) {
     const API_BASE_URL = this.getApiBaseUrl();
+    let requestData = data;
+
+    if (requestData && this.shouldEncryptPayload(method, endpoint)) {
+      try {
+        requestData = await this.payloadSecurity.encryptObject(requestData);
+      } catch (error) {
+        // Backward compatibility: old backend may not provide /auth/public-key yet.
+        if (!this.hasLoggedEncryptionFallback) {
+          this.hasLoggedEncryptionFallback = true;
+          console.warn(
+            '[apiService] Payload encryption unavailable on server; falling back to standard HTTPS JSON.',
+            error
+          );
+        }
+      }
+    }
+
     const options: RequestInit = {
       method,
       headers: {
@@ -90,8 +124,8 @@ class ApiServiceClass {
       };
     }
 
-    if (data) {
-      options.body = JSON.stringify(data);
+    if (requestData) {
+      options.body = JSON.stringify(requestData);
     }
 
     const response = await fetch(`${API_BASE_URL}${endpoint}`, options);

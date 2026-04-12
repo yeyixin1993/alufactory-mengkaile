@@ -3,6 +3,7 @@ from flask_jwt_extended import jwt_required, get_jwt_identity
 from datetime import datetime
 from app.models.user import db, User, Cart, CartItem, Order, OrderItem, Profile
 from app.order_utils import build_order_pdf_filename
+from app.security import get_request_json_secure
 import uuid
 import os
 import base64
@@ -48,7 +49,10 @@ def get_order(order_id):
 def create_order():
     """Create a new order from cart"""
     current_user_id = get_jwt_identity()
-    data = request.get_json()
+    try:
+        data = get_request_json_secure()
+    except ValueError as e:
+        return jsonify({'error': str(e)}), 400
     
     user = User.query.get(current_user_id)
     if not user:

@@ -2,6 +2,7 @@ from flask import Blueprint, request, jsonify
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from datetime import datetime
 from app.models.user import db, User, Address, normalize_membership_level
+from app.security import get_request_json_secure
 import uuid
 
 user_bp = Blueprint('users', __name__, url_prefix='/api/users')
@@ -42,7 +43,10 @@ def update_user(user_id):
     if not user:
         return jsonify({'error': 'User not found'}), 404
     
-    data = request.get_json()
+    try:
+        data = get_request_json_secure()
+    except ValueError as e:
+        return jsonify({'error': str(e)}), 400
     
     try:
         if 'full_name' in data:
@@ -101,7 +105,10 @@ def add_user_address(user_id):
     if not user:
         return jsonify({'error': 'User not found'}), 404
     
-    data = request.get_json()
+    try:
+        data = get_request_json_secure()
+    except ValueError as e:
+        return jsonify({'error': str(e)}), 400
     
     if not data or not all(k in data for k in ['recipient_name', 'phone', 'province', 'detail']):
         return jsonify({'error': 'Missing required fields'}), 400
@@ -145,7 +152,10 @@ def update_address(address_id):
     if address.user_id != current_user_id:
         return jsonify({'error': 'Unauthorized'}), 403
     
-    data = request.get_json()
+    try:
+        data = get_request_json_secure()
+    except ValueError as e:
+        return jsonify({'error': str(e)}), 400
     
     try:
         if 'recipient_name' in data:
