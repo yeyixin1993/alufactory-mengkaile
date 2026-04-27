@@ -993,7 +993,6 @@ const QuickQuote: React.FC<{ language: Language; user?: User | null }> = ({ lang
                   </div>
                   <div className="text-sm text-slate-600">
                     {t.qq_shippingFee}: {currency}{cat.shippingFee.toFixed(1)}
-                    {cat.key === 'profile' ? ` (${t.qq_shippingExtra})` : ` (${t.qq_shippingIncluded})`}
                   </div>
                 </div>
               ))}
