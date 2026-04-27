@@ -130,7 +130,9 @@ def update_order(order_id):
             order.status = data['status']
             
             # Update timestamps based on status
-            if data['status'] == 'shipped':
+            if data['status'] == 'confirmed':
+                order.paid_at = datetime.utcnow()
+            elif data['status'] == 'shipped':
                 order.shipped_at = datetime.utcnow()
             elif data['status'] == 'delivered':
                 order.delivered_at = datetime.utcnow()

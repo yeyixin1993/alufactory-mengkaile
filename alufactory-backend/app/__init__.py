@@ -9,6 +9,7 @@ from app.routes.cart import cart_bp
 from app.routes.orders import order_bp
 from app.routes.admin import admin_bp
 from app.routes.profiles import profile_bp
+from app.routes.payments import payment_bp
 from app.security import init_payload_encryption
 import os
 
@@ -47,6 +48,7 @@ def create_app(config_name='development'):
     app.register_blueprint(order_bp)
     app.register_blueprint(admin_bp)
     app.register_blueprint(profile_bp)
+    app.register_blueprint(payment_bp)
     
     # Create database tables and run auto-migrations
     with app.app_context():
@@ -65,6 +67,9 @@ def create_app(config_name='development'):
                     ('admin_memo', 'TEXT'),
                     ('memo', 'TEXT'),
                     ('tracking_number', 'VARCHAR(100)'),
+                    ('payment_method', 'VARCHAR(50)'),
+                    ('payment_transaction_no', 'VARCHAR(120)'),
+                    ('paid_at', 'DATETIME'),
                     ('shipped_at', 'DATETIME'),
                     ('delivered_at', 'DATETIME'),
                     ('cancelled_at', 'DATETIME'),

@@ -495,6 +495,66 @@ class ApiServiceClass {
     })) : [];
   }
 
+  async getOrderById(orderId: string) {
+    const order = await this.request('GET', `/orders/${orderId}`);
+    return {
+      id: order.id,
+      orderNumber: order.order_number,
+      date: order.created_at,
+      items: (order.items || []).map((item: any) => ({
+        id: item.id,
+        product: {
+          id: item.product_id,
+          type: item.product_type,
+          name: { en: item.product_name || item.product_id, cn: item.product_name || item.product_id, jp: item.product_name || item.product_id },
+          description: { en: '', cn: '', jp: '' },
+          basePrice: item.unit_price || 0,
+          imageUrl: ''
+        },
+        quantity: item.quantity,
+        config: item.config || {},
+        totalPrice: item.total_price || 0
+      })),
+      total: order.total_amount ?? order.total ?? 0,
+      shippingFee: order.shipping_fee ?? 0,
+      status: order.status,
+      userId: order.user_id,
+      address: order.address || {
+        id: order.address_id || '',
+        recipient_name: order.recipient_name,
+        phone: order.phone,
+        province: order.province,
+        detail: order.address_detail
+      },
+      addressId: order.address_id,
+      trackingNumber: order.tracking_number,
+      memo: order.memo,
+      adminMemo: order.admin_memo,
+      updatedAt: order.updated_at,
+      shippedAt: order.shipped_at,
+      deliveredAt: order.delivered_at,
+      cancelledAt: order.cancelled_at,
+      shippingMethod: order.shipping_method,
+      overlengthFee: order.overlength_fee,
+    } as Order;
+  }
+
+  async getPaymentConfig() {
+    return await this.request('GET', '/payments/config');
+  }
+
+  async createAlipayPagePayment(orderId: string) {
+    return await this.request('POST', `/payments/orders/${orderId}/alipay/create`, {});
+  }
+
+  async processOrderPayment(orderId: string, paymentMethod: 'alipay' | 'wechat_pay', transactionNo?: string) {
+    const data = await this.request('POST', `/payments/orders/${orderId}/process`, {
+      payment_method: paymentMethod,
+      transaction_no: transactionNo || '',
+    });
+    return data.order;
+  }
+
   async deleteOrder(id: string) {
     await this.request('DELETE', `/orders/${id}`);
   }

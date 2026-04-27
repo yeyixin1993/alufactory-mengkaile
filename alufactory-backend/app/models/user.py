@@ -180,6 +180,11 @@ class Order(db.Model):
     
     # Status: pending, confirmed, shipped, delivered, cancelled
     status = db.Column(db.String(50), default='pending', nullable=False)
+
+    # Payment snapshot
+    payment_method = db.Column(db.String(50), nullable=True)
+    payment_transaction_no = db.Column(db.String(120), nullable=True)
+    paid_at = db.Column(db.DateTime, nullable=True)
     
     # Tracking info
     tracking_number = db.Column(db.String(100), nullable=True)
@@ -219,7 +224,8 @@ class Order(db.Model):
         }
         # Safely access columns that may not exist in older DB schemas
         for attr in ('address_id', 'shipping_method', 'overlength_fee', 'tracking_number',
-                      'memo', 'admin_memo', 'shipped_at', 'delivered_at', 'cancelled_at'):
+                      'memo', 'admin_memo', 'payment_method', 'payment_transaction_no', 'paid_at',
+                      'shipped_at', 'delivered_at', 'cancelled_at'):
             try:
                 val = getattr(self, attr, None)
                 if val is not None and hasattr(val, 'isoformat'):

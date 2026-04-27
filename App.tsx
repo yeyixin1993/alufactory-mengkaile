@@ -217,8 +217,9 @@ const UserProfile: React.FC<{
   user: User, 
   language: Language, 
   setUser: (u: User) => void, 
-  onEditOrder: (o: Order) => void 
-}> = ({ user, language, setUser, onEditOrder }) => {
+  onEditOrder: (o: Order) => void,
+  onGoToPayment: (o: Order) => void,
+}> = ({ user, language, setUser, onEditOrder, onGoToPayment }) => {
   const t = TRANSLATIONS[language];
   const [orders, setOrders] = useState<Order[]>([]);
   const [isEditingAddress, setIsEditingAddress] = useState<Address | null | 'new'>(null);
@@ -392,6 +393,14 @@ const UserProfile: React.FC<{
                              {/*<a href={pdfUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 bg-green-50 text-green-600 px-3 py-2 rounded-xl text-xs font-black hover:bg-green-100 transition-all border border-green-100">
                                <Eye className="w-3 h-3"/> {t.viewPdf}
                              </a>*/}
+                             {o.status === 'pending' && (
+                               <button
+                                 onClick={() => onGoToPayment(o)}
+                                 className="flex items-center gap-2 bg-emerald-50 text-emerald-700 px-3 py-2 rounded-xl text-xs font-black hover:bg-emerald-100 transition-all border border-emerald-200"
+                               >
+                                 {language === 'cn' ? '去支付' : language === 'jp' ? '支払いへ' : 'Pay Now'}
+                               </button>
+                             )}
                              <button onClick={() => onEditOrder(o)} className="p-2.5 bg-slate-50 hover:bg-slate-100 text-slate-600 rounded-xl transition-colors border border-slate-200"><Edit2 className="w-4 h-4"/></button>
                           </div>
                         </div>
@@ -856,10 +865,9 @@ const Cart: React.FC<{
       if (pdfBase64 && createdOrder?.id) {
         await ApiService.uploadOrderPdf(createdOrder.id, pdfBase64, filename);
       }
-      
-      alert(t.checkoutSuccess);
+
       setCart([]);
-      navigate('/history');
+      navigate(`/payment/${createdOrder.id}`);
     } catch (e) {
       console.error(e);
       alert("Checkout failed. Please try again.");
@@ -1109,88 +1117,269 @@ const Cart: React.FC<{
             <button onClick={handleCheckout} disabled={isExporting} className="w-full bg-blue-600 py-6 rounded-3xl font-black hover:bg-blue-500 transition-all shadow-2xl shadow-blue-600/30 disabled:bg-slate-800 disabled:text-slate-600 uppercase tracking-widest text-lg flex items-center justify-center gap-3">
               {isExporting ? <div className="w-6 h-6 border-4 border-white/30 border-t-white rounded-full animate-spin" /> : <><Download className="w-6 h-6" /> {t.checkout}</>}
             </button>
+            <p className="mt-5 text-xs text-slate-400 leading-relaxed">
+              {language === 'cn'
+                ? '提交订单后将跳转到独立支付页（支付宝 / 微信支付），支付成功后订单状态会更新为“已付款”。'
+                : language === 'jp'
+                  ? '注文送信後、専用の支払いページ（Alipay / WeChat Pay）に移動します。支払い完了後は注文状態が「支払い済み」に更新されます。'
+                  : 'After order submission, you will be redirected to a dedicated payment page (Alipay / WeChat Pay). Successful payment updates order status to Paid.'}
+            </p>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
 
-            {/* Alipay Payment Section */}
-            <div className="mt-8 p-6 bg-gradient-to-br from-blue-50 to-slate-50 rounded-3xl border-2 border-blue-200 shadow-xl">
-              <div className="space-y-4">
-                <h4 className="text-lg font-black text-slate-900 text-center">
-                  {t.alipayPayment}
-                </h4>
-                <p className="text-xs text-slate-600 text-center leading-relaxed">
-                  {t.alipayInstructions} “上海暖橙黄信息科技有限公司”
-                </p>
-                <div className="flex justify-center p-4 bg-white rounded-2xl border border-slate-200">
-                  <img 
-                    src="images/alipay-qr.jpg" 
-                    alt="Alipay QR Code" 
-                    className="w-32 h-32 rounded-lg"
-                    onError={(e) => {
-                      (e.target as HTMLImageElement).style.display = 'none';
-                      const parent = (e.target as HTMLImageElement).parentElement;
-                      if (parent) {
-                        parent.innerHTML = '<p class="text-xs text-slate-400 italic text-center">QR Code Image (Please upload alipay-qr.jpg)</p>';
-                      }
-                    }}
-                  />
-                </div>
-              </div>
-            </div>
+const PaymentPage: React.FC<{ language: Language; user: User | null }> = ({ language, user }) => {
+  const { orderId } = useParams();
+  const navigate = useNavigate();
 
-            {/* WeChat Payment Section */}
-            <div className="mt-6 p-6 bg-gradient-to-br from-green-50 to-slate-50 rounded-3xl border-2 border-green-200 shadow-xl">
-              <div className="space-y-4">
-                <h4 className="text-lg font-black text-slate-900 text-center">
-                  {t.wechatPayment}
-                </h4>
-                <p className="text-xs text-slate-600 text-center leading-relaxed">
-                  {t.wechatInstructions}
-                </p>
-                <div className="flex justify-center p-4 bg-white rounded-2xl border border-slate-200">
-                  <img 
-                    src="images/wechatpay-qr.png" 
-                    alt="WeChat QR Code" 
-                    className="w-32 h-32 rounded-lg"
-                    onError={(e) => {
-                      (e.target as HTMLImageElement).style.display = 'none';
-                      const parent = (e.target as HTMLImageElement).parentElement;
-                      if (parent) {
-                        parent.innerHTML = '<p class="text-xs text-slate-400 italic text-center">QR Code Image (Please upload wechatpay-qr.png)</p>';
-                      }
-                    }}
-                  />
-                </div>
-                <p className="text-xs font-bold text-slate-700 text-center bg-green-100 py-2 px-3 rounded-2xl">
-                  {t.wechatPhone}
-                </p>
-              </div>
-            </div>
+  const [loading, setLoading] = useState(true);
+  const [submitting, setSubmitting] = useState(false);
+  const [payingAlipay, setPayingAlipay] = useState(false);
+  const [error, setError] = useState('');
+  const [order, setOrder] = useState<Order | null>(null);
+  const [paymentConfig, setPaymentConfig] = useState<any>(null);
+  const [paymentMethod, setPaymentMethod] = useState<'alipay' | 'wechat_pay'>('alipay');
+  const [transactionNo, setTransactionNo] = useState('');
+  const alipayPollRef = useRef<number | null>(null);
 
-            {/* WeChat Payment Section */}
-            <div className="mt-6 p-6 bg-gradient-to-br from-green-50 to-slate-50 rounded-3xl border-2 border-green-200 shadow-xl">
-              <div className="space-y-4">
-                <h4 className="text-lg font-black text-slate-900 text-center">
-                  {t.afterpay}
-                </h4>
-                <p className="text-xs text-slate-600 text-center leading-relaxed">
-                  {t.afterpayinstructions}
-                </p>
-                <div className="flex justify-center p-4 bg-white rounded-2xl border border-slate-200">
-                  <img 
-                    src="images/wechat-qr.jpg" 
-                    alt="WeChat QR Code" 
-                    className="w-32 h-32 rounded-lg"
-                    onError={(e) => {
-                      (e.target as HTMLImageElement).style.display = 'none';
-                      const parent = (e.target as HTMLImageElement).parentElement;
-                      if (parent) {
-                        parent.innerHTML = '<p class="text-xs text-slate-400 italic text-center">QR Code Image (Please upload wechat-qr.jpg)</p>';
-                      }
-                    }}
-                  />
-                </div>
-              </div>
+  useEffect(() => {
+    if (!orderId) return;
+    if (!user?.id) {
+      navigate(`/login?redirect=/payment/${orderId}`);
+      return;
+    }
+
+    let cancelled = false;
+    const load = async () => {
+      setLoading(true);
+      setError('');
+      try {
+        const [loadedOrder, cfg] = await Promise.all([
+          ApiService.getOrderById(orderId),
+          ApiService.getPaymentConfig(),
+        ]);
+        if (cancelled) return;
+        setOrder(loadedOrder);
+        setPaymentConfig(cfg);
+      } catch (e: any) {
+        if (!cancelled) setError(e?.message || 'Failed to load payment page');
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    };
+
+    load();
+    return () => {
+      cancelled = true;
+    };
+  }, [orderId, user?.id, navigate]);
+
+  useEffect(() => {
+    return () => {
+      if (alipayPollRef.current) {
+        window.clearInterval(alipayPollRef.current);
+        alipayPollRef.current = null;
+      }
+    };
+  }, []);
+
+  const amount = order?.total || 0;
+  const isPaid = order?.status === 'confirmed' || order?.status === 'shipped' || order?.status === 'delivered';
+
+  const handleConfirmPayment = async () => {
+    if (!orderId) return;
+    setSubmitting(true);
+    setError('');
+    try {
+      const updated = await ApiService.processOrderPayment(orderId, paymentMethod, transactionNo);
+      setOrder((prev) => ({ ...(prev || ({} as Order)), ...updated }));
+    } catch (e: any) {
+      setError(e?.message || 'Payment process failed');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleStartAlipay = async () => {
+    if (!orderId || !order) return;
+    if (payingAlipay) return;
+
+    setError('');
+    setPayingAlipay(true);
+
+    let popup: Window | null = null;
+    try {
+      popup = window.open('about:blank', '_blank', 'noopener,noreferrer,width=520,height=760');
+      const data = await ApiService.createAlipayPagePayment(orderId);
+      const payUrl = data?.pay_url;
+      if (!payUrl) {
+        throw new Error(language === 'cn' ? '未获取到支付宝支付链接' : 'Failed to get Alipay payment URL');
+      }
+
+      if (popup) {
+        popup.location.href = payUrl;
+      } else {
+        window.location.href = payUrl;
+      }
+
+      const maxPoll = 120;
+      let pollCount = 0;
+
+      if (alipayPollRef.current) {
+        window.clearInterval(alipayPollRef.current);
+      }
+
+      alipayPollRef.current = window.setInterval(async () => {
+        pollCount += 1;
+        try {
+          const latest = await ApiService.getOrderById(orderId);
+          setOrder(latest);
+
+          const paid = latest.status === 'confirmed' || latest.status === 'shipped' || latest.status === 'delivered';
+          if (paid) {
+            if (alipayPollRef.current) {
+              window.clearInterval(alipayPollRef.current);
+              alipayPollRef.current = null;
+            }
+            try {
+              if (popup && !popup.closed) popup.close();
+            } catch {}
+            alert(language === 'cn' ? '支付成功，订单已更新为已付款。' : 'Payment successful. Order marked as paid.');
+            setPayingAlipay(false);
+            navigate('/history');
+            return;
+          }
+
+          const popupClosed = !!popup && popup.closed;
+          if (popupClosed && pollCount >= 2) {
+            if (alipayPollRef.current) {
+              window.clearInterval(alipayPollRef.current);
+              alipayPollRef.current = null;
+            }
+            setPayingAlipay(false);
+            alert(language === 'cn' ? '支付未成功，请在当前页面重试。' : 'Payment was not successful. Please retry on this page.');
+            return;
+          }
+
+          if (pollCount >= maxPoll) {
+            if (alipayPollRef.current) {
+              window.clearInterval(alipayPollRef.current);
+              alipayPollRef.current = null;
+            }
+            setPayingAlipay(false);
+            alert(language === 'cn' ? '支付结果未确认，请稍后在订单记录查看。' : 'Payment status not confirmed yet. Please check order history later.');
+          }
+        } catch (pollErr: any) {
+          if (alipayPollRef.current) {
+            window.clearInterval(alipayPollRef.current);
+            alipayPollRef.current = null;
+          }
+          setPayingAlipay(false);
+          setError(pollErr?.message || 'Payment status check failed');
+        }
+      }, 2500);
+    } catch (e: any) {
+      try {
+        if (popup && !popup.closed) popup.close();
+      } catch {}
+      setPayingAlipay(false);
+      setError(e?.message || 'Alipay start failed');
+      alert(language === 'cn' ? '支付未成功，请在当前页面重试。' : 'Payment was not successful. Please retry on this page.');
+    }
+  };
+
+  if (loading) {
+    return <div className="max-w-3xl mx-auto p-10 text-center text-slate-500">Loading payment page...</div>;
+  }
+
+  if (!order) {
+    return <div className="max-w-3xl mx-auto p-10 text-center text-red-500">Order not found.</div>;
+  }
+
+  const alipayQr = paymentConfig?.methods?.alipay?.qr_image_url || 'images/alipay-qr.jpg';
+  const wechatQr = paymentConfig?.methods?.wechat_pay?.qr_image_url || 'images/wechatpay-qr.png';
+
+  return (
+    <div className="max-w-5xl mx-auto p-6">
+      <div className="bg-white rounded-3xl border border-slate-100 shadow-xl p-8 mb-6">
+        <div className="flex flex-col sm:flex-row justify-between gap-4">
+          <div>
+            <h2 className="text-3xl font-black text-slate-900">
+              {language === 'cn' ? '支付页面' : language === 'jp' ? 'お支払いページ' : 'Payment Page'}
+            </h2>
+            <p className="text-slate-500 mt-2">
+              {language === 'cn' ? `订单号：${order.orderNumber || order.id}` : `Order: ${order.orderNumber || order.id}`}
+            </p>
+          </div>
+          <div className="text-right">
+            <div className="text-slate-500 text-sm">{language === 'cn' ? '应付金额' : 'Amount'}</div>
+            <div className="text-3xl font-black text-blue-600">{getCurrency(language)}{amount.toFixed(1)}</div>
+            <div className={`mt-2 inline-block text-xs font-black px-3 py-1 rounded-full ${isPaid ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>
+              {isPaid ? (language === 'cn' ? '已付款' : language === 'jp' ? '支払い済み' : 'Paid') : (language === 'cn' ? '待支付' : language === 'jp' ? '未払い' : 'Pending Payment')}
             </div>
           </div>
+        </div>
+      </div>
+
+      {error && <div className="mb-4 p-3 rounded-xl border border-red-200 bg-red-50 text-red-700 text-sm font-bold">{error}</div>}
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <button
+          onClick={() => setPaymentMethod('alipay')}
+          className={`text-left p-6 rounded-3xl border-2 transition-all ${paymentMethod === 'alipay' ? 'border-blue-500 bg-blue-50' : 'border-slate-200 bg-white'}`}
+        >
+          <div className="font-black text-slate-900 text-lg">Alipay</div>
+          <div className="text-xs text-slate-500 mt-1">{paymentConfig?.merchant_display_name || 'Merchant'}</div>
+          <div className="mt-4 bg-white border border-slate-200 rounded-2xl p-4 flex justify-center">
+            <img src={alipayQr} alt="Alipay QR" className="w-40 h-40 rounded-lg" />
+          </div>
+        </button>
+
+        <button
+          onClick={() => setPaymentMethod('wechat_pay')}
+          className={`text-left p-6 rounded-3xl border-2 transition-all ${paymentMethod === 'wechat_pay' ? 'border-emerald-500 bg-emerald-50' : 'border-slate-200 bg-white'}`}
+        >
+          <div className="font-black text-slate-900 text-lg">WeChat Pay</div>
+          <div className="text-xs text-slate-500 mt-1">{paymentConfig?.wechat_contact || ''}</div>
+          <div className="mt-4 bg-white border border-slate-200 rounded-2xl p-4 flex justify-center">
+            <img src={wechatQr} alt="WeChat QR" className="w-40 h-40 rounded-lg" />
+          </div>
+        </button>
+      </div>
+
+      <div className="mt-6 bg-white rounded-3xl border border-slate-100 p-6 shadow-xl">
+        <label className="block text-xs font-black text-slate-500 uppercase mb-2">
+          {language === 'cn' ? '交易号（可选）' : language === 'jp' ? '取引番号（任意）' : 'Transaction No. (optional)'}
+        </label>
+        <input
+          value={transactionNo}
+          onChange={(e) => setTransactionNo(e.target.value)}
+          placeholder={language === 'cn' ? '粘贴支付宝/微信流水号（可选）' : 'Paste transaction number (optional)'}
+          className="w-full border border-slate-200 rounded-2xl px-4 py-3 outline-none focus:ring-2 focus:ring-blue-500"
+        />
+
+        <div className="mt-5 flex flex-wrap gap-3">
+          {!isPaid && (
+            <button
+              onClick={paymentMethod === 'alipay' ? handleStartAlipay : handleConfirmPayment}
+              disabled={submitting || payingAlipay}
+              className="bg-blue-600 text-white px-6 py-3 rounded-2xl font-black hover:bg-blue-500 transition-all disabled:bg-slate-300"
+            >
+              {paymentMethod === 'alipay'
+                ? (payingAlipay
+                    ? (language === 'cn' ? '支付中，等待回调...' : 'Paying, waiting callback...')
+                    : (language === 'cn' ? '前往支付宝支付（实时）' : language === 'jp' ? 'Alipayで支払う（リアルタイム）' : 'Pay with Alipay (real-time)'))
+                : (submitting
+                    ? (language === 'cn' ? '处理中...' : 'Processing...')
+                    : (language === 'cn' ? '我已支付，确认并更新订单状态' : language === 'jp' ? '支払い完了・注文状態を更新' : 'I have paid, update order status'))}
+            </button>
+          )}
+          <button onClick={() => navigate('/history')} className="bg-slate-100 text-slate-700 px-6 py-3 rounded-2xl font-black hover:bg-slate-200 transition-all">
+            {language === 'cn' ? '返回订单记录' : language === 'jp' ? '注文履歴へ戻る' : 'Back to Orders'}
+          </button>
         </div>
       </div>
     </div>
@@ -1420,6 +1609,10 @@ const App: React.FC = () => {
     window.location.hash = `/cart?addressId=${encodeURIComponent(o.addressId || o.address?.id || '')}`;
   };
 
+  const onGoToPayment = (o: Order) => {
+    window.location.hash = `/payment/${encodeURIComponent(o.id)}`;
+  };
+
   const isPreviewRoute = window.location.hash.startsWith('#/preview');
 
   return (
@@ -1490,9 +1683,10 @@ const App: React.FC = () => {
           <Route path="/" element={<Catalog language={language} />} />
           <Route path="/quick-quote" element={<QuickQuote language={language} user={user} />} />
           <Route path="/login" element={<Auth language={language} onLogin={(u) => { setUser(u); }} />} />
-          <Route path="/history" element={user ? <UserProfile user={user} language={language} setUser={setUser} onEditOrder={onEditOrder} /> : <div className="p-40 text-center flex flex-col items-center"><UserIcon className="w-20 h-20 text-slate-100 mb-6"/><p className="font-black text-slate-300 text-2xl">Please login to view your orders</p></div>} />
+          <Route path="/history" element={user ? <UserProfile user={user} language={language} setUser={setUser} onEditOrder={onEditOrder} onGoToPayment={onGoToPayment} /> : <div className="p-40 text-center flex flex-col items-center"><UserIcon className="w-20 h-20 text-slate-100 mb-6"/><p className="font-black text-slate-300 text-2xl">Please login to view your orders</p></div>} />
           <Route path="/product/:id" element={<ProductDetail language={language} user={user} onAddToCart={(item) => setCart(mergeCartItems(cart, [item]))} onAddBatchToCart={(items) => setCart(mergeCartItems(cart, items))} onUpdateCartItem={(item) => setCart(cart.map(x => x.id === item.id ? item : x))} draftProfiles={draftProfiles} setDraftProfiles={setDraftProfiles} />} />
           <Route path="/cart" element={<Cart cart={cart} language={language} setCart={setCart} user={user} updateUser={setUser} />} />
+          <Route path="/payment/:orderId" element={<PaymentPage language={language} user={user} />} />
           <Route path="/preview" element={<FactorySheetPreviewPage />} />
         </Routes>
       </div>

@@ -426,7 +426,9 @@ def update_order_status(order_id):
     try:
         order.status = status
         
-        if status == 'shipped':
+        if status == 'confirmed':
+            order.paid_at = datetime.utcnow()
+        elif status == 'shipped':
             order.shipped_at = datetime.utcnow()
         elif status == 'delivered':
             order.delivered_at = datetime.utcnow()
