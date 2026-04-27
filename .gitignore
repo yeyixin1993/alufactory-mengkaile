@@ -40,3 +40,9 @@ __pycache__/
 *.py[cod]
 *$py.class
 *.sqlite3
+
+# Payment credentials (local secrets)
+alufactory-backend/payment_credentials.local.py
+alufactory-backend/payment_credentials.py
+alufactory-backend/*.pem
+alufactory-backend/*_private_key.txt
