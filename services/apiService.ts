@@ -22,6 +22,12 @@ const isRunningRemotely = () => {
   return !!host && host !== 'localhost' && host !== '127.0.0.1';
 };
 
+const isBrowserLocalhost = () => {
+  if (typeof window === 'undefined') return false;
+  const host = window.location?.hostname;
+  return host === 'localhost' || host === '127.0.0.1';
+};
+
 const resolveApiBaseUrl = () => {
   const envUrl = (import.meta.env.VITE_API_URL || '').trim();
   if (envUrl) {
@@ -40,6 +46,11 @@ const resolveApiBaseUrl = () => {
     const runtimeUrl = (window as any).__API_BASE_URL__;
     if (typeof runtimeUrl === 'string' && runtimeUrl.trim()) {
       return normalizeBaseUrl(runtimeUrl.trim());
+    }
+
+    // Local dev fallback: if frontend runs on Vite (localhost:3000), call Flask backend directly.
+    if (isBrowserLocalhost()) {
+      return 'http://localhost:5000/api';
     }
 
     if (window.location?.origin) {
@@ -540,7 +551,30 @@ class ApiServiceClass {
   }
 
   async getPaymentConfig() {
-    return await this.request('GET', '/payments/config');
+    try {
+      return await this.request('GET', '/payments/config');
+    } catch (error) {
+      console.warn('[apiService] /payments/config unavailable, using fallback config.', error);
+      return {
+        merchant_display_name: 'Mengkaile',
+        wechat_contact: '',
+        methods: {
+          alipay: {
+            enabled: true,
+            configured: false,
+            display_name: 'Alipay',
+            qr_image_url: 'images/alipay-qr.jpg',
+            web_pay_enabled: false,
+          },
+          wechat_pay: {
+            enabled: true,
+            configured: false,
+            display_name: 'WeChat Pay',
+            qr_image_url: 'images/wechatpay-qr.png',
+          },
+        },
+      };
+    }
   }
 
   async createAlipayPagePayment(orderId: string) {

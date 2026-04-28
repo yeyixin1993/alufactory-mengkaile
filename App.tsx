@@ -867,7 +867,7 @@ const Cart: React.FC<{
       }
 
       setCart([]);
-      navigate(`/payment/${createdOrder.id}`);
+      navigate(`/payment/${createdOrder.id}`, { state: { order: createdOrder } });
     } catch (e) {
       console.error(e);
       alert("Checkout failed. Please try again.");
@@ -1134,12 +1134,27 @@ const Cart: React.FC<{
 const PaymentPage: React.FC<{ language: Language; user: User | null }> = ({ language, user }) => {
   const { orderId } = useParams();
   const navigate = useNavigate();
+  const location = useLocation();
+
+  const defaultPaymentConfig = React.useMemo(() => ({
+    merchant_display_name: 'Mengkaile',
+    wechat_contact: '',
+    methods: {
+      alipay: { qr_image_url: 'images/alipay-qr.jpg' },
+      wechat_pay: { qr_image_url: 'images/wechatpay-qr.png' },
+    },
+  }), []);
 
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [payingAlipay, setPayingAlipay] = useState(false);
   const [error, setError] = useState('');
-  const [order, setOrder] = useState<Order | null>(null);
+  const stateOrder = React.useMemo(() => {
+    const candidate = (location.state as any)?.order as Order | undefined;
+    if (!candidate || !orderId) return null;
+    return candidate.id === orderId ? candidate : null;
+  }, [location.state, orderId]);
+  const [order, setOrder] = useState<Order | null>(stateOrder);
   const [paymentConfig, setPaymentConfig] = useState<any>(null);
   const [paymentMethod, setPaymentMethod] = useState<'alipay' | 'wechat_pay'>('alipay');
   const [transactionNo, setTransactionNo] = useState('');
@@ -1157,15 +1172,27 @@ const PaymentPage: React.FC<{ language: Language; user: User | null }> = ({ lang
       setLoading(true);
       setError('');
       try {
-        const [loadedOrder, cfg] = await Promise.all([
-          ApiService.getOrderById(orderId),
-          ApiService.getPaymentConfig(),
-        ]);
+        const loadedOrder = await ApiService.getOrderById(orderId);
         if (cancelled) return;
         setOrder(loadedOrder);
-        setPaymentConfig(cfg);
+
+        try {
+          const cfg = await ApiService.getPaymentConfig();
+          if (cancelled) return;
+          setPaymentConfig(cfg);
+        } catch (cfgErr) {
+          console.warn('Payment config endpoint unavailable, using default payment config.', cfgErr);
+          if (!cancelled) setPaymentConfig(defaultPaymentConfig);
+        }
       } catch (e: any) {
-        if (!cancelled) setError(e?.message || 'Failed to load payment page');
+        if (!cancelled) {
+          if (stateOrder) {
+            setOrder((prev) => prev || stateOrder);
+            setError(e?.message || 'Failed to refresh order from server');
+          } else {
+            setError(e?.message || 'Failed to load payment page');
+          }
+        }
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -1175,7 +1202,7 @@ const PaymentPage: React.FC<{ language: Language; user: User | null }> = ({ lang
     return () => {
       cancelled = true;
     };
-  }, [orderId, user?.id, navigate]);
+  }, [orderId, user?.id, navigate, defaultPaymentConfig, stateOrder]);
 
   useEffect(() => {
     return () => {
@@ -1296,7 +1323,7 @@ const PaymentPage: React.FC<{ language: Language; user: User | null }> = ({ lang
   }
 
   if (!order) {
-    return <div className="max-w-3xl mx-auto p-10 text-center text-red-500">Order not found.</div>;
+    return <div className="max-w-3xl mx-auto p-10 text-center text-red-500">{error || 'Order not found.'}</div>;
   }
 
   const alipayQr = paymentConfig?.methods?.alipay?.qr_image_url || 'images/alipay-qr.jpg';
