@@ -3,6 +3,7 @@ from flask_jwt_extended import jwt_required, get_jwt_identity
 from datetime import datetime
 from app.models.user import db, User, Cart, CartItem, Order, OrderItem, Profile
 from app.order_utils import build_order_pdf_filename
+from app.product_order_db import sync_order_snapshot, remove_order_snapshot
 from app.security import get_request_json_secure
 import uuid
 import os
@@ -99,6 +100,7 @@ def create_order():
         
         db.session.add(order)
         db.session.commit()
+        sync_order_snapshot(current_app.instance_path, order, user=user, pdf_available=False)
         
         return jsonify({
             'message': 'Order created successfully',
@@ -150,6 +152,7 @@ def update_order(order_id):
         
         order.updated_at = datetime.utcnow()
         db.session.commit()
+        sync_order_snapshot(current_app.instance_path, order, user=order.user, pdf_available=False)
         
         return jsonify({
             'message': 'Order updated successfully',
@@ -176,8 +179,10 @@ def delete_order(order_id):
     
     try:
         # Intentionally keep any stored PDF files and PDF fallback data untouched.
+        order_id_for_cleanup = order.id
         db.session.delete(order)
         db.session.commit()
+        remove_order_snapshot(current_app.instance_path, str(order_id_for_cleanup))
         
         return jsonify({'message': 'Order deleted successfully'}), 200
     except Exception as e:
@@ -241,6 +246,7 @@ def upload_order_pdf(order_id):
             profile.pdf_path = None
 
         db.session.commit()
+        sync_order_snapshot(current_app.instance_path, order, user=order.user, pdf_available=True)
 
         return jsonify({'message': 'PDF uploaded', 'pdf_filename': pdf_filename}), 200
     except Exception as e:

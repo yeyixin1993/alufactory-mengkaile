@@ -8,3 +8,4 @@ werkzeug==2.3.6
 gunicorn==21.2.0
 cryptography==45.0.4
 python-alipay-sdk==3.4.0
+Pillow==10.4.0

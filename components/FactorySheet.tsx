@@ -1,6 +1,6 @@
 
 import React from 'react';
-import { CartItem, User, ProductType, ProfileConfig, PlateConfig, Language, ProfileSide, Address } from '../types';
+import { CartItem, User, ProductType, ProfileConfig, Language, ProfileSide, Address } from '../types';
 import { TRANSLATIONS, PROFILE_COLORS, SHIPPING_RATES, SHIPPING_RATES_SF, SHIPPING_RATES_AN, PROFILE_WEIGHTS, SHIPPING_METHOD_NAMES } from '../constants';
 import type { ShippingMethod } from '../constants';
 import ProfileVisualizer from './ProfileVisualizer';
@@ -310,24 +310,28 @@ const FactorySheet: React.FC<FactorySheetProps> = ({ cart, user, language, order
       {/* Items */}
       <div className="space-y-10">
         {cart.map((item, idx) => {
-           const cfg = item.config as ProfileConfig;
-           const colorDef = item.product.type === ProductType.PROFILE ? PROFILE_COLORS.find(c => c.id === cfg.colorId) : null;
+           const isProfile = item.product.type === ProductType.PROFILE;
+           const cfg = (item.config || {}) as any;
+           const profileCfg = cfg as ProfileConfig;
+           const colorDef = isProfile ? PROFILE_COLORS.find(c => c.id === profileCfg.colorId) : null;
            
            // Correctly translate finish to Chinese terms as requested
-           const finishLabel = cfg.finish === 'oxidized' ? t.finishOxidized : 
-                               cfg.finish === 'powder' ? t.finishPowder : 
-                               cfg.finish === 'electrophoretic' ? t.finishElectrophoretic : cfg.finish;
+           const finishLabel = isProfile
+             ? (profileCfg.finish === 'oxidized' ? t.finishOxidized : 
+                profileCfg.finish === 'powder' ? t.finishPowder : 
+                profileCfg.finish === 'electrophoretic' ? t.finishElectrophoretic : profileCfg.finish)
+             : '';
 
            // Early per-item processing detection: if raw (no drilling/tapping/miter), skip rendering this PROFILE item
-           const itemHasTap = !!(cfg.tapping?.left?.some(Boolean) || cfg.tapping?.right?.some(Boolean));
-           const itemHasDrill = Array.isArray(cfg.holes) && cfg.holes.length > 0;
-           const itemHasMiter = !!(cfg.miterCut?.left?.enabled || cfg.miterCut?.right?.enabled);
+           const itemHasTap = isProfile && !!(profileCfg.tapping?.left?.some(Boolean) || profileCfg.tapping?.right?.some(Boolean));
+           const itemHasDrill = isProfile && Array.isArray(profileCfg.holes) && profileCfg.holes.length > 0;
+           const itemHasMiter = isProfile && !!(profileCfg.miterCut?.left?.enabled || profileCfg.miterCut?.right?.enabled);
            let itemProcessingState: 'raw' | 'tap' | 'drill' | 'miter' = 'raw';
            if (itemHasDrill) itemProcessingState = 'drill';
            else if (itemHasMiter) itemProcessingState = 'miter';
-           else if (itemHasTap && ['2040', '3060', '2040-N1-20', '2040-N1-40', '2047', '2060', '20100'].includes(String(cfg.variantId))) itemProcessingState = 'tap';
+           else if (itemHasTap && ['2040', '3060', '2040-N1-20', '2040-N1-40', '2047', '2060', '20100'].includes(String(profileCfg.variantId))) itemProcessingState = 'tap';
 
-           if (item.product.type === ProductType.PROFILE && itemProcessingState === 'raw') return null;
+           if (isProfile && itemProcessingState === 'raw') return null;
 
            return (
            <div key={idx} className="break-inside-avoid border-2 border-slate-900 rounded-xl overflow-hidden bg-white shadow-sm">
@@ -343,14 +347,14 @@ const FactorySheet: React.FC<FactorySheetProps> = ({ cart, user, language, order
              </div>
              
              <div className="p-6">
-               {item.product.type === ProductType.PROFILE ? (
+               {isProfile ? (
                  <div className="space-y-8">
                     {/* Specs Information */}
                     <div className="bg-slate-50 p-4 rounded-xl border border-slate-100">
                        <h4 className="text-xs font-black text-slate-400 uppercase tracking-widest border-b border-slate-200 pb-2 mb-3">{t.specs}</h4>
                        <div className="grid grid-cols-4 gap-4 text-xs">
-                          <div className="flex flex-col"><span className="text-slate-400 mb-1">{t.model}</span><span className="font-black">{cfg.variantId}</span></div>
-                          <div className="flex flex-col"><span className="text-slate-400 mb-1">{t.length}</span><span className="font-black">{cfg.length}mm</span></div>
+                          <div className="flex flex-col"><span className="text-slate-400 mb-1">{t.model}</span><span className="font-black">{profileCfg.variantId}</span></div>
+                          <div className="flex flex-col"><span className="text-slate-400 mb-1">{t.length}</span><span className="font-black">{profileCfg.length}mm</span></div>
                           <div className="flex flex-col"><span className="text-slate-400 mb-1">{t.color}</span><span className="font-black">{colorDef?.name[language]}</span></div>
                           <div className="flex flex-col"><span className="text-slate-400 mb-1">{t.finish}</span><span className="font-black">{finishLabel}</span></div>
                        </div>
@@ -358,13 +362,13 @@ const FactorySheet: React.FC<FactorySheetProps> = ({ cart, user, language, order
 
                     {/* All-Sides Visualization */}
                     {(() => {
-                      const itemHasTap = !!(cfg.tapping?.left?.some(Boolean) || cfg.tapping?.right?.some(Boolean));
-                      const itemHasDrill = Array.isArray(cfg.holes) && cfg.holes.length > 0;
-                      const itemHasMiterInner = !!(cfg.miterCut?.left?.enabled || cfg.miterCut?.right?.enabled);
+                      const itemHasTap = !!(profileCfg.tapping?.left?.some(Boolean) || profileCfg.tapping?.right?.some(Boolean));
+                      const itemHasDrill = Array.isArray(profileCfg.holes) && profileCfg.holes.length > 0;
+                      const itemHasMiterInner = !!(profileCfg.miterCut?.left?.enabled || profileCfg.miterCut?.right?.enabled);
                       let itemProcessingState2: 'raw' | 'tap' | 'drill' | 'miter' = 'raw';
                       if (itemHasDrill) itemProcessingState2 = 'drill';
                       else if (itemHasMiterInner) itemProcessingState2 = 'miter';
-                      else if (itemHasTap && ['2040', '3060', '2040-N1-20', '2040-N1-40', '2047', '2060', '20100'].includes(String(cfg.variantId))) itemProcessingState2 = 'tap';
+                      else if (itemHasTap && ['2040', '3060', '2040-N1-20', '2040-N1-40', '2047', '2060', '20100'].includes(String(profileCfg.variantId))) itemProcessingState2 = 'tap';
 
                       // For miter cut, determine which sides to show based on cut face (AC/BD)
                       let sidesToShow: ProfileSide[] = [];
@@ -377,13 +381,13 @@ const FactorySheet: React.FC<FactorySheetProps> = ({ cart, user, language, order
                       } else if (itemProcessingState2 === 'miter') {
                         // Show sides relevant to each miter cut's face
                         const miterSides = new Set<ProfileSide>();
-                        if (cfg.miterCut?.left?.enabled) {
-                          const s = cfg.miterCut.left.side || 'AC';
+                        if (profileCfg.miterCut?.left?.enabled) {
+                          const s = profileCfg.miterCut.left.side || 'AC';
                           if (s === 'AC') { miterSides.add('A'); miterSides.add('C'); }
                           else { miterSides.add('B'); miterSides.add('D'); }
                         }
-                        if (cfg.miterCut?.right?.enabled) {
-                          const s = cfg.miterCut.right.side || 'AC';
+                        if (profileCfg.miterCut?.right?.enabled) {
+                          const s = profileCfg.miterCut.right.side || 'AC';
                           if (s === 'AC') { miterSides.add('A'); miterSides.add('C'); }
                           else { miterSides.add('B'); miterSides.add('D'); }
                         }
@@ -411,7 +415,7 @@ const FactorySheet: React.FC<FactorySheetProps> = ({ cart, user, language, order
                               <div key={side} className="flex gap-4 items-center">
                                 <div className="w-10 h-10 bg-slate-900 text-white rounded-lg flex items-center justify-center font-black text-xl">{side}</div>
                                 <div className="flex-1 bg-slate-50 border border-slate-200 rounded-xl p-3 overflow-visible">
-                                  <ProfileVisualizer config={cfg} selectedSide={side} onSideChange={() => {}} interactive={false} tapLabel={t.tapAction} showSideSelector={false} />
+                                  <ProfileVisualizer config={profileCfg} selectedSide={side} onSideChange={() => {}} interactive={false} tapLabel={t.tapAction} showSideSelector={false} />
                                 </div>
                               </div>
                             ))}
@@ -423,11 +427,11 @@ const FactorySheet: React.FC<FactorySheetProps> = ({ cart, user, language, order
                     {/* Miter Cut Details – hidden per request */}
 
                     {/* Drilling Spreadsheet */}
-                    {cfg.holes.length > 0 ? (
+                    {profileCfg.holes.length > 0 ? (
                       <div>
                         <h4 className="text-xs font-black text-slate-400 uppercase tracking-widest mb-2 flex justify-between">
                            <span>{t.drillingInstr}</span>
-                           <span className="text-[10px] lowercase text-slate-300 font-normal">total: {cfg.holes.length} holes</span>
+                           <span className="text-[10px] lowercase text-slate-300 font-normal">total: {profileCfg.holes.length} holes</span>
                         </h4>
                         <table className="w-full text-left text-[10px] border-collapse">
                            <thead>
@@ -440,7 +444,7 @@ const FactorySheet: React.FC<FactorySheetProps> = ({ cart, user, language, order
                              </tr>
                            </thead>
                            <tbody>
-                             {cfg.holes.map((hole, hIdx) => (
+                             {profileCfg.holes.map((hole, hIdx) => (
                                <tr key={hole.id} className="hover:bg-slate-50">
                                  <td className="p-2 border border-slate-100 font-bold">{hIdx + 1}</td>
                                  <td className="p-2 border border-slate-100 font-black">{hole.side}</td>
@@ -458,7 +462,97 @@ const FactorySheet: React.FC<FactorySheetProps> = ({ cart, user, language, order
                       </div>
                     )}
                  </div>
-               ) : <div className="text-sm font-bold p-10 text-center bg-slate-50 border-2 border-dashed border-slate-200 rounded-xl uppercase tracking-widest">{t.dimensions}: {(item.config as PlateConfig).items.length} pcs total</div>}
+               ) : (
+                <div className="space-y-4">
+                  <div className="bg-slate-50 p-4 rounded-xl border border-slate-100">
+                    <h4 className="text-xs font-black text-slate-400 uppercase tracking-widest border-b border-slate-200 pb-2 mb-3">{t.specs}</h4>
+                    <div className="grid grid-cols-2 md:grid-cols-3 gap-3 text-xs">
+                      <div><span className="text-slate-400">{language === 'cn' ? '厚度' : language === 'jp' ? '厚さ' : 'Thickness'}:</span> <span className="font-black">{cfg.thickness ?? '-'}mm</span></div>
+                      <div><span className="text-slate-400">{language === 'cn' ? '宽' : language === 'jp' ? '幅' : 'Width'}:</span> <span className="font-black">{cfg.width ?? '-'}mm</span></div>
+                      <div><span className="text-slate-400">{language === 'cn' ? '高' : language === 'jp' ? '高さ' : 'Height'}:</span> <span className="font-black">{cfg.height ?? '-'}mm</span></div>
+                      <div><span className="text-slate-400">{language === 'cn' ? '颜色' : language === 'jp' ? '色' : 'Color'}:</span> <span className="font-black">{cfg.colorName || (cfg.colorId === 'marine_bbb_uv_film' ? (language === 'cn' ? 'BBB两面UV清漆+覆膜' : language === 'jp' ? 'BBB両面UVクリア+フィルム' : 'BBB double-side UV varnish + film') : '-') }</span></div>
+                      <div><span className="text-slate-400">{language === 'cn' ? '单价' : language === 'jp' ? '単価' : 'Unit Price'}:</span> <span className="font-black">{currency}{Number(cfg.unitPrice || (item.totalPrice / Math.max(1, item.quantity))).toFixed(1)}</span></div>
+                      <div><span className="text-slate-400">{language === 'cn' ? '面积' : language === 'jp' ? '面積' : 'Area'}:</span> <span className="font-black">{Number(cfg.areaSqm || 0).toFixed(3)}㎡</span></div>
+                    </div>
+                    {cfg.openingSide && (
+                      <div className="mt-3 text-xs font-bold text-slate-700">
+                        {language === 'cn' ? '备注' : language === 'jp' ? '備考' : 'Note'}：
+                        {language === 'cn'
+                          ? `铰链数量 ${cfg.hingeCount || (Array.isArray(cfg.hingePositions) ? cfg.hingePositions.length : 0)} 个。上铰链离上端 ${Number(cfg.topHingeOffset ?? 100).toFixed(0)}mm，下铰链离下端 ${Number(cfg.bottomHingeOffset ?? 100).toFixed(0)}mm；铰链间距：${Array.isArray(cfg.hingeGaps) && cfg.hingeGaps.length ? cfg.hingeGaps.map((x: number) => `${Number(x).toFixed(0)}mm`).join(' / ') : '-'}。`
+                          : language === 'jp'
+                            ? `ヒンジ数 ${cfg.hingeCount || (Array.isArray(cfg.hingePositions) ? cfg.hingePositions.length : 0)}。上端距離 ${Number(cfg.topHingeOffset ?? 100).toFixed(0)}mm、下端距離 ${Number(cfg.bottomHingeOffset ?? 100).toFixed(0)}mm；間隔: ${Array.isArray(cfg.hingeGaps) && cfg.hingeGaps.length ? cfg.hingeGaps.map((x: number) => `${Number(x).toFixed(0)}mm`).join(' / ') : '-'}`
+                            : `Hinges: ${cfg.hingeCount || (Array.isArray(cfg.hingePositions) ? cfg.hingePositions.length : 0)}. Top offset ${Number(cfg.topHingeOffset ?? 100).toFixed(0)}mm, bottom offset ${Number(cfg.bottomHingeOffset ?? 100).toFixed(0)}mm; spacing: ${Array.isArray(cfg.hingeGaps) && cfg.hingeGaps.length ? cfg.hingeGaps.map((x: number) => `${Number(x).toFixed(0)}mm`).join(' / ') : '-'}.`}
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="bg-slate-50 border border-slate-200 rounded-xl p-3">
+                    <svg viewBox="0 0 320 180" className="w-full h-auto">
+                      {(() => {
+                        const w = Math.max(1, Number(cfg.width || 0));
+                        const h = Math.max(1, Number(cfg.height || 0));
+                        const ratio = w / h;
+                        const areaX = 30;
+                        const areaY = 15;
+                        const areaW = 230;
+                        const areaH = 145;
+                        let rw = areaW;
+                        let rh = rw / ratio;
+                        if (rh > areaH) {
+                          rh = areaH;
+                          rw = rh * ratio;
+                        }
+                        const rx = areaX + (areaW - rw) / 2;
+                        const ry = areaY + (areaH - rh) / 2;
+
+                        const isPegboard = item.product.id === 'p1';
+                        const isDoor = item.product.id === 'p3';
+
+                        return (
+                          <>
+                            <rect x={rx} y={ry} width={rw} height={rh} fill="#fff" stroke="#334155" strokeWidth="2" rx="4" />
+                            {isPegboard && (
+                              <>
+                                {Array.from({ length: Math.max(4, Math.min(18, Math.round(w / 120))) }).map((_, c) =>
+                                  Array.from({ length: Math.max(4, Math.min(14, Math.round(h / 120))) }).map((__, r) => (
+                                    <ellipse
+                                      key={`hole-${c}-${r}`}
+                                      cx={rx + ((c + 1) * rw) / (Math.max(4, Math.min(18, Math.round(w / 120))) + 1)}
+                                      cy={ry + ((r + 1) * rh) / (Math.max(4, Math.min(14, Math.round(h / 120))) + 1)}
+                                      rx={Math.max(2, rw / 110)}
+                                      ry={Math.max(3, rh / 75)}
+                                      fill="#94a3b8"
+                                    />
+                                  ))
+                                )}
+                              </>
+                            )}
+                            {isDoor && (
+                              <>
+                                {Array.isArray(cfg.hingePositions) && cfg.hingePositions.map((hp: number, i: number) => {
+                                  const hy = ry + (Math.max(0, Math.min(h, Number(hp || 0))) / h) * rh;
+                                  const hx = cfg.openingSide === 'left' ? rx : (rx + rw - 6);
+                                  return <rect key={`h-${i}`} x={hx} y={hy - 3} width="6" height="6" fill="#ef4444" rx="1" />;
+                                })}
+                                <rect
+                                  x={cfg.openingSide === 'left' ? (rx + rw - 8) : (rx - 4)}
+                                  y={ry + rh / 2 - 14}
+                                  width="8"
+                                  height="28"
+                                  fill="#2563eb"
+                                  rx="2"
+                                />
+                              </>
+                            )}
+                            <text x="145" y="174" fontSize="10" fill="#334155" textAnchor="middle">W {w}mm</text>
+                            <text x="12" y="92" fontSize="10" fill="#334155" transform="rotate(-90 12 92)" textAnchor="middle">H {h}mm</text>
+                          </>
+                        );
+                      })()}
+                    </svg>
+                  </div>
+                </div>
+               )}
              </div>
            </div>
         )})}

@@ -2,12 +2,12 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { HashRouter, Routes, Route, Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { ShoppingCart, User as UserIcon, LogOut, Menu, X, Globe, Home, Package, History, Settings, FileDown, Eye, Truck, MapPin, Plus, Trash2, Edit2, CheckCircle, ArrowLeft, Lock, Save, UserCheck, Key, Info, Pencil, ChevronRight, Download } from 'lucide-react';
-import { Language, User, CartItem, Product, ProductType, ProfileConfig, PlateConfig, Order, ProfileSide, DrillHole, Address, ProfileVariant, ColorDef } from './types';
+import { Language, User, CartItem, Product, ProductType, ProfileConfig, Order, ProfileSide, DrillHole, Address, ProfileVariant, ColorDef } from './types';
 import { TRANSLATIONS, INITIAL_PRODUCTS, PROFILE_COLORS, PROFILE_VARIANTS, PROFILE_WEIGHTS, SHIPPING_RATES, SHIPPING_RATES_SF, SHIPPING_RATES_AN, SHIPPING_METHOD_NAMES } from './constants';
 import type { ShippingMethod } from './constants';
 import { ApiService } from './services/apiService';
 import ProfileEditor from './components/ProfileEditor';
-import PlateEditor from './components/PlateEditor';
+import BoardQuoteEditor from './components/BoardQuoteEditor';
 import ProfileVisualizer from './components/ProfileVisualizer';
 import { openFactorySheetPreview } from './components/FactorySheetPreview';
 import FactorySheetPreviewPage from './components/FactorySheetPreviewPage';
@@ -298,7 +298,7 @@ const UserProfile: React.FC<{
         <div ref={adminPrintRef} className="w-[210mm]">
           {printOrder && (
             <FactorySheet 
-              cart={printOrder.items} 
+              cart={printOrder.items || []} 
               user={user} 
               language={language} 
               orderRef={printOrder.orderNumber || printOrder.id} 
@@ -867,6 +867,11 @@ const Cart: React.FC<{
       }
 
       setCart([]);
+      try {
+        await ApiService.syncCart([]);
+      } catch (syncErr) {
+        console.warn('Cart clear sync failed after checkout:', syncErr);
+      }
       navigate(`/payment/${createdOrder.id}`, { state: { order: createdOrder } });
     } catch (e) {
       console.error(e);
@@ -1036,6 +1041,99 @@ const Cart: React.FC<{
                       </div>
                       <div className="h-28 w-full max-w-lg bg-slate-50/50 rounded-[2rem] p-4">
                         <ProfileVisualizer config={item.config} selectedSide="A" onSideChange={() => {}} interactive={false} tapLabel={t.tapAction} showSideSelector={false} />
+                      </div>
+                    </div>
+                  )}
+                  {item.product.type !== ProductType.PROFILE && (
+                    <div className="mt-8 pt-8 border-t border-slate-100">
+                      <div className="grid grid-cols-2 md:grid-cols-3 gap-2 text-xs font-bold">
+                        <span className="px-3 py-1.5 rounded-xl bg-slate-100 text-slate-700">{language === 'cn' ? '厚度' : language === 'jp' ? '厚さ' : 'Thickness'}: {(item.config as any)?.thickness ?? '-' }mm</span>
+                        <span className="px-3 py-1.5 rounded-xl bg-slate-100 text-slate-700">{language === 'cn' ? '宽' : language === 'jp' ? '幅' : 'Width'}: {(item.config as any)?.width ?? '-'}mm</span>
+                        <span className="px-3 py-1.5 rounded-xl bg-slate-100 text-slate-700">{language === 'cn' ? '高' : language === 'jp' ? '高さ' : 'Height'}: {(item.config as any)?.height ?? '-'}mm</span>
+                        <span className="px-3 py-1.5 rounded-xl bg-slate-100 text-slate-700">{language === 'cn' ? '颜色' : language === 'jp' ? '色' : 'Color'}: {((item.config as any)?.colorId === 'marine_bbb_uv_film')
+                          ? (language === 'cn' ? 'BBB两面UV清漆+覆膜' : language === 'jp' ? 'BBB両面UVクリア+フィルム' : 'BBB double-side UV varnish + film')
+                          : ((item.config as any)?.colorName || (((item.config as any)?.colorId && PROFILE_COLORS.find(c => c.id === (item.config as any).colorId)?.name?.[language]) || '-'))}</span>
+                        <span className="px-3 py-1.5 rounded-xl bg-blue-50 text-blue-700">{language === 'cn' ? '单价' : language === 'jp' ? '単価' : 'Unit'}: {currency}{Number((item.config as any)?.unitPrice || (item.totalPrice / Math.max(1, item.quantity))).toFixed(1)}</span>
+                        <span className="px-3 py-1.5 rounded-xl bg-emerald-50 text-emerald-700">{language === 'cn' ? '面积' : language === 'jp' ? '面積' : 'Area'}: {Number((item.config as any)?.areaSqm || 0).toFixed(3)}㎡</span>
+                        {(item.config as any)?.openingSide && (
+                          <span className="px-3 py-1.5 rounded-xl bg-amber-50 text-amber-700">{language === 'cn' ? '开门方向' : language === 'jp' ? '開閉方向' : 'Opening'}: {(item.config as any).openingSide === 'left' ? (language === 'cn' ? '左开' : language === 'jp' ? '左開き' : 'Left Open') : (language === 'cn' ? '右开' : language === 'jp' ? '右開き' : 'Right Open')}</span>
+                        )}
+                      </div>
+                      {(item.config as any)?.openingSide && (
+                        <div className="mt-3 text-xs font-bold text-slate-700 bg-slate-50 border border-slate-200 rounded-xl px-3 py-2">
+                          {language === 'cn' ? '备注' : language === 'jp' ? '備考' : 'Note'}：
+                          {language === 'cn'
+                            ? `铰链数量 ${(item.config as any).hingeCount || (Array.isArray((item.config as any).hingePositions) ? (item.config as any).hingePositions.length : 0)} 个。上铰链离上端 ${Number((item.config as any).topHingeOffset ?? 100).toFixed(0)}mm，下铰链离下端 ${Number((item.config as any).bottomHingeOffset ?? 100).toFixed(0)}mm；铰链间距：${Array.isArray((item.config as any).hingeGaps) && (item.config as any).hingeGaps.length ? (item.config as any).hingeGaps.map((x: number) => `${Number(x).toFixed(0)}mm`).join(' / ') : '-'}。`
+                            : language === 'jp'
+                              ? `ヒンジ数 ${(item.config as any).hingeCount || (Array.isArray((item.config as any).hingePositions) ? (item.config as any).hingePositions.length : 0)}。上端距離 ${Number((item.config as any).topHingeOffset ?? 100).toFixed(0)}mm、下端距離 ${Number((item.config as any).bottomHingeOffset ?? 100).toFixed(0)}mm；間隔: ${Array.isArray((item.config as any).hingeGaps) && (item.config as any).hingeGaps.length ? (item.config as any).hingeGaps.map((x: number) => `${Number(x).toFixed(0)}mm`).join(' / ') : '-'}`
+                              : `Hinges: ${(item.config as any).hingeCount || (Array.isArray((item.config as any).hingePositions) ? (item.config as any).hingePositions.length : 0)}. Top offset ${Number((item.config as any).topHingeOffset ?? 100).toFixed(0)}mm, bottom offset ${Number((item.config as any).bottomHingeOffset ?? 100).toFixed(0)}mm; spacing: ${Array.isArray((item.config as any).hingeGaps) && (item.config as any).hingeGaps.length ? (item.config as any).hingeGaps.map((x: number) => `${Number(x).toFixed(0)}mm`).join(' / ') : '-'}.`}
+                        </div>
+                      )}
+                      <div className="mt-4 bg-slate-50 border border-slate-200 rounded-2xl p-3">
+                        <svg viewBox="0 0 320 180" className="w-full h-auto">
+                          {(() => {
+                            const cfg: any = item.config || {};
+                            const w = Math.max(1, Number(cfg.width || 0));
+                            const h = Math.max(1, Number(cfg.height || 0));
+                            const ratio = w / h;
+                            const areaX = 30;
+                            const areaY = 15;
+                            const areaW = 230;
+                            const areaH = 145;
+                            let rw = areaW;
+                            let rh = rw / ratio;
+                            if (rh > areaH) {
+                              rh = areaH;
+                              rw = rh * ratio;
+                            }
+                            const rx = areaX + (areaW - rw) / 2;
+                            const ry = areaY + (areaH - rh) / 2;
+
+                            const isPegboard = item.product.id === 'p1';
+                            const isDoor = item.product.id === 'p3';
+
+                            return (
+                              <>
+                                <rect x={rx} y={ry} width={rw} height={rh} fill="#fff" stroke="#334155" strokeWidth="2" rx="4" />
+                                {isPegboard && (
+                                  <>
+                                    {Array.from({ length: Math.max(4, Math.min(18, Math.round(w / 120))) }).map((_, c) =>
+                                      Array.from({ length: Math.max(4, Math.min(14, Math.round(h / 120))) }).map((__, r) => (
+                                        <ellipse
+                                          key={`hole-${c}-${r}`}
+                                          cx={rx + ((c + 1) * rw) / (Math.max(4, Math.min(18, Math.round(w / 120))) + 1)}
+                                          cy={ry + ((r + 1) * rh) / (Math.max(4, Math.min(14, Math.round(h / 120))) + 1)}
+                                          rx={Math.max(2, rw / 110)}
+                                          ry={Math.max(3, rh / 75)}
+                                          fill="#94a3b8"
+                                        />
+                                      ))
+                                    )}
+                                  </>
+                                )}
+                                {isDoor && (
+                                  <>
+                                    {Array.isArray(cfg.hingePositions) && cfg.hingePositions.map((hp: number, i: number) => {
+                                      const hy = ry + (Math.max(0, Math.min(h, Number(hp || 0))) / h) * rh;
+                                      const hx = cfg.openingSide === 'left' ? rx : (rx + rw - 6);
+                                      return <rect key={`h-${i}`} x={hx} y={hy - 3} width="6" height="6" fill="#ef4444" rx="1" />;
+                                    })}
+                                    <rect
+                                      x={cfg.openingSide === 'left' ? (rx + rw - 8) : (rx - 4)}
+                                      y={ry + rh / 2 - 14}
+                                      width="8"
+                                      height="28"
+                                      fill="#2563eb"
+                                      rx="2"
+                                    />
+                                  </>
+                                )}
+                                <text x="145" y="174" fontSize="10" fill="#334155" textAnchor="middle">W {w}mm</text>
+                                <text x="12" y="92" fontSize="10" fill="#334155" transform="rotate(-90 12 92)" textAnchor="middle">H {h}mm</text>
+                              </>
+                            );
+                          })()}
+                        </svg>
                       </div>
                     </div>
                   )}
@@ -1428,6 +1526,12 @@ const ProductDetail: React.FC<{
   const t = TRANSLATIONS[language];
 
   const editItem = location.state?.editItem as CartItem | undefined;
+  const isBoardLikeProduct = [
+    ProductType.PEGBOARD,
+    ProductType.ALUMINUM_PLATE,
+    ProductType.MARINE_BOARD,
+    ProductType.CABINET_DOOR,
+  ].includes(product?.type as ProductType);
 
   if (!product) return <div className="p-20 text-center font-bold">Product Not Found</div>;
 
@@ -1462,8 +1566,15 @@ const ProductDetail: React.FC<{
               draftProfiles={draftProfiles}
               setDraftProfiles={setDraftProfiles}
             />
-          ) : product.type === ProductType.PEGBOARD ? (
-            <PlateEditor language={language} onSave={() => {}} />
+          ) : isBoardLikeProduct ? (
+            <BoardQuoteEditor
+              language={language}
+              product={product}
+              user={user}
+              initialItem={editItem}
+              onAddToCart={onAddToCart}
+              onUpdateItem={onUpdateCartItem}
+            />
           ) : (
             <div className="p-20 text-center bg-white rounded-[3rem] border-4 border-dashed border-slate-100 flex flex-col items-center">
                <div className="w-20 h-20 bg-slate-50 rounded-full flex items-center justify-center mb-6">

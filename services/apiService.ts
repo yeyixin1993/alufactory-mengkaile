@@ -104,11 +104,14 @@ class ApiServiceClass {
 
   private async request(method: string, endpoint: string, data?: any) {
     const API_BASE_URL = this.getApiBaseUrl();
+    const originalData = data;
     let requestData = data;
+    let encryptedAttempted = false;
 
     if (requestData && this.shouldEncryptPayload(method, endpoint)) {
       try {
         requestData = await this.payloadSecurity.encryptObject(requestData);
+        encryptedAttempted = true;
       } catch (error) {
         // Backward compatibility: old backend may not provide /auth/public-key yet.
         if (!this.hasLoggedEncryptionFallback) {
@@ -139,7 +142,33 @@ class ApiServiceClass {
       options.body = JSON.stringify(requestData);
     }
 
-    const response = await fetch(`${API_BASE_URL}${endpoint}`, options);
+    const doFetch = async (bodyData: any) => {
+      const reqOptions: RequestInit = {
+        ...options,
+        body: bodyData ? JSON.stringify(bodyData) : undefined,
+      };
+      const resp = await fetch(`${API_BASE_URL}${endpoint}`, reqOptions);
+      let payload: any = null;
+      try {
+        payload = await resp.json();
+      } catch {
+        payload = null;
+      }
+      return { resp, payload };
+    };
+
+    let { resp: response, payload: responsePayload } = await doFetch(requestData);
+
+    if (!response.ok && encryptedAttempted && originalData) {
+      const message = String(responsePayload?.error || responsePayload?.message || '').toLowerCase();
+      const isDecryptError = message.includes('decrypt') || message.includes('encrypted payload');
+      if (response.status === 400 && isDecryptError) {
+        console.warn(`[apiService] Encrypted request failed on ${endpoint}, retrying with plain JSON payload.`);
+        const retry = await doFetch(originalData);
+        response = retry.resp;
+        responsePayload = retry.payload;
+      }
+    }
 
     if (!response.ok) {
       if (response.status === 401) {
@@ -148,11 +177,10 @@ class ApiServiceClass {
         this.authToken = null;
         window.location.href = '/#/login';
       }
-      const error = await response.json();
-      throw new Error(error.error || error.message || 'API request failed');
+      throw new Error(responsePayload?.error || responsePayload?.message || `API request failed (${response.status})`);
     }
 
-    return response.json();
+    return responsePayload ?? {};
   }
 
   // ===== AUTH =====

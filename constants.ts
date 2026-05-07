@@ -969,9 +969,13 @@ export const INITIAL_PRODUCTS: Product[] = [
   {
     id: 'p3',
     type: ProductType.CABINET_DOOR,
-    name: { en: 'Aluminum Cabinet Door', cn: '铝柜门', jp: 'アルミキャビネットドア' },
-    description: { en: 'Sleek aluminum doors for cabinets.', cn: '时尚铝合金柜门，支持拼单定制。', jp: 'キャビネット用の洗練されたアルミドア。' },
-    basePrice: 120,
+    name: { en: 'Aluminum Frame Door', cn: '铝框门', jp: 'アルミフレームドア' },
+    description: {
+      en: 'Uses the same setup and pricing as 2mm aluminum plate.',
+      cn: '配置与2mm铝板一致，价格与2mm铝板相同。',
+      jp: '2mmアルミ板と同じ設定・価格です。'
+    },
+    basePrice: 700,
     imageUrl: 'https://picsum.photos/400/300?random=3'
   },
   {
@@ -981,6 +985,42 @@ export const INITIAL_PRODUCTS: Product[] = [
     description: { en: 'Custom frames for your art.', cn: '为您的艺术品定制相框。', jp: 'アート用のカスタムフレーム。' },
     basePrice: 80,
     imageUrl: 'https://picsum.photos/400/300?random=4'
+  },
+  {
+    id: 'p5',
+    type: ProductType.ALUMINUM_PLATE,
+    name: { en: 'Aluminum Plate', cn: '铝板', jp: 'アルミ板' },
+    description: {
+      en: 'Same configuration workflow as aluminum pegboard.',
+      cn: '与铝合金洞洞板使用相同配置流程。',
+      jp: 'アルミペグボードと同じ設定フローです。'
+    },
+    basePrice: 700,
+    imageUrl: 'https://picsum.photos/400/300?random=5'
+  },
+  {
+    id: 'p6',
+    type: ProductType.MARINE_BOARD,
+    name: { en: 'Marine Board', cn: '海洋板', jp: 'マリンボード' },
+    description: { en: 'Moisture-resistant marine board for custom applications.', cn: '适用于定制场景的防潮海洋板。', jp: 'カスタム用途向け耐湿マリンボード。' },
+    basePrice: 200,
+    imageUrl: 'https://picsum.photos/400/300?random=6'
+  },
+  {
+    id: 'p7',
+    type: ProductType.CALLIGRAPHY_CABINET,
+    name: { en: 'IKEA Calligraphy Special Cabinet', cn: '宜家书法特柜子', jp: 'IKEA書道特注キャビネット' },
+    description: { en: 'Special cabinet solution for calligraphy storage and display.', cn: '用于书法收纳与展示的宜家专用柜体。', jp: '書道用品の収納・展示向けIKEA特注キャビネット。' },
+    basePrice: 0,
+    imageUrl: 'https://picsum.photos/400/300?random=7'
+  },
+  {
+    id: 'p8',
+    type: ProductType.WARDROBE,
+    name: { en: 'Wardrobe', cn: '衣柜', jp: 'ワードローブ' },
+    description: { en: 'Custom wardrobe solutions.', cn: '支持定制的衣柜方案。', jp: 'カスタムワードローブソリューション。' },
+    basePrice: 0,
+    imageUrl: 'https://picsum.photos/400/300?random=8'
   }
 ];
 

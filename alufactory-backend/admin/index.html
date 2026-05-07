@@ -321,7 +321,13 @@
                 <div class="nav-item active" onclick="switchTab('dashboard')">📊 仪表板</div>
                 <div class="nav-item" onclick="switchTab('users')">👥 用户管理</div>
                 <!-- <div class="nav-item" onclick="switchTab('profiles')">📋 用户资料</div> -->
-                <div class="nav-item" onclick="switchTab('orders')">📦 订单管理</div>
+                <div class="nav-item" onclick="switchTab('orders_profile')">📦 总订单管理</div>
+                <div class="nav-item" onclick="switchTab('orders_pegboard')">📦 铝合金洞洞板订单管理</div>
+                <div class="nav-item" onclick="switchTab('orders_aluminum_plate')">📦 铝板订单管理</div>
+                <div class="nav-item" onclick="switchTab('orders_aluminum_frame_door')">📦 铝框门订单管理</div>
+                <div class="nav-item" onclick="switchTab('orders_marine_board')">📦 海洋板订单管理</div>
+                <div class="nav-item" onclick="switchTab('orders_calligraphy_cabinet')">📦 宜家书法特柜子订单管理</div>
+                <div class="nav-item" onclick="switchTab('orders_wardrobe')">📦 衣柜订单管理</div>
                 <div class="nav-item logout-btn" onclick="logout()">🚪 退出</div>
             </nav>
         </div>
@@ -433,22 +439,7 @@
                     </div>
                     <table id="ordersTable">
                         <thead>
-                            <tr>
-                                <th>订单号</th>
-                                <th>用户名</th>
-                                <th>用户电话</th>
-                                <th>客户电话</th>
-                                <th>客户</th>
-                                <th>地址</th>
-                                <th>发货方式</th>
-                                <th>型材费</th>
-                                <th>运费</th>
-                                <th>总金额</th>
-                                <th>状态</th>
-                                <th>日期</th>
-                                <th>PDF</th>
-                                <th>操作</th>
-                            </tr>
+                            <tr id="ordersTableHead"></tr>
                         </thead>
                         <tbody id="ordersTableBody">
                         </tbody>
@@ -660,6 +651,17 @@
         let usersCache = {};   // Cache users data for edit modal pre-fill
         let currentEditingUser = null;
         let currentOrderStatusFilter = '';
+        let currentOrderCategory = 'profile';
+
+        const ORDER_TAB_MAP = {
+            'orders_profile': { category: 'profile', title: '总订单管理' },
+            'orders_pegboard': { category: 'pegboard', title: '铝合金洞洞板订单管理' },
+            'orders_aluminum_plate': { category: 'aluminum_plate', title: '铝板订单管理' },
+            'orders_aluminum_frame_door': { category: 'aluminum_frame_door', title: '铝框门订单管理' },
+            'orders_marine_board': { category: 'marine_board', title: '海洋板订单管理' },
+            'orders_calligraphy_cabinet': { category: 'calligraphy_cabinet', title: '宜家书法特柜子订单管理' },
+            'orders_wardrobe': { category: 'wardrobe', title: '衣柜订单管理' }
+        };
 
         function normalizeMembershipLevel(value) {
             const raw = String(value || '').trim().toLowerCase();
@@ -717,9 +719,11 @@
         function switchTab(tab) {
             // Hide all content
             document.querySelectorAll('.content').forEach(el => el.classList.add('hidden'));
+
+            const contentTab = ORDER_TAB_MAP[tab] ? 'orders' : tab;
             
             // Show selected
-            document.getElementById(tab).classList.remove('hidden');
+            document.getElementById(contentTab).classList.remove('hidden');
             
             // Update nav
             document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
@@ -730,7 +734,14 @@
                 'dashboard': '仪表板',
                 'users': '用户管理',
                 'profiles': '用户资料',
-                'orders': '订单管理'
+                'orders': '订单管理',
+                'orders_profile': '总订单管理',
+                'orders_pegboard': '铝合金洞洞板订单管理',
+                'orders_aluminum_plate': '铝板订单管理',
+                'orders_aluminum_frame_door': '铝框门订单管理',
+                'orders_marine_board': '海洋板订单管理',
+                'orders_calligraphy_cabinet': '宜家书法特柜子订单管理',
+                'orders_wardrobe': '衣柜订单管理'
             };
             document.getElementById('pageTitle').textContent = titles[tab];
             
@@ -738,6 +749,126 @@
             if (tab === 'users') loadUsers();
             if (tab === 'profiles') loadProfiles();
             if (tab === 'orders') loadOrders();
+            if (ORDER_TAB_MAP[tab]) {
+                currentOrderCategory = ORDER_TAB_MAP[tab].category;
+                loadOrders(1, null, currentOrderCategory);
+            }
+        }
+
+        function renderOrderTableHead(category) {
+            const head = document.getElementById('ordersTableHead');
+            if (!head) return;
+
+            if (category === 'profile') {
+                head.innerHTML = `
+                    <th>订单号</th>
+                    <th>用户名</th>
+                    <th>用户电话</th>
+                    <th>客户电话</th>
+                    <th>客户</th>
+                    <th>地址</th>
+                    <th>发货方式</th>
+                    <th>型材费</th>
+                    <th>运费</th>
+                    <th>总金额</th>
+                    <th>状态</th>
+                    <th>日期</th>
+                    <th>PDF</th>
+                    <th>操作</th>
+                `;
+                return;
+            }
+
+            head.innerHTML = `
+                <th>订单号</th>
+                <th>用户名</th>
+                <th>客户</th>
+                <th>数量</th>
+                <th>宽</th>
+                <th>高</th>
+                <th>厚度</th>
+                <th>颜色</th>
+                <th>开门方向</th>
+                <th>备注</th>
+                <th>示意图</th>
+                <th>任务进度</th>
+                <th>日期</th>
+            `;
+        }
+
+        function parseOrderConfig(order) {
+            try {
+                if (order && typeof order.item_config === 'string' && order.item_config.trim()) {
+                    return JSON.parse(order.item_config);
+                }
+            } catch (_) {}
+            return {};
+        }
+
+        function renderOrderSketch(order, config) {
+            const w = Math.max(1, Number(config?.width || 0));
+            const h = Math.max(1, Number(config?.height || 0));
+            const ratio = w / h;
+            const areaW = 120;
+            const areaH = 80;
+            let rw = areaW;
+            let rh = rw / ratio;
+            if (rh > areaH) {
+                rh = areaH;
+                rw = rh * ratio;
+            }
+            const rx = 5 + (areaW - rw) / 2;
+            const ry = 5 + (areaH - rh) / 2;
+
+            const isPegboard = String(order?.category_code || '') === 'pegboard';
+            const isDoor = String(order?.category_code || '') === 'aluminum_frame_door';
+            const openingSide = String(config?.openingSide || '').toLowerCase();
+            const hingePositions = Array.isArray(config?.hingePositions) ? config.hingePositions : [];
+
+            const canvas = document.createElement('canvas');
+            canvas.width = 130;
+            canvas.height = 90;
+            const ctx = canvas.getContext('2d');
+            if (!ctx) return '-';
+
+            ctx.fillStyle = '#f8fafc';
+            ctx.fillRect(0, 0, 130, 90);
+            ctx.fillStyle = '#ffffff';
+            ctx.strokeStyle = '#334155';
+            ctx.lineWidth = 1.3;
+            ctx.beginPath();
+            ctx.rect(rx, ry, rw, rh);
+            ctx.fill();
+            ctx.stroke();
+
+            if (isPegboard) {
+                ctx.fillStyle = '#94a3b8';
+                for (let c = 0; c < 6; c++) {
+                    for (let r = 0; r < 4; r++) {
+                        const cx = rx + ((c + 1) * rw) / 7;
+                        const cy = ry + ((r + 1) * rh) / 5;
+                        ctx.beginPath();
+                        ctx.ellipse(cx, cy, 1.4, 2, 0, 0, Math.PI * 2);
+                        ctx.fill();
+                    }
+                }
+            }
+
+            if (isDoor) {
+                ctx.fillStyle = '#ef4444';
+                hingePositions.forEach((hp) => {
+                    const hy = ry + (Math.max(0, Math.min(h, Number(hp || 0))) / h) * rh;
+                    const hx = openingSide === 'left' ? rx : (rx + rw - 2.5);
+                    ctx.fillRect(hx, hy - 1.2, 2.5, 2.5);
+                });
+
+                ctx.fillStyle = '#2563eb';
+                const handleX = openingSide === 'left' ? (rx + rw - 3.5) : (rx - 1);
+                ctx.fillRect(handleX, ry + rh / 2 - 6, 3.5, 12);
+            }
+
+            const src = canvas.toDataURL('image/png');
+            return `<img src="${src}" alt="示意图" width="130" height="90" style="display:block; object-fit:contain;" />`;
         }
         
         // Load dashboard
@@ -805,17 +936,26 @@
         }
         
         // Load orders
-        async function loadOrders(page = 1, status = null) {
+        async function loadOrders(page = 1, status = null, category = null) {
             try {
                 const activeStatus = status === null
                     ? (document.getElementById('orderFilter')?.value || currentOrderStatusFilter || '')
                     : status;
 
-                currentOrderStatusFilter = activeStatus;
+                const activeCategory = category || currentOrderCategory || 'profile';
 
-                const url = activeStatus
-                    ? `${API_BASE}/admin/orders?page=${page}&per_page=20&status=${activeStatus}`
-                    : `${API_BASE}/admin/orders?page=${page}&per_page=20`;
+                currentOrderStatusFilter = activeStatus;
+                currentOrderCategory = activeCategory;
+
+                renderOrderTableHead(activeCategory);
+
+                const params = new URLSearchParams({ page: String(page), per_page: '20' });
+                if (activeStatus) params.set('status', activeStatus);
+                let url = `${API_BASE}/admin/orders?${params.toString()}`;
+                if (activeCategory !== 'profile') {
+                    params.set('category', activeCategory);
+                    url = `${API_BASE}/admin/product-orders?${params.toString()}`;
+                }
                 
                 const response = await fetch(url, {
                     headers: { 'Authorization': `Bearer ${authToken}` }
@@ -831,43 +971,106 @@
                 tbody.innerHTML = '';
                 
                 data.orders.forEach(order => {
-                    ordersCache[order.id] = order;  // Cache for edit form pre-fill
+                    const sourceOrderId = order.source_order_id || order.id;
+                    ordersCache[sourceOrderId] = order;  // Cache for edit form pre-fill
                     const row = tbody.insertRow();
-                    const date = new Date(order.created_at).toLocaleDateString('zh-CN');
-                    const userName = order.user?.username || '-';
-                    const userPhone = order.user?.phone || '-';
+                    const date = order.created_at ? new Date(order.created_at).toLocaleDateString('zh-CN') : '-';
+                    const userName = order.user_name || '-';
+                    const userPhone = order.user_phone || '-';
                     const customerPhone = order.customer_phone || '-';
                     const addressInfo = `${userName} ${order.province} ${order.address_detail} ${customerPhone}`;
                     const shippingMethodText = getShippingMethodText(order.shipping_method);
                     const profileFee = Number(order.subtotal || 0);
                     const shippingFee = Number(order.shipping_fee || 0);
                     const totalAmount = Number(order.total_amount || 0);
-                          const pdfLink = order.pdf?.available && order.pdf?.url
-                                ? `<button class="btn btn-success" style="padding: 6px 8px;" onclick="openOrderPdf('${order.pdf.url}', '${order.pdf.filename || ''}', false)">打开</button>
-                                    <button class="btn btn-primary" style="padding: 6px 8px;" onclick="openOrderPdf('${order.pdf.url}', '${order.pdf.filename || ''}', true)">下载</button>`
-                                : '-';
+
+                    if (activeCategory === 'profile') {
+                        const userNameProfile = order.user?.username || userName || '-';
+                        const userPhoneProfile = order.user?.phone || userPhone || '-';
+                        const customerPhoneProfile = order.customer_phone || order.phone || '-';
+                        const addressInfoProfile = `${userNameProfile} ${order.province || ''} ${order.address_detail || ''} ${customerPhoneProfile}`;
+                        const shippingMethodTextProfile = getShippingMethodText(order.shipping_method);
+                        const profileFeeProfile = Number(order.subtotal || 0);
+                        const shippingFeeProfile = Number(order.shipping_fee || 0);
+                        const totalAmountProfile = Number(order.total_amount || 0);
+                        const profileDate = order.created_at ? new Date(order.created_at).toLocaleDateString('zh-CN') : '-';
+                        const profileOrderId = order.id || sourceOrderId;
+                        const pdfUrlProfile = profileOrderId ? `${API_BASE}/admin/orders/${profileOrderId}/pdf` : '';
+                        const pdfFilenameProfile = (order.order_number || profileOrderId || 'order') + '.pdf';
+                        const pdfLinkProfile = order.pdf?.available && order.pdf?.url
+                            ? `<button class="btn btn-success" style="padding: 6px 8px;" onclick="openOrderPdf('${pdfUrlProfile}', '${pdfFilenameProfile}', false)">打开</button>
+                               <button class="btn btn-primary" style="padding: 6px 8px;" onclick="openOrderPdf('${pdfUrlProfile}', '${pdfFilenameProfile}', true)">下载</button>`
+                            : '-';
+
+                        row.innerHTML = `
+                            <td>${order.order_number || profileOrderId || '-'}</td>
+                            <td>${userNameProfile}</td>
+                            <td>${userPhoneProfile}</td>
+                            <td>${customerPhoneProfile}</td>
+                            <td>${order.recipient_name || '-'}</td>
+                            <td>${addressInfoProfile}</td>
+                            <td>${shippingMethodTextProfile}</td>
+                            <td>¥${profileFeeProfile.toFixed(2)}</td>
+                            <td>¥${shippingFeeProfile.toFixed(2)}</td>
+                            <td>¥${totalAmountProfile.toFixed(2)}</td>
+                            <td><span class="status-badge status-${order.status}">${getStatusText(order.status)}</span></td>
+                            <td>${profileDate}</td>
+                            <td>${pdfLinkProfile}</td>
+                            <td><button class="btn btn-primary" onclick="editOrder('${profileOrderId}')">编辑</button></td>
+                        `;
+                        return;
+                    }
+
+                    const cfg = parseOrderConfig(order);
+                    const width = Number(order.item_width || cfg.width || 0);
+                    const height = Number(order.item_height || cfg.height || 0);
+                    const quantity = Math.max(1, Number(order.item_quantity || 1));
+                    const rawThickness = order.item_thickness ?? cfg.thickness;
+                    const thickness = rawThickness
+                        ? (String(rawThickness).toLowerCase().includes('mm') ? String(rawThickness) : `${rawThickness}mm`)
+                        : '-';
+                    const color = order.item_color || cfg.colorName || cfg.colorId || '-';
+                    const openingSide = (order.item_opening_side || cfg.openingSide || '').toLowerCase();
+                    const opening = openingSide === 'left' ? '左开' : openingSide === 'right' ? '右开' : '-';
+                    const generatedRemark = cfg.openingSide
+                        ? `铰链${cfg.hingeCount || (Array.isArray(cfg.hingePositions) ? cfg.hingePositions.length : 0)}个；上${Number(cfg.topHingeOffset ?? 100).toFixed(0)}mm，下${Number(cfg.bottomHingeOffset ?? 100).toFixed(0)}mm；间距${Array.isArray(cfg.hingeGaps) && cfg.hingeGaps.length ? cfg.hingeGaps.map(x => `${Number(x).toFixed(0)}mm`).join('/') : '-'}`
+                        : '-';
+                    const remark = order.item_remark || generatedRemark;
+                    const storedSketch = typeof order.item_sketch_svg === 'string' ? order.item_sketch_svg.trim() : '';
+                    const sketch = storedSketch.startsWith('data:image/')
+                        ? `<img src="${storedSketch}" alt="示意图" width="130" height="90" style="display:block; object-fit:contain;" />`
+                        : renderOrderSketch(order, cfg);
+                    const taskProgress = normalizeTaskProgress(order.task_progress);
+                    const entryId = Number(order.id || 0);
+                    const taskProgressControl = entryId > 0
+                        ? `
+                            <select data-entry-id="${entryId}" data-previous-value="${taskProgress}" onchange="updateOrderTaskProgress(${entryId}, this.value, this)" style="min-width:120px; padding:6px 8px;">
+                                <option value="started" ${taskProgress === 'started' ? 'selected' : ''}>已开始</option>
+                                <option value="in_progress" ${taskProgress === 'in_progress' ? 'selected' : ''}>进行中</option>
+                                <option value="finished" ${taskProgress === 'finished' ? 'selected' : ''}>已完成</option>
+                            </select>
+                          `
+                        : '-';
+
                     row.innerHTML = `
-                        <td>${order.order_number}</td>
+                        <td>${order.order_number || sourceOrderId || '-'}</td>
                         <td>${userName}</td>
-                        <td>${userPhone}</td>
-                        <td>${customerPhone}</td>
-                        <td>${order.recipient_name}</td>
-                        <td>${addressInfo}</td>
-                        <td>${shippingMethodText}</td>
-                        <td>¥${profileFee.toFixed(2)}</td>
-                        <td>¥${shippingFee.toFixed(2)}</td>
-                        <td>¥${totalAmount.toFixed(2)}</td>
-                        <td><span class="status-badge status-${order.status}">${getStatusText(order.status)}</span></td>
+                        <td>${order.recipient_name || '-'}</td>
+                        <td>${quantity}</td>
+                        <td>${width > 0 ? width + 'mm' : '-'}</td>
+                        <td>${height > 0 ? height + 'mm' : '-'}</td>
+                        <td>${thickness}</td>
+                        <td>${color}</td>
+                        <td>${opening}</td>
+                        <td style="max-width:220px; white-space:normal;">${remark}</td>
+                        <td>${sketch}</td>
+                        <td>${taskProgressControl}</td>
                         <td>${date}</td>
-                        <td>${pdfLink}</td>
-                        <td>
-                            <button class="btn btn-primary" onclick="editOrder('${order.id}')">编辑</button>
-                        </td>
                     `;
                 });
                 
                 // Pagination
-                renderPagination('ordersPagination', page, data.pages, (p) => loadOrders(p, currentOrderStatusFilter));
+                renderPagination('ordersPagination', page, data.pages, (p) => loadOrders(p, currentOrderStatusFilter, currentOrderCategory));
             } catch (error) {
                 console.error('Error loading orders:', error);
             }
@@ -1022,7 +1225,7 @@
                 
                 alert('订单已保存');
                 closeModal('editOrderModal');
-                loadOrders();
+                loadOrders(1, currentOrderStatusFilter, currentOrderCategory);
                 loadDashboard();
             } catch (error) {
                 alert('错误: ' + error.message);
@@ -1297,7 +1500,7 @@
         function filterOrders() {
             const status = document.getElementById('orderFilter').value;
             currentOrderStatusFilter = status;
-            loadOrders(1, status);
+            loadOrders(1, status, currentOrderCategory);
         }
 
         async function openOrderPdf(url, filename, download = false) {
@@ -1355,6 +1558,59 @@
                 'cancelled': '已取消'
             };
             return texts[status] || status;
+        }
+
+        function normalizeTaskProgress(value) {
+            const normalized = String(value || '').trim().toLowerCase().replace('-', '_');
+            if (normalized === 'in_progress' || normalized === 'processing' || normalized === 'ongoing') return 'in_progress';
+            if (normalized === 'finished' || normalized === 'done' || normalized === 'completed') return 'finished';
+            return 'started';
+        }
+
+        async function updateOrderTaskProgress(entryId, taskProgress, selectEl) {
+            if (!entryId) return;
+
+            const normalizedProgress = normalizeTaskProgress(taskProgress);
+            const previousValue = normalizeTaskProgress(selectEl?.dataset?.previousValue || 'started');
+            if (selectEl) {
+                selectEl.disabled = true;
+            }
+
+            try {
+                const response = await fetch(`${API_BASE}/admin/product-orders/${entryId}/task-progress`, {
+                    method: 'PUT',
+                    headers: {
+                        'Authorization': `Bearer ${authToken}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ task_progress: normalizedProgress })
+                });
+
+                if (!response.ok) {
+                    const errData = await response.json().catch(() => ({}));
+                    throw new Error(errData.error || '更新任务进度失败');
+                }
+
+                const data = await response.json().catch(() => ({}));
+                const savedValue = normalizeTaskProgress(data?.order?.task_progress || normalizedProgress);
+                if (selectEl) {
+                    selectEl.value = savedValue;
+                    selectEl.dataset.previousValue = savedValue;
+                }
+            } catch (error) {
+                console.error('Failed to update task progress:', error);
+                if (selectEl) {
+                    selectEl.value = previousValue;
+                }
+                alert('错误: ' + error.message);
+            } finally {
+                if (selectEl) {
+                    selectEl.disabled = false;
+                    if (!selectEl.dataset.previousValue) {
+                        selectEl.dataset.previousValue = normalizeTaskProgress(selectEl.value);
+                    }
+                }
+            }
         }
 
         function getShippingMethodText(method) {

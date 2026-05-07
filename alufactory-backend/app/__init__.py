@@ -10,6 +10,7 @@ from app.routes.orders import order_bp
 from app.routes.admin import admin_bp
 from app.routes.profiles import profile_bp
 from app.routes.payments import payment_bp
+from app.product_order_db import init_product_order_db
 from app.security import init_payload_encryption
 import os
 
@@ -53,6 +54,7 @@ def create_app(config_name='development'):
     # Create database tables and run auto-migrations
     with app.app_context():
         db.create_all()
+        init_product_order_db(app.instance_path)
         
         # Auto-migrate: ensure all expected columns exist in orders table
         try:

@@ -5,6 +5,13 @@ from app.models.user import db, User, Order, Profile
 from app.models.user import Cart
 from app.models.user import normalize_membership_level
 from app.order_utils import build_order_pdf_filename
+from app.product_order_db import (
+    query_order_snapshots,
+    sync_order_snapshot,
+    find_order_ids_with_missing_item_details,
+    update_product_order_task_progress,
+    normalize_task_progress,
+)
 import uuid
 import base64
 import os
@@ -446,6 +453,7 @@ def update_order_status(order_id):
         
         order.updated_at = datetime.utcnow()
         db.session.commit()
+        sync_order_snapshot(current_app.instance_path, order, user=order.user, pdf_available=bool(order and order.id))
         
         return jsonify({
             'message': 'Order status updated',
@@ -453,6 +461,91 @@ def update_order_status(order_id):
         }), 200
     except Exception as e:
         db.session.rollback()
+        return jsonify({'error': str(e)}), 500
+
+
+@admin_bp.route('/product-orders', methods=['GET'])
+@admin_required
+def get_product_orders():
+    """Get category-specific order snapshots from standalone product order database"""
+    try:
+        page = request.args.get('page', 1, type=int)
+        per_page = request.args.get('per_page', 50, type=int)
+        status = request.args.get('status')
+        category = request.args.get('category')
+
+        # Backfill legacy rows that were created before item detail fields were introduced.
+        missing_detail_order_ids = find_order_ids_with_missing_item_details(
+            current_app.instance_path,
+            category_code=category,
+            limit=300,
+        )
+        if missing_detail_order_ids:
+            for order_id in missing_detail_order_ids:
+                order = Order.query.get(order_id)
+                if order:
+                    sync_order_snapshot(current_app.instance_path, order, user=order.user, pdf_available=False)
+
+        entries, total = query_order_snapshots(
+            current_app.instance_path,
+            category_code=category,
+            status=status,
+            page=page,
+            per_page=per_page,
+        )
+
+        if total == 0:
+            # Backfill from current orders table into standalone product-orders DB (read-only source)
+            for order in Order.query.order_by(Order.created_at.desc()).all():
+                sync_order_snapshot(current_app.instance_path, order, user=order.user, pdf_available=False)
+
+            entries, total = query_order_snapshots(
+                current_app.instance_path,
+                category_code=category,
+                status=status,
+                page=page,
+                per_page=per_page,
+            )
+
+        pages = (total + per_page - 1) // per_page if per_page > 0 else 0
+        return jsonify({
+            'orders': entries,
+            'total': total,
+            'pages': pages,
+            'current_page': page,
+        }), 200
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@admin_bp.route('/product-orders/<int:entry_id>/task-progress', methods=['PUT'])
+@admin_required
+def update_product_order_progress(entry_id):
+    """Update task progress for a product-order snapshot row"""
+    data = request.get_json() or {}
+    task_progress = data.get('task_progress')
+
+    if task_progress is None:
+        return jsonify({'error': 'task_progress is required'}), 400
+
+    normalized_progress = normalize_task_progress(task_progress)
+    if normalized_progress not in ['started', 'in_progress', 'finished']:
+        return jsonify({'error': 'Invalid task_progress'}), 400
+
+    try:
+        updated_row = update_product_order_task_progress(
+            current_app.instance_path,
+            entry_id=entry_id,
+            task_progress=normalized_progress,
+        )
+        if not updated_row:
+            return jsonify({'error': 'Product order entry not found'}), 404
+
+        return jsonify({
+            'message': 'Task progress updated',
+            'order': updated_row,
+        }), 200
+    except Exception as e:
         return jsonify({'error': str(e)}), 500
 
 
