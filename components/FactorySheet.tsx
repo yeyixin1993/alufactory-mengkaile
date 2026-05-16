@@ -186,7 +186,7 @@ const FactorySheet: React.FC<FactorySheetProps> = ({ cart, user, language, order
   const hasOverlength = cart.some(item => {
     if (item.product.type === ProductType.PROFILE) {
       const cfg = item.config as ProfileConfig;
-      return cfg.length > 1400;
+      return cfg.length > 1500;
     }
     return false;
   });

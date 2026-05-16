@@ -737,11 +737,11 @@ const Cart: React.FC<{
     }
   }, [addresses, selectedAddressId]);
 
-  // Check if any profile item exceeds 1.4m (1400mm)
+  // Check if any profile item exceeds 1.4m (1500mm)
   const hasOverlength = cart.some(item => {
     if (item.product.type === ProductType.PROFILE) {
       const cfg = item.config as ProfileConfig;
-      return cfg.length > 1400;
+      return cfg.length > 1500;
     }
     return false;
   });

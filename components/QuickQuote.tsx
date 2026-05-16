@@ -206,7 +206,7 @@ const QuickQuote: React.FC<{ language: Language; user?: User | null }> = ({ lang
   const profileSummary = useMemo(() => {
     const itemTotal = round1(profileRowsCalculated.reduce((sum, x) => sum + x.subtotal, 0));
     const totalWeightKg = round1(profileRowsCalculated.reduce((sum, x) => sum + x.totalWeightKg, 0));
-    const hasOverlength = profileRows.some((r) => r.length > 1400);
+    const hasOverlength = profileRows.some((r) => r.length > 1500);
 
     if (!selectedProvince || itemTotal <= 0) {
       return {
