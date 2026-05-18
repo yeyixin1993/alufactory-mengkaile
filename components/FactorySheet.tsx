@@ -153,6 +153,25 @@ const FactorySheet: React.FC<FactorySheetProps> = ({ cart, user, language, order
       .sort((a, b) => b.meters - a.meters);
   }, [cart, language, t.finishOxidized, t.finishPowder, t.finishElectrophoretic]);
 
+  const profileHoleTotals = React.useMemo(() => {
+    return cart.reduce(
+      (acc, item) => {
+        if (item.product.type !== ProductType.PROFILE) return acc;
+        const cfg = item.config as ProfileConfig;
+        const qty = Number(item.quantity) || 0;
+        if (!Array.isArray(cfg.holes) || qty <= 0) return acc;
+
+        cfg.holes.forEach((hole) => {
+          if (hole.type === 'countersunk') acc.countersunk += qty;
+          if (hole.type === 'through') acc.through += qty;
+        });
+
+        return acc;
+      },
+      { through: 0, countersunk: 0 }
+    );
+  }, [cart]);
+
   const screwPlan = React.useMemo(() => calculateScrewPlan(cart, include304Screws), [cart, include304Screws]);
   const screwByModel = React.useMemo(() => {
     const m = new Map<string, { countersunk: number; through: number; totalHoles: number; recommended: number }>();
@@ -449,7 +468,13 @@ const FactorySheet: React.FC<FactorySheetProps> = ({ cart, user, language, order
                                  <td className="p-2 border border-slate-100 font-bold">{hIdx + 1}</td>
                                  <td className="p-2 border border-slate-100 font-black">{hole.side}</td>
                                  <td className="p-2 border border-slate-100 font-black text-blue-600">{hole.positionMm}</td>
-                                 <td className="p-2 border border-slate-100">{hole.type === 'countersunk' ? t.typeCountersunk : t.typeThrough}</td>
+                                 <td className="p-2 border border-slate-100">
+                                   {hole.type === 'countersunk'
+                                     ? t.typeCountersunk
+                                     : hole.type === 'threaded'
+                                       ? (t.typeThreaded || '螺纹孔')
+                                       : t.typeThrough}
+                                 </td>
                                  <td className="p-2 border border-slate-100">{hole.grooveIndex === 1 ? t.abbrBottom : t.abbrTop}</td>
                                </tr>
                              ))}
@@ -586,6 +611,16 @@ const FactorySheet: React.FC<FactorySheetProps> = ({ cart, user, language, order
                      </li>
                    ))}
                  </ul>
+                 <div className="mt-3 pt-3 border-t border-slate-200 text-xs text-slate-700 space-y-1">
+                   <div className="flex justify-between gap-3">
+                     <span>{t.typeThrough || '通孔'}总数</span>
+                     <span className="font-black">{profileHoleTotals.through}</span>
+                   </div>
+                   <div className="flex justify-between gap-3">
+                     <span>{t.typeCountersunk || '沉头孔'}总数</span>
+                     <span className="font-black">{profileHoleTotals.countersunk}</span>
+                   </div>
+                 </div>
                </div>
              )}
            </div>

@@ -41,7 +41,7 @@ export interface User {
 
 // Profile Specifics
 export type ProfileSide = 'A' | 'B' | 'C' | 'D';
-export type HoleType = 'through' | 'countersunk';
+export type HoleType = 'through' | 'countersunk' | 'threaded';
 export type ProfileFinish = 'oxidized' | 'electrophoretic' | 'powder';
 
 export interface TappingConfig {

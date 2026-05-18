@@ -96,7 +96,10 @@ const ProfileEditor: React.FC<ProfileEditorProps> = ({ language, product, user, 
     const basePricePerMeter = selectedVariant.price[finish];
     const effectivePricePerMeter = Math.max(0, basePricePerMeter - (isVipMember ? PROFILE_VIP_DISCOUNT_PER_METER : 0));
     const materialPrice = (len / 1000) * effectivePricePerMeter;
-    let holeFee = currentHoles.reduce((acc, h) => acc + (h.type === 'countersunk' ? PRICE_HOLE_COUNTERSUNK : PRICE_HOLE_THROUGH), 0);
+    let holeFee = currentHoles.reduce(
+      (acc, h) => acc + ((h.type === 'countersunk' || h.type === 'threaded') ? PRICE_HOLE_COUNTERSUNK : PRICE_HOLE_THROUGH),
+      0
+    );
     let tappingFee = (currentTapping.left.filter(Boolean).length + currentTapping.right.filter(Boolean).length) * PRICE_TAPPING_PER_END;
     let miterFee = 0;
     if (currentMiterCut) {
@@ -328,6 +331,7 @@ const ProfileEditor: React.FC<ProfileEditorProps> = ({ language, product, user, 
                 <select value={newHoleType} onChange={e => setNewHoleType(e.target.value as HoleType)} className="w-full border rounded-xl px-3 py-2 text-sm bg-white font-black">
                   <option value="through">{t.typeThrough}</option>
                   <option value="countersunk">{t.typeCountersunk}</option>
+                  <option value="threaded">{t.typeThreaded || '螺纹孔'}</option>
                 </select>
               </div>
               

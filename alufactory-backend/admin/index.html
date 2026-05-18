@@ -375,7 +375,7 @@
                     <div class="table-header">
                         <h3>用户列表</h3>
                         <div style="display: flex; gap: 10px;">
-                            <input type="text" class="search-box" id="userSearch" placeholder="搜索用户...">
+                            <input type="text" class="search-box" id="userSearch" placeholder="按手机号搜索用户...">
                             <button class="btn btn-primary" onclick="openCreateUserModal()" style="padding: 8px 16px;">新增用户</button>
                         </div>
                     </div>
@@ -652,6 +652,7 @@
         let currentEditingUser = null;
         let currentOrderStatusFilter = '';
         let currentOrderCategory = 'profile';
+        let currentUserPhoneSearch = '';
 
         const ORDER_TAB_MAP = {
             'orders_profile': { category: 'profile', title: '总订单管理' },
@@ -682,6 +683,26 @@
             if (!authToken) {
                 window.location.href = 'login.html';
                 return;
+            }
+
+            const userSearchInput = document.getElementById('userSearch');
+            if (userSearchInput) {
+                let debounceTimer = null;
+                userSearchInput.addEventListener('input', function(e) {
+                    const value = (e.target.value || '').trim();
+                    currentUserPhoneSearch = value;
+                    if (debounceTimer) clearTimeout(debounceTimer);
+                    debounceTimer = setTimeout(() => loadUsers(1, value), 250);
+                });
+
+                userSearchInput.addEventListener('keydown', function(e) {
+                    if (e.key === 'Enter') {
+                        e.preventDefault();
+                        const value = (e.target.value || '').trim();
+                        currentUserPhoneSearch = value;
+                        loadUsers(1, value);
+                    }
+                });
             }
             
             // Initialize: close all modals
@@ -897,9 +918,17 @@
         }
         
         // Load users
-        async function loadUsers(page = 1) {
+        async function loadUsers(page = 1, phoneSearch = null) {
             try {
-                const response = await fetch(`${API_BASE}/admin/users?page=${page}&per_page=20`, {
+                const activePhoneSearch = phoneSearch === null ? currentUserPhoneSearch : String(phoneSearch || '').trim();
+                currentUserPhoneSearch = activePhoneSearch;
+
+                const params = new URLSearchParams({ page: String(page), per_page: '20' });
+                if (activePhoneSearch) {
+                    params.set('phone', activePhoneSearch);
+                }
+
+                const response = await fetch(`${API_BASE}/admin/users?${params.toString()}`, {
                     headers: { 'Authorization': `Bearer ${authToken}` }
                 });
                 
@@ -929,7 +958,7 @@
                 });
                 
                 // Pagination
-                renderPagination('usersPagination', page, data.pages, loadUsers);
+                renderPagination('usersPagination', page, data.pages, (p) => loadUsers(p, currentUserPhoneSearch));
             } catch (error) {
                 console.error('Error loading users:', error);
             }

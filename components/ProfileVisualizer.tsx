@@ -341,6 +341,7 @@ const ProfileVisualizer: React.FC<ProfileVisualizerProps> = ({
           {visibleHoles.map(hole => {
             const isExit = hole.side !== selectedSide;
             const isCountersunkEntry = hole.type === 'countersunk' && !isExit;
+            const isThreaded = hole.type === 'threaded';
             
             let verticalPos = '50%';
             if (grooveCount >= 2) {
@@ -368,10 +369,22 @@ const ProfileVisualizer: React.FC<ProfileVisualizerProps> = ({
                    className={`rounded-full border border-white/50 transition-transform ${interactive ? 'group-hover:scale-125 group-hover:bg-red-500' : ''}`}
                    style={{ width: '8px', height: '8px', backgroundColor: '#000', WebkitPrintColorAdjust: 'exact', printColorAdjust: 'exact' } as React.CSSProperties}
                  />
+                 {isThreaded && (
+                   <>
+                     <div
+                       className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 rounded-full pointer-events-none"
+                       style={{ width: '12px', height: '12px', border: '1px solid #334155', borderStyle: 'dashed', WebkitPrintColorAdjust: 'exact', printColorAdjust: 'exact' } as React.CSSProperties}
+                     />
+                     <div
+                       className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 rounded-full pointer-events-none"
+                       style={{ width: '16px', height: '16px', border: '1px dotted #64748b', WebkitPrintColorAdjust: 'exact', printColorAdjust: 'exact' } as React.CSSProperties}
+                     />
+                   </>
+                 )}
                  
                  {interactive && (
                     <div className="absolute -top-8 left-1/2 -translate-x-1/2 bg-slate-900 text-white text-[10px] px-2 py-1 rounded opacity-0 group-hover:opacity-100 whitespace-nowrap z-20 pointer-events-none">
-                        {hole.positionMm}mm {hole.type === 'countersunk' ? '(CS)' : '(T)'} {isExit ? '[Exit]' : ''}
+                    {hole.positionMm}mm {hole.type === 'countersunk' ? '(CS)' : hole.type === 'threaded' ? '(TH)' : '(T)'} {isExit ? '[Exit]' : ''}
                     </div>
                  )}
               </div>

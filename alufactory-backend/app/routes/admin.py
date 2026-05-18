@@ -40,8 +40,13 @@ def get_all_users():
     """Get all users (admin only)"""
     page = request.args.get('page', 1, type=int)
     per_page = request.args.get('per_page', 50, type=int)
-    
-    users_paginated = User.query.paginate(page=page, per_page=per_page)
+    phone = (request.args.get('phone', '', type=str) or '').strip()
+
+    users_query = User.query
+    if phone:
+        users_query = users_query.filter(User.phone.like(f"%{phone}%"))
+
+    users_paginated = users_query.paginate(page=page, per_page=per_page)
     
     return jsonify({
         'users': [user.to_dict() for user in users_paginated.items],
