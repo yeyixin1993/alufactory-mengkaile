@@ -602,7 +602,7 @@ const FactorySheet: React.FC<FactorySheetProps> = ({ cart, user, language, order
                            if (!screw || screw.recommended <= 0) return null;
                            return (
                              <span className="ml-2 text-[10px] text-slate-500">
-                               ｜304螺丝: 总孔{screw.totalHoles}，配件{screw.recommended}（沉头{screw.countersunk}/通孔{screw.through}）
+                               ｜沉头{screw.countersunk} / 通孔{screw.through}
                              </span>
                            );
                          })()}
