@@ -563,6 +563,7 @@ def get_statistics():
         active_users = User.query.filter_by(is_active=True).count()
         total_orders = Order.query.count()
         pending_orders = Order.query.filter_by(status='pending').count()
+        paid_orders = Order.query.filter(Order.status.in_(['confirmed', 'shipped', 'delivered'])).count()
         shipped_orders = Order.query.filter_by(status='shipped').count()
         delivered_orders = Order.query.filter_by(status='delivered').count()
         
@@ -575,6 +576,7 @@ def get_statistics():
             'active_users': active_users,
             'total_orders': total_orders,
             'pending_orders': pending_orders,
+            'paid_orders': paid_orders,
             'shipped_orders': shipped_orders,
             'delivered_orders': delivered_orders,
             'total_revenue': float(total_revenue)

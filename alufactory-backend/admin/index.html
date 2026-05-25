@@ -355,8 +355,8 @@
                         <div class="value" id="totalOrders">-</div>
                     </div>
                     <div class="stat-card">
-                        <h3>待处理订单</h3>
-                        <div class="value" id="pendingOrders">-</div>
+                        <h3>已付款订单</h3>
+                        <div class="value" id="paidOrders">-</div>
                     </div>
                     <div class="stat-card">
                         <h3>已发货订单</h3>
@@ -909,7 +909,7 @@
                 document.getElementById('totalUsers').textContent = data.total_users;
                 document.getElementById('activeUsers').textContent = data.active_users;
                 document.getElementById('totalOrders').textContent = data.total_orders;
-                document.getElementById('pendingOrders').textContent = data.pending_orders;
+                document.getElementById('paidOrders').textContent = data.paid_orders;
                 document.getElementById('shippedOrders').textContent = data.shipped_orders;
                 document.getElementById('totalRevenue').textContent = '¥' + data.total_revenue.toFixed(2);
             } catch (error) {
