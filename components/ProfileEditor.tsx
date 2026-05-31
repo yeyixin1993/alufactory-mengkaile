@@ -5,7 +5,7 @@ import { useNavigate } from 'react-router-dom';
 import { DrillHole, ProfileConfig, ProfileSide, TappingConfig, Language, HoleType, ProfileFinish, CartItem, Product, MiterCutConfig, MiterCutDirection, MiterCutSide, User } from '../types';
 import { TRANSLATIONS, PROFILE_VARIANTS, PROFILE_COLORS, COLOR_ONLY_COLORED_SECTION_IDS } from '../constants';
 import { isVipMembership } from '../utils/membership';
-import { Plus, Trash2, List, ShoppingCart, Pencil, X, Hammer, Settings2 } from 'lucide-react';
+import { Plus, Trash2, List, ShoppingCart, Pencil, X, Hammer, Settings2, Copy } from 'lucide-react';
 import ProfileVisualizer from './ProfileVisualizer';
 
 interface ProfileEditorProps {
@@ -180,6 +180,17 @@ const ProfileEditor: React.FC<ProfileEditorProps> = ({ language, product, user, 
     navigate('/cart');
   };
 
+  const duplicateDraftItem = (item: CartItem) => {
+    const clonedConfig = JSON.parse(JSON.stringify(item.config)) as ProfileConfig;
+    const duplicated: CartItem = {
+      ...item,
+      id: Math.random().toString(36).substr(2, 9),
+      config: clonedConfig,
+      totalPrice: parseFloat(((clonedConfig.unitPrice || 0) * item.quantity).toFixed(1)),
+    };
+    setDraftProfiles(prev => [...prev, duplicated]);
+  };
+
   const currentUnitPrice = calculateItemUnitPrice(length, holes, tapping, miterCut);
   const getEditorGrooveCount = (vId: string, side: ProfileSide): number => {
     // 2020 N4 (square/round) - all 4 sides sealed
@@ -204,7 +215,7 @@ const ProfileEditor: React.FC<ProfileEditorProps> = ({ language, product, user, 
     // 20100: B/D have 5 grooves
     if (vId === '20100' && (side === 'B' || side === 'D')) return 5;
     // Standard rectangular profiles (2040, 3060, 2040 variants): B/D have 2 grooves
-    if (['2040', '3060', '2040-N1-20', '2040-N1-40'].includes(vId) && (side === 'B' || side === 'D')) return 2;
+    if (['2040', '3060', '2040-N1-20', '2040-N1-40','4080'].includes(vId) && (side === 'B' || side === 'D')) return 2;
     // N1/N2/N3 rules
     const name = (PROFILE_VARIANTS.find(v => v.id === vId)?.name || '').toLowerCase();
     if (name.includes('n1') && side === 'A') return 0;
@@ -516,6 +527,7 @@ const ProfileEditor: React.FC<ProfileEditorProps> = ({ language, product, user, 
                         <td className="px-4 font-black text-blue-600">{currency}{item.totalPrice.toFixed(1)}</td>
                         <td className="px-4 text-right">
                           <div className="flex gap-1 justify-end opacity-0 group-hover:opacity-100 transition-opacity">
+                            <button onClick={() => duplicateDraftItem(item)} title={t.copy} className="p-2 text-slate-400 hover:text-emerald-600 hover:bg-white rounded-xl transition-all"><Copy className="w-4 h-4"/></button>
                             <button onClick={() => { setEditingId(item.id); setVariantId(item.config.variantId); setLength(item.config.length); setHoles(item.config.holes); setTapping(item.config.tapping); setFinish(item.config.finish); setColorId(item.config.colorId); const mc = item.config.miterCut || { left: { enabled: false, direction: 'up', side: 'AC' }, right: { enabled: false, direction: 'up', side: 'AC' } }; setMiterCut(mc); setShowMiterCut(!!(mc.left?.enabled || mc.right?.enabled)); }} className="p-2 text-slate-400 hover:text-blue-600 hover:bg-white rounded-xl transition-all"><Pencil className="w-4 h-4"/></button>
                             <button onClick={() => setDraftProfiles(draftProfiles.filter(x => x.id !== item.id))} className="p-2 text-slate-400 hover:text-red-500 hover:bg-white rounded-xl transition-all"><Trash2 className="w-4 h-4"/></button>
                           </div>

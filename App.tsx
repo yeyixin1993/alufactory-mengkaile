@@ -49,6 +49,7 @@ const mergeCartItems = (currentCart: CartItem[], newItems: CartItem[]): CartItem
 const CART_CACHE_PREFIX = 'mengkaile_cart_cache_v1';
 const DRAFT_CACHE_PREFIX = 'mengkaile_profile_draft_cache_v1';
 const GUEST_CACHE_SCOPE = 'guest';
+const MARINE_BOARD_FLAT_SHIPPING_FEE = 30;
 
 const getCacheKey = (prefix: string, userId?: string | null) => {
   const scope = userId?.trim() || GUEST_CACHE_SCOPE;
@@ -99,13 +100,6 @@ const exportToPDF = async (
   if (!element) return;
 
   try {
-    const canvas = await html2canvas(element, { 
-      scale: 2, 
-      useCORS: true, 
-      logging: false, 
-      backgroundColor: '#ffffff'
-    });
-
     const pdf = new jsPDF('p', 'mm', 'a4');
     const pdfWidth = pdf.internal.pageSize.getWidth();
     const pdfHeight = pdf.internal.pageSize.getHeight();
@@ -113,31 +107,43 @@ const exportToPDF = async (
     const MARGIN_MM = 8;
     const printableHeight = pdfHeight - MARGIN_MM * 2;
     const contentWidth = pdfWidth;
-    const imgScale = contentWidth / canvas.width;
-
-    let srcY = 0;
     let pageIndex = 0;
 
-    while (srcY < canvas.height) {
-      const sliceHeightPx = Math.min(
-        Math.floor(printableHeight / imgScale),
-        canvas.height - srcY
-      );
-      const sliceHeightMm = sliceHeightPx * imgScale;
+    const pageSections = Array.from(element.querySelectorAll<HTMLElement>('[data-pdf-export-page]'));
+    const sectionsToRender = pageSections.length > 0 ? pageSections : [element];
 
-      const pageCanvas = document.createElement('canvas');
-      pageCanvas.width = canvas.width;
-      pageCanvas.height = sliceHeightPx;
-      const ctx = pageCanvas.getContext('2d')!;
-      ctx.fillStyle = '#ffffff';
-      ctx.fillRect(0, 0, pageCanvas.width, pageCanvas.height);
-      ctx.drawImage(canvas, 0, srcY, canvas.width, sliceHeightPx, 0, 0, canvas.width, sliceHeightPx);
+    for (const section of sectionsToRender) {
+      const canvas = await html2canvas(section, {
+        scale: 2,
+        useCORS: true,
+        logging: false,
+        backgroundColor: '#ffffff'
+      });
 
-      if (pageIndex > 0) pdf.addPage();
-      pdf.addImage(pageCanvas, 'JPEG', 0, MARGIN_MM, contentWidth, sliceHeightMm, undefined, 'FAST');
+      const imgScale = contentWidth / canvas.width;
+      let srcY = 0;
 
-      srcY += sliceHeightPx;
-      pageIndex++;
+      while (srcY < canvas.height) {
+        const sliceHeightPx = Math.min(
+          Math.floor(printableHeight / imgScale),
+          canvas.height - srcY
+        );
+        const sliceHeightMm = sliceHeightPx * imgScale;
+
+        const pageCanvas = document.createElement('canvas');
+        pageCanvas.width = canvas.width;
+        pageCanvas.height = sliceHeightPx;
+        const ctx = pageCanvas.getContext('2d')!;
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(0, 0, pageCanvas.width, pageCanvas.height);
+        ctx.drawImage(canvas, 0, srcY, canvas.width, sliceHeightPx, 0, 0, canvas.width, sliceHeightPx);
+
+        if (pageIndex > 0) pdf.addPage();
+        pdf.addImage(pageCanvas, 'JPEG', 0, MARGIN_MM, contentWidth, sliceHeightMm, undefined, 'FAST');
+
+        srcY += sliceHeightPx;
+        pageIndex++;
+      }
     }
     
     if (!options?.skipSave) {
@@ -472,6 +478,8 @@ const UserProfile: React.FC<{
 // --- Catalog Component ---
 const Catalog: React.FC<{ language: Language }> = ({ language }) => {
   const t = TRANSLATIONS[language];
+  const accessoryTitle = language === 'cn' ? '铝型材配件' : language === 'jp' ? 'アルミプロファイルアクセサリー' : 'Aluminum Profile Accessories';
+  const accessoryComingSoon = language === 'cn' ? '即将上线' : language === 'jp' ? '近日公開' : 'Coming soon';
   return (
     <div className="max-w-7xl mx-auto px-6 py-12">
       <div className="mb-8">
@@ -498,6 +506,21 @@ const Catalog: React.FC<{ language: Language }> = ({ language }) => {
             </div>
           </div>
         ))}
+
+        <div className="bg-white rounded-[2.5rem] overflow-hidden shadow-xl border border-slate-100 hover:shadow-2xl transition-all duration-300 group">
+          <div className="h-64 overflow-hidden relative">
+            <img src="https://picsum.photos/400/300?random=9" alt={accessoryTitle} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-1000" />
+            <div className="absolute inset-0 bg-gradient-to-t from-black/40 via-transparent to-transparent" />
+            <div className="absolute top-6 left-6 bg-white/95 backdrop-blur px-3 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest text-slate-800 shadow-xl">ACCESSORY</div>
+          </div>
+          <div className="p-8">
+            <h3 className="text-2xl font-black text-slate-900 mb-3">{accessoryTitle}</h3>
+            <p className="text-slate-500 text-sm mb-10 line-clamp-2 leading-relaxed">{accessoryComingSoon}</p>
+            <div className="w-full bg-slate-200 text-slate-600 py-5 rounded-3xl font-black flex items-center justify-center gap-3 shadow-xl">
+              {accessoryComingSoon}
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   );
@@ -746,6 +769,8 @@ const Cart: React.FC<{
     return false;
   });
 
+  const hasMarineBoard = cart.some((item) => item.product.type === ProductType.MARINE_BOARD);
+
   // Calculate total weight
   const totalWeightKg = React.useMemo(() => {
     let w = 0;
@@ -763,6 +788,10 @@ const Cart: React.FC<{
 
   // Calculate shipping fee for a given courier method
   const calcShippingForMethod = (method: ShippingMethod, province: string): { fee: number, overlength: number } => {
+    if (hasMarineBoard) {
+      return { fee: MARINE_BOARD_FLAT_SHIPPING_FEE, overlength: 0 };
+    }
+
     // 到付: 运费为0，由收件人支付
     if (method === 'sf_collect') {
       return { fee: 0, overlength: 0 };
@@ -801,7 +830,7 @@ const Cart: React.FC<{
     const sfc = calcShippingForMethod('sf_collect', province);
     const cheapest: ShippingMethod = std.fee <= sf.fee && std.fee <= an.fee ? 'standard' : sf.fee <= an.fee ? 'sf' : 'anneng';
     return { standard: std, sf, anneng: an, sf_collect: sfc, cheapest };
-  }, [selectedAddress, totalWeightKg, hasOverlength]);
+  }, [selectedAddress, totalWeightKg, hasOverlength, hasMarineBoard]);
 
   const activeCourier: ShippingMethod = selectedCourier === 'auto' ? shippingOptions.cheapest : selectedCourier;
   const activeShipping = shippingOptions[activeCourier];

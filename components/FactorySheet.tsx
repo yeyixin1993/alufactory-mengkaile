@@ -348,7 +348,7 @@ const FactorySheet: React.FC<FactorySheetProps> = ({ cart, user, language, order
            let itemProcessingState: 'raw' | 'tap' | 'drill' | 'miter' = 'raw';
            if (itemHasDrill) itemProcessingState = 'drill';
            else if (itemHasMiter) itemProcessingState = 'miter';
-           else if (itemHasTap && ['2040', '3060', '2040-N1-20', '2040-N1-40', '2047', '2060', '20100'].includes(String(profileCfg.variantId))) itemProcessingState = 'tap';
+           else if (itemHasTap && ['2040', '3060', '2040-N1-20', '2040-N1-40', '2047', '2060', '20100', '4080'].includes(String(profileCfg.variantId))) itemProcessingState = 'tap';
 
            if (isProfile && itemProcessingState === 'raw') return null;
 
@@ -387,7 +387,7 @@ const FactorySheet: React.FC<FactorySheetProps> = ({ cart, user, language, order
                       let itemProcessingState2: 'raw' | 'tap' | 'drill' | 'miter' = 'raw';
                       if (itemHasDrill) itemProcessingState2 = 'drill';
                       else if (itemHasMiterInner) itemProcessingState2 = 'miter';
-                      else if (itemHasTap && ['2040', '3060', '2040-N1-20', '2040-N1-40', '2047', '2060', '20100'].includes(String(profileCfg.variantId))) itemProcessingState2 = 'tap';
+                      else if (itemHasTap && ['2040', '3060', '2040-N1-20', '2040-N1-40', '2047', '2060', '20100', '4080'].includes(String(profileCfg.variantId))) itemProcessingState2 = 'tap';
 
                       // For miter cut, determine which sides to show based on cut face (AC/BD)
                       let sidesToShow: ProfileSide[] = [];

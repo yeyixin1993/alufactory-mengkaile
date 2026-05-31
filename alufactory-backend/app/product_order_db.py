@@ -23,7 +23,7 @@ TASK_PROGRESS_VALUES = ('started', 'in_progress', 'finished')
 
 def normalize_task_progress(value: Optional[str]) -> str:
     raw = _normalize_text(value).replace('-', '_')
-    if raw in ('started', 'start', 'begin', '已开始'):
+    if raw in ('started', 'start', 'begin', '已开始', '未开始'):
         return 'started'
     if raw in ('in_progress', 'processing', 'ongoing', '进行中'):
         return 'in_progress'

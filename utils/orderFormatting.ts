@@ -86,11 +86,6 @@ export const buildOrderPdfFilename = ({
   orderRef,
   withPrice,
 }: OrderPdfFilenameOptions) => {
-  const timestamp = getEast8TimestampToken(createdAt);
-  const safeUserName = sanitizeFilenamePart(userName || 'guest', 'guest');
   const safeOrderRef = sanitizeFilenamePart(orderRef || 'ORDER', 'ORDER');
-  const safeAmount = Number.isFinite(amount) ? Number(amount).toFixed(2) : '0.00';
-  const priceMode = typeof withPrice === 'boolean' ? `_${withPrice ? '含价格' : '不含价格'}` : '';
-
-  return `生产单_${timestamp}_用户_${safeUserName}_金额_${safeAmount}_${safeOrderRef}${priceMode}.pdf`;
+  return `${safeOrderRef}.pdf`;
 };

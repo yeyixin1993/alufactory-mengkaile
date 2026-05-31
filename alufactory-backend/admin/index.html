@@ -1017,7 +1017,8 @@
                         const userNameProfile = order.user?.username || userName || '-';
                         const userPhoneProfile = order.user?.phone || userPhone || '-';
                         const customerPhoneProfile = order.customer_phone || order.phone || '-';
-                        const addressInfoProfile = `${userNameProfile} ${order.province || ''} ${order.address_detail || ''} ${customerPhoneProfile}`;
+                        const customerNameProfile = order.recipient_name || '-';
+                        const addressInfoProfile = `${customerNameProfile} ${order.province || ''} ${order.address_detail || ''} ${customerPhoneProfile}`;
                         const shippingMethodTextProfile = getShippingMethodText(order.shipping_method);
                         const profileFeeProfile = Number(order.subtotal || 0);
                         const shippingFeeProfile = Number(order.shipping_fee || 0);
@@ -1074,7 +1075,7 @@
                     const taskProgressControl = entryId > 0
                         ? `
                             <select data-entry-id="${entryId}" data-previous-value="${taskProgress}" onchange="updateOrderTaskProgress(${entryId}, this.value, this)" style="min-width:120px; padding:6px 8px;">
-                                <option value="started" ${taskProgress === 'started' ? 'selected' : ''}>已开始</option>
+                                <option value="started" ${taskProgress === 'started' ? 'selected' : ''}>未开始</option>
                                 <option value="in_progress" ${taskProgress === 'in_progress' ? 'selected' : ''}>进行中</option>
                                 <option value="finished" ${taskProgress === 'finished' ? 'selected' : ''}>已完成</option>
                             </select>
@@ -1591,6 +1592,7 @@
 
         function normalizeTaskProgress(value) {
             const normalized = String(value || '').trim().toLowerCase().replace('-', '_');
+            if (normalized === 'started' || normalized === 'start' || normalized === 'begin' || normalized === '已开始' || normalized === '未开始') return 'started';
             if (normalized === 'in_progress' || normalized === 'processing' || normalized === 'ongoing') return 'in_progress';
             if (normalized === 'finished' || normalized === 'done' || normalized === 'completed') return 'finished';
             return 'started';

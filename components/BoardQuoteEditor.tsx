@@ -18,6 +18,8 @@ const MARINE_BOARD_PRICE_PER_SQM: Record<number, number> = { 6: 100, 9: 130, 12:
 const MIN_BOARD_CHARGE_AREA_SQM = 0.2;
 const MAX_BOARD_WIDTH_MM = 2400;
 const MAX_BOARD_HEIGHT_MM = 1200;
+const MARINE_BOARD_MAX_WIDTH_MM = 2440;
+const MARINE_BOARD_MAX_HEIGHT_MM = 1220;
 const MAX_DOOR_HEIGHT_MM = 3000;
 const MAX_DOOR_WIDTH_MM = 1500;
 const DOOR_HINGE_UNIT_PRICE = 10;
@@ -175,10 +177,16 @@ const BoardQuoteEditor: React.FC<BoardQuoteEditorProps> = ({ language, product, 
   const [quantity, setQuantity] = useState<number>(initialItem?.quantity || initialCfg.quantity || 1);
   const [openingSide, setOpeningSide] = useState<'left' | 'right'>(initialCfg.openingSide === 'right' ? 'right' : 'left');
 
-  const maxHeight = isDoor ? MAX_DOOR_HEIGHT_MM : (isPegboard ? 2400 : MAX_BOARD_HEIGHT_MM);
+  const maxHeight = isDoor
+    ? MAX_DOOR_HEIGHT_MM
+    : isPegboard
+      ? 2400
+      : isMarineBoard
+        ? MARINE_BOARD_MAX_HEIGHT_MM
+        : MAX_BOARD_HEIGHT_MM;
   const minWidth = (isPegboard || isDoor) ? 101 : 1;
   const minHeight = isDoor ? 230 : ((isPegboard || isDoor) ? 101 : 1);
-  const maxWidth = isDoor ? MAX_DOOR_WIDTH_MM : MAX_BOARD_WIDTH_MM;
+  const maxWidth = isDoor ? MAX_DOOR_WIDTH_MM : (isMarineBoard ? MARINE_BOARD_MAX_WIDTH_MM : MAX_BOARD_WIDTH_MM);
 
   const effectiveThickness = isDoor ? 2 : thickness;
   const rawWidth = Number(width) || 0;
@@ -189,7 +197,7 @@ const BoardQuoteEditor: React.FC<BoardQuoteEditorProps> = ({ language, product, 
   const hasRangeError = widthOutOfRange || heightOutOfRange || pegboardShapeInvalid;
 
   const calc = useMemo(() => {
-    const w = Math.min(MAX_BOARD_WIDTH_MM, Math.max(0, Number(width) || 0));
+    const w = Math.min(maxWidth, Math.max(0, Number(width) || 0));
     const h = Math.min(maxHeight, Math.max(0, Number(height) || 0));
     const qty = Math.max(1, Number(quantity) || 1);
     const areaSqm = (w * h) / 1_000_000;
@@ -203,7 +211,7 @@ const BoardQuoteEditor: React.FC<BoardQuoteEditorProps> = ({ language, product, 
     const minAreaApplied = areaSqm > 0 && areaSqm < MIN_BOARD_CHARGE_AREA_SQM;
 
     return { w, h, qty, areaSqm, chargedArea, unitRate, boardUnitPrice, hingeCount, hingeFeePerPiece, unitPrice, subtotal, minAreaApplied };
-  }, [width, height, quantity, effectiveThickness, maxHeight, isDoor]);
+  }, [width, height, quantity, effectiveThickness, maxHeight, maxWidth, isDoor]);
 
   const hingePositions = useMemo(() => (isDoor ? getDoorHingePositions(calc.h) : []), [isDoor, calc.h]);
   const hingeGaps = useMemo(() => {

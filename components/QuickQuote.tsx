@@ -64,6 +64,9 @@ const MIN_BOARD_CHARGE_AREA_SQM = 0.2;
 const MAX_PROFILE_LENGTH_MM = 3000;
 const MAX_BOARD_WIDTH_MM = 2400;
 const MAX_BOARD_HEIGHT_MM = 1200;
+const MARINE_BOARD_MAX_WIDTH_MM = 2440;
+const MARINE_BOARD_MAX_HEIGHT_MM = 1220;
+const MARINE_BOARD_FLAT_SHIPPING_FEE = 30;
 
 const round1 = (n: number) => Number(n.toFixed(1));
 const getCurrency = (lang: Language) => (lang === 'cn' ? '￥' : '$');
@@ -228,10 +231,15 @@ const QuickQuote: React.FC<{ language: Language; user?: User | null }> = ({ lang
     };
   }, [profileRows, profileRowsCalculated, selectedProvince]);
 
-  const calcBoardRows = (rows: BoardRow[], priceMap: Record<number, number>) => {
+  const calcBoardRows = (
+    rows: BoardRow[],
+    priceMap: Record<number, number>,
+    maxWidthMm = MAX_BOARD_WIDTH_MM,
+    maxHeightMm = MAX_BOARD_HEIGHT_MM
+  ) => {
     return rows.map((row) => {
-      const width = Math.min(MAX_BOARD_WIDTH_MM, Math.max(0, row.width));
-      const height = Math.min(MAX_BOARD_HEIGHT_MM, Math.max(0, row.height));
+      const width = Math.min(maxWidthMm, Math.max(0, row.width));
+      const height = Math.min(maxHeightMm, Math.max(0, row.height));
       const qty = Math.max(0, row.quantity || 0);
       const areaSqm = (width * height) / 1_000_000;
       const chargedArea = areaSqm > 0 && areaSqm < MIN_BOARD_CHARGE_AREA_SQM ? MIN_BOARD_CHARGE_AREA_SQM : areaSqm;
@@ -245,7 +253,10 @@ const QuickQuote: React.FC<{ language: Language; user?: User | null }> = ({ lang
 
   const aluPlateCalculated = useMemo(() => calcBoardRows(aluPlateRows, ALUMINUM_PLATE_PRICE_PER_SQM), [aluPlateRows]);
   const pegboardCalculated = useMemo(() => calcBoardRows(pegboardRows, PEGBOARD_PRICE_PER_SQM), [pegboardRows]);
-  const marineBoardCalculated = useMemo(() => calcBoardRows(marineBoardRows, MARINE_BOARD_PRICE_PER_SQM), [marineBoardRows]);
+  const marineBoardCalculated = useMemo(
+    () => calcBoardRows(marineBoardRows, MARINE_BOARD_PRICE_PER_SQM, MARINE_BOARD_MAX_WIDTH_MM, MARINE_BOARD_MAX_HEIGHT_MM),
+    [marineBoardRows]
+  );
 
   const frameCalculated = useMemo(() => {
     return frameRows.map((row) => {
@@ -413,6 +424,7 @@ const QuickQuote: React.FC<{ language: Language; user?: User | null }> = ({ lang
     const aluminumPlateItemTotal = round1(aluPlateCalculated.reduce((sum, x) => sum + x.subtotal, 0));
     const pegboardItemTotal = round1(pegboardCalculated.reduce((sum, x) => sum + x.subtotal, 0));
     const marineBoardItemTotal = round1(marineBoardCalculated.reduce((sum, x) => sum + x.subtotal, 0));
+    const marineBoardShippingFee = selectedProvince && marineBoardItemTotal > 0 ? MARINE_BOARD_FLAT_SHIPPING_FEE : 0;
     const frameItemTotal = round1(frameCalculated.reduce((sum, x) => sum + x.subtotal, 0));
 
     const categories = [
@@ -441,8 +453,8 @@ const QuickQuote: React.FC<{ language: Language; user?: User | null }> = ({ lang
         key: 'marine_board',
         name: t.qq_marineBoard,
         itemTotal: marineBoardItemTotal,
-        shippingFee: 0,
-        total: marineBoardItemTotal,
+        shippingFee: marineBoardShippingFee,
+        total: round1(marineBoardItemTotal + marineBoardShippingFee),
       },
       {
         key: 'frame',
@@ -465,6 +477,7 @@ const QuickQuote: React.FC<{ language: Language; user?: User | null }> = ({ lang
     aluPlateCalculated,
     pegboardCalculated,
     marineBoardCalculated,
+    selectedProvince,
     frameCalculated,
   ]);
 
@@ -486,7 +499,10 @@ const QuickQuote: React.FC<{ language: Language; user?: User | null }> = ({ lang
     setter: React.Dispatch<React.SetStateAction<BoardRow[]>>,
     thicknessOptions: number[],
     defaultThickness: number,
-    showColorSelector = false
+    showColorSelector = false,
+    maxWidthMm = MAX_BOARD_WIDTH_MM,
+    maxHeightMm = MAX_BOARD_HEIGHT_MM,
+    maxSizeNote?: string
   ) => {
     return (
       <div className="space-y-4">
@@ -515,9 +531,9 @@ const QuickQuote: React.FC<{ language: Language; user?: User | null }> = ({ lang
                   <input
                     type="number"
                     min={1}
-                    max={MAX_BOARD_WIDTH_MM}
+                    max={maxWidthMm}
                     value={row.width}
-                    onChange={(e) => updateBoardRows(setter, row.id, { width: Math.min(MAX_BOARD_WIDTH_MM, Number(e.target.value) || 0) })}
+                    onChange={(e) => updateBoardRows(setter, row.id, { width: Math.min(maxWidthMm, Number(e.target.value) || 0) })}
                     className="w-full border border-slate-200 rounded-xl px-3 py-2.5 bg-white"
                   />
                 </div>
@@ -526,9 +542,9 @@ const QuickQuote: React.FC<{ language: Language; user?: User | null }> = ({ lang
                   <input
                     type="number"
                     min={1}
-                    max={MAX_BOARD_HEIGHT_MM}
+                    max={maxHeightMm}
                     value={row.height}
-                    onChange={(e) => updateBoardRows(setter, row.id, { height: Math.min(MAX_BOARD_HEIGHT_MM, Number(e.target.value) || 0) })}
+                    onChange={(e) => updateBoardRows(setter, row.id, { height: Math.min(maxHeightMm, Number(e.target.value) || 0) })}
                     className="w-full border border-slate-200 rounded-xl px-3 py-2.5 bg-white"
                   />
                 </div>
@@ -587,7 +603,7 @@ const QuickQuote: React.FC<{ language: Language; user?: User | null }> = ({ lang
                   </span>
                 )}
               </div>
-              <div className="text-xs font-bold text-slate-500">{t.qq_boardMaxSizeNote}</div>
+              <div className="text-xs font-bold text-slate-500">{maxSizeNote || t.qq_boardMaxSizeNote}</div>
               {calc.minAreaApplied && <div className="text-xs font-bold text-amber-600">⚠ {t.qq_minAreaWarning}</div>}
             </div>
           );
@@ -610,6 +626,12 @@ const QuickQuote: React.FC<{ language: Language; user?: User | null }> = ({ lang
     { value: 'marine_board', label: t.qq_marineBoard },
     { value: 'frame', label: t.qq_frame },
   ];
+  const marineBoardMaxSizeNote =
+    language === 'cn'
+      ? '海洋板最大尺寸：宽2440mm，高1220mm'
+      : language === 'jp'
+        ? 'マリンボード最大サイズ: 幅2440mm / 高さ1220mm'
+        : 'Marine board max size: width 2440mm, height 1220mm';
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 py-8 sm:py-12">
@@ -864,7 +886,17 @@ const QuickQuote: React.FC<{ language: Language; user?: User | null }> = ({ lang
 
         {selectedProduct === 'aluminum_plate' && renderBoardEditor(aluPlateRows, aluPlateCalculated, setAluPlateRows, [1, 2, 3, 4, 5], 2, true)}
         {selectedProduct === 'pegboard' && renderBoardEditor(pegboardRows, pegboardCalculated, setPegboardRows, [1, 2, 3, 4, 5], 2, true)}
-        {selectedProduct === 'marine_board' && renderBoardEditor(marineBoardRows, marineBoardCalculated, setMarineBoardRows, [6, 9, 12, 15, 18], 18)}
+        {selectedProduct === 'marine_board' && renderBoardEditor(
+          marineBoardRows,
+          marineBoardCalculated,
+          setMarineBoardRows,
+          [6, 9, 12, 15, 18],
+          18,
+          false,
+          MARINE_BOARD_MAX_WIDTH_MM,
+          MARINE_BOARD_MAX_HEIGHT_MM,
+          marineBoardMaxSizeNote
+        )}
 
         {selectedProduct === 'frame' && (
           <div className="space-y-4">

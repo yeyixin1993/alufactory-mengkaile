@@ -117,14 +117,15 @@ const ProfileVisualizer: React.FC<ProfileVisualizerProps> = ({
   const { length, variantId, holes, tapping } = config;
   const selectedVariant = PROFILE_VARIANTS.find(v => v.id === variantId) || PROFILE_VARIANTS[0];
 
-  const tapDisabledVariants = ['2040', '3060', '2040-N1-20', '2040-N1-40', '2047', '2060', '20100'];
+  const tapDisabledVariants = ['2040', '3060', '2040-N1-20', '2040-N1-40', '2047', '2060', '20100', '4080'];
 
   // Helper logic extracted from Editor
   const isRadiusProfile = selectedVariant.id.endsWith('R');
   const availableSides: ProfileSide[] = isRadiusProfile ? ['A', 'B'] : ['A', 'B', 'C', 'D'];
   
-  const isRectangular = ['2040', '3060', '2040-N1-20', '2040-N1-40', '2047', '2060', '20100'].includes(selectedVariant.id);
+  const isRectangular = ['2040', '3060', '2040-N1-20', '2040-N1-40', '2047', '2060', '20100', '4080'].includes(selectedVariant.id);
   const isWideFace = isRectangular && (selectedSide === 'B' || selectedSide === 'D');
+  
   // Even wider faces for 2060 and 20100
   const isExtraWideFace = ['2060', '20100'].includes(selectedVariant.id) && (selectedSide === 'B' || selectedSide === 'D');
 
@@ -160,6 +161,9 @@ const ProfileVisualizer: React.FC<ProfileVisualizerProps> = ({
 
     // 20100: B/D have 5 grooves
     if (id === '20100' && (side === 'B' || side === 'D')) return 5;
+
+    // 4080: B/D use same groove rule as 20100
+    if (id === '4080' && (side === 'B' || side === 'D')) return 2;
 
     // Legacy name-based rules (2020 / 3030 and other variants that include N1/N2/N3)
     if (name.includes('n1') && side === 'A') return 0;
