@@ -23,6 +23,8 @@ interface PreviewData {
   shippingMethod?: string;
   shippingFee?: number;
   include304Screws?: boolean;
+  includeLabelService?: boolean;
+  labelFee?: number;
   overlengthFee?: number;
 }
 
@@ -52,12 +54,12 @@ const FactorySheetPreviewPage: React.FC = () => {
     );
   }
 
-  const { cart, user, language, showPrice, address, shippingMethod, shippingFee, include304Screws, overlengthFee } = data;
+  const { cart, user, language, showPrice, address, shippingMethod, shippingFee, include304Screws, includeLabelService, labelFee, overlengthFee } = data;
   const t = TRANSLATIONS[language];
   const dateStr = formatEast8Date(new Date());
   const orderRef = React.useMemo(() => Math.random().toString(36).substr(2, 6).toUpperCase(), []);
   const screwFee = React.useMemo(() => calculateScrewPlan(cart, !!include304Screws).totalFee, [cart, include304Screws]);
-  const totalAmount = cart.reduce((sum, item) => sum + (item.totalPrice || 0), 0) + (shippingFee || 0) + screwFee;
+  const totalAmount = cart.reduce((sum, item) => sum + (item.totalPrice || 0), 0) + (shippingFee || 0) + screwFee + (labelFee || 0);
   const fileBaseName = buildOrderPdfFilename({
     createdAt: new Date(),
     userName: address?.recipient_name || user?.name || user?.id,
@@ -213,6 +215,8 @@ const FactorySheetPreviewPage: React.FC = () => {
             shippingMethod={shippingMethod}
             shippingFee={shippingFee}
             include304Screws={include304Screws}
+            includeLabelService={includeLabelService}
+            labelFee={labelFee}
             overlengthFee={overlengthFee}
           />
         </div>

@@ -2,7 +2,7 @@
 // Add missing React import to fix namespace errors
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { DrillHole, ProfileConfig, ProfileSide, TappingConfig, Language, HoleType, ProfileFinish, CartItem, Product, MiterCutConfig, MiterCutDirection, MiterCutSide, User } from '../types';
+import { DrillHole, ProfileConfig, ProfileSide, TappingConfig, Language, HoleType, ProfileFinish, CartItem, Product, MiterCutConfig, MiterCutDirection, MiterCutSide, User, ThreadSize } from '../types';
 import { TRANSLATIONS, PROFILE_VARIANTS, PROFILE_COLORS, COLOR_ONLY_COLORED_SECTION_IDS } from '../constants';
 import { isVipMembership } from '../utils/membership';
 import { Plus, Trash2, List, ShoppingCart, Pencil, X, Hammer, Settings2, Copy } from 'lucide-react';
@@ -47,10 +47,13 @@ const ProfileEditor: React.FC<ProfileEditorProps> = ({ language, product, user, 
   const [holes, setHoles] = useState<DrillHole[]>(initialConfig?.holes || []);
   const [miterCut, setMiterCut] = useState<MiterCutConfig>(initialConfig?.miterCut || { left: { enabled: false, direction: 'up', side: 'AC' }, right: { enabled: false, direction: 'up', side: 'AC' } });
   const [showMiterCut, setShowMiterCut] = useState<boolean>(!!(initialConfig?.miterCut?.left?.enabled || initialConfig?.miterCut?.right?.enabled));
+  const [remark, setRemark] = useState<string>(String(initialConfig?.remark || ''));
   
   const [selectedSide, setSelectedSide] = useState<ProfileSide>('A');
   const [newHolePos, setNewHolePos] = useState<string>('');
   const [newHoleType, setNewHoleType] = useState<HoleType>('through');
+  const [threadSize, setThreadSize] = useState<ThreadSize>('M3');
+  const [batchHolePositions, setBatchHolePositions] = useState<string[]>(Array.from({ length: 10 }, () => ''));
   const [selectedGrooveIndex, setSelectedGrooveIndex] = useState<number>(0);
 
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -114,12 +117,63 @@ const ProfileEditor: React.FC<ProfileEditorProps> = ({ language, product, user, 
   const addHole = () => {
     const pos = parseFloat(newHolePos);
     if (!isNaN(pos) && pos >= 0 && pos < length) {
-      setHoles([...holes, { id: Math.random().toString(36).substr(2, 9), side: selectedSide, positionMm: pos, type: newHoleType, grooveIndex: selectedGrooveIndex }]);
+      setHoles([
+        ...holes,
+        {
+          id: Math.random().toString(36).substr(2, 9),
+          side: selectedSide,
+          positionMm: pos,
+          type: newHoleType,
+          threadSize: newHoleType === 'threaded' ? threadSize : undefined,
+          grooveIndex: selectedGrooveIndex,
+        }
+      ]);
       setNewHolePos('');
     } else if (pos >= length) {
       alert(t.position + " " + t.maxLengthExceeded);
     }
   };
+
+  const addBatchHoles = () => {
+    const validPositions = batchHolePositions
+      .slice(0, 10)
+      .map((raw) => raw.trim())
+      .filter((raw) => raw !== '')
+      .map((raw) => Number(raw))
+      .filter((num) => Number.isFinite(num) && num >= 0 && num < length);
+
+    if (validPositions.length === 0) {
+      return;
+    }
+
+    const newItems: DrillHole[] = validPositions.map((pos) => ({
+      id: Math.random().toString(36).substr(2, 9),
+      side: selectedSide,
+      positionMm: Number(pos),
+      type: newHoleType,
+      threadSize: newHoleType === 'threaded' ? threadSize : undefined,
+      grooveIndex: selectedGrooveIndex,
+    }));
+
+    setHoles((prev) => [...prev, ...newItems]);
+    setBatchHolePositions(Array.from({ length: 10 }, () => ''));
+  };
+
+  const getThreadSizeOptions = (vId: string): ThreadSize[] => {
+    const largeProfiles = ['3030', '3060', '4040', '4080'];
+    if (largeProfiles.some((x) => vId.startsWith(x))) {
+      return ['M3', 'M4', 'M5', 'M6', 'M8'];
+    }
+    return ['M3', 'M4', 'M5', 'M6'];
+  };
+
+  const threadSizeOptions = getThreadSizeOptions(variantId);
+
+  useEffect(() => {
+    if (!threadSizeOptions.includes(threadSize)) {
+      setThreadSize(threadSizeOptions[0]);
+    }
+  }, [variantId]);
 
   const defaultMiterCut: MiterCutConfig = { left: { enabled: false, direction: 'up', side: 'AC' }, right: { enabled: false, direction: 'up', side: 'AC' } };
 
@@ -131,7 +185,17 @@ const ProfileEditor: React.FC<ProfileEditorProps> = ({ language, product, user, 
     const effectiveMiterCut = showMiterCut ? miterCut : defaultMiterCut;
     const unitPrice = calculateItemUnitPrice(length, sortedHoles, tapping, effectiveMiterCut);
     
-    const config: ProfileConfig = { length, tapping: JSON.parse(JSON.stringify(tapping)), holes: sortedHoles, variantId, finish, colorId, unitPrice, miterCut: JSON.parse(JSON.stringify(effectiveMiterCut)) };
+    const config: ProfileConfig = {
+      length,
+      tapping: JSON.parse(JSON.stringify(tapping)),
+      holes: sortedHoles,
+      variantId,
+      finish,
+      colorId,
+      unitPrice,
+      miterCut: JSON.parse(JSON.stringify(effectiveMiterCut)),
+      remark: remark.trim(),
+    };
     
     if (initialItem) {
       onUpdateItem({ ...initialItem, config, totalPrice: parseFloat((unitPrice * initialItem.quantity).toFixed(1)) });
@@ -161,6 +225,8 @@ const ProfileEditor: React.FC<ProfileEditorProps> = ({ language, product, user, 
       setTapping({ left: [false, false], right: [false, false] });
       setMiterCut({ ...defaultMiterCut });
       setShowMiterCut(false);
+      setRemark('');
+      setRemark('');
     }
   };
 
@@ -330,6 +396,18 @@ const ProfileEditor: React.FC<ProfileEditorProps> = ({ language, product, user, 
             {isTooLong && <div className="text-red-500 text-xs mt-2 font-bold">{t.maxLengthExceeded} ({MAX_PROFILE_LENGTH_MM}mm)</div>}
         </div>
 
+        <div className="mb-8">
+          <label className="block text-xs font-black text-slate-400 uppercase mb-2">客户备注</label>
+          <input
+            type="text"
+            value={remark}
+            onChange={(e) => setRemark(e.target.value)}
+            placeholder="例如：客厅左侧立柱 / 玄关右上横梁"
+            maxLength={100}
+            className="w-full border border-slate-200 rounded-xl px-4 py-3 outline-none bg-slate-50 font-bold text-slate-700"
+          />
+        </div>
+
         <div className="mb-8 bg-slate-50 p-6 rounded-2xl border border-slate-100">
            <h4 className="text-xs font-black text-slate-400 uppercase mb-4 flex items-center gap-2 tracking-widest"><Hammer className="w-4 h-4 text-blue-500"/> {t.holes}</h4>
            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 items-end">
@@ -345,8 +423,39 @@ const ProfileEditor: React.FC<ProfileEditorProps> = ({ language, product, user, 
                   <option value="threaded">{t.typeThreaded || '螺纹孔'}</option>
                 </select>
               </div>
+              {newHoleType === 'threaded' && (
+                <div className="col-span-1">
+                  <label className="block text-[10px] font-black text-slate-400 uppercase mb-1">螺纹规格</label>
+                  <select value={threadSize} onChange={e => setThreadSize(e.target.value as ThreadSize)} className="w-full border rounded-xl px-3 py-2 text-sm bg-white font-black">
+                    {threadSizeOptions.map((size) => (
+                      <option key={size} value={size}>{size}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
               
               <button onClick={addHole} className="bg-slate-900 text-white px-4 py-2 rounded-xl text-xs font-black hover:bg-slate-700 transition-all h-[42px] uppercase">{t.addHole}</button>
+           </div>
+
+           <div className="mt-4 border-t border-slate-200 pt-4">
+              <label className="block text-[10px] font-black text-slate-400 uppercase mb-2">批量位置 (mm) · 最多10个（空白会自动忽略）</label>
+              <div className="grid grid-cols-2 md:grid-cols-5 gap-2 mb-3">
+                {batchHolePositions.map((value, idx) => (
+                  <input
+                    key={idx}
+                    type="number"
+                    value={value}
+                    onChange={(e) => {
+                      const next = [...batchHolePositions];
+                      next[idx] = e.target.value;
+                      setBatchHolePositions(next);
+                    }}
+                    placeholder={`${idx + 1}`}
+                    className="w-full border rounded-xl px-2 py-1.5 text-xs font-black"
+                  />
+                ))}
+              </div>
+              <button onClick={addBatchHoles} className="bg-blue-600 text-white px-4 py-2 rounded-xl text-xs font-black hover:bg-blue-700 transition-all uppercase">批量添加打孔</button>
            </div>
         </div>
         {grooveCount >= 2 && (
@@ -505,7 +614,11 @@ const ProfileEditor: React.FC<ProfileEditorProps> = ({ language, product, user, 
                     const profileColor = PROFILE_COLORS.find(c => c.id === item.config.colorId);
                     return (
                       <tr key={item.id} className={`group ${item.id === editingId ? 'bg-blue-50/50' : 'hover:bg-slate-50/50'} transition-colors`}>
-                        <td className="py-5 px-4"><div className="font-black text-slate-800">{item.config.variantId}</div><div className="text-[10px] text-slate-400 font-black">{item.config.length}mm</div></td>
+                        <td className="py-5 px-4">
+                          <div className="font-black text-slate-800">{item.config.variantId}</div>
+                          <div className="text-[10px] text-slate-400 font-black">{item.config.length}mm</div>
+                          {!!item.config.remark && <div className="text-[10px] text-slate-500 mt-1">备注：{item.config.remark}</div>}
+                        </td>
                         <td className="px-4">
                            <div className="flex items-center gap-2">
                              <span className="w-3 h-3 rounded-full border border-slate-200" style={{ background: item.config.finish === 'oxidized' ? '#e2e8f0' : '#475569' }}></span>
@@ -528,7 +641,7 @@ const ProfileEditor: React.FC<ProfileEditorProps> = ({ language, product, user, 
                         <td className="px-4 text-right">
                           <div className="flex gap-1 justify-end opacity-0 group-hover:opacity-100 transition-opacity">
                             <button onClick={() => duplicateDraftItem(item)} title={t.copy} className="p-2 text-slate-400 hover:text-emerald-600 hover:bg-white rounded-xl transition-all"><Copy className="w-4 h-4"/></button>
-                            <button onClick={() => { setEditingId(item.id); setVariantId(item.config.variantId); setLength(item.config.length); setHoles(item.config.holes); setTapping(item.config.tapping); setFinish(item.config.finish); setColorId(item.config.colorId); const mc = item.config.miterCut || { left: { enabled: false, direction: 'up', side: 'AC' }, right: { enabled: false, direction: 'up', side: 'AC' } }; setMiterCut(mc); setShowMiterCut(!!(mc.left?.enabled || mc.right?.enabled)); }} className="p-2 text-slate-400 hover:text-blue-600 hover:bg-white rounded-xl transition-all"><Pencil className="w-4 h-4"/></button>
+                            <button onClick={() => { setEditingId(item.id); setVariantId(item.config.variantId); setLength(item.config.length); setHoles(item.config.holes); setTapping(item.config.tapping); setFinish(item.config.finish); setColorId(item.config.colorId); setRemark(item.config.remark || ''); const mc = item.config.miterCut || { left: { enabled: false, direction: 'up', side: 'AC' }, right: { enabled: false, direction: 'up', side: 'AC' } }; setMiterCut(mc); setShowMiterCut(!!(mc.left?.enabled || mc.right?.enabled)); }} className="p-2 text-slate-400 hover:text-blue-600 hover:bg-white rounded-xl transition-all"><Pencil className="w-4 h-4"/></button>
                             <button onClick={() => setDraftProfiles(draftProfiles.filter(x => x.id !== item.id))} className="p-2 text-slate-400 hover:text-red-500 hover:bg-white rounded-xl transition-all"><Trash2 className="w-4 h-4"/></button>
                           </div>
                         </td>

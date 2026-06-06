@@ -42,6 +42,7 @@ export interface User {
 // Profile Specifics
 export type ProfileSide = 'A' | 'B' | 'C' | 'D';
 export type HoleType = 'through' | 'countersunk' | 'threaded';
+export type ThreadSize = 'M3' | 'M4' | 'M5' | 'M6' | 'M8';
 export type ProfileFinish = 'oxidized' | 'electrophoretic' | 'powder';
 
 export interface TappingConfig {
@@ -54,6 +55,7 @@ export interface DrillHole {
   side: ProfileSide;
   positionMm: number;
   type: HoleType;
+  threadSize?: ThreadSize;
   grooveIndex?: number;
 }
 
@@ -97,6 +99,8 @@ export interface ProfileConfig {
   colorId?: string;
   unitPrice?: number;
   miterCut?: MiterCutConfig;
+  remark?: string;
+  labelService?: boolean;
 }
 
 export interface Rect {
@@ -129,6 +133,8 @@ export interface Order {
   shippingFee: number;
   screwFee?: number;
   include304Screws?: boolean;
+  labelFee?: number;
+  includeLabelService?: boolean;
   overlengthFee?: number;
   shippingMethod?: string;
   status: 'pending' | 'confirmed' | 'processing' | 'shipped' | 'delivered' | 'cancelled';

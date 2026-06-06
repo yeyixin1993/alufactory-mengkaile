@@ -318,6 +318,8 @@ const UserProfile: React.FC<{
                   ? printOrder.include304Screws
                   : inferInclude304ScrewsByTotal(printOrder.items, printOrder.shippingFee || 0, getOrderTotal(printOrder))
               }
+              includeLabelService={!!printOrder.includeLabelService}
+              labelFee={printOrder.labelFee}
               overlengthFee={printOrder.overlengthFee}
             />
           )}
@@ -749,6 +751,7 @@ const Cart: React.FC<{
   const [isEditingAddress, setIsEditingAddress] = useState<Address | null | 'new'>(null);
   const [selectedCourier, setSelectedCourier] = useState<ShippingMethod | 'auto'>('auto');
   const [include304Screws, setInclude304Screws] = useState(false);
+  const [includeLabelService, setIncludeLabelService] = useState(false);
 
   const printRef = useRef<HTMLDivElement>(null);
   const addresses = user?.addresses || [];
@@ -840,10 +843,15 @@ const Cart: React.FC<{
   const activeShipping = shippingOptions[activeCourier];
   const screwPlan = React.useMemo(() => calculateScrewPlan(cart, include304Screws), [cart, include304Screws]);
   const screwFee = screwPlan.totalFee;
+  const labelProfileCount = React.useMemo(
+    () => cart.reduce((sum, item) => sum + (item.product.type === ProductType.PROFILE ? (Number(item.quantity) || 0) : 0), 0),
+    [cart]
+  );
+  const labelFee = includeLabelService ? labelProfileCount : 0;
 
   const calculateTotal = () => {
     const base = cart.reduce((acc, i) => acc + i.totalPrice, 0);
-    return { base, ship: activeShipping.fee, overlength: activeShipping.overlength, total: base + activeShipping.fee + screwFee };
+    return { base, ship: activeShipping.fee, overlength: activeShipping.overlength, total: base + activeShipping.fee + screwFee + labelFee };
   };
 
   const { base: baseTotal, ship: shippingFee, overlength: overlengthFee, total: finalTotal } = calculateTotal();
@@ -879,11 +887,22 @@ const Cart: React.FC<{
       const newOrder: Order = { 
         id: Math.random().toString(36).substr(2, 6).toUpperCase(), 
         date: new Date().toISOString(), 
-        items: [...cart], 
+        items: cart.map((item) => {
+          if (item.product.type !== ProductType.PROFILE) return item;
+          return {
+            ...item,
+            config: {
+              ...(item.config || {}),
+              labelService: includeLabelService,
+            },
+          };
+        }), 
         total: finalTotal, 
         shippingFee,
         screwFee,
         include304Screws,
+        labelFee,
+        includeLabelService,
         overlengthFee,
         shippingMethod: SHIPPING_METHOD_NAMES[activeCourier][language],
         status: 'pending', 
@@ -900,7 +919,10 @@ const Cart: React.FC<{
       }
 
       setCart([]);
+      removeCachedArray(getCacheKey(CART_CACHE_PREFIX, user.id));
+      removeCachedArray(getCacheKey(DRAFT_CACHE_PREFIX, user.id));
       try {
+        await ApiService.clearCart();
         await ApiService.syncCart([]);
       } catch (syncErr) {
         console.warn('Cart clear sync failed after checkout:', syncErr);
@@ -968,6 +990,8 @@ const Cart: React.FC<{
             shippingMethod={SHIPPING_METHOD_NAMES[activeCourier][language]}
             shippingFee={shippingFee}
             include304Screws={include304Screws}
+            includeLabelService={includeLabelService}
+            labelFee={labelFee}
             overlengthFee={overlengthFee}
           />
         </div>
@@ -1009,7 +1033,7 @@ const Cart: React.FC<{
           <div className="flex justify-between items-center bg-white p-5 rounded-[2rem] shadow-xl border border-slate-100">
             <Link to="/product/p2" className="flex items-center gap-2 text-blue-600 font-black px-5 py-3 rounded-2xl hover:bg-blue-50 transition-all text-sm"><ArrowLeft className="w-4 h-4"/> {t.continueShopping}</Link>
             <div className="flex gap-2">
-              <button onClick={() => openFactorySheetPreview({ cart, user, language, showPrice: true, address: selectedAddress || undefined, shippingMethod: SHIPPING_METHOD_NAMES[activeCourier][language], shippingFee, include304Screws, overlengthFee })} className="flex items-center gap-2 text-slate-700 font-bold px-5 py-3 rounded-2xl border border-slate-200 hover:bg-slate-50 transition-all text-sm"><Eye className="w-4 h-4"/> {t.preview}</button>
+              <button onClick={() => openFactorySheetPreview({ cart, user, language, showPrice: true, address: selectedAddress || undefined, shippingMethod: SHIPPING_METHOD_NAMES[activeCourier][language], shippingFee, include304Screws, includeLabelService, labelFee, overlengthFee })} className="flex items-center gap-2 text-slate-700 font-bold px-5 py-3 rounded-2xl border border-slate-200 hover:bg-slate-50 transition-all text-sm"><Eye className="w-4 h-4"/> {t.preview}</button>
               {user?.role === 'admin' && (
                 <button onClick={() => handleGeneratePDF(false)} className="flex items-center gap-2 text-orange-600 font-bold px-5 py-3 rounded-2xl border border-orange-100 bg-orange-50 hover:bg-orange-100 transition-all text-sm"><FileDown className="w-4 h-4"/> {t.downloadNoPrice}</button>
               )}
@@ -1075,6 +1099,11 @@ const Cart: React.FC<{
                       <div className="h-28 w-full max-w-lg bg-slate-50/50 rounded-[2rem] p-4">
                         <ProfileVisualizer config={item.config} selectedSide="A" onSideChange={() => {}} interactive={false} tapLabel={t.tapAction} showSideSelector={false} />
                       </div>
+                      {!!profileConfig?.remark && (
+                        <div className="mt-3 text-xs font-bold text-slate-700 bg-slate-50 border border-slate-200 rounded-xl px-3 py-2">
+                          备注：{profileConfig.remark}
+                        </div>
+                      )}
                     </div>
                   )}
                   {item.product.type !== ProductType.PROFILE && (
@@ -1231,6 +1260,23 @@ const Cart: React.FC<{
                         : '当前购物车没有可统计孔位的型材打孔项'}
                     </div>
                   </>
+                )}
+              </div>
+              <div className="bg-slate-800/70 border border-slate-700 rounded-2xl px-4 py-3 space-y-2">
+                <label className="flex items-start gap-3 text-sm font-bold text-slate-200 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={includeLabelService}
+                    onChange={(e) => setIncludeLabelService(e.target.checked)}
+                    className="w-4 h-4 mt-0.5 rounded border-slate-500 text-blue-500 focus:ring-blue-500"
+                  />
+                  <span>需要贴标签服务（¥1/根型材）</span>
+                </label>
+                {includeLabelService && (
+                  <div className="flex justify-between text-slate-300 text-sm">
+                    <span>贴标签服务费（{labelProfileCount} 根 × ¥1）</span>
+                    <span className="font-black text-white">{currency}{labelFee.toFixed(1)}</span>
+                  </div>
                 )}
               </div>
               {overlengthFee > 0 && (

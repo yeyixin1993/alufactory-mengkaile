@@ -13,6 +13,8 @@ interface FactorySheetPreviewProps {
   shippingMethod?: string;
   shippingFee?: number;
   include304Screws?: boolean;
+  includeLabelService?: boolean;
+  labelFee?: number;
   overlengthFee?: number;
 }
 
@@ -30,6 +32,8 @@ const openFactorySheetPreview = (props: Omit<FactorySheetPreviewProps, 'onClose'
     shippingMethod: props.shippingMethod,
     shippingFee: props.shippingFee,
     include304Screws: props.include304Screws,
+    includeLabelService: props.includeLabelService,
+    labelFee: props.labelFee,
     overlengthFee: props.overlengthFee,
   };
   localStorage.setItem('__factorySheetPreviewData', JSON.stringify(payload));

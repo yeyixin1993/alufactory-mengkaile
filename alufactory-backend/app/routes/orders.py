@@ -97,6 +97,12 @@ def create_order():
                 config=item_data.get('config')
             )
             order.items.append(order_item)
+
+        # Clear user's cart after successful order creation to avoid stale/repeated items.
+        cart = Cart.query.filter_by(user_id=current_user_id).first()
+        if cart:
+            CartItem.query.filter_by(cart_id=cart.id).delete()
+            cart.updated_at = datetime.utcnow()
         
         db.session.add(order)
         db.session.commit()

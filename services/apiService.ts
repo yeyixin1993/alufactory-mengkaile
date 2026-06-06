@@ -2,6 +2,7 @@
 import { Order, User, Address, CartItem, ProductType } from '../types';
 import { normalizeMembershipLevel } from '../utils/membership';
 import { PayloadSecurity } from './payloadSecurity';
+import { INITIAL_PRODUCTS } from '../constants';
 
 const normalizeBaseUrl = (url: string) => url.replace(/\/+$/, '');
 
@@ -334,6 +335,10 @@ class ApiServiceClass {
   }
 
   // ===== CART =====
+  private getProductMeta(productId: string) {
+    return INITIAL_PRODUCTS.find((p) => p.id === productId);
+  }
+
   private mapServerCartItem(item: any): CartItem {
     const quantity = Math.max(1, Number(item?.quantity) || 1);
     const unitPriceFromConfig = Number(item?.config?.unitPrice);
@@ -342,13 +347,17 @@ class ApiServiceClass {
     const productId = String(item?.product_id || item?.id || 'unknown');
     const productName = String(item?.product_name || productId);
     const productType = String(item?.product_type || ProductType.PROFILE);
+    const productMeta = this.getProductMeta(productId);
+    const productNameCN = productMeta?.name?.cn || productName;
+    const productNameEN = productMeta?.name?.en || productName;
+    const productNameJP = productMeta?.name?.jp || productName;
 
     return {
       id: String(item?.id || `${productId}_${Math.random().toString(36).slice(2, 8)}`),
       product: {
         id: productId,
         type: productType as ProductType,
-        name: { en: productName, cn: productName, jp: productName },
+        name: { en: productNameEN, cn: productNameCN, jp: productNameJP },
         description: { en: '', cn: '', jp: '' },
         basePrice: unitPrice,
         imageUrl: '',
@@ -378,7 +387,7 @@ class ApiServiceClass {
         const unitPrice = Number.isFinite(unitPriceFromConfig) && unitPriceFromConfig > 0
           ? unitPriceFromConfig
           : Number((item.totalPrice / quantity).toFixed(4));
-        const productName = item.product?.name?.en || item.product?.name?.cn || item.product?.name?.jp || item.product?.id || 'Unknown Product';
+        const productName = item.product?.name?.cn || item.product?.name?.en || item.product?.name?.jp || item.product?.id || 'Unknown Product';
 
         return {
           product_id: item.product?.id,
@@ -447,7 +456,7 @@ class ApiServiceClass {
     // Format items to match backend expectations
     const formattedItems = order.items.map(item => ({
       product_id: item.product.id,
-      product_name: item.product.name.en,
+      product_name: item.product.name.cn || item.product.name.en || item.product.id,
       product_type: item.product.type,
       quantity: item.quantity,
       unit_price: item.totalPrice / item.quantity,
@@ -466,6 +475,8 @@ class ApiServiceClass {
       shipping_fee: order.shippingFee,
       total_amount: order.total,
       shipping_method: order.shippingMethod || '',
+      label_fee: order.labelFee || 0,
+      include_label_service: !!order.includeLabelService,
       overlength_fee: order.overlengthFee || 0,
     };
 
@@ -485,6 +496,8 @@ class ApiServiceClass {
       address: order.address,
       addressId: order.address.id,
       shippingMethod: order.shippingMethod,
+      labelFee: order.labelFee,
+      includeLabelService: order.includeLabelService,
       overlengthFee: order.overlengthFee,
     };
   }
@@ -530,6 +543,14 @@ class ApiServiceClass {
       deliveredAt: order.delivered_at,
       cancelledAt: order.cancelled_at,
       shippingMethod: order.shipping_method,
+      includeLabelService: Array.isArray(order.items) ? order.items.some((it: any) => !!it?.config?.labelService) : false,
+      labelFee: Array.isArray(order.items)
+        ? order.items.reduce((sum: number, it: any) => {
+            const isProfile = String(it?.product_type || '').toUpperCase() === String(ProductType.PROFILE);
+            const enabled = !!it?.config?.labelService;
+            return sum + (isProfile && enabled ? (Number(it?.quantity) || 0) : 0);
+          }, 0)
+        : 0,
       overlengthFee: order.overlength_fee,
     })) : [];
   }
@@ -574,6 +595,14 @@ class ApiServiceClass {
       deliveredAt: order.delivered_at,
       cancelledAt: order.cancelled_at,
       shippingMethod: order.shipping_method,
+      includeLabelService: Array.isArray(order.items) ? order.items.some((it: any) => !!it?.config?.labelService) : false,
+      labelFee: Array.isArray(order.items)
+        ? order.items.reduce((sum: number, it: any) => {
+            const isProfile = String(it?.product_type || '').toUpperCase() === String(ProductType.PROFILE);
+            const enabled = !!it?.config?.labelService;
+            return sum + (isProfile && enabled ? (Number(it?.quantity) || 0) : 0);
+          }, 0)
+        : 0,
       overlengthFee: order.overlength_fee,
     } as Order;
   }

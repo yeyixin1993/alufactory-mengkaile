@@ -18,12 +18,14 @@ interface FactorySheetProps {
   shippingMethod?: string;
   shippingFee?: number;
   include304Screws?: boolean;
+  includeLabelService?: boolean;
+  labelFee?: number;
   overlengthFee?: number;
 }
 
 const getCurrency = (lang: Language) => lang === 'cn' ? '￥' : '$';
 
-const FactorySheet: React.FC<FactorySheetProps> = ({ cart, user, language, orderRef, dateStr, id, showPrice = true, address, shippingMethod, shippingFee: passedShippingFee, include304Screws = false, overlengthFee: passedOverlengthFee }) => {
+const FactorySheet: React.FC<FactorySheetProps> = ({ cart, user, language, orderRef, dateStr, id, showPrice = true, address, shippingMethod, shippingFee: passedShippingFee, include304Screws = false, includeLabelService = false, labelFee: passedLabelFee, overlengthFee: passedOverlengthFee }) => {
   const t = TRANSLATIONS[language];
   const currency = getCurrency(language);
  
@@ -82,13 +84,17 @@ const FactorySheet: React.FC<FactorySheetProps> = ({ cart, user, language, order
 
       // 5. Create Key
       // This ensures a profile with tapping is stored separately from one without
-      const key = [length, model, cfg.colorId, section, processingState, tapType, miterKey].join('||');
+      const customRemark = String(cfg.remark || '').trim();
+      const key = [length, model, cfg.colorId, section, processingState, tapType, miterKey, customRemark].join('||');
 
       // 6. Create Remark
       const hasMiter = hasMiterLeft || hasMiterRight;
       let remark = '无额外加工';
       if (processingState === 'drill' || hasMiter) {
         remark = '加工见下图';
+      }
+      if (customRemark) {
+        remark = customRemark;
       }
 
       const tapLabel = bothSideTap ? '两端攻丝' : oneSideTap ? '一端攻丝' : '无';
@@ -186,6 +192,19 @@ const FactorySheet: React.FC<FactorySheetProps> = ({ cart, user, language, order
     return m;
   }, [screwPlan.models]);
 
+  const labelProfileCount = React.useMemo(() => {
+    return cart.reduce((sum, item) => {
+      if (item.product.type !== ProductType.PROFILE) return sum;
+      const cfg = item.config as ProfileConfig;
+      if (includeLabelService || cfg.labelService) {
+        return sum + (Number(item.quantity) || 0);
+      }
+      return sum;
+    }, 0);
+  }, [cart, includeLabelService]);
+
+  const labelFee = typeof passedLabelFee === 'number' ? passedLabelFee : labelProfileCount;
+
   // 1. 先计算总重量（如果还没计算的话）
   const calculateTotalWeight = () => {
     let totalWeightKg = 0;
@@ -247,7 +266,7 @@ const FactorySheet: React.FC<FactorySheetProps> = ({ cart, user, language, order
     shippingLabel = SHIPPING_METHOD_NAMES[normalizedShippingMethod as ShippingMethod][language];
   }
 
-  const finalTotal = baseTotal + shippingFee + (include304Screws ? screwPlan.totalFee : 0);
+  const finalTotal = baseTotal + shippingFee + (include304Screws ? screwPlan.totalFee : 0) + labelFee;
 
   //const shipRate = activeAddress ? (SHIPPING_RATES[activeAddress.province] || { first: 15, next: 0 }) : { first: 0, next: 0 };
   //const shippingFee = activeAddress ? shipRate.first : 0;
@@ -277,6 +296,12 @@ const FactorySheet: React.FC<FactorySheetProps> = ({ cart, user, language, order
       </div>
 
       {/* Profiles Summary Spreadsheet (after header, before items) */}
+      {labelProfileCount > 0 && (
+        <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 text-sm font-bold text-amber-700">
+          标签服务提醒：需要打标签
+        </div>
+      )}
+
       <div className="bg-slate-50 p-4 rounded border border-slate-200">
         <h4 className="text-xs font-black text-slate-400 uppercase tracking-widest mb-2">{t.profileSummary || 'Profiles Summary'}</h4>
         <div className="overflow-x-auto">
@@ -472,7 +497,7 @@ const FactorySheet: React.FC<FactorySheetProps> = ({ cart, user, language, order
                                    {hole.type === 'countersunk'
                                      ? t.typeCountersunk
                                      : hole.type === 'threaded'
-                                       ? (t.typeThreaded || '螺纹孔')
+                                       ? `${t.typeThreaded || '螺纹孔'}${hole.threadSize ? ` (${hole.threadSize})` : ''}`
                                        : t.typeThrough}
                                  </td>
                                  <td className="p-2 border border-slate-100">{hole.grooveIndex === 1 ? t.abbrBottom : t.abbrTop}</td>
@@ -635,6 +660,12 @@ const FactorySheet: React.FC<FactorySheetProps> = ({ cart, user, language, order
                <div className="flex justify-between text-slate-500 text-xs">
                  <span>304螺丝及弹性配件费（总孔{screwPlan.totalHoles}）:</span>
                  <span className="font-bold text-slate-800">{currency}{screwPlan.totalFee.toFixed(1)}</span>
+               </div>
+             )}
+             {labelFee > 0 && (
+               <div className="flex justify-between text-slate-500 text-xs">
+                 <span>贴标签服务费（{labelProfileCount}根）:</span>
+                 <span className="font-bold text-slate-800">{currency}{labelFee.toFixed(1)}</span>
                </div>
              )}
              {(passedOverlengthFee ?? 0) > 0 && (
