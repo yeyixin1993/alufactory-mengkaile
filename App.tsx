@@ -770,53 +770,57 @@ const Cart: React.FC<{
   });
 
   const hasMarineBoard = cart.some((item) => item.product.type === ProductType.MARINE_BOARD);
+  const hasProfile = cart.some((item) => item.product.type === ProductType.PROFILE);
 
-  // Calculate total weight
-  const totalWeightKg = React.useMemo(() => {
+  // Calculate total profile weight
+  const totalProfileWeightKg = React.useMemo(() => {
     let w = 0;
     cart.forEach(item => {
       if (item.product.type === ProductType.PROFILE) {
         const cfg = item.config as ProfileConfig;
         const weightPerM = PROFILE_WEIGHTS[cfg.variantId!] || 0.6;
         w += weightPerM * (cfg.length / 1000) * item.quantity;
-      } else {
-        w += 1 * item.quantity;
       }
     });
     return w;
   }, [cart]);
 
+  const totalWeightKg = totalProfileWeightKg;
+
   // Calculate shipping fee for a given courier method
   const calcShippingForMethod = (method: ShippingMethod, province: string): { fee: number, overlength: number } => {
-    if (hasMarineBoard) {
-      return { fee: MARINE_BOARD_FLAT_SHIPPING_FEE, overlength: 0 };
-    }
+    const marineBoardShipping = hasMarineBoard ? MARINE_BOARD_FLAT_SHIPPING_FEE : 0;
 
     // 到付: 运费为0，由收件人支付
     if (method === 'sf_collect') {
-      return { fee: 0, overlength: 0 };
+      return { fee: marineBoardShipping, overlength: 0 };
     }
+
+    if (!hasProfile) {
+      return { fee: marineBoardShipping, overlength: 0 };
+    }
+
     const overlength = (method === 'standard' || method === 'sf') && hasOverlength ? 20 : 0;
     
     if (method === 'anneng') {
       // 安能: 15kg以内是首重价, 15kg以上每kg续重
       const rate = SHIPPING_RATES_AN[province] || { first: 50, next: 3 };
-      if (totalWeightKg <= 15) {
-        return { fee: rate.first, overlength: 0 };
+      if (totalProfileWeightKg <= 15) {
+        return { fee: rate.first + marineBoardShipping, overlength: 0 };
       } else {
-        const extraKg = Math.ceil(totalWeightKg - 15);
-        return { fee: rate.first + extraKg * rate.next, overlength: 0 };
+        const extraKg = Math.ceil(totalProfileWeightKg - 15);
+        return { fee: rate.first + extraKg * rate.next + marineBoardShipping, overlength: 0 };
       }
     } else if (method === 'sf') {
       // 顺丰: 首重1kg, 续重每kg
       const rate = SHIPPING_RATES_SF[province] || { first: 15, next: 5 };
-      const roundedWeight = Math.max(1, Math.ceil(totalWeightKg));
-      return { fee: rate.first + (roundedWeight - 1) * rate.next + overlength, overlength };
+      const roundedWeight = Math.max(1, Math.ceil(totalProfileWeightKg));
+      return { fee: rate.first + (roundedWeight - 1) * rate.next + overlength + marineBoardShipping, overlength };
     } else {
       // 普通快递: 首重1kg, 续重每kg
       const rate = SHIPPING_RATES[province] || { first: 18, next: 5 };
-      const roundedWeight = Math.max(1, Math.ceil(totalWeightKg));
-      return { fee: rate.first + (roundedWeight - 1) * rate.next + overlength, overlength };
+      const roundedWeight = Math.max(1, Math.ceil(totalProfileWeightKg));
+      return { fee: rate.first + (roundedWeight - 1) * rate.next + overlength + marineBoardShipping, overlength };
     }
   };
 
@@ -830,7 +834,7 @@ const Cart: React.FC<{
     const sfc = calcShippingForMethod('sf_collect', province);
     const cheapest: ShippingMethod = std.fee <= sf.fee && std.fee <= an.fee ? 'standard' : sf.fee <= an.fee ? 'sf' : 'anneng';
     return { standard: std, sf, anneng: an, sf_collect: sfc, cheapest };
-  }, [selectedAddress, totalWeightKg, hasOverlength, hasMarineBoard]);
+  }, [selectedAddress, totalProfileWeightKg, hasOverlength, hasMarineBoard, hasProfile]);
 
   const activeCourier: ShippingMethod = selectedCourier === 'auto' ? shippingOptions.cheapest : selectedCourier;
   const activeShipping = shippingOptions[activeCourier];
