@@ -502,6 +502,43 @@ class ApiServiceClass {
     };
   }
 
+  async updatePendingOrder(orderId: string, order: Order) {
+    if (!orderId) throw new Error('Order ID is required');
+    if (!order.address) throw new Error('Shipping address is required');
+    if (!Array.isArray(order.items) || order.items.length === 0) {
+      throw new Error('Order must have at least one item');
+    }
+
+    const formattedItems = order.items.map(item => ({
+      product_id: item.product.id,
+      product_name: item.product.name.cn || item.product.name.en || item.product.id,
+      product_type: item.product.type,
+      quantity: item.quantity,
+      unit_price: item.totalPrice / item.quantity,
+      total_price: item.totalPrice,
+      config: item.config
+    }));
+
+    const payload = {
+      items: formattedItems,
+      recipient_name: order.address.recipient_name,
+      phone: order.address.phone,
+      province: order.address.province,
+      address_detail: order.address.detail,
+      address_id: order.address.id || '',
+      subtotal: order.total - order.shippingFee,
+      shipping_fee: order.shippingFee,
+      total_amount: order.total,
+      shipping_method: order.shippingMethod || '',
+      label_fee: order.labelFee || 0,
+      include_label_service: !!order.includeLabelService,
+      overlength_fee: order.overlengthFee || 0,
+    };
+
+    const data = await this.request('PUT', `/orders/${orderId}`, payload);
+    return data?.order;
+  }
+
   async getOrders(userId: string) {
     const data = await this.request('GET', '/orders');
     const orders = data.orders || data;

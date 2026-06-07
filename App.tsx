@@ -22,12 +22,28 @@ import { calculateScrewPlan, inferInclude304ScrewsByTotal } from './utils/screwC
 
 const getCurrency = (lang: Language) => lang === 'cn' ? '￥' : '$';
 
+const stableSerialize = (value: unknown): string => {
+  if (value === null || value === undefined) return String(value);
+  if (Array.isArray(value)) {
+    return `[${value.map((item) => stableSerialize(item)).join(',')}]`;
+  }
+  if (typeof value === 'object') {
+    const record = value as Record<string, unknown>;
+    const keys = Object.keys(record).sort();
+    return `{${keys.map((key) => `${JSON.stringify(key)}:${stableSerialize(record[key])}`).join(',')}}`;
+  }
+  return JSON.stringify(value);
+};
+
+const getCartItemFingerprint = (item: CartItem) => {
+  return `${item.product.id}::${stableSerialize(item.config ?? {})}`;
+};
+
 const mergeCartItems = (currentCart: CartItem[], newItems: CartItem[]): CartItem[] => {
   const nextCart = [...currentCart];
   newItems.forEach(newItem => {
     const existingIndex = nextCart.findIndex(item => 
-      item.product.id === newItem.product.id && 
-      JSON.stringify(item.config) === JSON.stringify(newItem.config)
+      getCartItemFingerprint(item) === getCartItemFingerprint(newItem)
     );
 
     if (existingIndex !== -1) {
@@ -44,6 +60,22 @@ const mergeCartItems = (currentCart: CartItem[], newItems: CartItem[]): CartItem
     }
   });
   return nextCart;
+};
+
+const reconcileCartItems = (localItems: CartItem[], remoteItems: CartItem[]): CartItem[] => {
+  const byFingerprint = new Map<string, CartItem>();
+
+  // Keep local-only entries first (for offline/unsynced drafts already moved to cart).
+  localItems.forEach((item) => {
+    byFingerprint.set(getCartItemFingerprint(item), { ...item });
+  });
+
+  // Server snapshot is authoritative for duplicates.
+  remoteItems.forEach((item) => {
+    byFingerprint.set(getCartItemFingerprint(item), { ...item });
+  });
+
+  return Array.from(byFingerprint.values());
 };
 
 const CART_CACHE_PREFIX = 'mengkaile_cart_cache_v1';
@@ -731,8 +763,9 @@ const Cart: React.FC<{
   language: Language, 
   setCart: (c: CartItem[]) => void,
   user: User | null,
-  updateUser: (u: User) => void
-}> = ({ cart, language, setCart, user, updateUser }) => {
+  updateUser: (u: User) => void,
+  onSaveCartSuccess: () => void
+}> = ({ cart, language, setCart, user, updateUser, onSaveCartSuccess }) => {
   const t = TRANSLATIONS[language];
   const currency = getCurrency(language);
   const navigate = useNavigate();
@@ -740,10 +773,13 @@ const Cart: React.FC<{
   // showPreview state no longer needed — preview opens in new window
   const [isExporting, setIsExporting] = useState(false);
   const [pdfIncludePrice, setPdfIncludePrice] = useState(true);
+  const [isSavingCart, setIsSavingCart] = useState(false);
+  const [saveCartStatus, setSaveCartStatus] = useState<'idle' | 'saved' | 'error'>('idle');
   
   // Read addressId from URL query params (set when editing an existing order)
   const searchParams = new URLSearchParams(location.search);
   const initialAddressId = searchParams.get('addressId');
+  const editingOrderId = searchParams.get('editOrderId');
   
   const [selectedAddressId, setSelectedAddressId] = useState<string | null>(
     initialAddressId || user?.addresses?.[0]?.id || null
@@ -856,6 +892,85 @@ const Cart: React.FC<{
 
   const { base: baseTotal, ship: shippingFee, overlength: overlengthFee, total: finalTotal } = calculateTotal();
 
+  const handleSaveCart = async () => {
+    if (!user?.id) {
+      alert(language === 'cn'
+        ? '请先登录后再保存购物车。'
+        : language === 'jp'
+          ? 'カートを保存するにはログインしてください。'
+          : 'Please login before saving your cart.');
+      navigate('/login?redirect=/cart');
+      return;
+    }
+
+    setIsSavingCart(true);
+    setSaveCartStatus('idle');
+
+    try {
+      if (!selectedAddress) {
+        throw new Error(
+          language === 'cn'
+            ? '请先选择收货地址后再保存到历史待处理。'
+            : language === 'jp'
+              ? '保存前に配送先住所を選択してください。'
+              : 'Please select a shipping address before saving to pending history.'
+        );
+      }
+
+      const pendingOrder: Order = {
+        id: editingOrderId || Math.random().toString(36).substr(2, 6).toUpperCase(),
+        date: new Date().toISOString(),
+        items: cart.map((item) => {
+          if (item.product.type !== ProductType.PROFILE) return item;
+          return {
+            ...item,
+            config: {
+              ...(item.config || {}),
+              labelService: includeLabelService,
+            },
+          };
+        }),
+        total: finalTotal,
+        shippingFee,
+        screwFee,
+        include304Screws,
+        labelFee,
+        includeLabelService,
+        overlengthFee,
+        shippingMethod: SHIPPING_METHOD_NAMES[activeCourier][language],
+        status: 'pending',
+        userId: user.id,
+        address: selectedAddress,
+      };
+
+      if (editingOrderId) {
+        await ApiService.updatePendingOrder(editingOrderId, pendingOrder);
+      } else {
+        await ApiService.createOrder(pendingOrder);
+      }
+
+      await ApiService.syncCart(cart);
+
+      setSaveCartStatus('saved');
+      onSaveCartSuccess();
+    } catch (error) {
+      console.error('Manual cart save failed:', error);
+      const message = String((error as any)?.message || '');
+      if (editingOrderId && /admin access required|unauthorized|403/i.test(message)) {
+        alert(
+          language === 'cn'
+            ? '当前线上后端仍是旧版本（待处理订单更新接口仍限制管理员）。请先部署后端最新代码，再重试保存。'
+            : language === 'jp'
+              ? '本番バックエンドが旧バージョンのため、保留注文の更新が管理者限定のままです。最新バックエンドをデプロイ後、再度保存してください。'
+              : 'Production backend is still on an older version (pending order update is admin-only). Please deploy the latest backend, then save again.'
+        );
+      }
+      setSaveCartStatus('error');
+    } finally {
+      setIsSavingCart(false);
+    }
+  };
+
   const handleGeneratePDF = async (includePrice: boolean = true, returnBase64: boolean = false) => {
     if (!returnBase64) setIsExporting(true);
     try {
@@ -966,9 +1081,15 @@ const Cart: React.FC<{
       </div>
       <h2 className="text-4xl font-black text-slate-800 mb-3">{t.emptyCart}</h2>
       <p className="text-slate-500 mb-12 text-lg">{t.buildProject}</p>
-      <Link to="/" className="bg-slate-900 text-white px-10 py-5 rounded-3xl font-black hover:bg-blue-600 transition-all inline-flex items-center gap-3 shadow-xl shadow-slate-900/10">
-        {t.startShopping} <ArrowLeft className="w-5 h-5 rotate-180" />
-      </Link>
+
+      {saveCartStatus === 'saved' && (
+        <p className="text-sm text-emerald-600 font-black mb-5">{t.cartSaved}</p>
+      )}
+      <div className="flex flex-wrap gap-3 justify-center">
+        <Link to="/" className="bg-slate-900 text-white px-8 py-4 rounded-3xl font-black hover:bg-blue-600 transition-all inline-flex items-center gap-3 shadow-xl shadow-slate-900/10">
+          {t.startShopping} <ArrowLeft className="w-5 h-5 rotate-180" />
+        </Link>
+      </div>
     </div>
   );
 
@@ -1082,7 +1203,7 @@ const Cart: React.FC<{
                     <div className="text-right">
                       <div className="text-3xl font-black text-slate-900 mb-4">{currency}{item.totalPrice.toFixed(1)}</div>
                       <div className="flex gap-2 justify-end">
-                        <button onClick={() => navigate(`/product/${item.product.id}`, { state: { editItem: item } })} className="bg-blue-50 text-blue-600 px-4 py-2 rounded-xl text-xs font-black hover:bg-blue-600 hover:text-white transition-all flex items-center gap-2"><Pencil className="w-4 h-4"/>{t.edit}</button>
+                        <button onClick={() => navigate(`/product/${item.product.id}`, { state: { editItem: item, returnCartSearch: location.search } })} className="bg-blue-50 text-blue-600 px-4 py-2 rounded-xl text-xs font-black hover:bg-blue-600 hover:text-white transition-all flex items-center gap-2"><Pencil className="w-4 h-4"/>{t.edit}</button>
                         <button onClick={() => setCart(cart.filter(x => x.id !== item.id))} className="bg-red-50 text-red-500 px-4 py-2 rounded-xl text-xs font-black hover:bg-red-600 hover:text-white transition-all flex items-center gap-2"><Trash2 className="w-4 h-4"/>{t.remove}</button>
                       </div>
                     </div>
@@ -1291,9 +1412,33 @@ const Cart: React.FC<{
               <span className="text-white text-2xl">{t.total}</span>
               <span>{currency}{finalTotal.toFixed(1)}</span>
             </div>
-            <button onClick={handleCheckout} disabled={isExporting} className="w-full bg-blue-600 py-6 rounded-3xl font-black hover:bg-blue-500 transition-all shadow-2xl shadow-blue-600/30 disabled:bg-slate-800 disabled:text-slate-600 uppercase tracking-widest text-lg flex items-center justify-center gap-3">
-              {isExporting ? <div className="w-6 h-6 border-4 border-white/30 border-t-white rounded-full animate-spin" /> : <><Download className="w-6 h-6" /> {t.checkout}</>}
-            </button>
+            <div className="space-y-3">
+              <button
+                onClick={handleSaveCart}
+                disabled={isExporting || isSavingCart}
+                className="w-full bg-slate-700 py-4 rounded-3xl font-black hover:bg-slate-600 transition-all shadow-xl disabled:bg-slate-800 disabled:text-slate-500 uppercase tracking-widest text-sm flex items-center justify-center gap-2"
+              >
+                {isSavingCart ? (
+                  <div className="w-5 h-5 border-4 border-white/30 border-t-white rounded-full animate-spin" />
+                ) : (
+                  <>
+                    <Save className="w-5 h-5" />
+                    {t.saveCart}
+                  </>
+                )}
+              </button>
+
+              {saveCartStatus === 'saved' && (
+                <p className="text-xs text-emerald-300 font-bold">{t.cartSaved}</p>
+              )}
+              {saveCartStatus === 'error' && (
+                <p className="text-xs text-rose-300 font-bold">{t.cartSaveFailed}</p>
+              )}
+
+              <button onClick={handleCheckout} disabled={isExporting || isSavingCart} className="w-full bg-blue-600 py-6 rounded-3xl font-black hover:bg-blue-500 transition-all shadow-2xl shadow-blue-600/30 disabled:bg-slate-800 disabled:text-slate-600 uppercase tracking-widest text-lg flex items-center justify-center gap-3">
+                {isExporting ? <div className="w-6 h-6 border-4 border-white/30 border-t-white rounded-full animate-spin" /> : <><Download className="w-6 h-6" /> {t.checkout}</>}
+              </button>
+            </div>
             <p className="mt-5 text-xs text-slate-400 leading-relaxed">
               {language === 'cn'
                 ? '提交订单后将跳转到独立支付页（支付宝 / 微信支付），支付成功后订单状态会更新为“已付款”。'
@@ -1605,6 +1750,8 @@ const ProductDetail: React.FC<{
   const t = TRANSLATIONS[language];
 
   const editItem = location.state?.editItem as CartItem | undefined;
+  const returnCartSearch = typeof location.state?.returnCartSearch === 'string' ? location.state.returnCartSearch : '';
+  const returnCartPath = `/cart${returnCartSearch}`;
   const isBoardLikeProduct = [
     ProductType.PEGBOARD,
     ProductType.ALUMINUM_PLATE,
@@ -1640,6 +1787,7 @@ const ProductDetail: React.FC<{
               product={product} 
               user={user}
               initialItem={editItem}
+              returnCartPath={returnCartPath}
               onAddBatchToCart={onAddBatchToCart}
               onUpdateItem={onUpdateCartItem}
               draftProfiles={draftProfiles}
@@ -1651,6 +1799,7 @@ const ProductDetail: React.FC<{
               product={product}
               user={user}
               initialItem={editItem}
+              returnCartPath={returnCartPath}
               onAddToCart={onAddToCart}
               onUpdateItem={onUpdateCartItem}
             />
@@ -1679,6 +1828,7 @@ const App: React.FC = () => {
   const lastCacheScopeRef = useRef<string | null>(null);
   const skipNextCartPersistRef = useRef(false);
   const skipNextDraftPersistRef = useRef(false);
+  const skipNextServerSyncRef = useRef(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -1720,7 +1870,7 @@ const App: React.FC = () => {
           const remoteCart = await ApiService.getCart();
           if (cancelled) return;
 
-          const mergedWithRemote = mergeCartItems(mergedLocalCart, remoteCart.items || []);
+          const mergedWithRemote = reconcileCartItems(mergedLocalCart, remoteCart.items || []);
 
           skipNextCartPersistRef.current = true;
           setCart(mergedWithRemote);
@@ -1764,6 +1914,11 @@ const App: React.FC = () => {
 
   useEffect(() => {
     if (!user?.id) return;
+
+    if (skipNextServerSyncRef.current) {
+      skipNextServerSyncRef.current = false;
+      return;
+    }
 
     const syncTimer = window.setTimeout(() => {
       ApiService.syncCart(cart).catch((error) => {
@@ -1823,11 +1978,17 @@ const App: React.FC = () => {
   const onEditOrder = (o: Order) => {
     setCart(mergeCartItems([], o.items));
     // Navigate with the order's address info so the cart pre-selects the correct address
-    window.location.hash = `/cart?addressId=${encodeURIComponent(o.addressId || o.address?.id || '')}`;
+    window.location.hash = `/cart?addressId=${encodeURIComponent(o.addressId || o.address?.id || '')}&editOrderId=${encodeURIComponent(o.id)}`;
   };
 
   const onGoToPayment = (o: Order) => {
     window.location.hash = `/payment/${encodeURIComponent(o.id)}`;
+  };
+
+  const onSaveCartSuccess = () => {
+    skipNextServerSyncRef.current = true;
+    setCart([]);
+    writeCachedArray(getCacheKey(CART_CACHE_PREFIX, user?.id), []);
   };
 
   const isPreviewRoute = window.location.hash.startsWith('#/preview');
@@ -1902,7 +2063,7 @@ const App: React.FC = () => {
           <Route path="/login" element={<Auth language={language} onLogin={(u) => { setUser(u); }} />} />
           <Route path="/history" element={user ? <UserProfile user={user} language={language} setUser={setUser} onEditOrder={onEditOrder} onGoToPayment={onGoToPayment} /> : <div className="p-40 text-center flex flex-col items-center"><UserIcon className="w-20 h-20 text-slate-100 mb-6"/><p className="font-black text-slate-300 text-2xl">Please login to view your orders</p></div>} />
           <Route path="/product/:id" element={<ProductDetail language={language} user={user} onAddToCart={(item) => setCart(mergeCartItems(cart, [item]))} onAddBatchToCart={(items) => setCart(mergeCartItems(cart, items))} onUpdateCartItem={(item) => setCart(cart.map(x => x.id === item.id ? item : x))} draftProfiles={draftProfiles} setDraftProfiles={setDraftProfiles} />} />
-          <Route path="/cart" element={<Cart cart={cart} language={language} setCart={setCart} user={user} updateUser={setUser} />} />
+          <Route path="/cart" element={<Cart cart={cart} language={language} setCart={setCart} user={user} updateUser={setUser} onSaveCartSuccess={onSaveCartSuccess} />} />
           <Route path="/payment/:orderId" element={<PaymentPage language={language} user={user} />} />
           <Route path="/preview" element={<FactorySheetPreviewPage />} />
         </Routes>

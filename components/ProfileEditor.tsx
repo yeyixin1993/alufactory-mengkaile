@@ -13,6 +13,7 @@ interface ProfileEditorProps {
   product: Product;
   user?: User | null;
   initialItem?: CartItem;
+  returnCartPath?: string;
   onAddBatchToCart: (items: CartItem[]) => void;
   onUpdateItem: (item: CartItem) => void;
   draftProfiles: CartItem[];
@@ -31,7 +32,7 @@ const DANGER_FEE_PER_PIECE = 5;
 const MAX_PROFILE_LENGTH_MM = 3000;
 const PROFILE_VIP_DISCOUNT_PER_METER = 2;
 
-const ProfileEditor: React.FC<ProfileEditorProps> = ({ language, product, user, initialItem, onAddBatchToCart, onUpdateItem, draftProfiles, setDraftProfiles }) => {
+const ProfileEditor: React.FC<ProfileEditorProps> = ({ language, product, user, initialItem, returnCartPath = '/cart', onAddBatchToCart, onUpdateItem, draftProfiles, setDraftProfiles }) => {
   const t = TRANSLATIONS[language];
   const currency = getCurrency(language);
   const navigate = useNavigate();
@@ -199,7 +200,7 @@ const ProfileEditor: React.FC<ProfileEditorProps> = ({ language, product, user, 
     
     if (initialItem) {
       onUpdateItem({ ...initialItem, config, totalPrice: parseFloat((unitPrice * initialItem.quantity).toFixed(1)) });
-      navigate('/cart');
+      navigate(returnCartPath);
     } else if (editingId) {
       setDraftProfiles(draftProfiles.map(item => item.id === editingId ? { ...item, config, totalPrice: parseFloat((unitPrice * item.quantity).toFixed(1)) } : item));
       setEditingId(null);
@@ -243,7 +244,7 @@ const ProfileEditor: React.FC<ProfileEditorProps> = ({ language, product, user, 
 
     onAddBatchToCart(draftProfiles);
     setDraftProfiles([]);
-    navigate('/cart');
+    navigate(returnCartPath);
   };
 
   const duplicateDraftItem = (item: CartItem) => {
@@ -300,7 +301,7 @@ const ProfileEditor: React.FC<ProfileEditorProps> = ({ language, product, user, 
             {initialItem ? 'Update Configuration' : (editingId ? 'Edit Item' : t.configure)}
           </h3>
           {(editingId || initialItem) && (
-            <button onClick={() => { setEditingId(null); if (initialItem) navigate('/cart'); }} className="text-sm text-red-500 hover:text-red-700 font-bold flex items-center gap-1"><X className="w-4 h-4" /> {t.cancelEdit}</button>
+            <button onClick={() => { setEditingId(null); if (initialItem) navigate(returnCartPath); }} className="text-sm text-red-500 hover:text-red-700 font-bold flex items-center gap-1"><X className="w-4 h-4" /> {t.cancelEdit}</button>
           )}
         </div>
 

@@ -120,41 +120,104 @@ def create_order():
 @order_bp.route('/<order_id>', methods=['PUT'])
 @jwt_required()
 def update_order(order_id):
-    """Update order status (admin only)"""
+    """Update order (admin full update; customer can update own pending order draft fields)."""
     current_user_id = get_jwt_identity()
     current_user = User.query.get(current_user_id)
-    
-    if not current_user.is_admin:
-        return jsonify({'error': 'Admin access required'}), 403
-    
+
     order = Order.query.get(order_id)
     if not order:
         return jsonify({'error': 'Order not found'}), 404
-    
+
+    is_admin = bool(current_user and current_user.is_admin)
+    is_owner = str(order.user_id) == str(current_user_id)
+
+    if not is_admin and not is_owner:
+        return jsonify({'error': 'Unauthorized'}), 403
+
     data = request.get_json()
-    
+
     try:
-        if 'status' in data:
-            order.status = data['status']
-            
-            # Update timestamps based on status
-            if data['status'] == 'confirmed':
-                order.paid_at = datetime.utcnow()
-            elif data['status'] == 'shipped':
-                order.shipped_at = datetime.utcnow()
-            elif data['status'] == 'delivered':
-                order.delivered_at = datetime.utcnow()
-            elif data['status'] == 'cancelled':
-                order.cancelled_at = datetime.utcnow()
-        
-        if 'tracking_number' in data:
-            order.tracking_number = data['tracking_number']
-        
-        if 'memo' in data:
-            order.memo = data['memo']
-        
-        if 'admin_memo' in data:
-            order.admin_memo = data['admin_memo']
+        if is_admin:
+            if 'status' in data:
+                order.status = data['status']
+
+                # Update timestamps based on status
+                if data['status'] == 'confirmed':
+                    order.paid_at = datetime.utcnow()
+                elif data['status'] == 'shipped':
+                    order.shipped_at = datetime.utcnow()
+                elif data['status'] == 'delivered':
+                    order.delivered_at = datetime.utcnow()
+                elif data['status'] == 'cancelled':
+                    order.cancelled_at = datetime.utcnow()
+
+            if 'tracking_number' in data:
+                order.tracking_number = data['tracking_number']
+
+            if 'memo' in data:
+                order.memo = data['memo']
+
+            if 'admin_memo' in data:
+                order.admin_memo = data['admin_memo']
+        else:
+            # Customer can only update their own pending order draft details.
+            if order.status != 'pending':
+                return jsonify({'error': 'Only pending orders can be edited'}), 400
+
+            if 'recipient_name' in data:
+                order.recipient_name = data['recipient_name']
+            if 'phone' in data:
+                order.phone = data['phone']
+            if 'province' in data:
+                order.province = data['province']
+            if 'address_detail' in data:
+                order.address_detail = data['address_detail']
+            if 'address_id' in data:
+                order.address_id = data['address_id']
+            if 'subtotal' in data:
+                order.subtotal = data['subtotal']
+            if 'shipping_fee' in data:
+                order.shipping_fee = data['shipping_fee']
+            if 'total_amount' in data:
+                order.total_amount = data['total_amount']
+            if 'shipping_method' in data:
+                order.shipping_method = data['shipping_method']
+            if 'overlength_fee' in data:
+                order.overlength_fee = data['overlength_fee']
+            if 'memo' in data:
+                order.memo = data['memo']
+
+            if 'items' in data:
+                incoming_items = data.get('items') or []
+                if not isinstance(incoming_items, list):
+                    return jsonify({'error': 'items must be an array'}), 400
+
+                # Replace current order items with provided draft snapshot.
+                OrderItem.query.filter_by(order_id=order.id).delete()
+                db.session.flush()
+
+                for item_data in incoming_items:
+                    if not isinstance(item_data, dict):
+                        return jsonify({'error': 'Invalid order item'}), 400
+
+                    quantity = int(item_data.get('quantity', 1) or 1)
+                    if quantity <= 0:
+                        quantity = 1
+
+                    unit_price = float(item_data.get('unit_price', 0) or 0)
+                    total_price = float(item_data.get('total_price', unit_price * quantity) or unit_price * quantity)
+
+                    order_item = OrderItem(
+                        order_id=order.id,
+                        product_id=item_data.get('product_id'),
+                        product_name=item_data.get('product_name'),
+                        product_type=item_data.get('product_type'),
+                        quantity=quantity,
+                        unit_price=unit_price,
+                        total_price=total_price,
+                        config=item_data.get('config')
+                    )
+                    db.session.add(order_item)
         
         order.updated_at = datetime.utcnow()
         db.session.commit()

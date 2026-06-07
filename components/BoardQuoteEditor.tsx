@@ -8,6 +8,7 @@ interface BoardQuoteEditorProps {
   product: Product;
   user?: User | null;
   initialItem?: CartItem;
+  returnCartPath?: string;
   onAddToCart: (item: CartItem) => void;
   onUpdateItem: (item: CartItem) => void;
 }
@@ -126,7 +127,7 @@ const getDoorHingePositions = (heightMm: number): number[] => {
   return [100, (h - 200) * 0.25 + 100, h / 2, (h - 200) * 0.75 + 100, h - 100];
 };
 
-const BoardQuoteEditor: React.FC<BoardQuoteEditorProps> = ({ language, product, initialItem, onAddToCart, onUpdateItem }) => {
+const BoardQuoteEditor: React.FC<BoardQuoteEditorProps> = ({ language, product, initialItem, returnCartPath = '/cart', onAddToCart, onUpdateItem }) => {
   const t = TRANSLATIONS[language];
   const ui = UI_TEXT[language];
   const navigate = useNavigate();
@@ -294,7 +295,7 @@ const BoardQuoteEditor: React.FC<BoardQuoteEditorProps> = ({ language, product, 
     } else {
       onAddToCart(buildItem());
     }
-    navigate('/cart');
+    navigate(returnCartPath);
   };
 
   return (
