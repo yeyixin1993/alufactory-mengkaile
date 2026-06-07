@@ -30,17 +30,9 @@ def sanitize_filename_part(value, fallback='unknown'):
 
 
 def build_order_pdf_filename(order):
-    created_at = to_east8_datetime(getattr(order, 'created_at', None)) or datetime.now(EAST8_TIMEZONE)
-    timestamp = created_at.strftime('%Y%m%d_%H%M%S')
-    user_label = sanitize_filename_part(
-        getattr(order, 'recipient_name', None)
-        or getattr(order, 'phone', None)
-        or getattr(order, 'user_id', None),
-        fallback='guest'
-    )
-    amount = getattr(order, 'total_amount', 0) or 0
+    # Keep filename aligned with original order number format, e.g. ORDxxxxxxxx...
     order_ref = sanitize_filename_part(
         getattr(order, 'order_number', None) or getattr(order, 'id', None),
         fallback='ORDER'
     )
-    return f'生产单_{timestamp}_用户_{user_label}_金额_{amount:.2f}_{order_ref}.pdf'
+    return f'{order_ref}.pdf'

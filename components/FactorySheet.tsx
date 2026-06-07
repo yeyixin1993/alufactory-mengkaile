@@ -89,11 +89,13 @@ const FactorySheet: React.FC<FactorySheetProps> = ({ cart, user, language, order
 
       // 6. Create Remark
       const hasMiter = hasMiterLeft || hasMiterRight;
+      const needsProcessingRemark = processingState === 'drill' || hasMiter;
       let remark = '无额外加工';
-      if (processingState === 'drill' || hasMiter) {
-        remark = '加工见下图';
-      }
-      if (customRemark) {
+      if (needsProcessingRemark && customRemark) {
+        remark = `加工如下图；${customRemark}`;
+      } else if (needsProcessingRemark) {
+        remark = '加工如下图';
+      } else if (customRemark) {
         remark = customRemark;
       }
 
