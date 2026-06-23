@@ -117,13 +117,13 @@ const ProfileVisualizer: React.FC<ProfileVisualizerProps> = ({
   const { length, variantId, holes, tapping } = config;
   const selectedVariant = PROFILE_VARIANTS.find(v => v.id === variantId) || PROFILE_VARIANTS[0];
 
-  const tapDisabledVariants = ['2040', '3060', '2040-N1-20', '2040-N1-40', '2047', '2060', '20100', '4080'];
+  const tapDisabledVariants = ['2040', '3060', '3060-N1-60', '2040-N1-20', '2040-N1-40', '2047', '2060', '20100', '4080'];
 
   // Helper logic extracted from Editor
   const isRadiusProfile = selectedVariant.id.endsWith('R');
   const availableSides: ProfileSide[] = isRadiusProfile ? ['A', 'B'] : ['A', 'B', 'C', 'D'];
   
-  const isRectangular = ['2040', '3060', '2040-N1-20', '2040-N1-40', '2047', '2060', '20100', '4080'].includes(selectedVariant.id);
+  const isRectangular = ['2040', '3060', '3060-N1-60', '2040-N1-20', '2040-N1-40', '2047', '2060', '20100', '4080'].includes(selectedVariant.id);
   const isWideFace = isRectangular && (selectedSide === 'B' || selectedSide === 'D');
   
   // Even wider faces for 2060 and 20100
@@ -152,9 +152,9 @@ const ProfileVisualizer: React.FC<ProfileVisualizerProps> = ({
 
     // Specific exceptions for 2040 N1 variants
     if (id === '2040-N1-20' && side === 'A') return 0;
-    if (id === '2040-N1-40' && side === 'A') return 1;
-    // 2040-N1-40 D side: sealed but uses 2-groove positions for drilling
-    if (id === '2040-N1-40' && side === 'D') return 2;
+    if ((id === '2040-N1-40' || id === '3060-N1-60') && side === 'A') return 1;
+    // 2040-N1-40 / 3060-N1-60 D side: sealed but uses 2-groove positions for drilling
+    if ((id === '2040-N1-40' || id === '3060-N1-60') && side === 'D') return 2;
 
     // 2060: B/D have 3 grooves
     if (id === '2060' && (side === 'B' || side === 'D')) return 3;
@@ -171,7 +171,7 @@ const ProfileVisualizer: React.FC<ProfileVisualizerProps> = ({
     if (name.includes('n3') && (side !== 'D')) return 0;
 
     // Two-groove rectangular profiles (include the 2040 N1 variants here so they still render two grooves when applicable)
-    if (['2040', '3060', '2040-N1-20', '2040-N1-40'].includes(id) && (side === 'B' || side === 'D')) return 2;
+    if (['2040', '3060', '3060-N1-60', '2040-N1-20', '2040-N1-40'].includes(id) && (side === 'B' || side === 'D')) return 2;
 
     return 1;
   };
@@ -182,8 +182,8 @@ const ProfileVisualizer: React.FC<ProfileVisualizerProps> = ({
   // For sealed faces that still allow drill positioning (e.g. 2040-N1-40 D), visual = 0.
   const getVisualGrooveCount = (side: ProfileSide): number => {
     const id = selectedVariant.id;
-    // 2040-N1-40 D side is sealed (no visible groove) but uses 2 drill positions
-    if (id === '2040-N1-40' && side === 'D') return 0;
+    // 2040-N1-40 / 3060-N1-60 D side is sealed (no visible groove) but uses 2 drill positions
+    if ((id === '2040-N1-40' || id === '3060-N1-60') && side === 'D') return 0;
     return getGrooveCount(side);
   };
   const visualGrooveCount = getVisualGrooveCount(selectedSide);

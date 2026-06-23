@@ -274,15 +274,15 @@ const ProfileEditor: React.FC<ProfileEditorProps> = ({ language, product, user, 
     if (vId === '2047' && (side === 'B' || side === 'D')) return 2;
     // 2040-N1-20: A side sealed
     if (vId === '2040-N1-20' && side === 'A') return 0;
-    // 2040-N1-40: A has 1 groove, D sealed but uses 2-groove positions for drilling
-    if (vId === '2040-N1-40' && side === 'A') return 1;
-    if (vId === '2040-N1-40' && side === 'D') return 2;
+    // 2040-N1-40 / 3060-N1-60: A has 1 groove, D sealed but uses 2-groove positions for drilling
+    if ((vId === '2040-N1-40' || vId === '3060-N1-60') && side === 'A') return 1;
+    if ((vId === '2040-N1-40' || vId === '3060-N1-60') && side === 'D') return 2;
     // 2060: B/D have 3 grooves
     if (vId === '2060' && (side === 'B' || side === 'D')) return 3;
     // 20100: B/D have 5 grooves
     if (vId === '20100' && (side === 'B' || side === 'D')) return 5;
     // Standard rectangular profiles (2040, 3060, 2040 variants): B/D have 2 grooves
-    if (['2040', '3060', '2040-N1-20', '2040-N1-40','4080'].includes(vId) && (side === 'B' || side === 'D')) return 2;
+    if (['2040', '3060', '2040-N1-20', '2040-N1-40', '3060-N1-60', '4080'].includes(vId) && (side === 'B' || side === 'D')) return 2;
     // N1/N2/N3 rules
     const name = (PROFILE_VARIANTS.find(v => v.id === vId)?.name || '').toLowerCase();
     if (name.includes('n1') && side === 'A') return 0;

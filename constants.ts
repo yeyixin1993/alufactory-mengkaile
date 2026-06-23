@@ -804,6 +804,7 @@ export const PROFILE_VARIANTS: ProfileVariant[] = [
   { id: '3030-N2', name: '3030 N2', wallThickness: 1.8, price: { oxidized: 32, electrophoretic: 38, powder: 44 } },
   { id: '3030R', name: '3030R', wallThickness: 2.0, price: { oxidized: 32, electrophoretic: 38, powder: 44 } },
   { id: '3060', name: '3060', wallThickness: 1.8, price: { oxidized: 53, electrophoretic: 60, powder: 70 } },
+  { id: '3060-N1-60', name: '3060 N1-60', wallThickness: 2.0, price: { oxidized: 59, electrophoretic: 63, powder: 73 } },
   { id: '4040', name: '4040', wallThickness: 2.0, price: { oxidized: 45, electrophoretic: 52, powder: 62 } },
 ];
 
@@ -831,7 +832,8 @@ export const PROFILE_WEIGHTS: Record<string, number> = {
   '20100': 2.0,
   '4080': 2.0,
   '4040': 1.6,
-  '3060': 1.6
+  '3060': 1.6,
+  '3060-N1-60': 1.6
 };
 
 export const SHIPPING_RATES: Record<string, { first: number, next: number }> = {
