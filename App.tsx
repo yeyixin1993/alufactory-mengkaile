@@ -1026,11 +1026,15 @@ const Cart: React.FC<{
       };
       
       const createdOrder = await ApiService.createOrder(newOrder);
-      setPdfIncludePrice(true);
-      await new Promise(r => setTimeout(r, 200));
-      const { pdfBase64, filename } = await handleGeneratePDF(true, true);
-      if (pdfBase64 && createdOrder?.id) {
-        await ApiService.uploadOrderPdf(createdOrder.id, pdfBase64, filename);
+      const withPricePdf = await handleGeneratePDF(true, true);
+      const noPricePdf = await handleGeneratePDF(false, true);
+      if (createdOrder?.id) {
+        if (withPricePdf?.pdfBase64) {
+          await ApiService.uploadOrderPdf(createdOrder.id, withPricePdf.pdfBase64, withPricePdf.filename, 'with_price');
+        }
+        if (noPricePdf?.pdfBase64) {
+          await ApiService.uploadOrderPdf(createdOrder.id, noPricePdf.pdfBase64, noPricePdf.filename, 'without_price');
+        }
       }
 
       setCart([]);

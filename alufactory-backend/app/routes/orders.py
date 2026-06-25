@@ -275,7 +275,14 @@ def upload_order_pdf(order_id):
 
     data = request.get_json() or {}
     pdf_base64 = data.get('pdf_base64')
-    pdf_filename = build_order_pdf_filename(order)
+    pdf_type_raw = str(data.get('pdf_type', 'with_price')).strip().lower()
+    no_price_requested = pdf_type_raw in ('without_price', 'no_price', 'without-price', 'no-price')
+
+    base_filename = build_order_pdf_filename(order)
+    if no_price_requested:
+        pdf_filename = base_filename[:-4] + '_no_price.pdf' if base_filename.lower().endswith('.pdf') else f"{base_filename}_no_price.pdf"
+    else:
+        pdf_filename = base_filename
 
     if not pdf_base64:
         return jsonify({'error': 'Missing pdf_base64'}), 400
@@ -296,8 +303,12 @@ def upload_order_pdf(order_id):
             profile = Profile(user_id=order.user_id)
             db.session.add(profile)
 
-        profile.pdf_filename = pdf_filename
-        profile.pdf_base64 = pdf_base64
+        if no_price_requested:
+            profile.pdf_no_price_filename = pdf_filename
+            profile.pdf_no_price_base64 = pdf_base64
+        else:
+            profile.pdf_filename = pdf_filename
+            profile.pdf_base64 = pdf_base64
         profile.updated_at = datetime.utcnow()
 
         # Try to save to file system (optional, may fail in cloud)
@@ -305,19 +316,26 @@ def upload_order_pdf(order_id):
         try:
             pdf_dir = os.path.join(current_app.instance_path, 'order_pdfs')
             os.makedirs(pdf_dir, exist_ok=True)
-            pdf_path = os.path.join(pdf_dir, f"{order.id}.pdf")
+            file_suffix = '_no_price.pdf' if no_price_requested else '.pdf'
+            pdf_path = os.path.join(pdf_dir, f"{order.id}{file_suffix}")
             with open(pdf_path, 'wb') as f:
                 f.write(pdf_bytes)
-            profile.pdf_path = pdf_path
+            if no_price_requested:
+                profile.pdf_no_price_path = pdf_path
+            else:
+                profile.pdf_path = pdf_path
         except Exception as file_error:
             # File write failed (common in cloud), but continue with DB save
             current_app.logger.warning(f"Failed to save PDF to file system: {file_error}")
-            profile.pdf_path = None
+            if no_price_requested:
+                profile.pdf_no_price_path = None
+            else:
+                profile.pdf_path = None
 
         db.session.commit()
         sync_order_snapshot(current_app.instance_path, order, user=order.user, pdf_available=True)
 
-        return jsonify({'message': 'PDF uploaded', 'pdf_filename': pdf_filename}), 200
+        return jsonify({'message': 'PDF uploaded', 'pdf_filename': pdf_filename, 'pdf_type': 'without_price' if no_price_requested else 'with_price'}), 200
     except Exception as e:
         db.session.rollback()
         return jsonify({'error': str(e)}), 500
@@ -337,25 +355,45 @@ def get_order_pdf(order_id):
     if order.user_id != current_user_id and not current_user.is_admin:
         return jsonify({'error': 'Unauthorized'}), 403
 
+    no_price_requested = request.args.get('without_price', '0').strip().lower() in ('1', 'true', 'yes')
+    include_price_flag = request.args.get('include_price')
+    if include_price_flag is not None:
+        no_price_requested = str(include_price_flag).strip().lower() in ('0', 'false', 'no')
+
     from flask import send_file, Response
     # Try file system first
     pdf_dir = os.path.join(current_app.instance_path, 'order_pdfs')
-    pdf_path = os.path.join(pdf_dir, f"{order.id}.pdf")
+    file_suffix = '_no_price.pdf' if no_price_requested else '.pdf'
+    pdf_path = os.path.join(pdf_dir, f"{order.id}{file_suffix}")
     if os.path.exists(pdf_path):
-        filename = build_order_pdf_filename(order)
+        base_filename = build_order_pdf_filename(order)
+        filename = base_filename[:-4] + '_no_price.pdf' if no_price_requested and base_filename.lower().endswith('.pdf') else (f"{base_filename}_no_price.pdf" if no_price_requested else base_filename)
         return send_file(pdf_path, mimetype='application/pdf', as_attachment=False, download_name=filename)
+
+    if no_price_requested:
+        return jsonify({'error': 'No-price PDF not found for this order'}), 404
 
     # Try database
     profile = Profile.query.filter_by(user_id=order.user_id).first()
-    if not profile or not profile.pdf_base64:
+    if not profile:
+        return jsonify({'error': 'PDF not found'}), 404
+
+    pdf_base64_value = profile.pdf_no_price_base64 if no_price_requested else profile.pdf_base64
+    if not pdf_base64_value:
         return jsonify({'error': 'PDF not found'}), 404
 
     try:
-        pdf_bytes = base64.b64decode(profile.pdf_base64)
+        pdf_bytes = base64.b64decode(pdf_base64_value)
     except Exception:
         return jsonify({'error': 'Invalid PDF data'}), 500
 
-    filename = profile.pdf_filename or build_order_pdf_filename(order)
+    base_filename = build_order_pdf_filename(order)
+    default_no_price_filename = base_filename[:-4] + '_no_price.pdf' if base_filename.lower().endswith('.pdf') else f"{base_filename}_no_price.pdf"
+    filename = (
+        (profile.pdf_no_price_filename or default_no_price_filename)
+        if no_price_requested
+        else (profile.pdf_filename or base_filename)
+    )
     return Response(
         pdf_bytes,
         mimetype='application/pdf',

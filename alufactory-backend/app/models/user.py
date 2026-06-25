@@ -289,6 +289,9 @@ class Profile(db.Model):
     pdf_path = db.Column(db.String(500), nullable=True)
     pdf_filename = db.Column(db.String(255), nullable=True)
     pdf_base64 = db.Column(db.Text, nullable=True)  # Store base64 encoded PDF
+    pdf_no_price_path = db.Column(db.String(500), nullable=True)
+    pdf_no_price_filename = db.Column(db.String(255), nullable=True)
+    pdf_no_price_base64 = db.Column(db.Text, nullable=True)  # Store base64 encoded no-price PDF
     
     # Timestamps
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
@@ -310,11 +313,14 @@ class Profile(db.Model):
                 'detail': self.address_detail,
             },
             'pdf_filename': self.pdf_filename,
+            'pdf_no_price_filename': self.pdf_no_price_filename,
             'created_at': self.created_at.isoformat(),
             'updated_at': self.updated_at.isoformat(),
         }
         
         if include_pdf_data and self.pdf_base64:
             data['pdf_base64'] = self.pdf_base64
+        if include_pdf_data and self.pdf_no_price_base64:
+            data['pdf_no_price_base64'] = self.pdf_no_price_base64
         
         return data

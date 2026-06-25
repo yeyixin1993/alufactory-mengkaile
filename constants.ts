@@ -1038,7 +1038,7 @@ export const INITIAL_PRODUCTS: Product[] = [
   {
     id: 'p6',
     type: ProductType.MARINE_BOARD,
-    name: { en: 'Marine Board', cn: '海洋板', jp: 'マリンボード' },
+    name: { en: 'Russian BBB Marine Board', cn: '俄罗斯全进口BBB海洋板', jp: 'ロシア製マリンボードBBB' },
     description: { en: 'Moisture-resistant marine board for custom applications.', cn: '适用于定制场景的防潮海洋板。', jp: 'カスタム用途向け耐湿マリンボード。' },
     basePrice: 200,
     imageUrl: 'https://picsum.photos/400/300?random=6'

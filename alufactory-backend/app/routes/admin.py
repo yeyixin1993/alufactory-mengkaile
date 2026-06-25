@@ -286,7 +286,9 @@ def get_all_orders():
 
             pdf_dir = os.path.join(current_app.instance_path, 'order_pdfs')
             pdf_path = os.path.join(pdf_dir, f"{order.id}.pdf")
+            pdf_no_price_path = os.path.join(pdf_dir, f"{order.id}_no_price.pdf")
             pdf_available = os.path.exists(pdf_path) or bool(profile and profile.pdf_base64)
+            pdf_no_price_available = os.path.exists(pdf_no_price_path)
 
             order_dict['user'] = {
                 'id': user.id if user else None,
@@ -298,7 +300,10 @@ def get_all_orders():
             order_dict['pdf'] = {
                 'filename': build_order_pdf_filename(order),
                 'available': pdf_available,
-                'url': f"/api/admin/orders/{order.id}/pdf" if pdf_available else None
+                'url': f"/api/admin/orders/{order.id}/pdf" if pdf_available else None,
+                'no_price_filename': (build_order_pdf_filename(order)[:-4] + '_no_price.pdf') if build_order_pdf_filename(order).lower().endswith('.pdf') else (build_order_pdf_filename(order) + '_no_price.pdf'),
+                'no_price_available': pdf_no_price_available,
+                'no_price_url': f"/api/admin/orders/{order.id}/pdf?without_price=1" if pdf_no_price_available else None,
             }
 
             orders_data.append(order_dict)
@@ -323,22 +328,42 @@ def get_order_pdf(order_id):
     if not order:
         return jsonify({'error': 'Order not found'}), 404
 
+    no_price_requested = request.args.get('without_price', '0').strip().lower() in ('1', 'true', 'yes')
+    include_price_flag = request.args.get('include_price')
+    if include_price_flag is not None:
+        no_price_requested = str(include_price_flag).strip().lower() in ('0', 'false', 'no')
+
     pdf_dir = os.path.join(current_app.instance_path, 'order_pdfs')
-    pdf_path = os.path.join(pdf_dir, f"{order.id}.pdf")
+    file_suffix = '_no_price.pdf' if no_price_requested else '.pdf'
+    pdf_path = os.path.join(pdf_dir, f"{order.id}{file_suffix}")
     if os.path.exists(pdf_path):
-        filename = build_order_pdf_filename(order)
+        base_filename = build_order_pdf_filename(order)
+        filename = base_filename[:-4] + '_no_price.pdf' if no_price_requested and base_filename.lower().endswith('.pdf') else (f"{base_filename}_no_price.pdf" if no_price_requested else base_filename)
         return send_file(pdf_path, mimetype='application/pdf', as_attachment=False, download_name=filename)
 
+    if no_price_requested:
+        return jsonify({'error': 'No-price PDF not found for this order'}), 404
+
     profile = Profile.query.filter_by(user_id=order.user_id).first()
-    if not profile or not profile.pdf_base64:
+    if not profile:
+        return jsonify({'error': 'PDF not found'}), 404
+
+    pdf_base64_value = profile.pdf_no_price_base64 if no_price_requested else profile.pdf_base64
+    if not pdf_base64_value:
         return jsonify({'error': 'PDF not found'}), 404
 
     try:
-        pdf_bytes = base64.b64decode(profile.pdf_base64)
+        pdf_bytes = base64.b64decode(pdf_base64_value)
     except Exception:
         return jsonify({'error': 'Invalid PDF data'}), 500
 
-    filename = profile.pdf_filename or build_order_pdf_filename(order)
+    base_filename = build_order_pdf_filename(order)
+    default_no_price_filename = base_filename[:-4] + '_no_price.pdf' if base_filename.lower().endswith('.pdf') else f"{base_filename}_no_price.pdf"
+    filename = (
+        (profile.pdf_no_price_filename or default_no_price_filename)
+        if no_price_requested
+        else (profile.pdf_filename or base_filename)
+    )
     return Response(
         pdf_bytes,
         mimetype='application/pdf',

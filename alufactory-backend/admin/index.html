@@ -1026,10 +1026,15 @@
                         const profileDate = order.created_at ? new Date(order.created_at).toLocaleDateString('zh-CN') : '-';
                         const profileOrderId = order.id || sourceOrderId;
                         const pdfUrlProfile = profileOrderId ? `${API_BASE}/admin/orders/${profileOrderId}/pdf` : '';
+                                const pdfNoPriceUrlProfile = profileOrderId ? `${API_BASE}/admin/orders/${profileOrderId}/pdf?without_price=1` : '';
                         const pdfFilenameProfile = (order.order_number || profileOrderId || 'order') + '.pdf';
-                        const pdfLinkProfile = order.pdf?.available && order.pdf?.url
-                            ? `<button class="btn btn-success" style="padding: 6px 8px;" onclick="openOrderPdf('${pdfUrlProfile}', '${pdfFilenameProfile}', false)">打开</button>
-                               <button class="btn btn-primary" style="padding: 6px 8px;" onclick="openOrderPdf('${pdfUrlProfile}', '${pdfFilenameProfile}', true)">下载</button>`
+                                const pdfNoPriceFilenameProfile = (order.order_number || profileOrderId || 'order') + '_no_price.pdf';
+                                const hasNoPricePdf = !!(order.pdf?.no_price_available && order.pdf?.no_price_url);
+                                const pdfLinkProfile = order.pdf?.available && order.pdf?.url
+                                     ? `<button class="btn btn-success" style="padding: 6px 8px;" onclick="openOrderPdf('${pdfUrlProfile}', '${pdfFilenameProfile}', false)">打开</button>
+                                         ${hasNoPricePdf
+                                                ? `<button class="btn btn-primary" style="padding: 6px 8px;" onclick="openOrderPdf('${pdfNoPriceUrlProfile}', '${pdfNoPriceFilenameProfile}', false)">打开不含价</button>`
+                                                : `<button class="btn" style="padding: 6px 8px; background:#e5e7eb; color:#9ca3af; cursor:not-allowed;" disabled>不含价未生成</button>`}`
                             : '-';
 
                         row.innerHTML = `

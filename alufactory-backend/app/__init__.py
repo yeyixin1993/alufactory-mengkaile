@@ -85,6 +85,23 @@ def create_app(config_name='development'):
                                 print(f'  ✅ Auto-migrated: added {col_name} to orders')
                             except Exception:
                                 pass  # Column might already exist or DB doesn't support ALTER
+
+            if 'profiles' in inspector.get_table_names():
+                existing_profile_cols = [col['name'] for col in inspector.get_columns('profiles')]
+                profile_migrations = [
+                    ('pdf_no_price_path', 'VARCHAR(500)'),
+                    ('pdf_no_price_filename', 'VARCHAR(255)'),
+                    ('pdf_no_price_base64', 'TEXT'),
+                ]
+                with db.engine.connect() as conn:
+                    for col_name, col_type in profile_migrations:
+                        if col_name not in existing_profile_cols:
+                            try:
+                                conn.execute(text(f'ALTER TABLE profiles ADD COLUMN {col_name} {col_type}'))
+                                conn.commit()
+                                print(f'  ✅ Auto-migrated: added {col_name} to profiles')
+                            except Exception:
+                                pass
         except Exception as e:
             print(f'  ⚠️ Auto-migration check skipped: {e}')
     
