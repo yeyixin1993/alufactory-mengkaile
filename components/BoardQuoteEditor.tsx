@@ -173,8 +173,10 @@ const BoardQuoteEditor: React.FC<BoardQuoteEditorProps> = ({ language, product, 
       ? marineBoardColor.id
       : (initialCfg.colorId || 'natural')
   );
-  const [width, setWidth] = useState<number>(initialCfg.width || 0);
-  const [height, setHeight] = useState<number>(initialCfg.height || 0);
+  const defaultWidth = (isPegboard || isDoor) ? 500 : 0;
+  const defaultHeight = (isPegboard || isDoor) ? 2000 : 0;
+  const [width, setWidth] = useState<number>(initialCfg.width || defaultWidth);
+  const [height, setHeight] = useState<number>(initialCfg.height || defaultHeight);
   const [quantity, setQuantity] = useState<number>(initialItem?.quantity || initialCfg.quantity || 1);
   const [openingSide, setOpeningSide] = useState<'left' | 'right'>(initialCfg.openingSide === 'right' ? 'right' : 'left');
 
@@ -395,51 +397,6 @@ const BoardQuoteEditor: React.FC<BoardQuoteEditorProps> = ({ language, product, 
         </div>
       )}
 
-      <div className="bg-slate-50 border border-slate-200 rounded-2xl p-5 space-y-2">
-        <div className="flex justify-between font-bold text-slate-600">
-          <span>{t.qq_area || '面积'}</span>
-          <span>{calc.areaSqm.toFixed(3)}㎡</span>
-        </div>
-        <div className="flex justify-between font-bold text-slate-600">
-          <span>{t.qq_unitPrice || '单价'}</span>
-          <span>{currency}{calc.unitPrice.toFixed(1)}</span>
-        </div>
-        {isDoor && (
-          <>
-            <div className="flex justify-between font-bold text-slate-600">
-              <span>{language === 'cn' ? '门板计价' : language === 'jp' ? 'パネル単価' : 'Panel price'}</span>
-              <span>{currency}{calc.boardUnitPrice.toFixed(1)}</span>
-            </div>
-            <div className="flex justify-between font-bold text-slate-600">
-              <span>{ui.hingeFee} ({calc.hingeCount} × {currency}{DOOR_HINGE_UNIT_PRICE})</span>
-              <span>{currency}{calc.hingeFeePerPiece.toFixed(1)}</span>
-            </div>
-          </>
-        )}
-        <div className="flex justify-between font-black text-slate-900 text-lg">
-          <span>{t.total || '总计'}</span>
-          <span>{currency}{calc.subtotal.toFixed(1)}</span>
-        </div>
-        {calc.minAreaApplied && (
-          <div className="text-xs font-bold text-orange-600">{t.qq_minAreaWarning || '单张面积不足0.2㎡，按0.2㎡计算'}</div>
-        )}
-        {isDoor && <div className="text-xs font-bold text-slate-600">{ui.doorNote}</div>}
-        {isDoor && <div className="text-xs font-bold text-slate-600">{ui.doorSizeLimit}</div>}
-        {isPegboard && <div className="text-xs font-bold text-slate-600">{ui.pegboardLimit}</div>}
-        {(isPegboard || isDoor) && <div className="text-xs font-bold text-slate-500">{ui.diagramNotice}</div>}
-        {(isPegboard || isDoor) && <div className="text-xs font-bold text-slate-500">{ui.wechatNotice}</div>}
-        {isDoor && (
-          <div className="text-xs font-bold text-slate-600">
-            {language === 'cn' ? '备注' : language === 'jp' ? '備考' : 'Note'}：
-            {language === 'cn'
-              ? `上铰链离上端 ${topOffset}mm，下铰链离下端 ${bottomOffset}mm；${ui.hingeGap}：${hingeGaps.length ? hingeGaps.map(g => `${g}mm`).join(' / ') : '-'}。`
-              : language === 'jp'
-                ? `上ヒンジ端距離 ${topOffset}mm、下ヒンジ端距離 ${bottomOffset}mm；${ui.hingeGap}: ${hingeGaps.length ? hingeGaps.map(g => `${g}mm`).join(' / ') : '-'}`
-                : `Top hinge offset ${topOffset}mm, bottom hinge offset ${bottomOffset}mm; ${ui.hingeGap}: ${hingeGaps.length ? hingeGaps.map(g => `${g}mm`).join(' / ') : '-'}.`}
-          </div>
-        )}
-      </div>
-
       {(isPegboard || isDoor) && calc.w > 0 && calc.h > 0 && (
         <div className="bg-white border border-slate-200 rounded-2xl p-4">
           <div className="text-xs font-black text-slate-400 uppercase mb-3">{ui.previewTitle}</div>
@@ -556,6 +513,51 @@ const BoardQuoteEditor: React.FC<BoardQuoteEditorProps> = ({ language, product, 
           </svg>
         </div>
       )}
+
+      <div className="bg-slate-50 border border-slate-200 rounded-2xl p-5 space-y-2">
+        <div className="flex justify-between font-bold text-slate-600">
+          <span>{t.qq_area || '面积'}</span>
+          <span>{calc.areaSqm.toFixed(3)}㎡</span>
+        </div>
+        <div className="flex justify-between font-bold text-slate-600">
+          <span>{t.qq_unitPrice || '单价'}</span>
+          <span>{currency}{calc.unitPrice.toFixed(1)}</span>
+        </div>
+        {isDoor && (
+          <>
+            <div className="flex justify-between font-bold text-slate-600">
+              <span>{language === 'cn' ? '门板计价' : language === 'jp' ? 'パネル単価' : 'Panel price'}</span>
+              <span>{currency}{calc.boardUnitPrice.toFixed(1)}</span>
+            </div>
+            <div className="flex justify-between font-bold text-slate-600">
+              <span>{ui.hingeFee} ({calc.hingeCount} × {currency}{DOOR_HINGE_UNIT_PRICE})</span>
+              <span>{currency}{calc.hingeFeePerPiece.toFixed(1)}</span>
+            </div>
+          </>
+        )}
+        <div className="flex justify-between font-black text-slate-900 text-lg">
+          <span>{t.total || '总计'}</span>
+          <span>{currency}{calc.subtotal.toFixed(1)}</span>
+        </div>
+        {calc.minAreaApplied && (
+          <div className="text-xs font-bold text-orange-600">{t.qq_minAreaWarning || '单张面积不足0.2㎡，按0.2㎡计算'}</div>
+        )}
+        {isDoor && <div className="text-xs font-bold text-slate-600">{ui.doorNote}</div>}
+        {isDoor && <div className="text-xs font-bold text-slate-600">{ui.doorSizeLimit}</div>}
+        {isPegboard && <div className="text-xs font-bold text-slate-600">{ui.pegboardLimit}</div>}
+        {(isPegboard || isDoor) && <div className="text-xs font-bold text-slate-500">{ui.diagramNotice}</div>}
+        {(isPegboard || isDoor) && <div className="text-xs font-bold text-slate-500">{ui.wechatNotice}</div>}
+        {isDoor && (
+          <div className="text-xs font-bold text-slate-600">
+            {language === 'cn' ? '备注' : language === 'jp' ? '備考' : 'Note'}：
+            {language === 'cn'
+              ? `上铰链离上端 ${topOffset}mm，下铰链离下端 ${bottomOffset}mm；${ui.hingeGap}：${hingeGaps.length ? hingeGaps.map(g => `${g}mm`).join(' / ') : '-'}。`
+              : language === 'jp'
+                ? `上ヒンジ端距離 ${topOffset}mm、下ヒンジ端距離 ${bottomOffset}mm；${ui.hingeGap}: ${hingeGaps.length ? hingeGaps.map(g => `${g}mm`).join(' / ') : '-'}`
+                : `Top hinge offset ${topOffset}mm, bottom hinge offset ${bottomOffset}mm; ${ui.hingeGap}: ${hingeGaps.length ? hingeGaps.map(g => `${g}mm`).join(' / ') : '-'}.`}
+          </div>
+        )}
+      </div>
 
       {isDoor && calc.h > MAX_DOOR_HEIGHT_MM && (
         <div className="text-xs font-bold text-red-600">{language === 'cn' ? '高度不支持超过3000mm' : language === 'jp' ? '高さは3000mmを超えられません' : 'Height over 3000mm is not supported'}</div>
