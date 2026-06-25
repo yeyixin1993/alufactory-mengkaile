@@ -304,6 +304,49 @@ const FactorySheet: React.FC<FactorySheetProps> = ({ cart, user, language, order
         </div>
       )}
 
+      {include304Screws && screwPlan.totalFee > 0 && (
+        <div className="bg-cyan-50 border border-cyan-200 rounded-xl px-4 py-3 text-sm font-bold text-cyan-700">
+          螺丝配件提醒：需要配螺丝
+        </div>
+      )}
+
+      {profileMetersSummary.length > 0 && (
+        <div className="bg-slate-50 border border-slate-200 rounded-xl p-4">
+          <div className="text-xs font-black text-slate-500 uppercase tracking-widest mb-2">{t.qq_profileMetersByModelColor || '型材米数汇总'}</div>
+          <ul className="space-y-1.5 text-xs text-slate-700">
+            {profileMetersSummary.map((row) => (
+              <li key={row.name} className="flex justify-between gap-3">
+                <span className="truncate">
+                  {row.name}
+                  {(() => {
+                    if (!include304Screws) return null;
+                    const model = String(row.name || '').split('·')[0].trim();
+                    const screw = screwByModel.get(model);
+                    if (!screw || screw.recommended <= 0) return null;
+                    return (
+                      <span className="ml-2 text-[10px] text-slate-500">
+                        ｜圆柱头内六角 {screw.countersunk > 0 ? screw.countersunk + 2 : 0} / 半圆头内六角+弹性扣件套装 {screw.through > 0 ? screw.through + 2 : 0}
+                      </span>
+                    );
+                  })()}
+                </span>
+                <span className="font-black whitespace-nowrap">{row.meters.toFixed(1)}m</span>
+              </li>
+            ))}
+          </ul>
+          {/*<div className="mt-3 pt-3 border-t border-slate-200 text-xs text-slate-700 space-y-1">
+            <div className="flex justify-between gap-3">
+              <span>{t.typeThrough || '通孔'}总数</span>
+              <span className="font-black">{profileHoleTotals.through}</span>
+            </div>
+            <div className="flex justify-between gap-3">
+              <span>{t.typeCountersunk || '沉头孔'}总数</span>
+              <span className="font-black">{profileHoleTotals.countersunk}</span>
+            </div>
+          </div>*/}
+        </div>
+      )}
+
       <div className="bg-slate-50 p-4 rounded border border-slate-200">
         <h4 className="text-xs font-black text-slate-400 uppercase tracking-widest mb-2">{t.profileSummary || 'Profiles Summary'}</h4>
         <div className="overflow-x-auto">
@@ -613,44 +656,7 @@ const FactorySheet: React.FC<FactorySheetProps> = ({ cart, user, language, order
       {/* Totals */}
       {showPrice && (
         <div className="mt-12 border-t-4 border-slate-900 pt-8 flex justify-between items-start gap-8">
-           <div className="flex-1">
-             {profileMetersSummary.length > 0 && (
-               <div className="max-w-[420px] bg-slate-50 border border-slate-200 rounded-xl p-4">
-                 <div className="text-xs font-black text-slate-500 uppercase tracking-widest mb-2">{t.qq_profileMetersByModelColor || '型材米数汇总'}</div>
-                 <ul className="space-y-1.5 text-xs text-slate-700">
-                   {profileMetersSummary.map((row) => (
-                     <li key={row.name} className="flex justify-between gap-3">
-                       <span className="truncate">
-                         {row.name}
-                         {(() => {
-                           if (!include304Screws) return null;
-                           const model = String(row.name || '').split('·')[0].trim();
-                           const screw = screwByModel.get(model);
-                           if (!screw || screw.recommended <= 0) return null;
-                           return (
-                             <span className="ml-2 text-[10px] text-slate-500">
-                               ｜沉头{screw.countersunk} / 通孔{screw.through}
-                             </span>
-                           );
-                         })()}
-                       </span>
-                       <span className="font-black whitespace-nowrap">{row.meters.toFixed(1)}m</span>
-                     </li>
-                   ))}
-                 </ul>
-                 <div className="mt-3 pt-3 border-t border-slate-200 text-xs text-slate-700 space-y-1">
-                   <div className="flex justify-between gap-3">
-                     <span>{t.typeThrough || '通孔'}总数</span>
-                     <span className="font-black">{profileHoleTotals.through}</span>
-                   </div>
-                   <div className="flex justify-between gap-3">
-                     <span>{t.typeCountersunk || '沉头孔'}总数</span>
-                     <span className="font-black">{profileHoleTotals.countersunk}</span>
-                   </div>
-                 </div>
-               </div>
-             )}
-           </div>
+           <div className="flex-1" />
 
            <div className="w-80 space-y-3 text-right">
              <div className="flex justify-between text-slate-500 text-xs"><span>{t.total}:</span><span className="font-bold text-slate-800">{currency}{baseTotal.toFixed(1)}</span></div>
