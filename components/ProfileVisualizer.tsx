@@ -187,9 +187,9 @@ const ProfileVisualizer: React.FC<ProfileVisualizerProps> = ({
     return getGrooveCount(side);
   };
   const visualGrooveCount = getVisualGrooveCount(selectedSide);
+  const oppositeMap: Record<ProfileSide, ProfileSide> = { 'A': 'C', 'B': 'D', 'C': 'A', 'D': 'B' };
 
   const getVisibleHoles = (side: ProfileSide) => {
-    const oppositeMap: Record<ProfileSide, ProfileSide> = { 'A': 'C', 'B': 'D', 'C': 'A', 'D': 'B' };
     const opposite = oppositeMap[side];
     if (isRadiusProfile) return holes.filter(h => h.side === side);
     return holes.filter(h => h.side === side || h.side === opposite);
@@ -346,11 +346,17 @@ const ProfileVisualizer: React.FC<ProfileVisualizerProps> = ({
             const isExit = hole.side !== selectedSide;
             const isCountersunkEntry = hole.type === 'countersunk' && !isExit;
             const isThreaded = hole.type === 'threaded';
+            const oppositeSide = oppositeMap[selectedSide];
+            const oppositeGrooveCount = getGrooveCount(oppositeSide);
             
             let verticalPos = '50%';
             if (grooveCount >= 2) {
               const gi = hole.grooveIndex ?? 0;
-              verticalPos = `${((gi + 1) / (grooveCount + 1)) * 100}%`;
+              const shouldMirrorOppositeGroove = isExit && hole.side === oppositeSide && oppositeGrooveCount >= 2;
+              const displayGrooveIndex = shouldMirrorOppositeGroove
+                ? Math.max(0, Math.min(grooveCount - 1, grooveCount - gi - 1))
+                : gi;
+              verticalPos = `${((displayGrooveIndex + 1) / (grooveCount + 1)) * 100}%`;
             }
 
             return (

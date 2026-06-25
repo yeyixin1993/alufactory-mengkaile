@@ -798,7 +798,6 @@ export const PROFILE_VARIANTS: ProfileVariant[] = [
   { id: '2047', name: '2047', wallThickness: 1.5, price: { oxidized: 41, electrophoretic: 48, powder: 58 } },
   { id: '2060', name: '2060', wallThickness: 1.5, price: { oxidized: 65, electrophoretic: 90, powder: 120 } },
   { id: '20100', name: '20100', wallThickness: 1.5, price: { oxidized: 80, electrophoretic: 110, powder: 140 } },
-  { id: '4080', name: '4080', wallThickness: 1.5, price: { oxidized: 80, electrophoretic: 110, powder: 140 } },
   { id: '3030', name: '3030', wallThickness: 1.8, price: { oxidized: 29, electrophoretic: 35, powder: 41 } },
   { id: '3030-N1', name: '3030 N1', wallThickness: 1.8, price: { oxidized: 31, electrophoretic: 36, powder: 42 } },
   { id: '3030-N2', name: '3030 N2', wallThickness: 1.8, price: { oxidized: 32, electrophoretic: 38, powder: 44 } },
@@ -806,6 +805,7 @@ export const PROFILE_VARIANTS: ProfileVariant[] = [
   { id: '3060', name: '3060', wallThickness: 1.8, price: { oxidized: 53, electrophoretic: 60, powder: 70 } },
   { id: '3060-N1-60', name: '3060 N1-60', wallThickness: 2.0, price: { oxidized: 59, electrophoretic: 63, powder: 73 } },
   { id: '4040', name: '4040', wallThickness: 2.0, price: { oxidized: 45, electrophoretic: 52, powder: 62 } },
+  { id: '4080', name: '4080', wallThickness: 2.0, price: { oxidized: 80, electrophoretic: 110, powder: 140 } },
 ];
 
 export const PROFILE_WEIGHTS: Record<string, number> = {
