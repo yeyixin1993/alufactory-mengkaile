@@ -60,13 +60,13 @@ const PROFILE_VIP_DISCOUNT_PER_METER = 2;
 const PEGBOARD_PRICE_PER_SQM: Record<number, number> = { 1: 780, 2: 1080, 3: 1380, 4: 1680, 5: 1980 };
 const ALUMINUM_PLATE_PRICE_PER_SQM: Record<number, number> = { 1: 500, 2: 700, 3: 1000, 4: 1300, 5: 1600 };
 const MARINE_BOARD_PRICE_PER_SQM: Record<number, number> = { 6: 100, 9: 130, 12: 155, 15: 175, 18: 200 };
+const MARINE_BOARD_WEIGHT_PER_SQM: Record<number, number> = { 6: 12, 9: 18, 12: 24, 15: 30, 18: 36 };
 const MIN_BOARD_CHARGE_AREA_SQM = 0.2;
 const MAX_PROFILE_LENGTH_MM = 3000;
 const MAX_BOARD_WIDTH_MM = 2400;
 const MAX_BOARD_HEIGHT_MM = 1200;
 const MARINE_BOARD_MAX_WIDTH_MM = 2440;
 const MARINE_BOARD_MAX_HEIGHT_MM = 1220;
-const MARINE_BOARD_FLAT_SHIPPING_FEE = 30;
 
 const round1 = (n: number) => Number(n.toFixed(1));
 const getCurrency = (lang: Language) => (lang === 'cn' ? '￥' : '$');
@@ -258,6 +258,15 @@ const QuickQuote: React.FC<{ language: Language; user?: User | null }> = ({ lang
     [marineBoardRows]
   );
 
+  const marineBoardWeightKg = useMemo(() => {
+    return round1(marineBoardCalculated.reduce((sum, x) => {
+      const qty = Math.max(0, x.row.quantity || 0);
+      if (qty <= 0) return sum;
+      const weightPerSqm = MARINE_BOARD_WEIGHT_PER_SQM[x.row.thickness] || 0;
+      return sum + (x.areaSqm * weightPerSqm * qty);
+    }, 0));
+  }, [marineBoardCalculated]);
+
   const frameCalculated = useMemo(() => {
     return frameRows.map((row) => {
       const qty = Math.max(0, row.quantity || 0);
@@ -424,16 +433,23 @@ const QuickQuote: React.FC<{ language: Language; user?: User | null }> = ({ lang
     const aluminumPlateItemTotal = round1(aluPlateCalculated.reduce((sum, x) => sum + x.subtotal, 0));
     const pegboardItemTotal = round1(pegboardCalculated.reduce((sum, x) => sum + x.subtotal, 0));
     const marineBoardItemTotal = round1(marineBoardCalculated.reduce((sum, x) => sum + x.subtotal, 0));
-    const marineBoardShippingFee = selectedProvince && marineBoardItemTotal > 0 ? MARINE_BOARD_FLAT_SHIPPING_FEE : 0;
     const frameItemTotal = round1(frameCalculated.reduce((sum, x) => sum + x.subtotal, 0));
+    const hasOverlength = profileRows.some((r) => r.length > 1500);
+    const totalShippableWeightKg = round1(profileSummary.totalWeightKg + marineBoardWeightKg);
+    const hasShippableItems = profileSummary.itemTotal > 0 || marineBoardItemTotal > 0;
+    const combinedShipping = selectedProvince && hasShippableItems
+      ? calcProfileShippingByProvince(selectedProvince, totalShippableWeightKg, hasOverlength)
+      : null;
+    const profileShippingFee = profileSummary.itemTotal > 0 ? (combinedShipping?.fee || 0) : 0;
+    const marineBoardShippingFee = profileSummary.itemTotal > 0 ? 0 : (combinedShipping?.fee || 0);
 
     const categories = [
       {
         key: 'profile',
         name: t.qq_aluminumProfile,
         itemTotal: profileSummary.itemTotal,
-        shippingFee: profileSummary.shippingFee,
-        total: profileSummary.categoryTotal,
+        shippingFee: profileShippingFee,
+        total: round1(profileSummary.itemTotal + profileShippingFee),
       },
       {
         key: 'aluminum_plate',
@@ -477,8 +493,10 @@ const QuickQuote: React.FC<{ language: Language; user?: User | null }> = ({ lang
     aluPlateCalculated,
     pegboardCalculated,
     marineBoardCalculated,
+    marineBoardWeightKg,
     selectedProvince,
     frameCalculated,
+    profileRows,
   ]);
 
   const updateProfileRow = (id: string, patch: Partial<ProfileRow>) => {

@@ -81,7 +81,13 @@ const reconcileCartItems = (localItems: CartItem[], remoteItems: CartItem[]): Ca
 const CART_CACHE_PREFIX = 'mengkaile_cart_cache_v1';
 const DRAFT_CACHE_PREFIX = 'mengkaile_profile_draft_cache_v1';
 const GUEST_CACHE_SCOPE = 'guest';
-const MARINE_BOARD_FLAT_SHIPPING_FEE = 30;
+const MARINE_BOARD_WEIGHT_PER_SQM: Record<number, number> = {
+  6: 12,
+  9: 18,
+  12: 24,
+  15: 30,
+  18: 36,
+};
 
 const getCacheKey = (prefix: string, userId?: string | null) => {
   const scope = userId?.trim() || GUEST_CACHE_SCOPE;
@@ -808,9 +814,6 @@ const Cart: React.FC<{
     return false;
   });
 
-  const hasMarineBoard = cart.some((item) => item.product.type === ProductType.MARINE_BOARD);
-  const hasProfile = cart.some((item) => item.product.type === ProductType.PROFILE);
-
   // Calculate total profile weight
   const totalProfileWeightKg = React.useMemo(() => {
     let w = 0;
@@ -824,19 +827,33 @@ const Cart: React.FC<{
     return w;
   }, [cart]);
 
-  const totalWeightKg = totalProfileWeightKg;
+  const totalMarineBoardWeightKg = React.useMemo(() => {
+    let w = 0;
+    cart.forEach(item => {
+      if (item.product.type === ProductType.MARINE_BOARD) {
+        const cfg = (item.config || {}) as { thickness?: number; width?: number; height?: number; areaSqm?: number };
+        const thickness = Number(cfg.thickness || 0);
+        const weightPerSqm = MARINE_BOARD_WEIGHT_PER_SQM[thickness] || 0;
+        const areaSqm = Number(cfg.areaSqm || 0) > 0
+          ? Number(cfg.areaSqm)
+          : ((Number(cfg.width || 0) * Number(cfg.height || 0)) / 1_000_000);
+        w += weightPerSqm * Math.max(0, areaSqm) * item.quantity;
+      }
+    });
+    return w;
+  }, [cart]);
+
+  const totalWeightKg = totalProfileWeightKg + totalMarineBoardWeightKg;
 
   // Calculate shipping fee for a given courier method
   const calcShippingForMethod = (method: ShippingMethod, province: string): { fee: number, overlength: number } => {
-    const marineBoardShipping = hasMarineBoard ? MARINE_BOARD_FLAT_SHIPPING_FEE : 0;
-
     // 到付: 运费为0，由收件人支付
     if (method === 'sf_collect') {
-      return { fee: marineBoardShipping, overlength: 0 };
+      return { fee: 0, overlength: 0 };
     }
 
-    if (!hasProfile) {
-      return { fee: marineBoardShipping, overlength: 0 };
+    if (totalWeightKg <= 0) {
+      return { fee: 0, overlength: 0 };
     }
 
     const overlength = (method === 'standard' || method === 'sf') && hasOverlength ? 20 : 0;
@@ -844,22 +861,22 @@ const Cart: React.FC<{
     if (method === 'anneng') {
       // 安能: 15kg以内是首重价, 15kg以上每kg续重
       const rate = SHIPPING_RATES_AN[province] || { first: 50, next: 3 };
-      if (totalProfileWeightKg <= 15) {
-        return { fee: rate.first + marineBoardShipping, overlength: 0 };
+      if (totalWeightKg <= 15) {
+        return { fee: rate.first, overlength: 0 };
       } else {
-        const extraKg = Math.ceil(totalProfileWeightKg - 15);
-        return { fee: rate.first + extraKg * rate.next + marineBoardShipping, overlength: 0 };
+        const extraKg = Math.ceil(totalWeightKg - 15);
+        return { fee: rate.first + extraKg * rate.next, overlength: 0 };
       }
     } else if (method === 'sf') {
       // 顺丰: 首重1kg, 续重每kg
       const rate = SHIPPING_RATES_SF[province] || { first: 15, next: 5 };
-      const roundedWeight = Math.max(1, Math.ceil(totalProfileWeightKg));
-      return { fee: rate.first + (roundedWeight - 1) * rate.next + overlength + marineBoardShipping, overlength };
+      const roundedWeight = Math.max(1, Math.ceil(totalWeightKg));
+      return { fee: rate.first + (roundedWeight - 1) * rate.next + overlength, overlength };
     } else {
       // 普通快递: 首重1kg, 续重每kg
       const rate = SHIPPING_RATES[province] || { first: 18, next: 5 };
-      const roundedWeight = Math.max(1, Math.ceil(totalProfileWeightKg));
-      return { fee: rate.first + (roundedWeight - 1) * rate.next + overlength + marineBoardShipping, overlength };
+      const roundedWeight = Math.max(1, Math.ceil(totalWeightKg));
+      return { fee: rate.first + (roundedWeight - 1) * rate.next + overlength, overlength };
     }
   };
 
@@ -873,7 +890,7 @@ const Cart: React.FC<{
     const sfc = calcShippingForMethod('sf_collect', province);
     const cheapest: ShippingMethod = std.fee <= sf.fee && std.fee <= an.fee ? 'standard' : sf.fee <= an.fee ? 'sf' : 'anneng';
     return { standard: std, sf, anneng: an, sf_collect: sfc, cheapest };
-  }, [selectedAddress, totalProfileWeightKg, hasOverlength, hasMarineBoard, hasProfile]);
+  }, [selectedAddress, totalWeightKg, hasOverlength]);
 
   const activeCourier: ShippingMethod = selectedCourier === 'auto' ? shippingOptions.cheapest : selectedCourier;
   const activeShipping = shippingOptions[activeCourier];
