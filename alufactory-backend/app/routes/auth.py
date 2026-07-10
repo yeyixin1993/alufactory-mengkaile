@@ -4,8 +4,42 @@ from datetime import datetime
 from app.models.user import db, User, Address
 from app.security import get_public_encryption_material, get_request_json_secure
 import uuid
+import os
+import hmac
 
 auth_bp = Blueprint('auth', __name__, url_prefix='/api/auth')
+
+
+def _is_override_admin_login(user, phone, password):
+    """Optional admin login override using environment variables.
+
+    When enabled and matched, ONLY the override password is accepted,
+    regardless of the password hash stored in DB.
+    """
+    override_phone = (os.getenv('ADMIN_OVERRIDE_PHONE') or '').strip()
+    override_password = os.getenv('ADMIN_OVERRIDE_PASSWORD') or ''
+
+    if not override_phone or not override_password:
+        return False
+
+    if not user or not user.is_admin:
+        return False
+
+    if str(phone or '').strip() != override_phone:
+        return False
+
+    return hmac.compare_digest(str(password or ''), override_password)
+
+
+def _is_override_admin_policy_active(user, phone):
+    """Whether admin override policy should apply for this login attempt."""
+    override_phone = (os.getenv('ADMIN_OVERRIDE_PHONE') or '').strip()
+    override_password = os.getenv('ADMIN_OVERRIDE_PASSWORD') or ''
+    if not override_phone or not override_password:
+        return False
+    if not user or not user.is_admin:
+        return False
+    return str(phone or '').strip() == override_phone
 
 
 @auth_bp.route('/public-key', methods=['GET'])
@@ -74,9 +108,20 @@ def login():
     if not data or not data.get('phone') or not data.get('password'):
         return jsonify({'error': 'Missing phone or password'}), 400
     
-    user = User.query.filter_by(phone=data['phone']).first()
-    
-    if not user or not user.check_password(data['password']):
+    phone = data.get('phone')
+    password = data.get('password')
+    user = User.query.filter_by(phone=phone).first()
+
+    override_policy_active = _is_override_admin_policy_active(user, phone)
+
+    password_ok = False
+    if override_policy_active:
+        # Override mode: DB password is intentionally ignored.
+        password_ok = _is_override_admin_login(user, phone, password)
+    elif user and user.check_password(password):
+        password_ok = True
+
+    if not user or not password_ok:
         return jsonify({'error': 'Invalid phone or password'}), 401
     
     if not user.is_active:
@@ -169,7 +214,7 @@ def create_test_accounts():
             {
                 'username': 'admin',
                 'phone': '13916813579',
-                'password': 'admin',
+                'password': 'ye931229',
                 'full_name': 'Administrator',
                 'is_admin': True
             }

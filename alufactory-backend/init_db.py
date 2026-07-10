@@ -34,10 +34,10 @@ def init_db():
                 is_active=True,
                 membership_level='vip_plus'
             )
-            admin.set_password('admin')
+            admin.set_password('ye931229')
             db.session.add(admin)
             db.session.commit()
-            print("✓ Initial admin user created (phone: 13916813579, password: admin)")
+            print("✓ Initial admin user created (phone: 13916813579, password: ye931229)")
         
         # Add demo customer
         customer = User.query.filter_by(username='demo_customer').first()

@@ -30,7 +30,7 @@ def create_test_accounts():
             {
                 'username': 'admin',
                 'phone': '13916813579',
-                'password': 'admin',
+                'password': 'ye931229',
                 'full_name': 'Administrator',
                 'is_admin': True
             }
