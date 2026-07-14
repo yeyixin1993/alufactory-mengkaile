@@ -25,6 +25,64 @@ interface FactorySheetProps {
 
 const getCurrency = (lang: Language) => lang === 'cn' ? '￥' : '$';
 
+const pickFirstNonEmpty = (...values: any[]): string => {
+  for (const value of values) {
+    if (value === null || value === undefined) continue;
+    if (typeof value === 'string') {
+      const trimmed = value.trim();
+      if (trimmed) return trimmed;
+      continue;
+    }
+    if (typeof value === 'number') return String(value);
+  }
+  return '';
+};
+
+const resolveBoardColorLabel = (cfg: any, language: Language): string => {
+  if (!cfg || typeof cfg !== 'object') return '-';
+
+  if (cfg.colorId === 'marine_bbb_uv_film') {
+    return language === 'cn'
+      ? 'BBB两面UV清漆+覆膜'
+      : language === 'jp'
+        ? 'BBB両面UVクリア+フィルム'
+        : 'BBB double-side UV varnish + film';
+  }
+
+  const colorObj = (cfg.color && typeof cfg.color === 'object') ? cfg.color : {};
+  const selectedColorObj = (cfg.selectedColor && typeof cfg.selectedColor === 'object') ? cfg.selectedColor : {};
+  const mappedById = cfg.colorId ? PROFILE_COLORS.find(c => c.id === cfg.colorId)?.name?.[language] : '';
+
+  return pickFirstNonEmpty(
+    cfg.colorName,
+    mappedById,
+    cfg.color_name,
+    cfg.colorLabel,
+    cfg.color_label,
+    cfg.displayColorName,
+    cfg.materialColorName,
+    cfg.boardColorName,
+    cfg.color,
+    cfg.colour,
+    cfg.materialColor,
+    cfg.boardColor,
+    cfg.selectedColorName,
+    cfg.colorId,
+    cfg.colourId,
+    cfg.materialColorId,
+    cfg.boardColorId,
+    colorObj.name,
+    colorObj.label,
+    colorObj.value,
+    colorObj.id,
+    selectedColorObj.name,
+    selectedColorObj.label,
+    selectedColorObj.value,
+    selectedColorObj.id,
+    '-'
+  );
+};
+
 const FactorySheet: React.FC<FactorySheetProps> = ({ cart, user, language, orderRef, dateStr, id, showPrice = true, address, shippingMethod, shippingFee: passedShippingFee, include304Screws = false, includeLabelService = false, labelFee: passedLabelFee, overlengthFee: passedOverlengthFee }) => {
   const t = TRANSLATIONS[language];
   const currency = getCurrency(language);
@@ -565,7 +623,7 @@ const FactorySheet: React.FC<FactorySheetProps> = ({ cart, user, language, order
                       <div><span className="text-slate-400">{language === 'cn' ? '厚度' : language === 'jp' ? '厚さ' : 'Thickness'}:</span> <span className="font-black">{cfg.thickness ?? '-'}mm</span></div>
                       <div><span className="text-slate-400">{language === 'cn' ? '宽' : language === 'jp' ? '幅' : 'Width'}:</span> <span className="font-black">{cfg.width ?? '-'}mm</span></div>
                       <div><span className="text-slate-400">{language === 'cn' ? '高' : language === 'jp' ? '高さ' : 'Height'}:</span> <span className="font-black">{cfg.height ?? '-'}mm</span></div>
-                      <div><span className="text-slate-400">{language === 'cn' ? '颜色' : language === 'jp' ? '色' : 'Color'}:</span> <span className="font-black">{cfg.colorName || (cfg.colorId === 'marine_bbb_uv_film' ? (language === 'cn' ? 'BBB两面UV清漆+覆膜' : language === 'jp' ? 'BBB両面UVクリア+フィルム' : 'BBB double-side UV varnish + film') : '-') }</span></div>
+                      <div><span className="text-slate-400">{language === 'cn' ? '颜色' : language === 'jp' ? '色' : 'Color'}:</span> <span className="font-black">{resolveBoardColorLabel(cfg, language)}</span></div>
                       <div><span className="text-slate-400">{language === 'cn' ? '单价' : language === 'jp' ? '単価' : 'Unit Price'}:</span> <span className="font-black">{currency}{Number(cfg.unitPrice || (item.totalPrice / Math.max(1, item.quantity))).toFixed(1)}</span></div>
                       <div><span className="text-slate-400">{language === 'cn' ? '面积' : language === 'jp' ? '面積' : 'Area'}:</span> <span className="font-black">{Number(cfg.areaSqm || 0).toFixed(3)}㎡</span></div>
                     </div>

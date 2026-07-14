@@ -826,6 +826,53 @@
             return {};
         }
 
+        function pickFirstNonEmpty(...values) {
+            for (const value of values) {
+                if (value === null || value === undefined) continue;
+                if (typeof value === 'string') {
+                    const trimmed = value.trim();
+                    if (trimmed) return trimmed;
+                    continue;
+                }
+                if (typeof value === 'number') return String(value);
+            }
+            return '';
+        }
+
+        function getOrderColorText(order, cfg) {
+            const colorObj = (cfg && typeof cfg.color === 'object' && cfg.color) ? cfg.color : {};
+            const selectedColorObj = (cfg && typeof cfg.selectedColor === 'object' && cfg.selectedColor) ? cfg.selectedColor : {};
+
+            return pickFirstNonEmpty(
+                order?.item_color,
+                cfg?.colorName,
+                cfg?.color_name,
+                cfg?.colorLabel,
+                cfg?.color_label,
+                cfg?.displayColorName,
+                cfg?.materialColorName,
+                cfg?.boardColorName,
+                cfg?.color,
+                cfg?.colour,
+                cfg?.materialColor,
+                cfg?.boardColor,
+                cfg?.selectedColorName,
+                cfg?.colorId,
+                cfg?.colourId,
+                cfg?.materialColorId,
+                cfg?.boardColorId,
+                colorObj?.name,
+                colorObj?.label,
+                colorObj?.value,
+                colorObj?.id,
+                selectedColorObj?.name,
+                selectedColorObj?.label,
+                selectedColorObj?.value,
+                selectedColorObj?.id,
+                '-'
+            );
+        }
+
         function renderOrderSketch(order, config) {
             const w = Math.max(1, Number(config?.width || 0));
             const h = Math.max(1, Number(config?.height || 0));
@@ -1064,7 +1111,7 @@
                     const thickness = rawThickness
                         ? (String(rawThickness).toLowerCase().includes('mm') ? String(rawThickness) : `${rawThickness}mm`)
                         : '-';
-                    const color = order.item_color || cfg.colorName || cfg.colorId || '-';
+                    const color = getOrderColorText(order, cfg);
                     const openingSide = (order.item_opening_side || cfg.openingSide || '').toLowerCase();
                     const opening = openingSide === 'left' ? '左开' : openingSide === 'right' ? '右开' : '-';
                     const generatedRemark = cfg.openingSide

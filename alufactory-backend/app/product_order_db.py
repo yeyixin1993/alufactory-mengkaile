@@ -101,6 +101,55 @@ def _normalize_text(value):
     return str(value or '').strip().lower()
 
 
+def _pick_first_non_empty(*values) -> Optional[str]:
+    for value in values:
+        if value is None:
+            continue
+        if isinstance(value, str):
+            text = value.strip()
+            if text:
+                return text
+            continue
+        if isinstance(value, (int, float)):
+            return str(value)
+    return None
+
+
+def _extract_color_value(config: Dict) -> Optional[str]:
+    if not isinstance(config, dict):
+        return None
+
+    nested_color = config.get('color') if isinstance(config.get('color'), dict) else {}
+    selected_color = config.get('selectedColor') if isinstance(config.get('selectedColor'), dict) else {}
+
+    return _pick_first_non_empty(
+        config.get('colorName'),
+        config.get('color_name'),
+        config.get('colorLabel'),
+        config.get('color_label'),
+        config.get('displayColorName'),
+        config.get('materialColorName'),
+        config.get('boardColorName'),
+        config.get('color'),
+        config.get('colour'),
+        config.get('materialColor'),
+        config.get('boardColor'),
+        config.get('selectedColorName'),
+        config.get('colorId'),
+        config.get('colourId'),
+        config.get('materialColorId'),
+        config.get('boardColorId'),
+        nested_color.get('name'),
+        nested_color.get('label'),
+        nested_color.get('value'),
+        nested_color.get('id'),
+        selected_color.get('name'),
+        selected_color.get('label'),
+        selected_color.get('value'),
+        selected_color.get('id'),
+    )
+
+
 def _to_positive_float(value) -> Optional[float]:
     try:
         num = float(value)
@@ -200,7 +249,7 @@ def _extract_item_detail_payload(category_code: str, item_config) -> Dict[str, O
     height = _to_positive_float(config.get('height'))
     thickness_raw = config.get('thickness')
     thickness = str(thickness_raw).strip() if thickness_raw not in (None, '') else None
-    color = str(config.get('colorName') or config.get('colorId') or '').strip() or None
+    color = _extract_color_value(config)
     opening_side = _normalize_opening_side(config.get('openingSide'))
 
     hinge_positions_raw = config.get('hingePositions') if isinstance(config.get('hingePositions'), list) else []
@@ -603,7 +652,7 @@ def find_order_ids_with_missing_item_details(
     try:
         where = [
             'is_total_order = 0',
-            '(item_config IS NOT NULL AND TRIM(item_config) <> "" AND item_config <> "null" AND ((item_width IS NULL OR item_height IS NULL) OR item_sketch_svg IS NULL OR item_sketch_svg = "" OR item_sketch_svg LIKE "<svg%"))',
+            '(item_config IS NOT NULL AND TRIM(item_config) <> "" AND item_config <> "null" AND (((item_width IS NULL OR item_height IS NULL) OR item_sketch_svg IS NULL OR item_sketch_svg = "" OR item_sketch_svg LIKE "<svg%") OR item_color IS NULL OR TRIM(item_color) = ""))',
         ]
         params = []
         if category_code:
