@@ -4,7 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { DrillHole, ProfileConfig, ProfileSide, TappingConfig, Language, HoleType, ProfileFinish, CartItem, Product, MiterCutConfig, MiterCutDirection, MiterCutSide, User, ThreadSize } from '../types';
 import { TRANSLATIONS, PROFILE_VARIANTS, PROFILE_COLORS, COLOR_ONLY_COLORED_SECTION_IDS } from '../constants';
-import { isVipMembership } from '../utils/membership';
+import { normalizeMembershipLevel } from '../utils/membership';
 import { Plus, Trash2, List, ShoppingCart, Pencil, X, Hammer, Settings2, Copy } from 'lucide-react';
 import ProfileVisualizer from './ProfileVisualizer';
 
@@ -31,12 +31,18 @@ const DANGER_FEE_THRESHOLD_MM = 100;
 const DANGER_FEE_PER_PIECE = 5;
 const MAX_PROFILE_LENGTH_MM = 3000;
 const PROFILE_VIP_DISCOUNT_PER_METER = 2;
+const PROFILE_VIP_PLUS_DISCOUNT_PER_METER = 4;
 
 const ProfileEditor: React.FC<ProfileEditorProps> = ({ language, product, user, initialItem, returnCartPath = '/cart', onAddBatchToCart, onUpdateItem, draftProfiles, setDraftProfiles }) => {
   const t = TRANSLATIONS[language];
   const currency = getCurrency(language);
   const navigate = useNavigate();
-  const isVipMember = isVipMembership(user?.membershipLevel);
+  const membershipLevel = normalizeMembershipLevel(user?.membershipLevel);
+  const profileDiscountPerMeter = membershipLevel === 'vip_plus'
+    ? PROFILE_VIP_PLUS_DISCOUNT_PER_METER
+    : membershipLevel === 'vip'
+      ? PROFILE_VIP_DISCOUNT_PER_METER
+      : 0;
   
   const initialConfig = initialItem?.config as ProfileConfig | undefined;
 
@@ -98,7 +104,7 @@ const ProfileEditor: React.FC<ProfileEditorProps> = ({ language, product, user, 
 
   const calculateItemUnitPrice = (len: number, currentHoles: DrillHole[], currentTapping: TappingConfig, currentMiterCut?: MiterCutConfig) => {
     const basePricePerMeter = selectedVariant.price[finish];
-    const effectivePricePerMeter = Math.max(0, basePricePerMeter - (isVipMember ? PROFILE_VIP_DISCOUNT_PER_METER : 0));
+    const effectivePricePerMeter = Math.max(0, basePricePerMeter - profileDiscountPerMeter);
     const materialPrice = (len / 1000) * effectivePricePerMeter;
     let holeFee = currentHoles.reduce(
       (acc, h) => acc + ((h.type === 'countersunk' || h.type === 'threaded') ? PRICE_HOLE_COUNTERSUNK : PRICE_HOLE_THROUGH),

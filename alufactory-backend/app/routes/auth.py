@@ -76,7 +76,7 @@ def register():
             phone=data['phone'],
             email=data.get('email'),
             full_name=data.get('full_name', ''),
-            membership_level='standard'
+            membership_level='vip'
         )
         user.set_password(data['password'])
         

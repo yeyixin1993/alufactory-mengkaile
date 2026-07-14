@@ -2,6 +2,7 @@ import React, { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Language, Product, CartItem, User } from '../types';
 import { TRANSLATIONS, PROFILE_COLORS } from '../constants';
+import { normalizeMembershipLevel } from '../utils/membership';
 
 interface BoardQuoteEditorProps {
   language: Language;
@@ -15,6 +16,8 @@ interface BoardQuoteEditorProps {
 
 const PEGBOARD_PRICE_PER_SQM: Record<number, number> = { 1: 780, 2: 1080, 3: 1380, 4: 1680, 5: 1980 };
 const ALUMINUM_PLATE_PRICE_PER_SQM: Record<number, number> = { 1: 500, 2: 700, 3: 1000, 4: 1300, 5: 1600 };
+const VIP_PLUS_PEGBOARD_PRICE_PER_SQM: Record<number, number> = { 1: 400, 2: 520, 3: 720, 4: 920, 5: 1120 };
+const VIP_PLUS_ALUMINUM_PLATE_PRICE_PER_SQM: Record<number, number> = { 1: 300, 2: 420, 3: 600, 4: 780, 5: 960 };
 const MARINE_BOARD_PRICE_PER_SQM: Record<number, number> = { 6: 100, 9: 130, 12: 155, 15: 175, 18: 200 };
 const MIN_BOARD_CHARGE_AREA_SQM = 0.2;
 const MAX_BOARD_WIDTH_MM = 2400;
@@ -127,11 +130,13 @@ const getDoorHingePositions = (heightMm: number): number[] => {
   return [100, (h - 200) * 0.25 + 100, h / 2, (h - 200) * 0.75 + 100, h - 100];
 };
 
-const BoardQuoteEditor: React.FC<BoardQuoteEditorProps> = ({ language, product, initialItem, returnCartPath = '/cart', onAddToCart, onUpdateItem }) => {
+const BoardQuoteEditor: React.FC<BoardQuoteEditorProps> = ({ language, product, user, initialItem, returnCartPath = '/cart', onAddToCart, onUpdateItem }) => {
   const t = TRANSLATIONS[language];
   const ui = UI_TEXT[language];
   const navigate = useNavigate();
   const currency = getCurrency(language);
+  const membershipLevel = normalizeMembershipLevel(user?.membershipLevel);
+  const isVipPlus = membershipLevel === 'vip_plus';
   const isPegboard = product.id === 'p1';
   const isDoor = product.id === 'p3';
   const isAluminumPlate = product.id === 'p5';
@@ -146,8 +151,8 @@ const BoardQuoteEditor: React.FC<BoardQuoteEditorProps> = ({ language, product, 
   };
 
   const getPriceMap = (): Record<number, number> => {
-    if (isPegboard) return PEGBOARD_PRICE_PER_SQM;
-    if (isAluminumPlate) return ALUMINUM_PLATE_PRICE_PER_SQM;
+    if (isPegboard) return isVipPlus ? VIP_PLUS_PEGBOARD_PRICE_PER_SQM : PEGBOARD_PRICE_PER_SQM;
+    if (isAluminumPlate) return isVipPlus ? VIP_PLUS_ALUMINUM_PLATE_PRICE_PER_SQM : ALUMINUM_PLATE_PRICE_PER_SQM;
     if (isMarineBoard) return MARINE_BOARD_PRICE_PER_SQM;
     if (isDoor) return { 2: ALUMINUM_PLATE_PRICE_PER_SQM[2] || 700 };
     return ALUMINUM_PLATE_PRICE_PER_SQM;
@@ -157,7 +162,7 @@ const BoardQuoteEditor: React.FC<BoardQuoteEditorProps> = ({ language, product, 
   const allThicknessOptions = isMarineBoard ? [6, 9, 12, 15, 18] : [1, 2, 3, 4, 5];
   const allowedThicknessSet = new Set<number>(
     isPegboard || isAluminumPlate
-      ? [2, 5]
+      ? (isVipPlus ? [1, 2, 3, 4, 5] : [2, 5])
       : isMarineBoard
         ? [12, 18]
         : isDoor

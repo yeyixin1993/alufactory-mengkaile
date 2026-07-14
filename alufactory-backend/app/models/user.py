@@ -27,7 +27,7 @@ class User(db.Model):
     
     # Profile info
     full_name = db.Column(db.String(120), nullable=True)
-    membership_level = db.Column(db.String(50), default='standard')  # standard, vip, vip_plus
+    membership_level = db.Column(db.String(50), default='vip')  # standard, vip, vip_plus
     membership_points = db.Column(db.Integer, default=0)
     
     # Account status
