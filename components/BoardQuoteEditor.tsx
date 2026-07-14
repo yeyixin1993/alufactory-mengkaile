@@ -154,7 +154,12 @@ const BoardQuoteEditor: React.FC<BoardQuoteEditorProps> = ({ language, product, 
     if (isPegboard) return isVipPlus ? VIP_PLUS_PEGBOARD_PRICE_PER_SQM : PEGBOARD_PRICE_PER_SQM;
     if (isAluminumPlate) return isVipPlus ? VIP_PLUS_ALUMINUM_PLATE_PRICE_PER_SQM : ALUMINUM_PLATE_PRICE_PER_SQM;
     if (isMarineBoard) return MARINE_BOARD_PRICE_PER_SQM;
-    if (isDoor) return { 2: ALUMINUM_PLATE_PRICE_PER_SQM[2] || 700 };
+    if (isDoor) {
+      const doorRate = isVipPlus
+        ? (VIP_PLUS_ALUMINUM_PLATE_PRICE_PER_SQM[2] || 420)
+        : (ALUMINUM_PLATE_PRICE_PER_SQM[2] || 700);
+      return { 2: doorRate };
+    }
     return ALUMINUM_PLATE_PRICE_PER_SQM;
   };
 

@@ -13,7 +13,7 @@ import {
   TRANSLATIONS,
 } from '../constants';
 import type { ShippingMethod } from '../constants';
-import { isVipMembership } from '../utils/membership';
+import { normalizeMembershipLevel } from '../utils/membership';
 
 type QuickQuoteProduct = 'profile' | 'aluminum_plate' | 'pegboard' | 'marine_board' | 'frame';
 type ProfileSection = 'natural' | 'colored';
@@ -56,9 +56,12 @@ const PROFILE_PRICE_COUNTERSUNK = 1.8;
 const PROFILE_DANGER_FEE_THRESHOLD_MM = 100;
 const PROFILE_DANGER_FEE = 5;
 const PROFILE_VIP_DISCOUNT_PER_METER = 2;
+const PROFILE_VIP_PLUS_DISCOUNT_PER_METER = 4;
 
 const PEGBOARD_PRICE_PER_SQM: Record<number, number> = { 1: 780, 2: 1080, 3: 1380, 4: 1680, 5: 1980 };
 const ALUMINUM_PLATE_PRICE_PER_SQM: Record<number, number> = { 1: 500, 2: 700, 3: 1000, 4: 1300, 5: 1600 };
+const VIP_PLUS_PEGBOARD_PRICE_PER_SQM: Record<number, number> = { 1: 400, 2: 520, 3: 720, 4: 920, 5: 1120 };
+const VIP_PLUS_ALUMINUM_PLATE_PRICE_PER_SQM: Record<number, number> = { 1: 300, 2: 420, 3: 600, 4: 780, 5: 960 };
 const MARINE_BOARD_PRICE_PER_SQM: Record<number, number> = { 6: 100, 9: 130, 12: 155, 15: 175, 18: 200 };
 const MARINE_BOARD_WEIGHT_PER_SQM: Record<number, number> = { 6: 12, 9: 18, 12: 24, 15: 30, 18: 36 };
 const MIN_BOARD_CHARGE_AREA_SQM = 0.2;
@@ -141,7 +144,13 @@ const calcProfileShippingByProvince = (province: string, totalWeightKg: number, 
 const QuickQuote: React.FC<{ language: Language; user?: User | null }> = ({ language, user }) => {
   const t = TRANSLATIONS[language];
   const currency = getCurrency(language);
-  const isVipMember = isVipMembership(user?.membershipLevel);
+  const membershipLevel = normalizeMembershipLevel(user?.membershipLevel);
+  const isVipPlus = membershipLevel === 'vip_plus';
+  const profileDiscountPerMeter = membershipLevel === 'vip_plus'
+    ? PROFILE_VIP_PLUS_DISCOUNT_PER_METER
+    : membershipLevel === 'vip'
+      ? PROFILE_VIP_DISCOUNT_PER_METER
+      : 0;
   const perPiecePrefix = t.qq_perPiecePrefix || '';
   const buildPerPieceLabel = (label: string) => {
     if (!perPiecePrefix) return label;
@@ -188,7 +197,7 @@ const QuickQuote: React.FC<{ language: Language; user?: User | null }> = ({ lang
       const finish = getProfileFinishByRow(row);
       const effectiveLength = Math.min(MAX_PROFILE_LENGTH_MM, safeNonNegative(row.length));
       const basePricePerMeter = variant.price[finish];
-      const effectivePricePerMeter = Math.max(0, basePricePerMeter - (isVipMember ? PROFILE_VIP_DISCOUNT_PER_METER : 0));
+      const effectivePricePerMeter = Math.max(0, basePricePerMeter - profileDiscountPerMeter);
       const materialPrice = (effectiveLength / 1000) * effectivePricePerMeter;
       const processPrice =
         safeNonNegative(row.tappingCount) * PROFILE_PRICE_TAPPING +
@@ -204,7 +213,7 @@ const QuickQuote: React.FC<{ language: Language; user?: User | null }> = ({ lang
       const totalWeightKg = weightPerMeter * (effectiveLength / 1000) * qty;
       return { row, unitPrice, subtotal, totalWeightKg };
     });
-  }, [profileRows, isVipMember]);
+  }, [profileRows, profileDiscountPerMeter]);
 
   const profileSummary = useMemo(() => {
     const itemTotal = round1(profileRowsCalculated.reduce((sum, x) => sum + x.subtotal, 0));
@@ -251,8 +260,11 @@ const QuickQuote: React.FC<{ language: Language; user?: User | null }> = ({ lang
     });
   };
 
-  const aluPlateCalculated = useMemo(() => calcBoardRows(aluPlateRows, ALUMINUM_PLATE_PRICE_PER_SQM), [aluPlateRows]);
-  const pegboardCalculated = useMemo(() => calcBoardRows(pegboardRows, PEGBOARD_PRICE_PER_SQM), [pegboardRows]);
+  const aluPlatePriceMap = isVipPlus ? VIP_PLUS_ALUMINUM_PLATE_PRICE_PER_SQM : ALUMINUM_PLATE_PRICE_PER_SQM;
+  const pegboardPriceMap = isVipPlus ? VIP_PLUS_PEGBOARD_PRICE_PER_SQM : PEGBOARD_PRICE_PER_SQM;
+
+  const aluPlateCalculated = useMemo(() => calcBoardRows(aluPlateRows, aluPlatePriceMap), [aluPlateRows, aluPlatePriceMap]);
+  const pegboardCalculated = useMemo(() => calcBoardRows(pegboardRows, pegboardPriceMap), [pegboardRows, pegboardPriceMap]);
   const marineBoardCalculated = useMemo(
     () => calcBoardRows(marineBoardRows, MARINE_BOARD_PRICE_PER_SQM, MARINE_BOARD_MAX_WIDTH_MM, MARINE_BOARD_MAX_HEIGHT_MM),
     [marineBoardRows]
