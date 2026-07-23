@@ -84,8 +84,8 @@ const ACCESSORY_DEFINITIONS: AccessoryDefinition[] = [
     name: { en: 'No.2 Corner Bracket (Only)', cn: '2号角码 only', jp: '2番コーナーブラケットのみ' },
     prices: {
       '1515': { natural: 3, colored: 3.5, naturalBulk: 2.5, coloredBulk: 3 },
-      '2020': { natural: 4, colored: 5, naturalBulk: 3, coloredBulk: 4.7 },
-      '3030': { natural: 6, colored: 8, naturalBulk: 3.5, coloredBulk: 4.3 },
+      '2020': { natural: 4, colored: 5, naturalBulk: 3.2, coloredBulk: 4 },
+      '3030': { natural: 6, colored: 8, naturalBulk: 4.5, coloredBulk: 6 },
     },
   },
   {
