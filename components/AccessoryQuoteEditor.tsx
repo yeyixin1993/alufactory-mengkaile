@@ -282,13 +282,13 @@ const AccessoryQuoteEditor: React.FC<{
         item: '配件',
         image: '示意图',
         unit: '单价',
-        bulk: '批量单价(≥10)',
+        bulk: '批量单价(≥20)',
         qty: '数量',
         subtotal: '小计',
         notAvailable: '该型号暂不提供',
         total: '总计',
         totalQty: '总数量',
-        batchRule: '同一编号一次买 10 个及以上，自动使用批量单价。',
+        batchRule: '同一编号一次买 20 个及以上，自动使用批量单价。',
         add: '加入购物车',
         update: '更新购物车',
         pickFirst: '请先选择数量',
@@ -308,13 +308,13 @@ const AccessoryQuoteEditor: React.FC<{
         item: '部品',
         image: '画像',
         unit: '単価',
-        bulk: '大量単価(10個以上)',
+        bulk: '大量単価(20個以上)',
         qty: '数量',
         subtotal: '小計',
         notAvailable: 'このサイズは未提供',
         total: '合計',
         totalQty: '総数量',
-        batchRule: '同一番号を10個以上購入時、自動で大量単価になります。',
+        batchRule: '同一番号を20個以上購入時、自動で大量単価になります。',
         add: 'カートに追加',
         update: 'カートを更新',
         pickFirst: '数量を入力してください',
@@ -333,13 +333,13 @@ const AccessoryQuoteEditor: React.FC<{
       item: 'Item',
       image: 'Image',
       unit: 'Unit',
-      bulk: 'Bulk Unit (>=10)',
+      bulk: 'Bulk Unit (>=20)',
       qty: 'Qty',
       subtotal: 'Subtotal',
       notAvailable: 'Not available for this size',
       total: 'Total',
       totalQty: 'Total Qty',
-      batchRule: 'For the same code, qty >=10 uses bulk unit price.',
+      batchRule: 'For the same code, qty >=20 uses bulk unit price.',
       add: 'Add to Cart',
       update: 'Update Cart',
       pickFirst: 'Please enter quantity first',
@@ -356,7 +356,7 @@ const AccessoryQuoteEditor: React.FC<{
       .map((def) => {
         const p = def.prices[profileSize]!;
         const qty = Math.max(0, Number(qtyMap[def.id] ?? 0));
-        const isBulk = qty >= 10;
+        const isBulk = qty >= 20;
         const unitPrice = colorMode === 'natural'
           ? (isBulk ? p.naturalBulk : p.natural)
           : (isBulk ? p.coloredBulk : p.colored);
@@ -538,7 +538,7 @@ const AccessoryQuoteEditor: React.FC<{
                 const p = def.prices[profileSize];
                 if (!p) return null;
                 const qty = Math.max(0, Number(qtyMap[def.id] ?? 0));
-                const isBulk = qty >= 10;
+                const isBulk = qty >= 20;
                 const unitPrice = colorMode === 'natural'
                   ? (isBulk ? p.naturalBulk : p.natural)
                   : (isBulk ? p.coloredBulk : p.colored);
