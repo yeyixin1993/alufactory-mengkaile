@@ -74,8 +74,8 @@ const ACCESSORY_DEFINITIONS: AccessoryDefinition[] = [
     code: 1,
     name: { en: 'No.1 Corner Bracket + Screws', cn: '1号角码配螺丝', jp: '1番コーナーブラケット+ねじ' },
     prices: {
-      '2020': { natural: 1, colored: 3, naturalBulk: 0.8, coloredBulk: 2.5 },
-      '3030': { natural: 2, colored: 4, naturalBulk: 1.3, coloredBulk: 3.1 },
+      '2020': { natural: 1, colored: 3, naturalBulk: 0.9, coloredBulk: 2.5 },
+      '3030': { natural: 2, colored: 4, naturalBulk: 1.5, coloredBulk: 3.1 },
     },
   },
   {
@@ -93,7 +93,7 @@ const ACCESSORY_DEFINITIONS: AccessoryDefinition[] = [
     code: 5,
     name: { en: 'No.5 Corner Bracket + Set Screw', cn: '5号角码配顶丝', jp: '5番コーナーブラケット+止めねじ' },
     prices: {
-      '2020': { natural: 1, colored: 3, naturalBulk: 0.8, coloredBulk: 2.5 },
+      '2020': { natural: 1, colored: 3, naturalBulk: 0.9, coloredBulk: 2.5 },
       '3030': { natural: 1.5, colored: 3.5, naturalBulk: 1.3, coloredBulk: 3.1 },
     },
   },

@@ -415,21 +415,19 @@ const BoardQuoteEditor: React.FC<BoardQuoteEditorProps> = ({ language, product, 
           </div>
         )}
 
-        <div>
-          {isMarineBoard && (
-            <>
-              <label className="block text-xs font-black text-slate-400 uppercase mb-2">{language === 'cn' ? '海洋板规格' : language === 'jp' ? '海洋板仕様' : 'Marine Spec'}</label>
-              <select
-                value={marineSpecId}
-                onChange={(e) => setMarineSpecId((e.target.value as MarineSpecId) || 'marine_bbb_uv_film')}
-                className="w-full border border-slate-200 rounded-xl px-4 py-3 outline-none bg-slate-50 font-black text-slate-700"
-              >
-                <option value="marine_bbb_uv_film">{MARINE_SPECS.marine_bbb_uv_film.name[language]}</option>
-                <option value="marine_bbb_plain">{MARINE_SPECS.marine_bbb_plain.name[language]}</option>
-              </select>
-            </>
-          )}
-        </div>
+        {isMarineBoard && (
+          <div>
+            <label className="block text-xs font-black text-slate-400 uppercase mb-2">{language === 'cn' ? '海洋板规格' : language === 'jp' ? '海洋板仕様' : 'Marine Spec'}</label>
+            <select
+              value={marineSpecId}
+              onChange={(e) => setMarineSpecId((e.target.value as MarineSpecId) || 'marine_bbb_uv_film')}
+              className="w-full border border-slate-200 rounded-xl px-4 py-3 outline-none bg-slate-50 font-black text-slate-700"
+            >
+              <option value="marine_bbb_uv_film">{MARINE_SPECS.marine_bbb_uv_film.name[language]}</option>
+              <option value="marine_bbb_plain">{MARINE_SPECS.marine_bbb_plain.name[language]}</option>
+            </select>
+          </div>
+        )}
 
         <div>
           <label className="block text-xs font-black text-slate-400 uppercase mb-2">{t.qq_color || '颜色'}</label>
