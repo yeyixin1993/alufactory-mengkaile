@@ -18,7 +18,11 @@ const PEGBOARD_PRICE_PER_SQM: Record<number, number> = { 1: 780, 2: 1080, 3: 138
 const ALUMINUM_PLATE_PRICE_PER_SQM: Record<number, number> = { 1: 500, 2: 700, 3: 1000, 4: 1300, 5: 1600 };
 const VIP_PLUS_PEGBOARD_PRICE_PER_SQM: Record<number, number> = { 1: 400, 2: 520, 3: 720, 4: 920, 5: 1120 };
 const VIP_PLUS_ALUMINUM_PLATE_PRICE_PER_SQM: Record<number, number> = { 1: 300, 2: 420, 3: 600, 4: 780, 5: 960 };
-const MARINE_BOARD_PRICE_PER_SQM: Record<number, number> = { 6: 100, 9: 130, 12: 155, 15: 175, 18: 200 };
+const MARINE_BOARD_SPEC_PRICE_PER_SQM: Record<'marine_bbb_uv_film' | 'marine_bbb_plain', Record<number, number>> = {
+  marine_bbb_uv_film: { 12: 155, 18: 200 },
+  marine_bbb_plain: { 12: 136, 18: 176 },
+};
+const MARINE_BOARD_COLORED_SURCHARGE_PER_SQM = 100;
 const MIN_BOARD_CHARGE_AREA_SQM = 0.2;
 const MAX_BOARD_WIDTH_MM = 2400;
 const MAX_BOARD_HEIGHT_MM = 1200;
@@ -141,19 +145,30 @@ const BoardQuoteEditor: React.FC<BoardQuoteEditorProps> = ({ language, product, 
   const isDoor = product.id === 'p3';
   const isAluminumPlate = product.id === 'p5';
   const isMarineBoard = product.id === 'p6';
-  const marineBoardColor = {
-    id: 'marine_bbb_uv_film',
-    name: {
-      cn: 'BBB两面UV清漆+覆膜',
-      en: 'BBB double-side UV varnish + film',
-      jp: 'BBB両面UVクリア+フィルム',
-    } as Record<Language, string>,
+  const MARINE_SPECS = {
+    marine_bbb_uv_film: {
+      id: 'marine_bbb_uv_film' as const,
+      name: {
+        cn: 'BBB两面UV清漆+覆膜',
+        en: 'BBB double-side UV varnish + film',
+        jp: 'BBB両面UVクリア+フィルム',
+      } as Record<Language, string>,
+    },
+    marine_bbb_plain: {
+      id: 'marine_bbb_plain' as const,
+      name: {
+        cn: 'BBB素板',
+        en: 'BBB plain board',
+        jp: 'BBB素板',
+      } as Record<Language, string>,
+    },
   };
+  type MarineSpecId = keyof typeof MARINE_SPECS;
 
   const getPriceMap = (): Record<number, number> => {
     if (isPegboard) return isVipPlus ? VIP_PLUS_PEGBOARD_PRICE_PER_SQM : PEGBOARD_PRICE_PER_SQM;
     if (isAluminumPlate) return isVipPlus ? VIP_PLUS_ALUMINUM_PLATE_PRICE_PER_SQM : ALUMINUM_PLATE_PRICE_PER_SQM;
-    if (isMarineBoard) return MARINE_BOARD_PRICE_PER_SQM;
+    if (isMarineBoard) return MARINE_BOARD_SPEC_PRICE_PER_SQM.marine_bbb_uv_film;
     if (isDoor) {
       const doorRate = isVipPlus
         ? (VIP_PLUS_ALUMINUM_PLATE_PRICE_PER_SQM[2] || 420)
@@ -178,11 +193,34 @@ const BoardQuoteEditor: React.FC<BoardQuoteEditorProps> = ({ language, product, 
 
   const initialCfg = (initialItem?.config || {}) as any;
   const [thickness, setThickness] = useState<number>(allowedThicknessSet.has(initialCfg.thickness) ? initialCfg.thickness : defaultThickness);
-  const [colorId, setColorId] = useState<string>(
-    isMarineBoard
-      ? marineBoardColor.id
-      : (initialCfg.colorId || 'natural')
+  const [marineSpecId, setMarineSpecId] = useState<MarineSpecId>(
+    initialCfg.marineSpecId === 'marine_bbb_plain' ? 'marine_bbb_plain' : 'marine_bbb_uv_film'
   );
+  const [colorId, setColorId] = useState<string>(initialCfg.colorId || 'natural');
+  const [swatchImgError, setSwatchImgError] = useState(false);
+
+  const marineColorOptions = useMemo(() => {
+    if (!isMarineBoard) return PROFILE_COLORS;
+    const base = PROFILE_COLORS.filter((c) => c.id !== 'natural');
+    return [
+      {
+        id: 'natural',
+        name: {
+          en: 'Original',
+          cn: '原色',
+          jp: '原色',
+        },
+        maxLength: 3000,
+      },
+      ...base,
+    ];
+  }, [isMarineBoard]);
+
+  const selectedColorName = useMemo(() => {
+    const source = isMarineBoard ? marineColorOptions : PROFILE_COLORS;
+    const hit = source.find((c) => c.id === colorId);
+    return hit?.name?.[language] || colorId;
+  }, [isMarineBoard, marineColorOptions, colorId, language]);
   const defaultWidth = (isPegboard || isDoor) ? 500 : 0;
   const defaultHeight = (isPegboard || isDoor) ? 2000 : 0;
   const [width, setWidth] = useState<number>(initialCfg.width || defaultWidth);
@@ -215,7 +253,13 @@ const BoardQuoteEditor: React.FC<BoardQuoteEditorProps> = ({ language, product, 
     const qty = Math.max(1, Number(quantity) || 1);
     const areaSqm = (w * h) / 1_000_000;
     const chargedArea = areaSqm > 0 && areaSqm < MIN_BOARD_CHARGE_AREA_SQM ? MIN_BOARD_CHARGE_AREA_SQM : areaSqm;
-    const unitRate = priceMap[effectiveThickness] || 0;
+    const marineBaseRate = isMarineBoard
+      ? (MARINE_BOARD_SPEC_PRICE_PER_SQM[marineSpecId]?.[effectiveThickness] || 0)
+      : 0;
+    const marineColorSurcharge = isMarineBoard && colorId !== 'natural' ? MARINE_BOARD_COLORED_SURCHARGE_PER_SQM : 0;
+    const unitRate = isMarineBoard
+      ? (marineBaseRate + marineColorSurcharge)
+      : (priceMap[effectiveThickness] || 0);
     const boardUnitPrice = Number((chargedArea * unitRate).toFixed(1));
     const hingeCount = isDoor ? getDoorHingePositions(h).length : 0;
     const hingeFeePerPiece = isDoor ? hingeCount * DOOR_HINGE_UNIT_PRICE : 0;
@@ -224,7 +268,7 @@ const BoardQuoteEditor: React.FC<BoardQuoteEditorProps> = ({ language, product, 
     const minAreaApplied = areaSqm > 0 && areaSqm < MIN_BOARD_CHARGE_AREA_SQM;
 
     return { w, h, qty, areaSqm, chargedArea, unitRate, boardUnitPrice, hingeCount, hingeFeePerPiece, unitPrice, subtotal, minAreaApplied };
-  }, [width, height, quantity, effectiveThickness, maxHeight, maxWidth, isDoor]);
+  }, [width, height, quantity, effectiveThickness, maxHeight, maxWidth, isDoor, isMarineBoard, marineSpecId, colorId, priceMap]);
 
   const hingePositions = useMemo(() => (isDoor ? getDoorHingePositions(calc.h) : []), [isDoor, calc.h]);
   const hingeGaps = useMemo(() => {
@@ -242,7 +286,9 @@ const BoardQuoteEditor: React.FC<BoardQuoteEditorProps> = ({ language, product, 
     const config = {
       thickness: effectiveThickness,
       colorId,
-      colorName: isMarineBoard ? marineBoardColor.name[language] : undefined,
+      colorName: selectedColorName,
+      marineSpecId: isMarineBoard ? marineSpecId : undefined,
+      marineSpecName: isMarineBoard ? MARINE_SPECS[marineSpecId].name[language] : undefined,
       width: calc.w,
       height: calc.h,
       unitPrice: calc.unitPrice,
@@ -370,20 +416,34 @@ const BoardQuoteEditor: React.FC<BoardQuoteEditorProps> = ({ language, product, 
         )}
 
         <div>
+          {isMarineBoard && (
+            <>
+              <label className="block text-xs font-black text-slate-400 uppercase mb-2">{language === 'cn' ? '海洋板规格' : language === 'jp' ? '海洋板仕様' : 'Marine Spec'}</label>
+              <select
+                value={marineSpecId}
+                onChange={(e) => setMarineSpecId((e.target.value as MarineSpecId) || 'marine_bbb_uv_film')}
+                className="w-full border border-slate-200 rounded-xl px-4 py-3 outline-none bg-slate-50 font-black text-slate-700"
+              >
+                <option value="marine_bbb_uv_film">{MARINE_SPECS.marine_bbb_uv_film.name[language]}</option>
+                <option value="marine_bbb_plain">{MARINE_SPECS.marine_bbb_plain.name[language]}</option>
+              </select>
+            </>
+          )}
+        </div>
+
+        <div>
           <label className="block text-xs font-black text-slate-400 uppercase mb-2">{t.qq_color || '颜色'}</label>
           <select
             value={colorId}
-            onChange={(e) => setColorId(e.target.value)}
-            disabled={isMarineBoard}
+            onChange={(e) => {
+              setColorId(e.target.value);
+              setSwatchImgError(false);
+            }}
             className="w-full border border-slate-200 rounded-xl px-4 py-3 outline-none bg-slate-50 font-black text-slate-700"
           >
-            {isMarineBoard ? (
-              <option value={marineBoardColor.id}>{marineBoardColor.name[language]}</option>
-            ) : (
-              PROFILE_COLORS.map((c) => (
-                <option key={c.id} value={c.id}>{c.name[language]}</option>
-              ))
-            )}
+            {(isMarineBoard ? marineColorOptions : PROFILE_COLORS).map((c) => (
+              <option key={c.id} value={c.id}>{c.name[language]}</option>
+            ))}
           </select>
         </div>
 
@@ -404,6 +464,26 @@ const BoardQuoteEditor: React.FC<BoardQuoteEditorProps> = ({ language, product, 
           {isPegboard
             ? `${ui.pegboardRangeText}，${ui.pegboardLimit}`
             : `${ui.rangeError}（${ui.widthShort}: ${minWidth}-${maxWidth}mm, ${ui.heightShort}: ${minHeight}-${maxHeight}mm）`}
+        </div>
+      )}
+
+      {colorId !== 'natural' && (
+        <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4">
+          <div className="text-xs font-black text-slate-500 mb-2">{language === 'cn' ? '色板图' : language === 'jp' ? 'カラースウォッチ' : 'Color Swatch'}</div>
+          {!swatchImgError ? (
+            <div className="w-full max-w-md h-40 rounded-xl border border-slate-200 bg-white overflow-hidden">
+              <img
+                src={`/images/color_${colorId}.png`}
+                alt={selectedColorName}
+                className="w-full h-full object-contain"
+                onError={() => setSwatchImgError(true)}
+              />
+            </div>
+          ) : (
+            <div className="w-full max-w-md h-40 rounded-xl border border-dashed border-slate-300 bg-white flex items-center justify-center text-xs font-bold text-slate-400">
+              {language === 'cn' ? '色板图占位（可上传）' : language === 'jp' ? '色見本プレースホルダー' : 'Swatch placeholder'}
+            </div>
+          )}
         </div>
       )}
 

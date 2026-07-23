@@ -25,6 +25,30 @@ interface FactorySheetProps {
 
 const getCurrency = (lang: Language) => lang === 'cn' ? '￥' : '$';
 
+const ACCESSORY_CODE_IMAGE_MAP: Record<string, string> = {
+  '1': '/images/accessory/1.jpg',
+  '2': '/images/accessory/2.jpg',
+  '3': '/images/accessory/3.jpg',
+  '5': '/images/accessory/5.jpg',
+  '7': '/images/accessory/7.jpg',
+  '7L': '/images/accessory/7L.jpg',
+  '7T': '/images/accessory/7T.jpg',
+  '8': '/images/accessory/8.jpg',
+  '9': '/images/accessory/9.jpg',
+  '10': '/images/accessory/10.jpg',
+  '10_1515_m4x6_cap': '/images/accessory/10_1515_m4x6_cap.jpg',
+  '10_1515_m4x12_cap': '/images/accessory/10_1515_m4x12_cap.jpg',
+  '10_1515_m4_tnut': '/images/accessory/10_1515_m4_tnut.jpg',
+  '10_2020_m5x14_cap': '/images/accessory/10_2020_m5x14_cap.jpg',
+  '10_2020_m5x8_cap': '/images/accessory/10_2020_m5x8_cap.jpg',
+  '10_2020_m6x20_cs': '/images/accessory/10_2020_m6x20_cs.jpg',
+  '10_2020_m5_tnut': '/images/accessory/10_2020_m5_tnut.jpg',
+  '10_3030_m6x18_cap': '/images/accessory/10_3030_m6x18_cap.jpg',
+  '10_3030_m6x12_cap': '/images/accessory/10_3030_m6x12_cap.jpg',
+  '10_3030_m8x20_cs': '/images/accessory/10_3030_m8x20_cs.jpg',
+  '10_3030_m6_tnut': '/images/accessory/10_3030_m6_tnut.jpg',
+};
+
 const pickFirstNonEmpty = (...values: any[]): string => {
   for (const value of values) {
     if (value === null || value === undefined) continue;
@@ -40,14 +64,6 @@ const pickFirstNonEmpty = (...values: any[]): string => {
 
 const resolveBoardColorLabel = (cfg: any, language: Language): string => {
   if (!cfg || typeof cfg !== 'object') return '-';
-
-  if (cfg.colorId === 'marine_bbb_uv_film') {
-    return language === 'cn'
-      ? 'BBB两面UV清漆+覆膜'
-      : language === 'jp'
-        ? 'BBB両面UVクリア+フィルム'
-        : 'BBB double-side UV varnish + film';
-  }
 
   const colorObj = (cfg.color && typeof cfg.color === 'object') ? cfg.color : {};
   const selectedColorObj = (cfg.selectedColor && typeof cfg.selectedColor === 'object') ? cfg.selectedColor : {};
@@ -458,6 +474,7 @@ const FactorySheet: React.FC<FactorySheetProps> = ({ cart, user, language, order
       <div className="space-y-10">
         {cart.map((item, idx) => {
            const isProfile = item.product.type === ProductType.PROFILE;
+            const isAccessory = item.product.type === ProductType.ACCESSORY;
            const cfg = (item.config || {}) as any;
            const profileCfg = cfg as ProfileConfig;
            const colorDef = isProfile ? PROFILE_COLORS.find(c => c.id === profileCfg.colorId) : null;
@@ -615,6 +632,103 @@ const FactorySheet: React.FC<FactorySheetProps> = ({ cart, user, language, order
                       </div>
                     )}
                  </div>
+               ) : isAccessory ? (
+                <div className="space-y-4">
+                  {(() => {
+                    const lines = Array.isArray(cfg?.lines) ? cfg.lines : [];
+                    const selectedLines = lines.filter((line: any) => Number(line?.quantity || 0) > 0);
+                    const fitModel = cfg?.profileSize || cfg?.size || cfg?.variantId || '-';
+                    const rawColorMode = String(cfg?.colorMode || '').toLowerCase();
+                    const selectedAccessoryColorName = cfg?.colorName || (cfg?.colorId ? PROFILE_COLORS.find(c => c.id === cfg.colorId)?.name?.[language] : '');
+                    const colorModeText = rawColorMode === 'natural'
+                      ? (language === 'cn' ? '银白' : language === 'jp' ? 'シルバーホワイト' : 'Silver White')
+                      : rawColorMode === 'colored'
+                        ? (selectedAccessoryColorName || (language === 'cn' ? '彩色' : language === 'jp' ? 'カラー' : 'Colored'))
+                        : (cfg?.colorMode || '-');
+                    const totalQty = Number(cfg?.totalQuantity || 0);
+                    const showAccessorySwatch = rawColorMode === 'colored' && !!cfg?.colorId;
+                    const accessorySwatchSrc = showAccessorySwatch ? `/images/color_${cfg.colorId}.png` : '';
+
+                    return (
+                      <>
+                        <div className="bg-slate-50 p-4 rounded-xl border border-slate-100">
+                          <h4 className="text-xs font-black text-slate-400 uppercase tracking-widest border-b border-slate-200 pb-2 mb-3">{t.specs}</h4>
+                          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-xs">
+                            <div><span className="text-slate-400">{language === 'cn' ? '适配型号' : language === 'jp' ? '適合型番' : 'Fit Model'}:</span> <span className="font-black">{fitModel}</span></div>
+                            <div><span className="text-slate-400">{language === 'cn' ? '颜色' : language === 'jp' ? '色' : 'Color'}:</span> <span className="font-black">{colorModeText}</span></div>
+                            <div><span className="text-slate-400">{language === 'cn' ? '总数量' : language === 'jp' ? '総数量' : 'Total Qty'}:</span> <span className="font-black">{totalQty}</span></div>
+                            <div><span className="text-slate-400">{language === 'cn' ? '小计' : language === 'jp' ? '小計' : 'Subtotal'}:</span> <span className="font-black">{currency}{Number(cfg?.unitTotal || item.totalPrice || 0).toFixed(1)}</span></div>
+                          </div>
+                        </div>
+
+                        <div className="bg-slate-50 p-4 rounded-xl border border-slate-100">
+                          <h4 className="text-xs font-black text-slate-400 uppercase tracking-widest border-b border-slate-200 pb-2 mb-3">
+                            {language === 'cn' ? '配件明细' : language === 'jp' ? '部品明細' : 'Accessory Details'}
+                          </h4>
+                          {selectedLines.length === 0 ? (
+                            <div className="text-xs text-slate-500">-</div>
+                          ) : (
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                              {showAccessorySwatch && (
+                                <div className="border border-slate-200 rounded-xl bg-white p-3 flex gap-3 items-center">
+                                  <div className="w-20 h-16 rounded-lg border border-slate-200 bg-slate-50 overflow-hidden relative shrink-0">
+                                    <img
+                                      src={accessorySwatchSrc}
+                                      alt={String(selectedAccessoryColorName || cfg?.colorId || 'swatch')}
+                                      className="w-full h-full object-contain"
+                                      onError={(e) => {
+                                        e.currentTarget.style.display = 'none';
+                                        const placeholder = e.currentTarget.nextElementSibling as HTMLElement | null;
+                                        if (placeholder) placeholder.style.display = 'flex';
+                                      }}
+                                    />
+                                    <div className="absolute inset-0 hidden items-center justify-center text-[10px] font-bold text-slate-400 bg-slate-50">
+                                      {language === 'cn' ? '色板缺失' : language === 'jp' ? '色見本なし' : 'No Swatch'}
+                                    </div>
+                                  </div>
+                                  <div className="min-w-0 flex-1 text-xs">
+                                    <div className="font-black text-slate-800 whitespace-normal break-words leading-snug">{selectedAccessoryColorName || String(cfg?.colorId || '-')}</div>
+                                  </div>
+                                </div>
+                              )}
+                              {selectedLines.map((line: any, lineIdx: number) => {
+                                const code = String(line?.code || '');
+                                const imageKey = String(line?.imageKey || line?.id || code || '');
+                                const imgSrc = ACCESSORY_CODE_IMAGE_MAP[imageKey] || ACCESSORY_CODE_IMAGE_MAP[code] || '';
+                                const lineName = line?.name || `#${code || lineIdx + 1}`;
+                                const qty = Number(line?.quantity || 0);
+                                const subtotal = Number(line?.subtotal || 0);
+
+                                return (
+                                  <div key={`acc-line-${imageKey || code}-${lineIdx}`} className="border border-slate-200 rounded-xl bg-white p-3 flex gap-3 items-center">
+                                    <div className="w-20 h-16 rounded-lg border border-slate-200 bg-slate-50 overflow-hidden relative shrink-0">
+                                      <img
+                                        src={imgSrc}
+                                        alt={lineName}
+                                        className="w-full h-full object-contain"
+                                        onError={(e) => {
+                                          e.currentTarget.style.display = 'none';
+                                          const placeholder = e.currentTarget.nextElementSibling as HTMLElement | null;
+                                          if (placeholder) placeholder.style.display = 'flex';
+                                        }}
+                                      />
+                                      <div className="absolute inset-0 hidden items-center justify-center text-[10px] font-bold text-slate-400 bg-slate-50">IMG #{imageKey || code || lineIdx + 1}</div>
+                                    </div>
+                                    <div className="min-w-0 flex-1 text-xs">
+                                      <div className="font-black text-slate-800 whitespace-normal break-words leading-snug" title={lineName}>{lineName}</div>
+                                      <div className="text-slate-500">{language === 'cn' ? '数量' : language === 'jp' ? '数量' : 'Qty'}: {qty}</div>
+                                      <div className="text-slate-700 font-bold">{language === 'cn' ? '小计' : language === 'jp' ? '小計' : 'Subtotal'}: {currency}{subtotal.toFixed(1)}</div>
+                                    </div>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          )}
+                        </div>
+                      </>
+                    );
+                  })()}
+                </div>
                ) : (
                 <div className="space-y-4">
                   <div className="bg-slate-50 p-4 rounded-xl border border-slate-100">
@@ -624,6 +738,9 @@ const FactorySheet: React.FC<FactorySheetProps> = ({ cart, user, language, order
                       <div><span className="text-slate-400">{language === 'cn' ? '宽' : language === 'jp' ? '幅' : 'Width'}:</span> <span className="font-black">{cfg.width ?? '-'}mm</span></div>
                       <div><span className="text-slate-400">{language === 'cn' ? '高' : language === 'jp' ? '高さ' : 'Height'}:</span> <span className="font-black">{cfg.height ?? '-'}mm</span></div>
                       <div><span className="text-slate-400">{language === 'cn' ? '颜色' : language === 'jp' ? '色' : 'Color'}:</span> <span className="font-black">{resolveBoardColorLabel(cfg, language)}</span></div>
+                      {item.product.type === ProductType.MARINE_BOARD && (
+                        <div><span className="text-slate-400">{language === 'cn' ? '海洋板规格' : language === 'jp' ? '海洋板仕様' : 'Marine Spec'}:</span> <span className="font-black">{cfg.marineSpecName || (cfg.marineSpecId === 'marine_bbb_plain' ? (language === 'cn' ? 'BBB素板' : language === 'jp' ? 'BBB素板' : 'BBB plain board') : (language === 'cn' ? 'BBB两面UV清漆+覆膜' : language === 'jp' ? 'BBB両面UVクリア+フィルム' : 'BBB double-side UV varnish + film'))}</span></div>
+                      )}
                       <div><span className="text-slate-400">{language === 'cn' ? '单价' : language === 'jp' ? '単価' : 'Unit Price'}:</span> <span className="font-black">{currency}{Number(cfg.unitPrice || (item.totalPrice / Math.max(1, item.quantity))).toFixed(1)}</span></div>
                       <div><span className="text-slate-400">{language === 'cn' ? '面积' : language === 'jp' ? '面積' : 'Area'}:</span> <span className="font-black">{Number(cfg.areaSqm || 0).toFixed(3)}㎡</span></div>
                     </div>
@@ -637,6 +754,29 @@ const FactorySheet: React.FC<FactorySheetProps> = ({ cart, user, language, order
                             : `Hinges: ${cfg.hingeCount || (Array.isArray(cfg.hingePositions) ? cfg.hingePositions.length : 0)}. Top offset ${Number(cfg.topHingeOffset ?? 100).toFixed(0)}mm, bottom offset ${Number(cfg.bottomHingeOffset ?? 100).toFixed(0)}mm; spacing: ${Array.isArray(cfg.hingeGaps) && cfg.hingeGaps.length ? cfg.hingeGaps.map((x: number) => `${Number(x).toFixed(0)}mm`).join(' / ') : '-'}.`}
                       </div>
                     )}
+                    {(() => {
+                      const showSwatch = !!cfg?.colorId && String(cfg.colorId) !== 'natural';
+                      const swatchSrc = showSwatch ? `/images/color_${cfg.colorId}.png` : '';
+                      return showSwatch ? (
+                        <div className="mt-3">
+                          <div className="w-36 h-24 rounded-lg border border-slate-200 bg-white overflow-hidden relative">
+                            <img
+                              src={swatchSrc}
+                              alt={String(cfg?.colorName || cfg?.colorId || 'swatch')}
+                              className="w-full h-full object-contain"
+                              onError={(e) => {
+                                e.currentTarget.style.display = 'none';
+                                const placeholder = e.currentTarget.nextElementSibling as HTMLElement | null;
+                                if (placeholder) placeholder.style.display = 'flex';
+                              }}
+                            />
+                            <div className="absolute inset-0 hidden items-center justify-center text-[10px] font-bold text-slate-400 bg-slate-50">
+                              {language === 'cn' ? '色板缺失' : language === 'jp' ? '色見本なし' : 'No Swatch'}
+                            </div>
+                          </div>
+                        </div>
+                      ) : null;
+                    })()}
                   </div>
 
                   <div className="bg-slate-50 border border-slate-200 rounded-xl p-3">

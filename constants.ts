@@ -739,7 +739,8 @@ export const COLOR_ONLY_COLORED_SECTION_IDS = [
 // OLD maxLength values (commented out 2026-03-15, all colors now max 3000mm):
 // red: 1000, sapphire_blue: 1000, sky_blue: 1000, green: 1000, pink: 450
 export const PROFILE_COLORS: ColorDef[] = [
-  { id: 'natural', name: { en: 'Natural / Silver', cn: '本色 / 银白', jp: 'ナチュラル / シルバー' }, maxLength: 3000 },
+  { id: 'natural', name: { en: 'Silver White', cn: '银白', jp: 'シルバーホワイト' }, maxLength: 3000 },
+  { id: 'silver', name: { en: 'Bright Silver', cn: '亮银色', jp: 'ブライトシルバー' }, maxLength: 3000 },
   // { id: 'orange_gold', name: { en: 'Orange K Gold', cn: '橙K金', jp: 'オレンジKゴールド' }, maxLength: 3000 },
   { id: 'red', name: { en: 'China Red', cn: '中国红', jp: 'チャイナレッド' }, maxLength: 3000 },
   { id: 'sapphire_blue', name: { en: 'Sapphire Blue', cn: '宝蓝色', jp: 'サファイアブルー' }, maxLength: 3000 },

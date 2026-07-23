@@ -8,6 +8,7 @@ import type { ShippingMethod } from './constants';
 import { ApiService } from './services/apiService';
 import ProfileEditor from './components/ProfileEditor';
 import BoardQuoteEditor from './components/BoardQuoteEditor';
+import AccessoryQuoteEditor from './components/AccessoryQuoteEditor';
 import ProfileVisualizer from './components/ProfileVisualizer';
 import { openFactorySheetPreview } from './components/FactorySheetPreview';
 import FactorySheetPreviewPage from './components/FactorySheetPreviewPage';
@@ -87,6 +88,23 @@ const MARINE_BOARD_WEIGHT_PER_SQM: Record<number, number> = {
   12: 24,
   15: 30,
   18: 36,
+};
+
+const ACCESSORY_PRODUCT: Product = {
+  id: 'accessory',
+  type: ProductType.ACCESSORY,
+  name: {
+    en: 'Aluminum Profile Accessories',
+    cn: '铝型材配件',
+    jp: 'アルミプロファイルアクセサリー',
+  },
+  description: {
+    en: 'Select profile size and accessory quantities with automatic bulk pricing.',
+    cn: '按型材规格选择配件并填写数量，系统自动按批量规则计价。',
+    jp: 'プロファイルサイズと数量を選択し、数量割引を自動計算します。',
+  },
+  basePrice: 0,
+  imageUrl: 'https://picsum.photos/400/300?random=9',
 };
 
 const getCacheKey = (prefix: string, userId?: string | null) => {
@@ -518,8 +536,7 @@ const UserProfile: React.FC<{
 // --- Catalog Component ---
 const Catalog: React.FC<{ language: Language }> = ({ language }) => {
   const t = TRANSLATIONS[language];
-  const accessoryTitle = language === 'cn' ? '铝型材配件' : language === 'jp' ? 'アルミプロファイルアクセサリー' : 'Aluminum Profile Accessories';
-  const accessoryComingSoon = language === 'cn' ? '即将上线' : language === 'jp' ? '近日公開' : 'Coming soon';
+  const accessoryProduct = ACCESSORY_PRODUCT;
   return (
     <div className="max-w-7xl mx-auto px-6 py-12">
       <div className="mb-8">
@@ -549,16 +566,16 @@ const Catalog: React.FC<{ language: Language }> = ({ language }) => {
 
         <div className="bg-white rounded-[2.5rem] overflow-hidden shadow-xl border border-slate-100 hover:shadow-2xl transition-all duration-300 group">
           <div className="h-64 overflow-hidden relative">
-            <img src="https://picsum.photos/400/300?random=9" alt={accessoryTitle} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-1000" />
+            <img src={accessoryProduct.imageUrl} alt={accessoryProduct.name[language]} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-1000" />
             <div className="absolute inset-0 bg-gradient-to-t from-black/40 via-transparent to-transparent" />
             <div className="absolute top-6 left-6 bg-white/95 backdrop-blur px-3 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest text-slate-800 shadow-xl">ACCESSORY</div>
           </div>
           <div className="p-8">
-            <h3 className="text-2xl font-black text-slate-900 mb-3">{accessoryTitle}</h3>
-            <p className="text-slate-500 text-sm mb-10 line-clamp-2 leading-relaxed">{accessoryComingSoon}</p>
-            <div className="w-full bg-slate-200 text-slate-600 py-5 rounded-3xl font-black flex items-center justify-center gap-3 shadow-xl">
-              {accessoryComingSoon}
-            </div>
+            <h3 className="text-2xl font-black text-slate-900 mb-3">{accessoryProduct.name[language]}</h3>
+            <p className="text-slate-500 text-sm mb-10 line-clamp-2 leading-relaxed">{accessoryProduct.description[language]}</p>
+            <Link to={`/product/${accessoryProduct.id}`} className="w-full bg-slate-900 text-white py-5 rounded-3xl font-black flex items-center justify-center gap-3 hover:bg-blue-600 transition-all shadow-xl shadow-slate-900/20 group-hover:-translate-y-1">
+              {t.addToCart} <ChevronRight className="w-5 h-5" />
+            </Link>
           </div>
         </div>
       </div>
@@ -843,7 +860,18 @@ const Cart: React.FC<{
     return w;
   }, [cart]);
 
-  const totalWeightKg = totalProfileWeightKg + totalMarineBoardWeightKg;
+  const totalItemAmount = React.useMemo(
+    () => cart.reduce((sum, item) => sum + (Number(item.totalPrice) || 0), 0),
+    [cart]
+  );
+
+  const accessoryShippingWeightKg = React.useMemo(() => {
+    const hasAccessory = cart.some(item => item.product.type === ProductType.ACCESSORY);
+    if (!hasAccessory) return 0;
+    return totalItemAmount < 30 ? 1 : 0;
+  }, [cart, totalItemAmount]);
+
+  const totalWeightKg = totalProfileWeightKg + totalMarineBoardWeightKg + accessoryShippingWeightKg;
 
   // Calculate shipping fee for a given courier method
   const calcShippingForMethod = (method: ShippingMethod, province: string): { fee: number, overlength: number } => {
@@ -1173,7 +1201,7 @@ const Cart: React.FC<{
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-10">
         <div className="lg:col-span-2 space-y-8">
           <div className="flex justify-between items-center bg-white p-5 rounded-[2rem] shadow-xl border border-slate-100">
-            <Link to="/product/p2" className="flex items-center gap-2 text-blue-600 font-black px-5 py-3 rounded-2xl hover:bg-blue-50 transition-all text-sm"><ArrowLeft className="w-4 h-4"/> {t.continueShopping}</Link>
+            <Link to="/" className="flex items-center gap-2 text-blue-600 font-black px-5 py-3 rounded-2xl hover:bg-blue-50 transition-all text-sm"><ArrowLeft className="w-4 h-4"/> {language === 'cn' ? '返回首页' : language === 'jp' ? 'ホームに戻る' : 'Back to Home'}</Link>
             <div className="flex gap-2">
               <button onClick={() => openFactorySheetPreview({ cart, user, language, showPrice: true, address: selectedAddress || undefined, shippingMethod: SHIPPING_METHOD_NAMES[activeCourier][language], shippingFee, include304Screws, includeLabelService, labelFee, overlengthFee })} className="flex items-center gap-2 text-slate-700 font-bold px-5 py-3 rounded-2xl border border-slate-200 hover:bg-slate-50 transition-all text-sm"><Eye className="w-4 h-4"/> {t.preview}</button>
               {user?.role === 'admin' && (
@@ -1248,15 +1276,184 @@ const Cart: React.FC<{
                       )}
                     </div>
                   )}
-                  {item.product.type !== ProductType.PROFILE && (
+                  {item.product.type === ProductType.ACCESSORY && (
                     <div className="mt-8 pt-8 border-t border-slate-100">
+                      {(() => {
+                        const cfg: any = item.config || {};
+                        const lines = Array.isArray(cfg?.lines) ? cfg.lines : [];
+                        const selectedLines = lines.filter((line: any) => Number(line?.quantity || 0) > 0);
+                        const sizeText = cfg?.profileSize || cfg?.size || cfg?.variantId || '-';
+                        const rawColorMode = String(cfg?.colorMode || '').toLowerCase();
+                        const selectedAccessoryColorName = cfg?.colorName || (cfg?.colorId ? PROFILE_COLORS.find(c => c.id === cfg.colorId)?.name?.[language] : '');
+                        const colorModeText = rawColorMode === 'natural'
+                          ? (language === 'cn' ? '银白' : language === 'jp' ? 'シルバーホワイト' : 'Silver White')
+                          : rawColorMode === 'colored'
+                            ? (selectedAccessoryColorName || (language === 'cn' ? '彩色' : language === 'jp' ? 'カラー' : 'Colored'))
+                            : (cfg?.colorMode || '-');
+                        const showAccessorySwatch = rawColorMode === 'colored' && !!cfg?.colorId;
+                        const accessorySwatchSrc = showAccessorySwatch ? `/images/color_${cfg.colorId}.png` : '';
+                        const totalQty = Number(cfg?.totalQuantity || 0);
+                        const accessoryUnitTotal = Number(cfg?.unitTotal || item.totalPrice || 0);
+                        const detailSummary = selectedLines
+                          .slice(0, 3)
+                          .map((line: any) => `${line?.name || `#${line?.code || '-'}`}×${Number(line?.quantity || 0)}`)
+                          .join('；') || '-';
+                        const accessoryImageByCode: Record<string, string> = {
+                          '1': '/images/accessory/1.jpg',
+                          '2': '/images/accessory/2.jpg',
+                          '3': '/images/accessory/3.jpg',
+                          '5': '/images/accessory/5.jpg',
+                          '7': '/images/accessory/7.jpg',
+                          '7L': '/images/accessory/7L.jpg',
+                          '7T': '/images/accessory/7T.jpg',
+                          '8': '/images/accessory/8.jpg',
+                          '9': '/images/accessory/9.jpg',
+                          '10': '/images/accessory/10.jpg',
+                          '10_1515_m4x6_cap': '/images/accessory/10_1515_m4x6_cap.jpg',
+                          '10_1515_m4x12_cap': '/images/accessory/10_1515_m4x12_cap.jpg',
+                          '10_1515_m4_tnut': '/images/accessory/10_1515_m4_tnut.jpg',
+                          '10_2020_m5x14_cap': '/images/accessory/10_2020_m5x14_cap.jpg',
+                          '10_2020_m5x8_cap': '/images/accessory/10_2020_m5x8_cap.jpg',
+                          '10_2020_m6x20_cs': '/images/accessory/10_2020_m6x20_cs.jpg',
+                          '10_2020_m5_tnut': '/images/accessory/10_2020_m5_tnut.jpg',
+                          '10_3030_m6x18_cap': '/images/accessory/10_3030_m6x18_cap.jpg',
+                          '10_3030_m6x12_cap': '/images/accessory/10_3030_m6x12_cap.jpg',
+                          '10_3030_m8x20_cs': '/images/accessory/10_3030_m8x20_cs.jpg',
+                          '10_3030_m6_tnut': '/images/accessory/10_3030_m6_tnut.jpg',
+                        };
+
+                        return (
+                          <>
+                            <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-xs font-bold mb-4">
+                              <span className="px-3 py-1.5 rounded-xl bg-slate-100 text-slate-700">{language === 'cn' ? '适配型号' : language === 'jp' ? '適合型番' : 'Fit Model'}: {sizeText}</span>
+                              <span className="px-3 py-1.5 rounded-xl bg-slate-100 text-slate-700">{language === 'cn' ? '颜色' : language === 'jp' ? '色' : 'Color'}: {colorModeText}</span>
+                              <span className="px-3 py-1.5 rounded-xl bg-slate-100 text-slate-700">{language === 'cn' ? '明细' : language === 'jp' ? '明細' : 'Summary'}: {detailSummary}</span>
+                              <span className="px-3 py-1.5 rounded-xl bg-emerald-50 text-emerald-700">{language === 'cn' ? '总数量' : language === 'jp' ? '総数量' : 'Total Qty'}: {totalQty}</span>
+                            </div>
+
+                            {showAccessorySwatch && (
+                              <div className="mb-4 rounded-2xl border border-slate-200 bg-slate-50 p-3">
+                                <div className="text-xs font-black text-slate-700 mb-2">{language === 'cn' ? '色板图' : language === 'jp' ? 'カラースウォッチ' : 'Color Swatch'}</div>
+                                <div className="w-36 h-24 rounded-xl border border-slate-200 bg-white overflow-hidden relative">
+                                  <img
+                                    src={accessorySwatchSrc}
+                                    alt={String(selectedAccessoryColorName || cfg?.colorId || 'swatch')}
+                                    className="w-full h-full object-contain"
+                                    onError={(e) => {
+                                      e.currentTarget.style.display = 'none';
+                                      const placeholder = e.currentTarget.nextElementSibling as HTMLElement | null;
+                                      if (placeholder) placeholder.style.display = 'flex';
+                                    }}
+                                  />
+                                  <div className="absolute inset-0 hidden items-center justify-center text-[11px] font-bold text-slate-400 bg-slate-50">
+                                    {language === 'cn' ? '色板缺失' : language === 'jp' ? '色見本なし' : 'No Swatch'}
+                                  </div>
+                                </div>
+                              </div>
+                            )}
+
+                            <div className="bg-slate-50 border border-slate-200 rounded-2xl p-3 text-xs">
+                              <div className="font-black text-slate-700 mb-2">{language === 'cn' ? '配件明细' : language === 'jp' ? '部品明細' : 'Accessory Details'}</div>
+                              {selectedLines.length === 0 ? (
+                                <div className="text-slate-500">-</div>
+                              ) : (
+                                <div className="space-y-1">
+                                  {selectedLines.map((line: any, idx: number) => (
+                                    <div key={`${line?.code || idx}-${idx}`} className="flex items-center justify-between gap-3">
+                                      <span className="text-slate-700">{line?.name || `#${line?.code || idx + 1}`}</span>
+                                      <span className="text-slate-500">x{Number(line?.quantity || 0)}</span>
+                                      <span className="text-slate-800 font-black">{currency}{Number(line?.subtotal || 0).toFixed(1)}</span>
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+
+                            <div className="mt-3 text-xs font-black text-slate-700">
+                              {language === 'cn' ? '配件小计' : language === 'jp' ? '部品小計' : 'Accessory Subtotal'}: {currency}{accessoryUnitTotal.toFixed(1)}
+                            </div>
+
+                            <div className="mt-4">
+                              {selectedLines.length > 0 && (
+                                <>
+                                  <div className="text-xs font-black text-slate-700 mb-2">
+                                    {language === 'cn' ? '已选配件示意图' : language === 'jp' ? '選択済み部品イメージ' : 'Selected Accessory Images'}
+                                  </div>
+                                  <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                                    {selectedLines.map((line: any, idx: number) => {
+                                      const code = String(line?.code || '');
+                                      const imageKey = String(line?.imageKey || line?.id || code || '');
+                                      const imgSrc = accessoryImageByCode[imageKey] || accessoryImageByCode[code] || '';
+                                      const lineName = line?.name || `#${code || idx + 1}`;
+                                      const qty = Number(line?.quantity || 0);
+                                      return (
+                                        <div key={`acc-sel-${imageKey || code}-${idx}`} className="rounded-2xl border border-slate-300 bg-slate-50 p-3">
+                                          <div className="h-20 rounded-xl bg-white border border-slate-200 relative overflow-hidden">
+                                            <img
+                                              src={imgSrc}
+                                              alt={lineName}
+                                              className="w-full h-full object-contain"
+                                              onError={(e) => {
+                                                e.currentTarget.style.display = 'none';
+                                                const placeholder = e.currentTarget.nextElementSibling as HTMLElement | null;
+                                                if (placeholder) placeholder.style.display = 'flex';
+                                              }}
+                                            />
+                                            <div className="absolute inset-0 hidden items-center justify-center text-[11px] font-bold text-slate-400 bg-slate-50">
+                                              IMG #{imageKey || code || idx + 1}
+                                            </div>
+                                          </div>
+                                          <div className="mt-2 text-[11px] font-bold text-slate-700 truncate" title={lineName}>{lineName}</div>
+                                          <div className="text-[11px] text-slate-500">{language === 'cn' ? '数量' : language === 'jp' ? '数量' : 'Qty'}: {qty}</div>
+                                        </div>
+                                      );
+                                    })}
+                                  </div>
+                                </>
+                              )}
+                            </div>
+                          </>
+                        );
+                      })()}
+                    </div>
+                  )}
+                  {item.product.type !== ProductType.PROFILE && item.product.type !== ProductType.ACCESSORY && (
+                    <div className="mt-8 pt-8 border-t border-slate-100">
+                      {(() => {
+                        const cfg: any = item.config || {};
+                        const showSwatch = !!cfg?.colorId && String(cfg.colorId) !== 'natural';
+                        const swatchSrc = showSwatch ? `/images/color_${cfg.colorId}.png` : '';
+                        return showSwatch ? (
+                          <div className="mb-4 rounded-2xl border border-slate-200 bg-slate-50 p-3">
+                            <div className="text-xs font-black text-slate-700 mb-2">{language === 'cn' ? '色板图' : language === 'jp' ? 'カラースウォッチ' : 'Color Swatch'}</div>
+                            <div className="w-36 h-24 rounded-xl border border-slate-200 bg-white overflow-hidden relative">
+                              <img
+                                src={swatchSrc}
+                                alt={String(cfg?.colorName || cfg?.colorId || 'swatch')}
+                                className="w-full h-full object-contain"
+                                onError={(e) => {
+                                  e.currentTarget.style.display = 'none';
+                                  const placeholder = e.currentTarget.nextElementSibling as HTMLElement | null;
+                                  if (placeholder) placeholder.style.display = 'flex';
+                                }}
+                              />
+                              <div className="absolute inset-0 hidden items-center justify-center text-[11px] font-bold text-slate-400 bg-slate-50">
+                                {language === 'cn' ? '色板缺失' : language === 'jp' ? '色見本なし' : 'No Swatch'}
+                              </div>
+                            </div>
+                          </div>
+                        ) : null;
+                      })()}
                       <div className="grid grid-cols-2 md:grid-cols-3 gap-2 text-xs font-bold">
                         <span className="px-3 py-1.5 rounded-xl bg-slate-100 text-slate-700">{language === 'cn' ? '厚度' : language === 'jp' ? '厚さ' : 'Thickness'}: {(item.config as any)?.thickness ?? '-' }mm</span>
                         <span className="px-3 py-1.5 rounded-xl bg-slate-100 text-slate-700">{language === 'cn' ? '宽' : language === 'jp' ? '幅' : 'Width'}: {(item.config as any)?.width ?? '-'}mm</span>
                         <span className="px-3 py-1.5 rounded-xl bg-slate-100 text-slate-700">{language === 'cn' ? '高' : language === 'jp' ? '高さ' : 'Height'}: {(item.config as any)?.height ?? '-'}mm</span>
-                        <span className="px-3 py-1.5 rounded-xl bg-slate-100 text-slate-700">{language === 'cn' ? '颜色' : language === 'jp' ? '色' : 'Color'}: {((item.config as any)?.colorId === 'marine_bbb_uv_film')
-                          ? (language === 'cn' ? 'BBB两面UV清漆+覆膜' : language === 'jp' ? 'BBB両面UVクリア+フィルム' : 'BBB double-side UV varnish + film')
-                          : ((item.config as any)?.colorName || (((item.config as any)?.colorId && PROFILE_COLORS.find(c => c.id === (item.config as any).colorId)?.name?.[language]) || '-'))}</span>
+                        <span className="px-3 py-1.5 rounded-xl bg-slate-100 text-slate-700">{language === 'cn' ? '颜色' : language === 'jp' ? '色' : 'Color'}: {(item.config as any)?.colorName || (((item.config as any)?.colorId && PROFILE_COLORS.find(c => c.id === (item.config as any).colorId)?.name?.[language]) || '-')}</span>
+                        {item.product.type === ProductType.MARINE_BOARD && (
+                          <span className="px-3 py-1.5 rounded-xl bg-slate-100 text-slate-700">{language === 'cn' ? '海洋板规格' : language === 'jp' ? '海洋板仕様' : 'Marine Spec'}: {((item.config as any)?.marineSpecName || ((item.config as any)?.marineSpecId === 'marine_bbb_plain'
+                            ? (language === 'cn' ? 'BBB素板' : language === 'jp' ? 'BBB素板' : 'BBB plain board')
+                            : (language === 'cn' ? 'BBB两面UV清漆+覆膜' : language === 'jp' ? 'BBB両面UVクリア+フィルム' : 'BBB double-side UV varnish + film')))}</span>
+                        )}
                         <span className="px-3 py-1.5 rounded-xl bg-blue-50 text-blue-700">{language === 'cn' ? '单价' : language === 'jp' ? '単価' : 'Unit'}: {currency}{Number((item.config as any)?.unitPrice || (item.totalPrice / Math.max(1, item.quantity))).toFixed(1)}</span>
                         <span className="px-3 py-1.5 rounded-xl bg-emerald-50 text-emerald-700">{language === 'cn' ? '面积' : language === 'jp' ? '面積' : 'Area'}: {Number((item.config as any)?.areaSqm || 0).toFixed(3)}㎡</span>
                         {(item.config as any)?.openingSide && (
@@ -1767,7 +1964,7 @@ const ProductDetail: React.FC<{
 }> = ({ language, user, onAddToCart, onAddBatchToCart, onUpdateCartItem, draftProfiles, setDraftProfiles }) => {
   const { id } = useParams();
   const location = useLocation();
-  const product = INITIAL_PRODUCTS.find(p => p.id === id);
+  const product = INITIAL_PRODUCTS.find(p => p.id === id) || (id === ACCESSORY_PRODUCT.id ? ACCESSORY_PRODUCT : undefined);
   const t = TRANSLATIONS[language];
 
   const editItem = location.state?.editItem as CartItem | undefined;
@@ -1816,6 +2013,16 @@ const ProductDetail: React.FC<{
             />
           ) : isBoardLikeProduct ? (
             <BoardQuoteEditor
+              language={language}
+              product={product}
+              user={user}
+              initialItem={editItem}
+              returnCartPath={returnCartPath}
+              onAddToCart={onAddToCart}
+              onUpdateItem={onUpdateCartItem}
+            />
+          ) : product.type === ProductType.ACCESSORY ? (
+            <AccessoryQuoteEditor
               language={language}
               product={product}
               user={user}

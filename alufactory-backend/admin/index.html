@@ -328,6 +328,7 @@
                 <div class="nav-item" onclick="switchTab('orders_marine_board')">📦 海洋板订单管理</div>
                 <div class="nav-item" onclick="switchTab('orders_calligraphy_cabinet')">📦 宜家书法特柜子订单管理</div>
                 <div class="nav-item" onclick="switchTab('orders_wardrobe')">📦 衣柜订单管理</div>
+                <div class="nav-item" onclick="switchTab('orders_accessory')">📦 配件订单管理</div>
                 <div class="nav-item logout-btn" onclick="logout()">🚪 退出</div>
             </nav>
         </div>
@@ -661,7 +662,8 @@
             'orders_aluminum_frame_door': { category: 'aluminum_frame_door', title: '铝框门订单管理' },
             'orders_marine_board': { category: 'marine_board', title: '海洋板订单管理' },
             'orders_calligraphy_cabinet': { category: 'calligraphy_cabinet', title: '宜家书法特柜子订单管理' },
-            'orders_wardrobe': { category: 'wardrobe', title: '衣柜订单管理' }
+            'orders_wardrobe': { category: 'wardrobe', title: '衣柜订单管理' },
+            'orders_accessory': { category: 'accessory', title: '配件订单管理' }
         };
 
         function normalizeMembershipLevel(value) {
@@ -762,7 +764,8 @@
                 'orders_aluminum_frame_door': '铝框门订单管理',
                 'orders_marine_board': '海洋板订单管理',
                 'orders_calligraphy_cabinet': '宜家书法特柜子订单管理',
-                'orders_wardrobe': '衣柜订单管理'
+                'orders_wardrobe': '衣柜订单管理',
+                'orders_accessory': '配件订单管理'
             };
             document.getElementById('pageTitle').textContent = titles[tab];
             
@@ -796,6 +799,22 @@
                     <th>日期</th>
                     <th>PDF</th>
                     <th>操作</th>
+                `;
+                return;
+            }
+
+            if (category === 'accessory') {
+                head.innerHTML = `
+                    <th>订单号</th>
+                    <th>用户名</th>
+                    <th>客户</th>
+                    <th>数量</th>
+                    <th>规格</th>
+                    <th>颜色/模式</th>
+                    <th>配件明细</th>
+                    <th>小计</th>
+                    <th>任务进度</th>
+                    <th>日期</th>
                 `;
                 return;
             }
@@ -1107,6 +1126,7 @@
                     const width = Number(order.item_width || cfg.width || 0);
                     const height = Number(order.item_height || cfg.height || 0);
                     const quantity = Math.max(1, Number(order.item_quantity || 1));
+                    const itemSubtotal = Number(order.item_total_price || 0);
                     const rawThickness = order.item_thickness ?? cfg.thickness;
                     const thickness = rawThickness
                         ? (String(rawThickness).toLowerCase().includes('mm') ? String(rawThickness) : `${rawThickness}mm`)
@@ -1133,6 +1153,36 @@
                             </select>
                           `
                         : '-';
+
+                    if (activeCategory === 'accessory') {
+                        const sizeText = (cfg && (cfg.size || cfg.variantId || cfg.model)) || order.item_thickness || '-';
+                        const modeText = (cfg && (cfg.colorMode || cfg.colorId || cfg.colorName)) || order.item_color || '-';
+                        const lines = Array.isArray(cfg?.lines) ? cfg.lines : [];
+                        const lineSummary = lines
+                            .filter(line => line && Number(line.quantity || 0) > 0)
+                            .slice(0, 8)
+                            .map(line => {
+                                const lineName = line.name || line.item || (line.code ? `#${line.code}` : '配件');
+                                return `${lineName}×${Number(line.quantity || 0)}`;
+                            })
+                            .join('；');
+                        const fallbackSummary = order.item_remark || (Number(cfg?.totalQuantity || 0) > 0 ? `总数量×${Number(cfg.totalQuantity)}` : '-');
+                        const detailText = lineSummary || fallbackSummary || '-';
+
+                        row.innerHTML = `
+                            <td>${order.order_number || sourceOrderId || '-'}</td>
+                            <td>${userName}</td>
+                            <td>${order.recipient_name || '-'}</td>
+                            <td>${quantity}</td>
+                            <td>${sizeText}</td>
+                            <td>${modeText}</td>
+                            <td style="max-width:320px; white-space:normal; line-height:1.5;">${detailText}</td>
+                            <td>¥${itemSubtotal.toFixed(2)}</td>
+                            <td>${taskProgressControl}</td>
+                            <td>${date}</td>
+                        `;
+                        return;
+                    }
 
                     row.innerHTML = `
                         <td>${order.order_number || sourceOrderId || '-'}</td>

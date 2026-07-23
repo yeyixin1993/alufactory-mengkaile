@@ -16,6 +16,7 @@ CATEGORY_LABELS = {
     'marine_board': '海洋板订单管理',
     'calligraphy_cabinet': '宜家书法特柜子订单管理',
     'wardrobe': '衣柜订单管理',
+    'accessory': '配件订单管理',
 }
 
 TASK_PROGRESS_VALUES = ('started', 'in_progress', 'finished')
@@ -270,6 +271,38 @@ def _extract_item_detail_payload(category_code: str, item_config) -> Dict[str, O
 
     sketch_svg = _build_sketch_svg(category_code, width, height, opening_side, hinge_positions)
 
+    if category_code == 'accessory':
+        size_text = _pick_first_non_empty(config.get('size'), config.get('variantId'), config.get('model'))
+        if size_text:
+            thickness = str(size_text)
+
+        color = _pick_first_non_empty(
+            color,
+            config.get('colorMode'),
+            config.get('colorId'),
+        )
+
+        lines = config.get('lines') if isinstance(config.get('lines'), list) else []
+        summary_parts = []
+        for idx, line in enumerate(lines[:8]):
+            if not isinstance(line, dict):
+                continue
+            name = _pick_first_non_empty(line.get('name'), line.get('item'), line.get('code')) or f'#{idx + 1}'
+            qty = int(line.get('quantity') or 0)
+            if qty <= 0:
+                continue
+            summary_parts.append(f'{name}×{qty}')
+
+        total_qty = int(config.get('totalQuantity') or 0)
+        if not summary_parts and total_qty > 0:
+            summary_parts.append(f'总数量×{total_qty}')
+
+        if summary_parts:
+            remark = '；'.join(summary_parts)
+
+        opening_side = None
+        sketch_svg = None
+
     return {
         'item_width': width,
         'item_height': height,
@@ -298,6 +331,8 @@ def classify_order_item(product_type: str, product_name: str, product_id: str) -
         return 'calligraphy_cabinet'
     if 'wardrobe' in ptype or '衣柜' in pname or pid == 'p8':
         return 'wardrobe'
+    if ptype == 'accessory' or '配件' in pname or 'connector' in pname or pid == 'accessory':
+        return 'accessory'
     if ptype == 'pegboard' or '洞洞板' in pname or pid == 'p1':
         return 'pegboard'
     return None
