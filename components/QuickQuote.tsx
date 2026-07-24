@@ -18,6 +18,7 @@ import { normalizeMembershipLevel } from '../utils/membership';
 type QuickQuoteProduct = 'profile' | 'aluminum_plate' | 'pegboard' | 'marine_board' | 'frame';
 type ProfileSection = 'natural' | 'colored';
 type FrameType = 'wood' | 'aluminum' | 'alu_wood';
+type MarineSpecId = 'marine_bbb_uv_film' | 'marine_bbb_plain';
 
 interface ProfileRow {
   id: string;
@@ -37,6 +38,7 @@ interface BoardRow {
   id: string;
   thickness: number;
   colorId: string;
+  marineSpecId?: MarineSpecId;
   width: number;
   height: number;
   quantity: number;
@@ -62,14 +64,37 @@ const PEGBOARD_PRICE_PER_SQM: Record<number, number> = { 1: 780, 2: 1080, 3: 138
 const ALUMINUM_PLATE_PRICE_PER_SQM: Record<number, number> = { 1: 500, 2: 700, 3: 1000, 4: 1300, 5: 1600 };
 const VIP_PLUS_PEGBOARD_PRICE_PER_SQM: Record<number, number> = { 1: 400, 2: 520, 3: 720, 4: 920, 5: 1120 };
 const VIP_PLUS_ALUMINUM_PLATE_PRICE_PER_SQM: Record<number, number> = { 1: 300, 2: 420, 3: 600, 4: 780, 5: 960 };
-const MARINE_BOARD_PRICE_PER_SQM: Record<number, number> = { 6: 100, 9: 130, 12: 155, 15: 175, 18: 200 };
-const MARINE_BOARD_WEIGHT_PER_SQM: Record<number, number> = { 6: 12, 9: 18, 12: 24, 15: 30, 18: 36 };
+const MARINE_BOARD_SPEC_PRICE_PER_SQM: Record<MarineSpecId, Record<number, number>> = {
+  marine_bbb_uv_film: { 12: 155, 18: 200 },
+  marine_bbb_plain: { 12: 136, 18: 176 },
+};
+const MARINE_BOARD_COLORED_SURCHARGE_PER_SQM = 100;
+const MARINE_BOARD_WEIGHT_PER_SQM: Record<number, number> = { 12: 24, 18: 36 };
 const MIN_BOARD_CHARGE_AREA_SQM = 0.2;
 const MAX_PROFILE_LENGTH_MM = 3000;
 const MAX_BOARD_WIDTH_MM = 2400;
 const MAX_BOARD_HEIGHT_MM = 1200;
 const MARINE_BOARD_MAX_WIDTH_MM = 2440;
 const MARINE_BOARD_MAX_HEIGHT_MM = 1220;
+
+const MARINE_SPECS: Record<MarineSpecId, { id: MarineSpecId; name: Record<Language, string> }> = {
+  marine_bbb_uv_film: {
+    id: 'marine_bbb_uv_film',
+    name: {
+      cn: 'BBB两面UV清漆+覆膜',
+      en: 'BBB double-side UV varnish + film',
+      jp: 'BBB両面UVクリア+フィルム',
+    },
+  },
+  marine_bbb_plain: {
+    id: 'marine_bbb_plain',
+    name: {
+      cn: 'BBB素板',
+      en: 'BBB plain board',
+      jp: 'BBB素板',
+    },
+  },
+};
 
 const round1 = (n: number) => Number(n.toFixed(1));
 const getCurrency = (lang: Language) => (lang === 'cn' ? '￥' : '$');
@@ -92,10 +117,11 @@ const createProfileRow = (): ProfileRow => ({
   quantity: 0,
 });
 
-const createBoardRow = (thickness: number): BoardRow => ({
+const createBoardRow = (thickness: number, patch?: Partial<BoardRow>): BoardRow => ({
   id: Math.random().toString(36).slice(2, 10),
   thickness,
-  colorId: 'natural',
+  colorId: patch?.colorId || 'natural',
+  marineSpecId: patch?.marineSpecId,
   width: 0,
   height: 0,
   quantity: 0,
@@ -163,7 +189,9 @@ const QuickQuote: React.FC<{ language: Language; user?: User | null }> = ({ lang
   const [profileRows, setProfileRows] = useState<ProfileRow[]>([createProfileRow()]);
   const [aluPlateRows, setAluPlateRows] = useState<BoardRow[]>([createBoardRow(2)]);
   const [pegboardRows, setPegboardRows] = useState<BoardRow[]>([createBoardRow(2)]);
-  const [marineBoardRows, setMarineBoardRows] = useState<BoardRow[]>([createBoardRow(18)]);
+  const [marineBoardRows, setMarineBoardRows] = useState<BoardRow[]>([
+    createBoardRow(18, { marineSpecId: 'marine_bbb_uv_film', colorId: 'natural' }),
+  ]);
   const [frameRows, setFrameRows] = useState<FrameRow[]>([createFrameRow()]);
   const [showSummary, setShowSummary] = useState(false);
 
@@ -181,7 +209,7 @@ const QuickQuote: React.FC<{ language: Language; user?: User | null }> = ({ lang
       return;
     }
     if (key === 'marine_board') {
-      setMarineBoardRows([createBoardRow(18)]);
+      setMarineBoardRows([createBoardRow(18, { marineSpecId: 'marine_bbb_uv_film', colorId: 'natural' })]);
       return;
     }
     if (key === 'frame') {
@@ -190,6 +218,21 @@ const QuickQuote: React.FC<{ language: Language; user?: User | null }> = ({ lang
   };
 
   const provinces = useMemo(() => Object.keys(SHIPPING_RATES).sort(), []);
+  const marineBoardColorOptions = useMemo(() => {
+    const base = PROFILE_COLORS.filter((c) => c.id !== 'natural');
+    return [
+      {
+        id: 'natural',
+        name: {
+          en: 'Original',
+          cn: '原色',
+          jp: '原色',
+        },
+        maxLength: 3000,
+      },
+      ...base,
+    ];
+  }, []);
 
   const profileRowsCalculated = useMemo(() => {
     return profileRows.map((row) => {
@@ -244,7 +287,8 @@ const QuickQuote: React.FC<{ language: Language; user?: User | null }> = ({ lang
     rows: BoardRow[],
     priceMap: Record<number, number>,
     maxWidthMm = MAX_BOARD_WIDTH_MM,
-    maxHeightMm = MAX_BOARD_HEIGHT_MM
+    maxHeightMm = MAX_BOARD_HEIGHT_MM,
+    unitRateResolver?: (row: BoardRow) => number
   ) => {
     return rows.map((row) => {
       const width = Math.min(maxWidthMm, Math.max(0, row.width));
@@ -252,7 +296,7 @@ const QuickQuote: React.FC<{ language: Language; user?: User | null }> = ({ lang
       const qty = Math.max(0, row.quantity || 0);
       const areaSqm = (width * height) / 1_000_000;
       const chargedArea = areaSqm > 0 && areaSqm < MIN_BOARD_CHARGE_AREA_SQM ? MIN_BOARD_CHARGE_AREA_SQM : areaSqm;
-      const unitRate = priceMap[row.thickness] || 0;
+      const unitRate = unitRateResolver ? unitRateResolver(row) : (priceMap[row.thickness] || 0);
       const unitPrice = round1(chargedArea * unitRate);
       const subtotal = round1(unitPrice * qty);
       const minAreaApplied = areaSqm > 0 && areaSqm < MIN_BOARD_CHARGE_AREA_SQM;
@@ -266,7 +310,18 @@ const QuickQuote: React.FC<{ language: Language; user?: User | null }> = ({ lang
   const aluPlateCalculated = useMemo(() => calcBoardRows(aluPlateRows, aluPlatePriceMap), [aluPlateRows, aluPlatePriceMap]);
   const pegboardCalculated = useMemo(() => calcBoardRows(pegboardRows, pegboardPriceMap), [pegboardRows, pegboardPriceMap]);
   const marineBoardCalculated = useMemo(
-    () => calcBoardRows(marineBoardRows, MARINE_BOARD_PRICE_PER_SQM, MARINE_BOARD_MAX_WIDTH_MM, MARINE_BOARD_MAX_HEIGHT_MM),
+    () => calcBoardRows(
+      marineBoardRows,
+      {},
+      MARINE_BOARD_MAX_WIDTH_MM,
+      MARINE_BOARD_MAX_HEIGHT_MM,
+      (row) => {
+        const specId: MarineSpecId = row.marineSpecId === 'marine_bbb_plain' ? 'marine_bbb_plain' : 'marine_bbb_uv_film';
+        const baseRate = MARINE_BOARD_SPEC_PRICE_PER_SQM[specId]?.[row.thickness] || 0;
+        const colorSurcharge = row.colorId !== 'natural' ? MARINE_BOARD_COLORED_SURCHARGE_PER_SQM : 0;
+        return baseRate + colorSurcharge;
+      }
+    ),
     [marineBoardRows]
   );
 
@@ -410,9 +465,12 @@ const QuickQuote: React.FC<{ language: Language; user?: User | null }> = ({ lang
           const width = Math.max(0, row.width || 0);
           const height = Math.max(0, row.height || 0);
           if (qty <= 0 || width <= 0 || height <= 0) return null;
+          const specId: MarineSpecId = row.marineSpecId === 'marine_bbb_plain' ? 'marine_bbb_plain' : 'marine_bbb_uv_film';
+          const specName = MARINE_SPECS[specId].name[language];
+          const colorName = (marineBoardColorOptions.find((c) => c.id === row.colorId) || marineBoardColorOptions[0]).name[language];
           return {
             id: row.id,
-            text: `${row.thickness}mm · ${width}×${height}mm × ${qty}`,
+            text: `${specName} · ${row.thickness}mm · ${colorName} · ${width}×${height}mm × ${qty}`,
           };
         })
         .filter((x): x is { id: string; text: string } => Boolean(x)),
@@ -439,6 +497,7 @@ const QuickQuote: React.FC<{ language: Language; user?: User | null }> = ({ lang
     aluPlateRows,
     pegboardRows,
     marineBoardRows,
+    marineBoardColorOptions,
   ]);
 
   const categorySummary = useMemo(() => {
@@ -532,16 +591,20 @@ const QuickQuote: React.FC<{ language: Language; user?: User | null }> = ({ lang
     showColorSelector = false,
     maxWidthMm = MAX_BOARD_WIDTH_MM,
     maxHeightMm = MAX_BOARD_HEIGHT_MM,
-    maxSizeNote?: string
+    maxSizeNote?: string,
+    showMarineSpecSelector = false,
+    colorOptions = PROFILE_COLORS
   ) => {
     return (
       <div className="space-y-4">
         {rows.map((row, index) => {
           const calc = rowsCalculated[index];
-          const boardColor = PROFILE_COLORS.find((c) => c.id === row.colorId) || PROFILE_COLORS[0];
+          const boardColor = colorOptions.find((c) => c.id === row.colorId) || colorOptions[0];
+          const marineSpecLabel = language === 'cn' ? '海洋板规格' : language === 'jp' ? 'マリンボード仕様' : 'Marine Spec';
+          const marineSpecId: MarineSpecId = row.marineSpecId === 'marine_bbb_plain' ? 'marine_bbb_plain' : 'marine_bbb_uv_film';
           return (
             <div key={row.id} className="bg-slate-50 border border-slate-200 rounded-2xl p-4 md:p-5 space-y-4">
-              <div className="grid grid-cols-3 gap-2 sm:grid-cols-3 sm:gap-3">
+              <div className={showMarineSpecSelector ? 'grid grid-cols-2 gap-2 sm:grid-cols-4 sm:gap-3' : 'grid grid-cols-3 gap-2 sm:grid-cols-3 sm:gap-3'}>
                 <div>
                   <label className="block text-xs font-black text-slate-500 mb-1">{t.qq_thickness} (mm)</label>
                   <select
@@ -556,6 +619,22 @@ const QuickQuote: React.FC<{ language: Language; user?: User | null }> = ({ lang
                     ))}
                   </select>
                 </div>
+                {showMarineSpecSelector && (
+                  <div>
+                    <label className="block text-xs font-black text-slate-500 mb-1">{marineSpecLabel}</label>
+                    <select
+                      value={marineSpecId}
+                      onChange={(e) => updateBoardRows(setter, row.id, { marineSpecId: e.target.value as MarineSpecId })}
+                      className="w-full border border-slate-200 rounded-xl px-3 py-2.5 bg-white"
+                    >
+                      {Object.values(MARINE_SPECS).map((spec) => (
+                        <option key={spec.id} value={spec.id}>
+                          {spec.name[language]}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
                 <div>
                   <label className="block text-xs font-black text-slate-500 mb-1">{t.qq_width}</label>
                   <input
@@ -589,7 +668,7 @@ const QuickQuote: React.FC<{ language: Language; user?: User | null }> = ({ lang
                       onChange={(e) => updateBoardRows(setter, row.id, { colorId: e.target.value })}
                       className="w-full border border-slate-200 rounded-xl px-3 py-2.5 bg-white"
                     >
-                      {PROFILE_COLORS.map((c) => (
+                      {colorOptions.map((c) => (
                         <option key={c.id} value={c.id}>
                           {c.name[language]}
                         </option>
@@ -640,7 +719,10 @@ const QuickQuote: React.FC<{ language: Language; user?: User | null }> = ({ lang
         })}
 
         <button
-          onClick={() => setter((prev) => [...prev, { ...createBoardRow(defaultThickness), quantity: 1 }])}
+          onClick={() => setter((prev) => [...prev, {
+            ...createBoardRow(defaultThickness, showMarineSpecSelector ? { marineSpecId: 'marine_bbb_uv_film', colorId: 'natural' } : undefined),
+            quantity: 1,
+          }])}
           className="w-full sm:w-auto px-4 py-2.5 rounded-xl bg-slate-900 text-white font-bold text-sm inline-flex items-center gap-2"
         >
           <Plus className="w-4 h-4" /> {t.qq_addRow}
@@ -658,10 +740,10 @@ const QuickQuote: React.FC<{ language: Language; user?: User | null }> = ({ lang
   ];
   const marineBoardMaxSizeNote =
     language === 'cn'
-      ? '海洋板最大尺寸：宽2440mm，高1220mm'
+      ? '海洋板最大尺寸：宽2440mm，高1220mm（支持12/18mm）'
       : language === 'jp'
-        ? 'マリンボード最大サイズ: 幅2440mm / 高さ1220mm'
-        : 'Marine board max size: width 2440mm, height 1220mm';
+        ? 'マリンボード最大サイズ: 幅2440mm / 高さ1220mm（12/18mm対応）'
+        : 'Marine board max size: width 2440mm, height 1220mm (12/18mm supported)';
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 py-8 sm:py-12">
@@ -920,12 +1002,14 @@ const QuickQuote: React.FC<{ language: Language; user?: User | null }> = ({ lang
           marineBoardRows,
           marineBoardCalculated,
           setMarineBoardRows,
-          [6, 9, 12, 15, 18],
+          [12, 18],
           18,
-          false,
+          true,
           MARINE_BOARD_MAX_WIDTH_MM,
           MARINE_BOARD_MAX_HEIGHT_MM,
-          marineBoardMaxSizeNote
+          marineBoardMaxSizeNote,
+          true,
+          marineBoardColorOptions
         )}
 
         {selectedProduct === 'frame' && (

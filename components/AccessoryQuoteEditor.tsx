@@ -56,6 +56,7 @@ const ACCESSORY_CODE_IMAGE_MAP: Record<string, string> = {
   '9': '/images/accessory/9.jpg',
   '10': '/images/accessory/10.jpg',
   '10_1515_m4x6_cap': '/images/accessory/10_1515_m4x6_cap.jpg',
+  '10_1515_m4x10_cs': '/images/accessory/10_1515_m4x10_cs.jpg',
   '10_1515_m4x12_cap': '/images/accessory/10_1515_m4x12_cap.jpg',
   '10_1515_m4_tnut': '/images/accessory/10_1515_m4_tnut.jpg',
   '10_2020_m5x14_cap': '/images/accessory/10_2020_m5x14_cap.jpg',
@@ -145,6 +146,15 @@ const ACCESSORY_DEFINITIONS: AccessoryDefinition[] = [
     code: 10,
     name: { en: 'No.10 Screw · 304 M4*12 Socket Cap', cn: '10号螺丝 · 304 M4*12 圆柱头内六角', jp: '10番ねじ · 304 M4*12 六角穴付きボルト' },
     note: '1515：搭配2号配件',
+    prices: {
+      '1515': { natural: 0.5, colored: 1, naturalBulk: 0.33, coloredBulk: 0.8 },
+    },
+  },
+  {
+    id: '10_1515_m4x10_cs',
+    code: 10,
+    name: { en: 'No.10 Screw · 304 M4*10 Countersunk', cn: '10号螺丝 · 304 M4*10 沉头内六角', jp: '10番ねじ · 304 M4*10 皿六角' },
+    note: '1515：搭配9号配件',
     prices: {
       '1515': { natural: 0.5, colored: 1, naturalBulk: 0.33, coloredBulk: 0.8 },
     },
@@ -288,6 +298,7 @@ const AccessoryQuoteEditor: React.FC<{
         notAvailable: '该型号暂不提供',
         total: '总计',
         totalQty: '总数量',
+        freeShippingNotice: '🔥 满30包邮',
         batchRule: '同一编号一次买 20 个及以上，自动使用批量单价。',
         add: '加入购物车',
         update: '更新购物车',
@@ -314,6 +325,7 @@ const AccessoryQuoteEditor: React.FC<{
         notAvailable: 'このサイズは未提供',
         total: '合計',
         totalQty: '総数量',
+        freeShippingNotice: '🔥 30元以上で送料無料',
         batchRule: '同一番号を20個以上購入時、自動で大量単価になります。',
         add: 'カートに追加',
         update: 'カートを更新',
@@ -339,6 +351,7 @@ const AccessoryQuoteEditor: React.FC<{
       notAvailable: 'Not available for this size',
       total: 'Total',
       totalQty: 'Total Qty',
+      freeShippingNotice: '🔥 Free shipping for orders over ¥30',
       batchRule: 'For the same code, qty >=20 uses bulk unit price.',
       add: 'Add to Cart',
       update: 'Update Cart',
@@ -516,6 +529,10 @@ const AccessoryQuoteEditor: React.FC<{
               </select>
             </div>
           ) : <div />}
+        </div>
+
+        <div className="text-center text-base md:text-lg font-black text-rose-700 bg-rose-50 border-2 border-rose-300 rounded-xl px-4 py-2">
+          {ui.freeShippingNotice}
         </div>
 
         <p className="text-xs font-bold text-amber-700 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2">{ui.batchRule}</p>
