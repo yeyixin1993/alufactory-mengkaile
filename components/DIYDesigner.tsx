@@ -39,6 +39,7 @@ import { normalizeMembershipLevel } from '../utils/membership';
 type DIYItemKind = 'profile' | 'plate' | 'pegboard' | 'marine_board' | 'connector' | 'foot';
 
 type Vec3 = [number, number, number];
+type RotationAxisIndex = 0 | 1 | 2;
 
 interface DIYSceneItem {
   id: string;
@@ -145,7 +146,7 @@ const TEXT: Record<Language, Record<string, string>> = {
     saved: '设计已保存在本机',
     loaded: '已读取保存的设计',
     cartAdded: '设计清单已加入购物车',
-    dragHint: '可从左侧拖到画布，也可点击添加。选中后使用 3D 手柄拖动。',
+    dragHint: '点击添加零件；拖动画布旋转视角，右键零件可绕 X/Y/Z 旋转，拖近型材时自动磁吸。',
     delete: '删除',
     duplicate: '复制',
     backToProject: '返回项目结构',
@@ -156,6 +157,9 @@ const TEXT: Record<Language, Record<string, string>> = {
     rotateX: '绕 X 轴 +90°',
     rotateY: '绕 Y 轴 +90°',
     rotateZ: '绕 Z 轴 +90°',
+    snapEnd: '磁吸：端点连接',
+    snapSide: '磁吸：交叉连接',
+    snapOffset: '磁吸：边缘对齐',
   },
   en: {
     title: 'Aluminum Profile 3D DIY Designer',
@@ -205,7 +209,7 @@ const TEXT: Record<Language, Record<string, string>> = {
     saved: 'Design saved on this device',
     loaded: 'Saved design loaded',
     cartAdded: 'Design parts added to cart',
-    dragHint: 'Drag from the library or click to add. Select a part and use the 3D handle to move it.',
+    dragHint: 'Click to add; drag the canvas to orbit, right-click a part for X/Y/Z rotation, and move profiles close together to snap.',
     delete: 'Delete',
     duplicate: 'Duplicate',
     backToProject: 'Back to project',
@@ -216,6 +220,9 @@ const TEXT: Record<Language, Record<string, string>> = {
     rotateX: 'Rotate X +90°',
     rotateY: 'Rotate Y +90°',
     rotateZ: 'Rotate Z +90°',
+    snapEnd: 'Magnet: end connection',
+    snapSide: 'Magnet: cross connection',
+    snapOffset: 'Magnet: edge alignment',
   },
   jp: {
     title: 'アルミプロファイル 3D DIY デザイナー',
@@ -265,7 +272,7 @@ const TEXT: Record<Language, Record<string, string>> = {
     saved: '端末に保存しました',
     loaded: '保存済みデザインを読み込みました',
     cartAdded: 'カートに追加しました',
-    dragHint: '左からドラッグ、またはクリックで追加。選択後は3Dハンドルで移動できます。',
+    dragHint: 'クリックで追加。画面ドラッグで視点回転、右クリックでX/Y/Z回転、近い形材は自動スナップします。',
     delete: '削除',
     duplicate: '複製',
     backToProject: 'プロジェクトへ戻る',
@@ -276,6 +283,9 @@ const TEXT: Record<Language, Record<string, string>> = {
     rotateX: 'X軸 +90°',
     rotateY: 'Y軸 +90°',
     rotateZ: 'Z軸 +90°',
+    snapEnd: 'スナップ：端点接続',
+    snapSide: 'スナップ：交差接続',
+    snapOffset: 'スナップ：端揃え',
   },
 };
 
@@ -391,6 +401,91 @@ const addSelectionHitbox = (group: THREE.Group, geometry: THREE.BufferGeometry) 
   const hitbox = new THREE.Mesh(geometry, material);
   hitbox.userData.selectionProxy = true;
   group.add(hitbox);
+};
+
+const profileDimensions = (item: DIYSceneItem) => {
+  const [widthMm, heightMm] = profileSize(item.variantId);
+  return {
+    length: Math.max(20, item.length || 1000) / SCENE_SCALE,
+    width: widthMm / SCENE_SCALE,
+    height: heightMm / SCENE_SCALE,
+  };
+};
+
+type ProfileSnap = {
+  position: THREE.Vector3;
+  point: THREE.Vector3;
+  label: 'end' | 'side' | 'offset';
+};
+
+const findMagneticProfileSnap = (
+  moving: THREE.Group,
+  movingItem: DIYSceneItem,
+  items: DIYSceneItem[],
+  groups: Map<string, THREE.Group>,
+): ProfileSnap | null => {
+  if (movingItem.kind !== 'profile') return null;
+  const movingDimensions = profileDimensions(movingItem);
+  const movingQuaternion = moving.quaternion.clone();
+  const movingAxis = new THREE.Vector3(1, 0, 0).applyQuaternion(movingQuaternion).normalize();
+  const movingEndpoints = [-1, 1].map((direction) => (
+    moving.position.clone().addScaledVector(movingAxis, direction * movingDimensions.length / 2)
+  ));
+  const movingHalfCell = Math.min(movingDimensions.width, movingDimensions.height) / 2;
+  let best: { distance: number; snap: ProfileSnap } | null = null;
+
+  items.forEach((targetItem) => {
+    if (targetItem.id === movingItem.id || targetItem.kind !== 'profile') return;
+    const target = groups.get(targetItem.id);
+    if (!target) return;
+    const targetDimensions = profileDimensions(targetItem);
+    const targetAxis = new THREE.Vector3(1, 0, 0).applyQuaternion(target.quaternion).normalize();
+    const targetUp = new THREE.Vector3(0, 1, 0).applyQuaternion(target.quaternion).normalize();
+    const targetSide = new THREE.Vector3(0, 0, 1).applyQuaternion(target.quaternion).normalize();
+    const targetHalfLength = targetDimensions.length / 2;
+    const targetEnds = [-1, 1].map((direction) => (
+      target.position.clone().addScaledVector(targetAxis, direction * targetHalfLength)
+    ));
+    const upClearance = targetDimensions.height / 2 + movingHalfCell;
+    const sideClearance = targetDimensions.width / 2 + movingHalfCell;
+    const offsets = [
+      new THREE.Vector3(),
+      targetUp.clone().multiplyScalar(upClearance),
+      targetUp.clone().multiplyScalar(-upClearance),
+      targetSide.clone().multiplyScalar(sideClearance),
+      targetSide.clone().multiplyScalar(-sideClearance),
+    ];
+
+    movingEndpoints.forEach((movingEndpoint) => {
+      const along = THREE.MathUtils.clamp(
+        movingEndpoint.clone().sub(target.position).dot(targetAxis),
+        -targetHalfLength,
+        targetHalfLength,
+      );
+      const sideBase = target.position.clone().addScaledVector(targetAxis, along);
+      const candidates = [
+        ...targetEnds.map((point) => ({ point, label: 'end' as const })),
+        { point: sideBase, label: 'side' as const },
+      ];
+
+      candidates.forEach((candidate) => {
+        offsets.forEach((offset, offsetIndex) => {
+          const point = candidate.point.clone().add(offset);
+          const distance = movingEndpoint.distanceTo(point);
+          if (distance > 0.52 || (best && distance >= best.distance)) return;
+          best = {
+            distance,
+            snap: {
+              position: moving.position.clone().add(point.clone().sub(movingEndpoint)),
+              point,
+              label: offsetIndex === 0 ? candidate.label : 'offset',
+            },
+          };
+        });
+      });
+    });
+  });
+  return best?.snap || null;
 };
 
 type ProfileFace = 'top' | 'right' | 'bottom' | 'left';
@@ -541,20 +636,65 @@ const createProfileObject = (item: DIYSceneItem, selected: boolean) => {
     group.add(groove);
   });
 
+  const railMaterial = makeMaterial(item.colorId, selected, item.kind);
+  railMaterial.roughness = 0.22;
+  const railHeight = Math.max(0.018, cellSize * 0.09);
+  const railWidth = Math.max(0.026, cellSize * 0.16);
+  const railOffset = cellSize * 0.23;
+  const addRail = (rail: THREE.Mesh) => {
+    rail.castShadow = true;
+    rail.receiveShadow = true;
+    addEdges(rail, item.colorId === 'black' ? '#7c8796' : '#7b8491');
+    group.add(rail);
+  };
+  if (activeFaces.has('top')) xCenters.forEach((center) => [-1, 1].forEach((direction) => {
+    const rail = new THREE.Mesh(new THREE.BoxGeometry(length * 0.99, railHeight, railWidth), railMaterial.clone());
+    rail.position.set(0, height / 2 + railHeight / 2, -center + direction * railOffset);
+    addRail(rail);
+  }));
+  if (activeFaces.has('bottom')) xCenters.forEach((center) => [-1, 1].forEach((direction) => {
+    const rail = new THREE.Mesh(new THREE.BoxGeometry(length * 0.99, railHeight, railWidth), railMaterial.clone());
+    rail.position.set(0, -height / 2 - railHeight / 2, -center + direction * railOffset);
+    addRail(rail);
+  }));
+  if (activeFaces.has('right')) yCenters.forEach((center) => [-1, 1].forEach((direction) => {
+    const rail = new THREE.Mesh(new THREE.BoxGeometry(length * 0.99, railWidth, railHeight), railMaterial.clone());
+    rail.position.set(0, center + direction * railOffset, -width / 2 - railHeight / 2);
+    addRail(rail);
+  }));
+  if (activeFaces.has('left')) yCenters.forEach((center) => [-1, 1].forEach((direction) => {
+    const rail = new THREE.Mesh(new THREE.BoxGeometry(length * 0.99, railWidth, railHeight), railMaterial.clone());
+    rail.position.set(0, center + direction * railOffset, width / 2 + railHeight / 2);
+    addRail(rail);
+  }));
+
   (item.holes || []).forEach((hole) => {
     const x = -length / 2 + (hole.positionMm / Math.max(20, item.length || 1000)) * length;
-    const radius = hole.type === 'countersunk' ? 0.05 : hole.type === 'threaded' ? 0.038 : 0.032;
-    const marker = new THREE.Mesh(
-      new THREE.CylinderGeometry(radius, radius, Math.max(width, height) * 1.25, 20),
-      new THREE.MeshStandardMaterial({ color: '#111827', roughness: 0.8 }),
+    const innerRadius = hole.type === 'threaded' ? 0.027 : 0.032;
+    const outerRadius = hole.type === 'countersunk' ? 0.052 : hole.type === 'threaded' ? 0.043 : 0.039;
+    const marker = new THREE.Group();
+    const opening = new THREE.Mesh(
+      new THREE.CircleGeometry(innerRadius, 28),
+      new THREE.MeshStandardMaterial({ color: '#10151c', metalness: 0.15, roughness: 0.9, polygonOffset: true, polygonOffsetFactor: -2 }),
     );
+    const rim = new THREE.Mesh(
+      new THREE.RingGeometry(innerRadius, outerRadius, 28),
+      new THREE.MeshStandardMaterial({
+        color: hole.type === 'countersunk' ? '#89939e' : '#303944',
+        metalness: 0.72,
+        roughness: 0.3,
+        polygonOffset: true,
+        polygonOffsetFactor: -3,
+      }),
+    );
+    marker.add(rim, opening);
     marker.position.x = x;
     if (hole.side === 'A' || hole.side === 'C') {
-      marker.rotation.x = Math.PI / 2;
-      marker.position.z = hole.side === 'A' ? width / 2 : -width / 2;
+      marker.position.z = hole.side === 'A' ? width / 2 + 0.003 : -width / 2 - 0.003;
+      if (hole.side === 'C') marker.rotation.y = Math.PI;
     } else {
-      marker.rotation.z = Math.PI / 2;
-      marker.position.y = hole.side === 'B' ? height / 2 : -height / 2;
+      marker.position.y = hole.side === 'B' ? height / 2 + 0.003 : -height / 2 - 0.003;
+      marker.rotation.x = hole.side === 'B' ? -Math.PI / 2 : Math.PI / 2;
     }
     group.add(marker);
   });
@@ -636,11 +776,16 @@ const createAccessoryObject = (item: DIYSceneItem, selected: boolean) => {
 const ThreeAssembly: React.FC<{
   items: DIYSceneItem[];
   selectedId: string | null;
+  rotationLabels: [string, string, string];
+  snapLabels: { end: string; side: string; offset: string };
   onSelect: (id: string | null) => void;
   onTransform: (id: string, position: Vec3, rotation: Vec3) => void;
-}> = ({ items, selectedId, onSelect, onTransform }) => {
+  onRotate90: (id: string, axisIndex: RotationAxisIndex) => void;
+}> = ({ items, selectedId, rotationLabels, snapLabels, onSelect, onTransform, onRotate90 }) => {
   const mountRef = useRef<HTMLDivElement>(null);
   const [renderError, setRenderError] = useState<string | null>(null);
+  const [contextMenu, setContextMenu] = useState<{ id: string; x: number; y: number } | null>(null);
+  const [snapHint, setSnapHint] = useState<string | null>(null);
   const sceneRef = useRef<THREE.Scene | null>(null);
   const cameraRef = useRef<THREE.PerspectiveCamera | null>(null);
   const rendererRef = useRef<THREE.WebGLRenderer | null>(null);
@@ -648,12 +793,18 @@ const ThreeAssembly: React.FC<{
   const transformRef = useRef<TransformControls | null>(null);
   const contentRef = useRef<THREE.Group | null>(null);
   const groupsRef = useRef<Map<string, THREE.Group>>(new Map());
-  const lastFramedItemCountRef = useRef(0);
+  const lastFrameSignatureRef = useRef('');
+  const itemsRef = useRef(items);
   const onSelectRef = useRef(onSelect);
   const onTransformRef = useRef(onTransform);
+  const onRotate90Ref = useRef(onRotate90);
+  const snapLabelsRef = useRef(snapLabels);
 
+  useEffect(() => { itemsRef.current = items; }, [items]);
   useEffect(() => { onSelectRef.current = onSelect; }, [onSelect]);
   useEffect(() => { onTransformRef.current = onTransform; }, [onTransform]);
+  useEffect(() => { onRotate90Ref.current = onRotate90; }, [onRotate90]);
+  useEffect(() => { snapLabelsRef.current = snapLabels; }, [snapLabels]);
 
   useEffect(() => {
     const mount = mountRef.current;
@@ -696,12 +847,40 @@ const ThreeAssembly: React.FC<{
     transform.setSize(0.85);
     const helper = transform.getHelper();
     scene.add(helper);
+    const snapGuide = new THREE.Mesh(
+      new THREE.TorusGeometry(0.18, 0.028, 10, 40),
+      new THREE.MeshBasicMaterial({ color: '#0ea5e9', transparent: true, opacity: 0.95, depthTest: false }),
+    );
+    snapGuide.visible = false;
+    snapGuide.renderOrder = 100;
+    scene.add(snapGuide);
     let transformWasDragging = false;
-    transform.addEventListener('dragging-changed', (event) => {
+    let snapHintTimer = 0;
+    const onDraggingChanged = (event: { value: unknown }) => {
       orbit.enabled = !event.value;
       if (event.value) transformWasDragging = true;
-    });
-    transform.addEventListener('mouseUp', () => {
+    };
+    const onObjectChange = () => {
+      const object = transform.object as THREE.Group | undefined;
+      const itemId = object?.userData.itemId as string | undefined;
+      const item = itemId ? itemsRef.current.find((entry) => entry.id === itemId) : undefined;
+      if (!object || !item || item.kind !== 'profile') {
+        snapGuide.visible = false;
+        return;
+      }
+      const snap = findMagneticProfileSnap(object, item, itemsRef.current, groupsRef.current);
+      if (!snap) {
+        snapGuide.visible = false;
+        setSnapHint(null);
+        return;
+      }
+      object.position.copy(snap.position);
+      snapGuide.position.copy(snap.point);
+      snapGuide.quaternion.copy(camera.quaternion);
+      snapGuide.visible = true;
+      setSnapHint(snapLabelsRef.current[snap.label]);
+    };
+    const onTransformMouseUp = () => {
       const object = transform.object;
       const itemId = object?.userData.itemId as string | undefined;
       if (!object || !itemId) return;
@@ -714,7 +893,13 @@ const ThreeAssembly: React.FC<{
           Math.round(THREE.MathUtils.radToDeg(object.rotation.z)),
         ],
       );
-    });
+      snapGuide.visible = false;
+      window.clearTimeout(snapHintTimer);
+      snapHintTimer = window.setTimeout(() => setSnapHint(null), 1000);
+    };
+    transform.addEventListener('dragging-changed', onDraggingChanged);
+    transform.addEventListener('objectChange', onObjectChange);
+    transform.addEventListener('mouseUp', onTransformMouseUp);
 
     scene.add(new THREE.HemisphereLight('#ffffff', '#728196', 2.1));
     const keyLight = new THREE.DirectionalLight('#ffffff', 3.4);
@@ -740,32 +925,62 @@ const ThreeAssembly: React.FC<{
 
     const pointer = new THREE.Vector2();
     const raycaster = new THREE.Raycaster();
-    let pointerStart: { x: number; y: number } | null = null;
+    let pointerStart: { x: number; y: number; button: number } | null = null;
+    let rightPointerMoved = false;
+    const getHitItemId = (clientX: number, clientY: number) => {
+      const rect = renderer.domElement.getBoundingClientRect();
+      pointer.x = ((clientX - rect.left) / rect.width) * 2 - 1;
+      pointer.y = -((clientY - rect.top) / rect.height) * 2 + 1;
+      raycaster.setFromCamera(pointer, camera);
+      const hit = raycaster.intersectObjects(content.children, true)[0];
+      if (!hit) return null;
+      let current: THREE.Object3D | null = hit.object;
+      while (current && !current.userData.itemId) current = current.parent;
+      return (current?.userData.itemId as string) || null;
+    };
     const onPointerDown = (event: PointerEvent) => {
-      pointerStart = { x: event.clientX, y: event.clientY };
+      pointerStart = { x: event.clientX, y: event.clientY, button: event.button };
+      if (event.button === 2) rightPointerMoved = false;
+      else setContextMenu(null);
     };
     const onPointerUp = (event: PointerEvent) => {
       const start = pointerStart;
       pointerStart = null;
       if (!start) return;
       const distance = Math.hypot(event.clientX - start.x, event.clientY - start.y);
+      if (start.button === 2) {
+        rightPointerMoved = distance > 7;
+        return;
+      }
       if (transformWasDragging) {
         transformWasDragging = false;
         return;
       }
       if (distance > 7) return;
+      onSelectRef.current(getHitItemId(event.clientX, event.clientY));
+    };
+    const onContextMenu = (event: MouseEvent) => {
+      event.preventDefault();
+      if (rightPointerMoved) {
+        rightPointerMoved = false;
+        return;
+      }
+      const itemId = getHitItemId(event.clientX, event.clientY);
+      if (!itemId) {
+        setContextMenu(null);
+        return;
+      }
       const rect = renderer.domElement.getBoundingClientRect();
-      pointer.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
-      pointer.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
-      raycaster.setFromCamera(pointer, camera);
-      const hit = raycaster.intersectObjects(content.children, true)[0];
-      if (!hit) return onSelectRef.current(null);
-      let current: THREE.Object3D | null = hit.object;
-      while (current && !current.userData.itemId) current = current.parent;
-      onSelectRef.current((current?.userData.itemId as string) || null);
+      onSelectRef.current(itemId);
+      setContextMenu({
+        id: itemId,
+        x: THREE.MathUtils.clamp(event.clientX - rect.left, 8, Math.max(8, rect.width - 154)),
+        y: THREE.MathUtils.clamp(event.clientY - rect.top, 8, Math.max(8, rect.height - 132)),
+      });
     };
     renderer.domElement.addEventListener('pointerdown', onPointerDown);
     renderer.domElement.addEventListener('pointerup', onPointerUp);
+    renderer.domElement.addEventListener('contextmenu', onContextMenu);
 
     const resize = () => {
       const rect = mount.getBoundingClientRect();
@@ -802,8 +1017,15 @@ const ThreeAssembly: React.FC<{
       if (!resizeObserver) window.removeEventListener('resize', resize);
       renderer.domElement.removeEventListener('pointerdown', onPointerDown);
       renderer.domElement.removeEventListener('pointerup', onPointerUp);
+      renderer.domElement.removeEventListener('contextmenu', onContextMenu);
+      transform.removeEventListener('dragging-changed', onDraggingChanged);
+      transform.removeEventListener('objectChange', onObjectChange);
+      transform.removeEventListener('mouseUp', onTransformMouseUp);
+      window.clearTimeout(snapHintTimer);
       transform.detach();
       transform.dispose();
+      snapGuide.geometry.dispose();
+      (snapGuide.material as THREE.Material).dispose();
       orbit.dispose();
       disposeObject(content);
       renderer.dispose();
@@ -851,7 +1073,17 @@ const ThreeAssembly: React.FC<{
     const selected = selectedId ? groups.get(selectedId) : undefined;
     if (selected) transform.attach(selected);
 
-    if (items.length > 0 && items.length !== lastFramedItemCountRef.current) {
+    const frameSignature = items.map((item) => [
+      item.id,
+      item.kind,
+      item.variantId,
+      item.length,
+      item.width,
+      item.height,
+      item.thickness,
+      item.rotation.join(','),
+    ].join(':')).join('|');
+    if (items.length > 0 && frameSignature !== lastFrameSignatureRef.current) {
       const camera = cameraRef.current;
       const orbit = orbitRef.current;
       if (camera && orbit) {
@@ -872,12 +1104,38 @@ const ThreeAssembly: React.FC<{
         }
       }
     }
-    lastFramedItemCountRef.current = items.length;
+    lastFrameSignatureRef.current = frameSignature;
   }, [items, selectedId]);
 
   return (
     <div className="relative h-[52vh] min-h-[380px] max-h-[620px] w-full sm:h-[62vh] xl:h-[calc(100vh-220px)] xl:min-h-[590px] xl:max-h-none">
       <div ref={mountRef} className="absolute inset-0 overflow-hidden" data-testid="diy-3d-canvas" />
+      {contextMenu && (
+        <div
+          className="absolute z-30 w-36 rounded-2xl border border-slate-200 bg-white p-2 shadow-2xl"
+          style={{ left: contextMenu.x, top: contextMenu.y }}
+          onContextMenu={(event) => event.preventDefault()}
+        >
+          <div className="px-2 pb-1.5 text-[9px] font-black uppercase tracking-widest text-slate-400">+90°</div>
+          {rotationLabels.map((label, axisIndex) => (
+            <button
+              key={label}
+              onClick={() => {
+                onRotate90Ref.current(contextMenu.id, axisIndex as RotationAxisIndex);
+                setContextMenu(null);
+              }}
+              className="flex w-full items-center gap-2 rounded-xl px-2.5 py-2 text-left text-[11px] font-black text-slate-700 transition hover:bg-blue-50 hover:text-blue-700"
+            >
+              <Rotate3D className="h-3.5 w-3.5" />{label}
+            </button>
+          ))}
+        </div>
+      )}
+      {snapHint && (
+        <div className="pointer-events-none absolute bottom-4 left-1/2 z-20 -translate-x-1/2 rounded-full bg-sky-500 px-4 py-2 text-[11px] font-black text-white shadow-xl shadow-sky-500/30">
+          {snapHint}
+        </div>
+      )}
       {renderError && (
         <div className="absolute inset-0 z-20 flex items-center justify-center bg-slate-100 p-8 text-center">
           <div className="max-w-sm rounded-2xl border border-red-200 bg-white p-6 text-sm font-bold text-red-700 shadow-xl">{renderError}</div>
@@ -968,11 +1226,17 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({ language, user, onAddBatchToC
     commit(items.map((item) => item.id === selected.id ? { ...item, ...patch } : item), selected.id);
   };
 
-  const rotateSelectedBy90 = (axisIndex: 0 | 1 | 2) => {
-    if (!selected) return;
-    const rotation = [...selected.rotation] as Vec3;
+  const rotateItemBy90 = (itemId: string, axisIndex: RotationAxisIndex) => {
+    const item = items.find((entry) => entry.id === itemId);
+    if (!item) return;
+    const rotation = [...item.rotation] as Vec3;
     rotation[axisIndex] = ((rotation[axisIndex] + 90) % 360 + 360) % 360;
-    updateSelected({ rotation });
+    commit(items.map((entry) => entry.id === itemId ? { ...entry, rotation } : entry), itemId);
+  };
+
+  const rotateSelectedBy90 = (axisIndex: RotationAxisIndex) => {
+    if (!selected) return;
+    rotateItemBy90(selected.id, axisIndex);
   };
 
   const addItem = (kind: DIYItemKind, variantId?: string) => {
@@ -1233,11 +1497,14 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({ language, user, onAddBatchToC
           <ThreeAssembly
             items={items}
             selectedId={selectedId}
+            rotationLabels={[t.rotateX, t.rotateY, t.rotateZ]}
+            snapLabels={{ end: t.snapEnd, side: t.snapSide, offset: t.snapOffset }}
             onSelect={setSelectedId}
             onTransform={(id, position, rotation) => {
               const next = items.map((item) => item.id === id ? { ...item, position, rotation } : item);
               commit(next, id);
             }}
+            onRotate90={rotateItemBy90}
           />
           <div className="pointer-events-none absolute left-4 top-4 rounded-2xl border border-white/80 bg-white/85 px-4 py-3 shadow-lg backdrop-blur">
             <div className="text-[10px] font-black uppercase tracking-widest text-slate-400">{t.total}</div>
@@ -1269,7 +1536,14 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({ language, user, onAddBatchToC
                     className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-slate-600 transition hover:bg-blue-50 hover:text-blue-700"
                   >
                     <span className="text-[10px] font-black opacity-60">{String(index + 1).padStart(2, '0')}</span>
-                    <span className="min-w-0 flex-1 truncate text-xs font-bold">{getItemLabel(item, language)}</span>
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate text-xs font-bold">{getItemLabel(item, language)}</span>
+                      {!!item.remark?.trim() && (
+                        <span className="mt-0.5 block truncate text-[10px] font-bold text-slate-400">
+                          {t.remark}：{item.remark.trim()}
+                        </span>
+                      )}
+                    </span>
                     <span className="text-[10px] font-black text-slate-400">×{item.quantity}</span>
                   </button>
                 ))}
