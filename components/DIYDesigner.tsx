@@ -146,7 +146,7 @@ const TEXT: Record<Language, Record<string, string>> = {
     saved: '设计已保存在本机',
     loaded: '已读取保存的设计',
     cartAdded: '设计清单已加入购物车',
-    dragHint: '点击添加零件；拖动画布旋转视角，右键零件可绕 X/Y/Z 旋转，拖近型材时自动磁吸。',
+    dragHint: '点击添加；右键零件可旋转或删除，选中后按 Delete/Backspace 删除，型材靠近时自动无穿透磁吸。',
     delete: '删除',
     duplicate: '复制',
     backToProject: '返回项目结构',
@@ -160,6 +160,7 @@ const TEXT: Record<Language, Record<string, string>> = {
     snapEnd: '磁吸：端点连接',
     snapSide: '磁吸：交叉连接',
     snapOffset: '磁吸：边缘对齐',
+    snapCollision: '已阻止型材相互穿透',
   },
   en: {
     title: 'Aluminum Profile 3D DIY Designer',
@@ -209,7 +210,7 @@ const TEXT: Record<Language, Record<string, string>> = {
     saved: 'Design saved on this device',
     loaded: 'Saved design loaded',
     cartAdded: 'Design parts added to cart',
-    dragHint: 'Click to add; drag the canvas to orbit, right-click a part for X/Y/Z rotation, and move profiles close together to snap.',
+    dragHint: 'Click to add; right-click to rotate/delete, press Delete or Backspace on a selected part, and move profiles close to snap without overlap.',
     delete: 'Delete',
     duplicate: 'Duplicate',
     backToProject: 'Back to project',
@@ -223,6 +224,7 @@ const TEXT: Record<Language, Record<string, string>> = {
     snapEnd: 'Magnet: end connection',
     snapSide: 'Magnet: cross connection',
     snapOffset: 'Magnet: edge alignment',
+    snapCollision: 'Profile overlap prevented',
   },
   jp: {
     title: 'アルミプロファイル 3D DIY デザイナー',
@@ -272,7 +274,7 @@ const TEXT: Record<Language, Record<string, string>> = {
     saved: '端末に保存しました',
     loaded: '保存済みデザインを読み込みました',
     cartAdded: 'カートに追加しました',
-    dragHint: 'クリックで追加。画面ドラッグで視点回転、右クリックでX/Y/Z回転、近い形材は自動スナップします。',
+    dragHint: 'クリックで追加。右クリックで回転・削除、選択後Delete/Backspaceで削除。近い形材は重ならず自動スナップします。',
     delete: '削除',
     duplicate: '複製',
     backToProject: 'プロジェクトへ戻る',
@@ -286,6 +288,7 @@ const TEXT: Record<Language, Record<string, string>> = {
     snapEnd: 'スナップ：端点接続',
     snapSide: 'スナップ：交差接続',
     snapOffset: 'スナップ：端揃え',
+    snapCollision: '形材同士の貫通を防止しました',
   },
 };
 
@@ -418,6 +421,101 @@ type ProfileSnap = {
   label: 'end' | 'side' | 'offset';
 };
 
+type ProfileBox = {
+  center: THREE.Vector3;
+  axes: [THREE.Vector3, THREE.Vector3, THREE.Vector3];
+  halfSizes: [number, number, number];
+};
+
+const profileBox = (item: DIYSceneItem, group: THREE.Group, position = group.position): ProfileBox => {
+  const dimensions = profileDimensions(item);
+  return {
+    center: position.clone(),
+    axes: [
+      new THREE.Vector3(1, 0, 0).applyQuaternion(group.quaternion).normalize(),
+      new THREE.Vector3(0, 1, 0).applyQuaternion(group.quaternion).normalize(),
+      new THREE.Vector3(0, 0, 1).applyQuaternion(group.quaternion).normalize(),
+    ],
+    halfSizes: [dimensions.length / 2, dimensions.height / 2, dimensions.width / 2],
+  };
+};
+
+const profileBoxFromItem = (item: DIYSceneItem): ProfileBox => {
+  const dimensions = profileDimensions(item);
+  const quaternion = new THREE.Quaternion().setFromEuler(new THREE.Euler(
+    THREE.MathUtils.degToRad(item.rotation[0]),
+    THREE.MathUtils.degToRad(item.rotation[1]),
+    THREE.MathUtils.degToRad(item.rotation[2]),
+  ));
+  return {
+    center: new THREE.Vector3(
+      item.position[0] / SCENE_SCALE,
+      item.position[1] / SCENE_SCALE,
+      item.position[2] / SCENE_SCALE,
+    ),
+    axes: [
+      new THREE.Vector3(1, 0, 0).applyQuaternion(quaternion).normalize(),
+      new THREE.Vector3(0, 1, 0).applyQuaternion(quaternion).normalize(),
+      new THREE.Vector3(0, 0, 1).applyQuaternion(quaternion).normalize(),
+    ],
+    halfSizes: [dimensions.length / 2, dimensions.height / 2, dimensions.width / 2],
+  };
+};
+
+const orientedBoxesOverlap = (first: ProfileBox, second: ProfileBox, tolerance = 0.004) => {
+  const axes = [
+    ...first.axes,
+    ...second.axes,
+    ...first.axes.flatMap((firstAxis) => second.axes.map((secondAxis) => (
+      new THREE.Vector3().crossVectors(firstAxis, secondAxis)
+    ))),
+  ];
+  const centerDelta = second.center.clone().sub(first.center);
+  return axes.every((candidateAxis) => {
+    if (candidateAxis.lengthSq() < 1e-8) return true;
+    const axis = candidateAxis.normalize();
+    const centerDistance = Math.abs(centerDelta.dot(axis));
+    const firstRadius = first.axes.reduce(
+      (sum, boxAxis, index) => sum + first.halfSizes[index] * Math.abs(boxAxis.dot(axis)),
+      0,
+    );
+    const secondRadius = second.axes.reduce(
+      (sum, boxAxis, index) => sum + second.halfSizes[index] * Math.abs(boxAxis.dot(axis)),
+      0,
+    );
+    return centerDistance < firstRadius + secondRadius - tolerance;
+  });
+};
+
+const profileItemCollides = (candidate: DIYSceneItem, items: DIYSceneItem[]) => {
+  if (candidate.kind !== 'profile') return false;
+  const candidateBox = profileBoxFromItem(candidate);
+  return items.some((item) => (
+    item.id !== candidate.id
+    && item.kind === 'profile'
+    && orientedBoxesOverlap(candidateBox, profileBoxFromItem(item))
+  ));
+};
+
+const profileCollides = (
+  moving: THREE.Group,
+  movingItem: DIYSceneItem,
+  position: THREE.Vector3,
+  items: DIYSceneItem[],
+  groups: Map<string, THREE.Group>,
+) => {
+  const movingBox = profileBox(movingItem, moving, position);
+  return items.some((targetItem) => {
+    if (targetItem.id === movingItem.id || targetItem.kind !== 'profile') return false;
+    const target = groups.get(targetItem.id);
+    return !!target && orientedBoxesOverlap(movingBox, profileBox(targetItem, target));
+  });
+};
+
+const uniqueOffsets = (values: number[]) => (
+  values.filter((value, index) => values.findIndex((candidate) => Math.abs(candidate - value) < 0.001) === index)
+);
+
 const findMagneticProfileSnap = (
   moving: THREE.Group,
   movingItem: DIYSceneItem,
@@ -425,62 +523,62 @@ const findMagneticProfileSnap = (
   groups: Map<string, THREE.Group>,
 ): ProfileSnap | null => {
   if (movingItem.kind !== 'profile') return null;
-  const movingDimensions = profileDimensions(movingItem);
-  const movingQuaternion = moving.quaternion.clone();
-  const movingAxis = new THREE.Vector3(1, 0, 0).applyQuaternion(movingQuaternion).normalize();
-  const movingEndpoints = [-1, 1].map((direction) => (
-    moving.position.clone().addScaledVector(movingAxis, direction * movingDimensions.length / 2)
-  ));
-  const movingHalfCell = Math.min(movingDimensions.width, movingDimensions.height) / 2;
+  const movingBox = profileBox(movingItem, moving);
   let best: { distance: number; snap: ProfileSnap } | null = null;
 
   items.forEach((targetItem) => {
     if (targetItem.id === movingItem.id || targetItem.kind !== 'profile') return;
     const target = groups.get(targetItem.id);
     if (!target) return;
-    const targetDimensions = profileDimensions(targetItem);
-    const targetAxis = new THREE.Vector3(1, 0, 0).applyQuaternion(target.quaternion).normalize();
-    const targetUp = new THREE.Vector3(0, 1, 0).applyQuaternion(target.quaternion).normalize();
-    const targetSide = new THREE.Vector3(0, 0, 1).applyQuaternion(target.quaternion).normalize();
-    const targetHalfLength = targetDimensions.length / 2;
-    const targetEnds = [-1, 1].map((direction) => (
-      target.position.clone().addScaledVector(targetAxis, direction * targetHalfLength)
-    ));
-    const upClearance = targetDimensions.height / 2 + movingHalfCell;
-    const sideClearance = targetDimensions.width / 2 + movingHalfCell;
-    const offsets = [
-      new THREE.Vector3(),
-      targetUp.clone().multiplyScalar(upClearance),
-      targetUp.clone().multiplyScalar(-upClearance),
-      targetSide.clone().multiplyScalar(sideClearance),
-      targetSide.clone().multiplyScalar(-sideClearance),
-    ];
+    const targetBox = profileBox(targetItem, target);
 
-    movingEndpoints.forEach((movingEndpoint) => {
-      const along = THREE.MathUtils.clamp(
-        movingEndpoint.clone().sub(target.position).dot(targetAxis),
-        -targetHalfLength,
-        targetHalfLength,
-      );
-      const sideBase = target.position.clone().addScaledVector(targetAxis, along);
-      const candidates = [
-        ...targetEnds.map((point) => ({ point, label: 'end' as const })),
-        { point: sideBase, label: 'side' as const },
-      ];
+    targetBox.axes.forEach((targetNormalAxis, targetAxisIndex) => {
+      [-1, 1].forEach((targetDirection) => {
+        const targetNormal = targetNormalAxis.clone().multiplyScalar(targetDirection);
+        const targetFaceCenter = targetBox.center.clone().addScaledVector(
+          targetNormal,
+          targetBox.halfSizes[targetAxisIndex],
+        );
+        const tangentIndices = ([0, 1, 2] as const).filter((index) => index !== targetAxisIndex);
+        const tangentOffsets = tangentIndices.map((tangentIndex) => {
+          const tangent = targetBox.axes[tangentIndex];
+          const movingProjectedHalf = movingBox.axes.reduce(
+            (sum, movingAxis, movingIndex) => (
+              sum + movingBox.halfSizes[movingIndex] * Math.abs(movingAxis.dot(tangent))
+            ),
+            0,
+          );
+          const targetHalf = targetBox.halfSizes[tangentIndex];
+          const insideAlignment = Math.max(0, targetHalf - movingProjectedHalf);
+          const outsideAlignment = targetHalf + movingProjectedHalf;
+          return uniqueOffsets([0, -insideAlignment, insideAlignment, -outsideAlignment, outsideAlignment]);
+        });
 
-      candidates.forEach((candidate) => {
-        offsets.forEach((offset, offsetIndex) => {
-          const point = candidate.point.clone().add(offset);
-          const distance = movingEndpoint.distanceTo(point);
-          if (distance > 0.52 || (best && distance >= best.distance)) return;
-          best = {
-            distance,
-            snap: {
-              position: moving.position.clone().add(point.clone().sub(movingEndpoint)),
-              point,
-              label: offsetIndex === 0 ? candidate.label : 'offset',
-            },
-          };
+        movingBox.axes.forEach((movingNormalAxis, movingAxisIndex) => {
+          [-1, 1].forEach((movingDirection) => {
+            const movingNormal = movingNormalAxis.clone().multiplyScalar(movingDirection);
+            if (targetNormal.dot(movingNormal) > -0.995) return;
+            const movingFaceOffset = movingNormal.clone().multiplyScalar(movingBox.halfSizes[movingAxisIndex]);
+
+            tangentOffsets[0].forEach((firstOffset) => tangentOffsets[1].forEach((secondOffset) => {
+              const targetPoint = targetFaceCenter.clone()
+                .addScaledVector(targetBox.axes[tangentIndices[0]], firstOffset)
+                .addScaledVector(targetBox.axes[tangentIndices[1]], secondOffset);
+              const candidatePosition = targetPoint.clone().sub(movingFaceOffset);
+              const distance = moving.position.distanceTo(candidatePosition);
+              if (distance > 0.65 || (best && distance >= best.distance)) return;
+              if (profileCollides(moving, movingItem, candidatePosition, items, groups)) return;
+              const hasOffset = Math.abs(firstOffset) > 0.001 || Math.abs(secondOffset) > 0.001;
+              best = {
+                distance,
+                snap: {
+                  position: candidatePosition,
+                  point: targetPoint,
+                  label: hasOffset ? 'offset' : targetAxisIndex === 0 || movingAxisIndex === 0 ? 'end' : 'side',
+                },
+              };
+            }));
+          });
         });
       });
     });
@@ -777,11 +875,13 @@ const ThreeAssembly: React.FC<{
   items: DIYSceneItem[];
   selectedId: string | null;
   rotationLabels: [string, string, string];
-  snapLabels: { end: string; side: string; offset: string };
+  snapLabels: { end: string; side: string; offset: string; collision: string };
+  deleteLabel: string;
   onSelect: (id: string | null) => void;
   onTransform: (id: string, position: Vec3, rotation: Vec3) => void;
   onRotate90: (id: string, axisIndex: RotationAxisIndex) => void;
-}> = ({ items, selectedId, rotationLabels, snapLabels, onSelect, onTransform, onRotate90 }) => {
+  onDelete: (id: string) => void;
+}> = ({ items, selectedId, rotationLabels, snapLabels, deleteLabel, onSelect, onTransform, onRotate90, onDelete }) => {
   const mountRef = useRef<HTMLDivElement>(null);
   const [renderError, setRenderError] = useState<string | null>(null);
   const [contextMenu, setContextMenu] = useState<{ id: string; x: number; y: number } | null>(null);
@@ -798,12 +898,14 @@ const ThreeAssembly: React.FC<{
   const onSelectRef = useRef(onSelect);
   const onTransformRef = useRef(onTransform);
   const onRotate90Ref = useRef(onRotate90);
+  const onDeleteRef = useRef(onDelete);
   const snapLabelsRef = useRef(snapLabels);
 
   useEffect(() => { itemsRef.current = items; }, [items]);
   useEffect(() => { onSelectRef.current = onSelect; }, [onSelect]);
   useEffect(() => { onTransformRef.current = onTransform; }, [onTransform]);
   useEffect(() => { onRotate90Ref.current = onRotate90; }, [onRotate90]);
+  useEffect(() => { onDeleteRef.current = onDelete; }, [onDelete]);
   useEffect(() => { snapLabelsRef.current = snapLabels; }, [snapLabels]);
 
   useEffect(() => {
@@ -855,10 +957,17 @@ const ThreeAssembly: React.FC<{
     snapGuide.renderOrder = 100;
     scene.add(snapGuide);
     let transformWasDragging = false;
+    let lastSafeProfilePosition: THREE.Vector3 | null = null;
     let snapHintTimer = 0;
     const onDraggingChanged = (event: { value: unknown }) => {
       orbit.enabled = !event.value;
-      if (event.value) transformWasDragging = true;
+      if (event.value) {
+        transformWasDragging = true;
+        const object = transform.object as THREE.Group | undefined;
+        lastSafeProfilePosition = object?.position.clone() || null;
+      } else {
+        lastSafeProfilePosition = null;
+      }
     };
     const onObjectChange = () => {
       const object = transform.object as THREE.Group | undefined;
@@ -869,16 +978,25 @@ const ThreeAssembly: React.FC<{
         return;
       }
       const snap = findMagneticProfileSnap(object, item, itemsRef.current, groupsRef.current);
-      if (!snap) {
-        snapGuide.visible = false;
-        setSnapHint(null);
+      if (snap) {
+        object.position.copy(snap.position);
+        if (lastSafeProfilePosition) lastSafeProfilePosition.copy(snap.position);
+        else lastSafeProfilePosition = snap.position.clone();
+        snapGuide.position.copy(snap.point);
+        snapGuide.quaternion.copy(camera.quaternion);
+        snapGuide.visible = true;
+        setSnapHint(snapLabelsRef.current[snap.label]);
         return;
       }
-      object.position.copy(snap.position);
-      snapGuide.position.copy(snap.point);
-      snapGuide.quaternion.copy(camera.quaternion);
-      snapGuide.visible = true;
-      setSnapHint(snapLabelsRef.current[snap.label]);
+      if (profileCollides(object, item, object.position, itemsRef.current, groupsRef.current)) {
+        if (lastSafeProfilePosition) object.position.copy(lastSafeProfilePosition);
+        snapGuide.visible = false;
+        setSnapHint(snapLabelsRef.current.collision);
+        return;
+      }
+      lastSafeProfilePosition = object.position.clone();
+      snapGuide.visible = false;
+      setSnapHint(null);
     };
     const onTransformMouseUp = () => {
       const object = transform.object;
@@ -975,7 +1093,7 @@ const ThreeAssembly: React.FC<{
       setContextMenu({
         id: itemId,
         x: THREE.MathUtils.clamp(event.clientX - rect.left, 8, Math.max(8, rect.width - 154)),
-        y: THREE.MathUtils.clamp(event.clientY - rect.top, 8, Math.max(8, rect.height - 132)),
+        y: THREE.MathUtils.clamp(event.clientY - rect.top, 8, Math.max(8, rect.height - 174)),
       });
     };
     renderer.domElement.addEventListener('pointerdown', onPointerDown);
@@ -1129,6 +1247,16 @@ const ThreeAssembly: React.FC<{
               <Rotate3D className="h-3.5 w-3.5" />{label}
             </button>
           ))}
+          <div className="my-1 border-t border-slate-100" />
+          <button
+            onClick={() => {
+              onDeleteRef.current(contextMenu.id);
+              setContextMenu(null);
+            }}
+            className="flex w-full items-center gap-2 rounded-xl px-2.5 py-2 text-left text-[11px] font-black text-red-600 transition hover:bg-red-50"
+          >
+            <Trash2 className="h-3.5 w-3.5" />{deleteLabel}
+          </button>
         </div>
       )}
       {snapHint && (
@@ -1223,7 +1351,12 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({ language, user, onAddBatchToC
 
   const updateSelected = (patch: Partial<DIYSceneItem>) => {
     if (!selected) return;
-    commit(items.map((item) => item.id === selected.id ? { ...item, ...patch } : item), selected.id);
+    const candidate = { ...selected, ...patch };
+    if (profileItemCollides(candidate, items)) {
+      showNotice(t.snapCollision);
+      return;
+    }
+    commit(items.map((item) => item.id === selected.id ? candidate : item), selected.id);
   };
 
   const rotateItemBy90 = (itemId: string, axisIndex: RotationAxisIndex) => {
@@ -1231,13 +1364,39 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({ language, user, onAddBatchToC
     if (!item) return;
     const rotation = [...item.rotation] as Vec3;
     rotation[axisIndex] = ((rotation[axisIndex] + 90) % 360 + 360) % 360;
-    commit(items.map((entry) => entry.id === itemId ? { ...entry, rotation } : entry), itemId);
+    const candidate = { ...item, rotation };
+    if (profileItemCollides(candidate, items)) {
+      showNotice(t.snapCollision);
+      return;
+    }
+    commit(items.map((entry) => entry.id === itemId ? candidate : entry), itemId);
   };
 
   const rotateSelectedBy90 = (axisIndex: RotationAxisIndex) => {
     if (!selected) return;
     rotateItemBy90(selected.id, axisIndex);
   };
+
+  const deleteItem = (itemId: string) => {
+    commit(items.filter((item) => item.id !== itemId), null);
+  };
+
+  useEffect(() => {
+    const handleDeleteShortcut = (event: KeyboardEvent) => {
+      if (!selectedId || (event.key !== 'Delete' && event.key !== 'Backspace')) return;
+      if (event.metaKey || event.ctrlKey || event.altKey) return;
+      const target = event.target;
+      const isEditing = target instanceof HTMLInputElement
+        || target instanceof HTMLTextAreaElement
+        || target instanceof HTMLSelectElement
+        || (target instanceof HTMLElement && target.isContentEditable);
+      if (isEditing) return;
+      event.preventDefault();
+      deleteItem(selectedId);
+    };
+    window.addEventListener('keydown', handleDeleteShortcut);
+    return () => window.removeEventListener('keydown', handleDeleteShortcut);
+  }, [items, selectedId]);
 
   const addItem = (kind: DIYItemKind, variantId?: string) => {
     const item = createItem(kind, items.length, variantId);
@@ -1498,13 +1657,22 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({ language, user, onAddBatchToC
             items={items}
             selectedId={selectedId}
             rotationLabels={[t.rotateX, t.rotateY, t.rotateZ]}
-            snapLabels={{ end: t.snapEnd, side: t.snapSide, offset: t.snapOffset }}
+            snapLabels={{ end: t.snapEnd, side: t.snapSide, offset: t.snapOffset, collision: t.snapCollision }}
+            deleteLabel={t.delete}
             onSelect={setSelectedId}
             onTransform={(id, position, rotation) => {
-              const next = items.map((item) => item.id === id ? { ...item, position, rotation } : item);
+              const transformed = items.find((item) => item.id === id);
+              if (!transformed) return;
+              const candidate = { ...transformed, position, rotation };
+              if (profileItemCollides(candidate, items)) {
+                showNotice(t.snapCollision);
+                return;
+              }
+              const next = items.map((item) => item.id === id ? candidate : item);
               commit(next, id);
             }}
             onRotate90={rotateItemBy90}
+            onDelete={deleteItem}
           />
           <div className="pointer-events-none absolute left-4 top-4 rounded-2xl border border-white/80 bg-white/85 px-4 py-3 shadow-lg backdrop-blur">
             <div className="text-[10px] font-black uppercase tracking-widest text-slate-400">{t.total}</div>
@@ -1560,7 +1728,7 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({ language, user, onAddBatchToC
                   const duplicated = { ...cloneItems([selected])[0], id: makeId(), position: [selected.position[0] + 80, selected.position[1] + 80, selected.position[2]] as Vec3 };
                   commit([...items, duplicated], duplicated.id);
                 }} className="diy-toolbar-button flex-1 gap-2"><Copy className="h-4 w-4" />{t.duplicate}</button>
-                <button onClick={() => commit(items.filter((item) => item.id !== selected.id), null)} className="diy-toolbar-button flex-1 gap-2 text-red-600 hover:border-red-300 hover:bg-red-50"><Trash2 className="h-4 w-4" />{t.delete}</button>
+                <button onClick={() => deleteItem(selected.id)} className="diy-toolbar-button flex-1 gap-2 text-red-600 hover:border-red-300 hover:bg-red-50"><Trash2 className="h-4 w-4" />{t.delete}</button>
               </div>
 
               {selected.kind === 'profile' && (
