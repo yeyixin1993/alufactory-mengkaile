@@ -21,6 +21,8 @@ import { buildOrderPdfFilename, formatEast8Date, formatEast8DateTime } from './u
 import { normalizeMembershipLevel } from './utils/membership';
 import { calculateScrewPlan, inferInclude304ScrewsByTotal } from './utils/screwCalculator';
 
+const DIYDesigner = React.lazy(() => import('./components/DIYDesigner'));
+
 const getCurrency = (lang: Language) => lang === 'cn' ? '￥' : '$';
 
 const stableSerialize = (value: unknown): string => {
@@ -539,7 +541,11 @@ const Catalog: React.FC<{ language: Language }> = ({ language }) => {
   const accessoryProduct = ACCESSORY_PRODUCT;
   return (
     <div className="max-w-7xl mx-auto px-6 py-12">
-      <div className="mb-8">
+      <div className="mb-8 flex flex-wrap gap-3">
+        <Link to="/diy-designer" className="inline-flex items-center gap-2 bg-slate-950 text-white px-6 py-3 rounded-2xl font-black shadow-xl shadow-slate-900/20 hover:bg-blue-600 transition-all">
+          {language === 'cn' ? '3D DIY 设计器' : language === 'jp' ? '3D DIY デザイナー' : '3D DIY Designer'}
+          <ChevronRight className="w-4 h-4" />
+        </Link>
         <Link to="/quick-quote" className="inline-flex items-center gap-2 bg-blue-600 text-white px-6 py-3 rounded-2xl font-black shadow-xl shadow-blue-600/20 hover:bg-blue-500 transition-all">
           {t.quickQuote}
           <ChevronRight className="w-4 h-4" />
@@ -2249,6 +2255,9 @@ const App: React.FC = () => {
             <div className="flex items-center gap-2 sm:gap-6">
               <div className="hidden lg:flex gap-10 items-center">
                 {/*<Link to="/" className="text-sm font-black text-slate-500 hover:text-blue-600 transition-all tracking-widest uppercase">{t.catalog}</Link>*/}
+                <Link to="/diy-designer" className="text-sm font-black text-slate-500 hover:text-blue-600 transition-all tracking-widest uppercase">
+                  {language === 'cn' ? '3D DIY' : language === 'jp' ? '3D DIY' : '3D DIY'}
+                </Link>
                 {user && <Link to="/history" className="text-sm font-black text-slate-500 hover:text-blue-600 transition-all tracking-widest uppercase">{t.history}</Link>}
               </div>
               {/* Mobile: prominent history button */}
@@ -2287,6 +2296,11 @@ const App: React.FC = () => {
 
         <Routes>
           <Route path="/" element={<Catalog language={language} />} />
+          <Route path="/diy-designer" element={(
+            <React.Suspense fallback={<div className="min-h-[70vh] flex items-center justify-center text-slate-400 font-black">Loading 3D designer...</div>}>
+              <DIYDesigner language={language} user={user} onAddBatchToCart={(items) => setCart(mergeCartItems(cart, items))} />
+            </React.Suspense>
+          )} />
           <Route path="/quick-quote" element={<QuickQuote language={language} user={user} />} />
           <Route path="/login" element={<Auth language={language} onLogin={(u) => { setUser(u); }} />} />
           <Route path="/history" element={user ? <UserProfile user={user} language={language} setUser={setUser} onEditOrder={onEditOrder} onGoToPayment={onGoToPayment} /> : <div className="p-40 text-center flex flex-col items-center"><UserIcon className="w-20 h-20 text-slate-100 mb-6"/><p className="font-black text-slate-300 text-2xl">Please login to view your orders</p></div>} />
