@@ -10,6 +10,7 @@ import {
   Download,
   Grid3X3,
   Hammer,
+  Maximize2,
   Move3D,
   Paintbrush,
   PanelTop,
@@ -23,6 +24,7 @@ import {
   Wrench,
 } from 'lucide-react';
 import { INITIAL_PRODUCTS, PROFILE_COLORS, PROFILE_VARIANTS } from '../constants';
+import ProfileVisualizer from './ProfileVisualizer';
 import {
   CartItem,
   DrillHole,
@@ -132,6 +134,7 @@ const TEXT: Record<Language, Record<string, string>> = {
     drilling: '定制打孔',
     holePosition: '孔位 (mm)',
     side: '面',
+    groove: '槽位',
     holeType: '孔类型',
     addHole: '添加孔',
     tapping: '端面攻丝',
@@ -161,6 +164,7 @@ const TEXT: Record<Language, Record<string, string>> = {
     snapSide: '磁吸：交叉连接',
     snapOffset: '磁吸：边缘对齐',
     snapCollision: '已阻止型材相互穿透',
+    frameAll: '显示全部',
   },
   en: {
     title: 'Aluminum Profile 3D DIY Designer',
@@ -196,6 +200,7 @@ const TEXT: Record<Language, Record<string, string>> = {
     drilling: 'Custom drilling',
     holePosition: 'Hole position (mm)',
     side: 'Face',
+    groove: 'Groove',
     holeType: 'Hole type',
     addHole: 'Add hole',
     tapping: 'End tapping',
@@ -225,6 +230,7 @@ const TEXT: Record<Language, Record<string, string>> = {
     snapSide: 'Magnet: cross connection',
     snapOffset: 'Magnet: edge alignment',
     snapCollision: 'Profile overlap prevented',
+    frameAll: 'Frame all',
   },
   jp: {
     title: 'アルミプロファイル 3D DIY デザイナー',
@@ -260,6 +266,7 @@ const TEXT: Record<Language, Record<string, string>> = {
     drilling: '穴あけ加工',
     holePosition: '穴位置 (mm)',
     side: '面',
+    groove: '溝',
     holeType: '穴タイプ',
     addHole: '穴を追加',
     tapping: '端面タップ',
@@ -289,6 +296,7 @@ const TEXT: Record<Language, Record<string, string>> = {
     snapSide: 'スナップ：交差接続',
     snapOffset: 'スナップ：端揃え',
     snapCollision: '形材同士の貫通を防止しました',
+    frameAll: '全体表示',
   },
 };
 
@@ -300,6 +308,31 @@ const profileSize = (variantId = '2020'): [number, number] => {
   const first = variantId.match(/^(\d{2})(\d{2,3})/);
   if (!first) return [20, 20];
   return [Number(first[1]), Number(first[2])];
+};
+
+// Keep the DIY drill positions aligned with the profile order configurator.
+const getProfileGrooveCount = (variantId = '2020', side: ProfileSide): number => {
+  if (variantId === '2020-N4-SQ' || variantId === '2020-N4-RD') return 0;
+  if (variantId === '2020-N2-OPP') return side === 'B' || side === 'D' ? 1 : 0;
+  if (variantId === '1515-N1' && side === 'A') return 0;
+  if (variantId === '1515-N2' && (side === 'A' || side === 'B')) return 0;
+  if (variantId === '2047') {
+    if (side === 'A') return 0;
+    if (side === 'B' || side === 'D') return 2;
+  }
+  if (variantId === '2040-N1-20' && side === 'A') return 0;
+  if ((variantId === '2040-N1-40' || variantId === '3060-N1-60') && side === 'A') return 1;
+  if ((variantId === '2040-N1-40' || variantId === '3060-N1-60') && side === 'D') return 2;
+  if (variantId === '2060' && (side === 'B' || side === 'D')) return 3;
+  if (variantId === '20100' && (side === 'B' || side === 'D')) return 5;
+  if (['2040', '3060', '2040-N1-20', '2040-N1-40', '3060-N1-60', '4080'].includes(variantId)
+    && (side === 'B' || side === 'D')) return 2;
+
+  const variantName = (PROFILE_VARIANTS.find((variant) => variant.id === variantId)?.name || '').toLowerCase();
+  if (variantName.includes('n1') && side === 'A') return 0;
+  if (variantName.includes('n2') && (side === 'A' || side === 'B')) return 0;
+  if (variantName.includes('n3') && side !== 'D') return 0;
+  return 1;
 };
 
 const createItem = (kind: DIYItemKind, index = 0, variantId?: string): DIYSceneItem => {
@@ -516,6 +549,24 @@ const uniqueOffsets = (values: number[]) => (
   values.filter((value, index) => values.findIndex((candidate) => Math.abs(candidate - value) < 0.001) === index)
 );
 
+const getCoplanarNormal = (movingBox: ProfileBox, targetBox: ProfileBox) => {
+  const movingLengthAxis = movingBox.axes[0];
+  const targetLengthAxis = targetBox.axes[0];
+  const centerDelta = movingBox.center.clone().sub(targetBox.center);
+  const cross = new THREE.Vector3().crossVectors(movingLengthAxis, targetLengthAxis);
+
+  if (cross.lengthSq() > 1e-5) {
+    cross.normalize();
+    return Math.abs(centerDelta.dot(cross)) <= 0.06 ? cross : null;
+  }
+
+  const transverseAxes = [targetBox.axes[1], targetBox.axes[2]];
+  const closest = transverseAxes
+    .map((axis) => ({ axis, distance: Math.abs(centerDelta.dot(axis)) }))
+    .sort((first, second) => first.distance - second.distance)[0];
+  return closest.distance <= 0.06 ? closest.axis.clone() : null;
+};
+
 const findMagneticProfileSnap = (
   moving: THREE.Group,
   movingItem: DIYSceneItem,
@@ -531,10 +582,13 @@ const findMagneticProfileSnap = (
     const target = groups.get(targetItem.id);
     if (!target) return;
     const targetBox = profileBox(targetItem, target);
+    const coplanarNormal = getCoplanarNormal(movingBox, targetBox);
+    if (!coplanarNormal) return;
 
     targetBox.axes.forEach((targetNormalAxis, targetAxisIndex) => {
       [-1, 1].forEach((targetDirection) => {
         const targetNormal = targetNormalAxis.clone().multiplyScalar(targetDirection);
+        if (Math.abs(targetNormal.dot(coplanarNormal)) > 0.995) return;
         const targetFaceCenter = targetBox.center.clone().addScaledVector(
           targetNormal,
           targetBox.halfSizes[targetAxisIndex],
@@ -542,6 +596,7 @@ const findMagneticProfileSnap = (
         const tangentIndices = ([0, 1, 2] as const).filter((index) => index !== targetAxisIndex);
         const tangentOffsets = tangentIndices.map((tangentIndex) => {
           const tangent = targetBox.axes[tangentIndex];
+          if (Math.abs(tangent.dot(coplanarNormal)) > 0.995) return [0];
           const movingProjectedHalf = movingBox.axes.reduce(
             (sum, movingAxis, movingIndex) => (
               sum + movingBox.halfSizes[movingIndex] * Math.abs(movingAxis.dot(tangent))
@@ -550,8 +605,7 @@ const findMagneticProfileSnap = (
           );
           const targetHalf = targetBox.halfSizes[tangentIndex];
           const insideAlignment = Math.max(0, targetHalf - movingProjectedHalf);
-          const outsideAlignment = targetHalf + movingProjectedHalf;
-          return uniqueOffsets([0, -insideAlignment, insideAlignment, -outsideAlignment, outsideAlignment]);
+          return uniqueOffsets([0, -insideAlignment, insideAlignment]);
         });
 
         movingBox.axes.forEach((movingNormalAxis, movingAxisIndex) => {
@@ -720,37 +774,57 @@ const createProfileObject = (item: DIYSceneItem, selected: boolean) => {
   addEdges(body, item.colorId === 'black' ? '#64748b' : '#6b7280');
   group.add(body);
 
+  const oppositeSide: Record<ProfileSide, ProfileSide> = { A: 'C', B: 'D', C: 'A', D: 'B' };
+  const grooveCoordinate = (side: ProfileSide, grooveIndex = 0) => {
+    const count = Math.max(1, getProfileGrooveCount(item.variantId, side));
+    const index = THREE.MathUtils.clamp(grooveIndex, 0, count - 1);
+    const span = side === 'A' || side === 'C' ? width : height;
+    return span / 2 - ((index + 0.5) * span) / count;
+  };
+
   (item.holes || []).forEach((hole) => {
     const x = -length / 2 + (hole.positionMm / Math.max(20, item.length || 1000)) * length;
-    const innerRadius = hole.type === 'threaded' ? 0.027 : 0.032;
-    const outerRadius = hole.type === 'countersunk' ? 0.052 : hole.type === 'threaded' ? 0.043 : 0.039;
-    const marker = new THREE.Group();
-    const opening = new THREE.Mesh(
-      new THREE.CircleGeometry(innerRadius, 28),
-      new THREE.MeshStandardMaterial({ color: '#10151c', metalness: 0.15, roughness: 0.9, polygonOffset: true, polygonOffsetFactor: -2 }),
-    );
-    const rim = new THREE.Mesh(
-      new THREE.RingGeometry(innerRadius, outerRadius, 28),
-      new THREE.MeshStandardMaterial({
-        color: hole.type === 'countersunk' ? '#89939e' : '#303944',
-        metalness: 0.72,
-        roughness: 0.3,
-        polygonOffset: true,
-        polygonOffsetFactor: -3,
-      }),
-    );
-    marker.add(rim, opening);
-    marker.position.x = x;
-    if (hole.side === 'A' || hole.side === 'C') {
-      marker.position.z = hole.side === 'A' ? width / 2 + 0.003 : -width / 2 - 0.003;
-      if (hole.side === 'C') marker.rotation.y = Math.PI;
-    } else {
-      marker.position.y = hole.side === 'B' ? height / 2 + 0.003 : -height / 2 - 0.003;
-      marker.rotation.x = hole.side === 'B' ? -Math.PI / 2 : Math.PI / 2;
-    }
-    group.add(marker);
+    const addHoleMarker = (side: ProfileSide, isEntry: boolean) => {
+      const markerType: HoleType = isEntry ? hole.type : 'through';
+      const innerRadius = markerType === 'threaded' ? 0.027 : 0.032;
+      const outerRadius = markerType === 'countersunk'
+        ? Math.max(0.058, cellSize * 0.32)
+        : markerType === 'threaded'
+          ? 0.043
+          : 0.039;
+      const marker = new THREE.Group();
+      const opening = new THREE.Mesh(
+        new THREE.CircleGeometry(innerRadius, 28),
+        new THREE.MeshStandardMaterial({ color: '#10151c', metalness: 0.15, roughness: 0.9, polygonOffset: true, polygonOffsetFactor: -2 }),
+      );
+      const rim = new THREE.Mesh(
+        new THREE.RingGeometry(innerRadius, outerRadius, 28),
+        new THREE.MeshStandardMaterial({
+          color: markerType === 'countersunk' ? '#89939e' : '#303944',
+          metalness: 0.72,
+          roughness: 0.3,
+          polygonOffset: true,
+          polygonOffsetFactor: -3,
+        }),
+      );
+      marker.add(rim, opening);
+      marker.position.x = x;
+      const crossPosition = grooveCoordinate(hole.side, hole.grooveIndex);
+      if (side === 'A' || side === 'C') {
+        marker.position.y = side === 'A' ? height / 2 + 0.003 : -height / 2 - 0.003;
+        marker.position.z = crossPosition;
+        marker.rotation.x = side === 'A' ? -Math.PI / 2 : Math.PI / 2;
+      } else {
+        marker.position.y = crossPosition;
+        marker.position.z = side === 'B' ? width / 2 + 0.003 : -width / 2 - 0.003;
+        if (side === 'D') marker.rotation.y = Math.PI;
+      }
+      group.add(marker);
+    };
+    addHoleMarker(hole.side, true);
+    addHoleMarker(oppositeSide[hole.side], false);
   });
-  addSelectionHitbox(group, new THREE.BoxGeometry(length, Math.max(height + 0.12, 0.32), Math.max(width + 0.12, 0.32)));
+  addSelectionHitbox(group, new THREE.BoxGeometry(length + 0.012, height + 0.018, width + 0.018));
   return group;
 };
 
@@ -927,6 +1001,7 @@ const ThreeAssembly: React.FC<{
   rotationLabels: [string, string, string];
   snapLabels: { end: string; side: string; offset: string; collision: string };
   deleteLabel: string;
+  frameAllLabel: string;
   onSelect: (id: string | null) => void;
   onTransform: (id: string, position: Vec3, rotation: Vec3) => void;
   onResizeProfile: (id: string, length: number, position: Vec3) => void;
@@ -938,6 +1013,7 @@ const ThreeAssembly: React.FC<{
   rotationLabels,
   snapLabels,
   deleteLabel,
+  frameAllLabel,
   onSelect,
   onTransform,
   onResizeProfile,
@@ -964,6 +1040,38 @@ const ThreeAssembly: React.FC<{
   const onRotate90Ref = useRef(onRotate90);
   const onDeleteRef = useRef(onDelete);
   const snapLabelsRef = useRef(snapLabels);
+
+  const frameAll = () => {
+    const content = contentRef.current;
+    const camera = cameraRef.current;
+    const orbit = orbitRef.current;
+    if (!content || !camera || !orbit) return;
+    if (content.children.length === 0) {
+      orbit.target.set(0, 4, 0);
+      camera.position.set(14, 11, 16);
+      camera.near = 0.02;
+      camera.far = 200;
+      camera.updateProjectionMatrix();
+      orbit.update();
+      return;
+    }
+    const bounds = new THREE.Box3().setFromObject(content);
+    const sphere = bounds.getBoundingSphere(new THREE.Sphere());
+    if (!Number.isFinite(sphere.radius) || sphere.radius <= 0) return;
+    const direction = camera.position.clone().sub(orbit.target);
+    if (direction.lengthSq() < 0.001) direction.set(1, 0.75, 1);
+    direction.normalize();
+    const verticalHalfFov = THREE.MathUtils.degToRad(camera.fov * 0.5);
+    const horizontalHalfFov = Math.atan(Math.tan(verticalHalfFov) * Math.max(0.1, camera.aspect));
+    const limitingHalfFov = Math.min(verticalHalfFov, horizontalHalfFov);
+    const distance = Math.max(4, (sphere.radius / Math.sin(limitingHalfFov)) * 1.22);
+    orbit.target.copy(sphere.center);
+    camera.position.copy(sphere.center).add(direction.multiplyScalar(distance));
+    camera.near = Math.max(0.02, distance / 100);
+    camera.far = Math.max(200, distance * 20);
+    camera.updateProjectionMatrix();
+    orbit.update();
+  };
 
   useEffect(() => { itemsRef.current = items; }, [items]);
   useEffect(() => { onSelectRef.current = onSelect; }, [onSelect]);
@@ -1114,6 +1222,7 @@ const ThreeAssembly: React.FC<{
 
     const pointer = new THREE.Vector2();
     const raycaster = new THREE.Raycaster();
+    raycaster.params.Line.threshold = 0.025;
     const resizePlane = new THREE.Plane();
     const movePlane = new THREE.Plane();
     type LengthResizeState = {
@@ -1148,13 +1257,19 @@ const ThreeAssembly: React.FC<{
       pointer.y = -((clientY - rect.top) / rect.height) * 2 + 1;
       raycaster.setFromCamera(pointer, camera);
     };
-    const getHitItemId = (clientX: number, clientY: number) => {
-      setPointerRay(clientX, clientY);
-      const hit = raycaster.intersectObjects(content.children, true)[0];
-      if (!hit) return null;
-      let current: THREE.Object3D | null = hit.object;
+    const getItemIdFromObject = (object: THREE.Object3D | null) => {
+      let current = object;
       while (current && !current.userData.itemId) current = current.parent;
       return (current?.userData.itemId as string) || null;
+    };
+    const getContentHit = (clientX: number, clientY: number) => {
+      setPointerRay(clientX, clientY);
+      const hits = raycaster.intersectObjects(content.children, true);
+      return hits.find((hit) => !hit.object.userData.selectionProxy) || hits[0] || null;
+    };
+    const getHitItemId = (clientX: number, clientY: number) => {
+      const hit = getContentHit(clientX, clientY);
+      return hit ? getItemIdFromObject(hit.object) : null;
     };
     const onPointerDown = (event: PointerEvent) => {
       if (event.button === 0 && lengthHandles.visible) {
@@ -1243,10 +1358,8 @@ const ThreeAssembly: React.FC<{
         }
         const selectedObject = transform.object as THREE.Group | undefined;
         const selectedItemId = selectedObject?.userData.itemId as string | undefined;
-        const hit = raycaster.intersectObjects(content.children, true)[0];
-        let hitObject: THREE.Object3D | null = hit?.object || null;
-        while (hitObject && !hitObject.userData.itemId) hitObject = hitObject.parent;
-        const hitItemId = hitObject?.userData.itemId as string | undefined;
+        const hit = getContentHit(event.clientX, event.clientY);
+        const hitItemId = hit ? getItemIdFromObject(hit.object) : null;
         const item = selectedItemId ? itemsRef.current.find((entry) => entry.id === selectedItemId) : undefined;
         if (hit && selectedObject && item && hitItemId === selectedItemId) {
           const cameraDirection = camera.getWorldDirection(new THREE.Vector3()).normalize();
@@ -1547,25 +1660,7 @@ const ThreeAssembly: React.FC<{
       item.rotation.join(','),
     ].join(':')).join('|');
     if (items.length > 0 && frameSignature !== lastFrameSignatureRef.current) {
-      const camera = cameraRef.current;
-      const orbit = orbitRef.current;
-      if (camera && orbit) {
-        const bounds = new THREE.Box3().setFromObject(content);
-        const sphere = bounds.getBoundingSphere(new THREE.Sphere());
-        if (Number.isFinite(sphere.radius) && sphere.radius > 0) {
-          const direction = camera.position.clone().sub(orbit.target);
-          if (direction.lengthSq() < 0.001) direction.set(1, 0.75, 1);
-          direction.normalize();
-          const halfFov = THREE.MathUtils.degToRad(camera.fov * 0.5);
-          const distance = Math.max(4, (sphere.radius / Math.sin(halfFov)) * 1.25);
-          orbit.target.copy(sphere.center);
-          camera.position.copy(sphere.center).add(direction.multiplyScalar(distance));
-          camera.near = Math.max(0.02, distance / 100);
-          camera.far = Math.max(200, distance * 20);
-          camera.updateProjectionMatrix();
-          orbit.update();
-        }
-      }
+      frameAll();
     }
     lastFrameSignatureRef.current = frameSignature;
   }, [items, selectedId]);
@@ -1573,6 +1668,16 @@ const ThreeAssembly: React.FC<{
   return (
     <div className="relative h-[52vh] min-h-[380px] max-h-[620px] w-full sm:h-[62vh] xl:h-[calc(100vh-220px)] xl:min-h-[590px] xl:max-h-none">
       <div ref={mountRef} className="absolute inset-0 overflow-hidden" data-testid="diy-3d-canvas" />
+      <button
+        type="button"
+        onClick={frameAll}
+        title={frameAllLabel}
+        aria-label={frameAllLabel}
+        className="absolute right-3 top-3 z-20 flex items-center gap-2 rounded-xl border border-slate-200 bg-white/95 px-3 py-2 text-[11px] font-black text-slate-700 shadow-lg backdrop-blur transition hover:border-blue-300 hover:text-blue-700"
+      >
+        <Maximize2 className="h-4 w-4" />
+        <span className="hidden sm:inline">{frameAllLabel}</span>
+      </button>
       {contextMenu && (
         <div
           className="absolute z-30 w-36 rounded-2xl border border-slate-200 bg-white p-2 shadow-2xl"
@@ -1679,6 +1784,7 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({ language, user, onAddBatchToC
   const [notice, setNotice] = useState('');
   const [holePosition, setHolePosition] = useState(100);
   const [holeSide, setHoleSide] = useState<ProfileSide>('A');
+  const [holeGrooveIndex, setHoleGrooveIndex] = useState(0);
   const [holeType, setHoleType] = useState<HoleType>('through');
   const [threadSize, setThreadSize] = useState<ThreadSize>('M6');
   const importRef = useRef<HTMLInputElement>(null);
@@ -1915,14 +2021,22 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({ language, user, onAddBatchToC
     if (!selected || selected.kind !== 'profile') return;
     const length = selected.length || 1000;
     if (holePosition < 5 || holePosition > length - 5) return;
+    const grooveCount = getProfileGrooveCount(selected.variantId, holeSide);
     const hole: DrillHole = {
       id: makeId(),
       positionMm: holePosition,
       side: holeSide,
       type: holeType,
       threadSize: holeType === 'threaded' ? threadSize : undefined,
+      grooveIndex: grooveCount >= 2 ? Math.min(holeGrooveIndex, grooveCount - 1) : 0,
     };
     updateSelected({ holes: [...(selected.holes || []), hole] });
+  };
+
+  const grooveLabel = (index: number) => {
+    if (language === 'cn') return ['第一槽', '第二槽', '第三槽', '第四槽', '第五槽'][index] || `第${index + 1}槽`;
+    if (language === 'jp') return ['第一溝', '第二溝', '第三溝', '第四溝', '第五溝'][index] || `第${index + 1}溝`;
+    return `Groove ${index + 1}`;
   };
 
   const palette = [
@@ -2004,6 +2118,7 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({ language, user, onAddBatchToC
             rotationLabels={[t.rotateX, t.rotateY, t.rotateZ]}
             snapLabels={{ end: t.snapEnd, side: t.snapSide, offset: t.snapOffset, collision: t.snapCollision }}
             deleteLabel={t.delete}
+            frameAllLabel={t.frameAll}
             onSelect={setSelectedId}
             onTransform={(id, position, rotation) => {
               const transformed = items.find((item) => item.id === id);
@@ -2176,9 +2291,43 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({ language, user, onAddBatchToC
               {selected.kind === 'profile' && (
                 <div className="rounded-2xl border border-blue-100 bg-blue-50/60 p-4">
                   <div className="mb-3 flex items-center gap-2"><CircleDot className="h-4 w-4 text-blue-600" /><h3 className="text-xs font-black uppercase tracking-widest text-blue-900">{t.drilling}</h3></div>
+                  <div className="mb-4 rounded-2xl border border-blue-100 bg-white p-2">
+                    <ProfileVisualizer
+                      config={{
+                        length: selected.length || 1000,
+                        variantId: selected.variantId,
+                        holes: selected.holes || [],
+                        colorId: selected.colorId,
+                        tapping: {
+                          left: Array(5).fill(!!selected.tappingLeft),
+                          right: Array(5).fill(!!selected.tappingRight),
+                        },
+                      }}
+                      selectedSide={holeSide}
+                      onSideChange={(side) => {
+                        setHoleSide(side);
+                        setHoleGrooveIndex(0);
+                      }}
+                      interactive={false}
+                      tapLabel={t.tapping}
+                    />
+                  </div>
                   <div className="grid grid-cols-2 gap-2">
                     <NumberField label={t.holePosition} value={holePosition} min={5} max={(selected.length || 1000) - 5} onChange={setHolePosition} />
-                    <label className="block"><span className="diy-field-label">{t.side}</span><select value={holeSide} onChange={(event) => setHoleSide(event.target.value as ProfileSide)} className="diy-select"><option>A</option><option>B</option><option>C</option><option>D</option></select></label>
+                    <label className="block"><span className="diy-field-label">{t.side}</span><select value={holeSide} onChange={(event) => {
+                      setHoleSide(event.target.value as ProfileSide);
+                      setHoleGrooveIndex(0);
+                    }} className="diy-select"><option>A</option><option>B</option><option>C</option><option>D</option></select></label>
+                    {getProfileGrooveCount(selected.variantId, holeSide) >= 2 && (
+                      <label className="col-span-2 block">
+                        <span className="diy-field-label">{t.groove}</span>
+                        <select value={holeGrooveIndex} onChange={(event) => setHoleGrooveIndex(Number(event.target.value))} className="diy-select">
+                          {Array.from({ length: getProfileGrooveCount(selected.variantId, holeSide) }, (_, index) => (
+                            <option key={index} value={index}>{grooveLabel(index)}</option>
+                          ))}
+                        </select>
+                      </label>
+                    )}
                     <label className="col-span-2 block"><span className="diy-field-label">{t.holeType}</span><select value={holeType} onChange={(event) => setHoleType(event.target.value as HoleType)} className="diy-select"><option value="through">{t.through}</option><option value="countersunk">{t.countersunk}</option><option value="threaded">{t.threaded}</option></select></label>
                     {holeType === 'threaded' && <label className="col-span-2 block"><span className="diy-field-label">Thread</span><select value={threadSize} onChange={(event) => setThreadSize(event.target.value as ThreadSize)} className="diy-select">{(['M3', 'M4', 'M5', 'M6', 'M8'] as ThreadSize[]).map((size) => <option key={size}>{size}</option>)}</select></label>}
                     <button onClick={addHole} className="col-span-2 rounded-xl bg-blue-600 px-3 py-2.5 text-xs font-black text-white hover:bg-blue-500">{t.addHole}</button>
@@ -2186,7 +2335,7 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({ language, user, onAddBatchToC
                   <div className="mt-3 space-y-1">
                     {(selected.holes || []).map((hole) => (
                       <div key={hole.id} className="flex items-center justify-between rounded-lg bg-white px-3 py-2 text-xs font-bold text-slate-600">
-                        <span>{hole.side} · {hole.positionMm}mm · {t[hole.type]}{hole.threadSize ? ` ${hole.threadSize}` : ''}</span>
+                        <span>{hole.side}{getProfileGrooveCount(selected.variantId, hole.side) >= 2 ? ` · ${grooveLabel(hole.grooveIndex || 0)}` : ''} · {hole.positionMm}mm · {t[hole.type]}{hole.threadSize ? ` ${hole.threadSize}` : ''}</span>
                         <button onClick={() => updateSelected({ holes: (selected.holes || []).filter((entry) => entry.id !== hole.id) })} className="text-red-500"><Trash2 className="h-3.5 w-3.5" /></button>
                       </div>
                     ))}
