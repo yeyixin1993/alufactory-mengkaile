@@ -146,7 +146,7 @@ const TEXT: Record<Language, Record<string, string>> = {
     saved: '设计已保存在本机',
     loaded: '已读取保存的设计',
     cartAdded: '设计清单已加入购物车',
-    dragHint: '点击添加；拖动紫色方块自由移动，拖动两端黑色箭头修改长度，右键旋转或删除。',
+    dragHint: '点击添加；选中后拖动零件任意位置即可自由移动，拖动两端黑色箭头修改型材长度。',
     delete: '删除',
     duplicate: '复制',
     backToProject: '返回项目结构',
@@ -210,7 +210,7 @@ const TEXT: Record<Language, Record<string, string>> = {
     saved: 'Design saved on this device',
     loaded: 'Saved design loaded',
     cartAdded: 'Design parts added to cart',
-    dragHint: 'Click to add; drag the purple square to move freely, use the black end arrows to resize, and right-click to rotate or delete.',
+    dragHint: 'Click to add; once selected, drag anywhere on a part to move it freely, or use the black end arrows to resize profiles.',
     delete: 'Delete',
     duplicate: 'Duplicate',
     backToProject: 'Back to project',
@@ -274,7 +274,7 @@ const TEXT: Record<Language, Record<string, string>> = {
     saved: '端末に保存しました',
     loaded: '保存済みデザインを読み込みました',
     cartAdded: 'カートに追加しました',
-    dragHint: 'クリックで追加。紫の四角で自由移動し、両端の黒い矢印で長さを変更。右クリックで回転・削除できます。',
+    dragHint: 'クリックで追加。選択後は部品のどこからでもドラッグして移動でき、黒い矢印で形材の長さを変更できます。',
     delete: '削除',
     duplicate: '複製',
     backToProject: 'プロジェクトへ戻る',
@@ -602,174 +602,83 @@ const getActiveProfileFaces = (variantId = '2020'): Set<ProfileFace> => {
   return active;
 };
 
-const addTSlotHole = (
-  shape: THREE.Shape,
-  face: ProfileFace,
-  center: number,
+const createProfileSectionShape = (
   width: number,
   height: number,
   cellSize: number,
+  activeFaces: Set<ProfileFace>,
+  xCenters: number[],
+  yCenters: number[],
 ) => {
-  const skin = Math.max(0.006, cellSize * 0.025);
-  const opening = cellSize * 0.27;
-  const chamber = cellSize * 0.54;
-  const neckDepth = cellSize * 0.11;
-  const totalDepth = cellSize * 0.30;
-  const path = new THREE.Path();
+  const opening = cellSize * 0.26;
+  const shoulder = cellSize * 0.44;
+  const inner = cellSize * 0.22;
+  const neckDepth = cellSize * 0.09;
+  const shoulderDepth = cellSize * 0.18;
+  const totalDepth = cellSize * 0.34;
+  const left = -width / 2;
+  const right = width / 2;
+  const bottom = -height / 2;
+  const top = height / 2;
+  const shape = new THREE.Shape();
 
-  if (face === 'top') {
-    const edge = height / 2 - skin;
-    path.moveTo(center - opening / 2, edge);
-    path.lineTo(center + opening / 2, edge);
-    path.lineTo(center + opening / 2, edge - neckDepth);
-    path.lineTo(center + chamber / 2, edge - neckDepth);
-    path.lineTo(center + chamber / 2, edge - totalDepth);
-    path.lineTo(center - chamber / 2, edge - totalDepth);
-    path.lineTo(center - chamber / 2, edge - neckDepth);
-    path.lineTo(center - opening / 2, edge - neckDepth);
-  } else if (face === 'bottom') {
-    const edge = -height / 2 + skin;
-    path.moveTo(center - opening / 2, edge);
-    path.lineTo(center - opening / 2, edge + neckDepth);
-    path.lineTo(center - chamber / 2, edge + neckDepth);
-    path.lineTo(center - chamber / 2, edge + totalDepth);
-    path.lineTo(center + chamber / 2, edge + totalDepth);
-    path.lineTo(center + chamber / 2, edge + neckDepth);
-    path.lineTo(center + opening / 2, edge + neckDepth);
-    path.lineTo(center + opening / 2, edge);
-  } else if (face === 'right') {
-    const edge = width / 2 - skin;
-    path.moveTo(edge, center - opening / 2);
-    path.lineTo(edge - neckDepth, center - opening / 2);
-    path.lineTo(edge - neckDepth, center - chamber / 2);
-    path.lineTo(edge - totalDepth, center - chamber / 2);
-    path.lineTo(edge - totalDepth, center + chamber / 2);
-    path.lineTo(edge - neckDepth, center + chamber / 2);
-    path.lineTo(edge - neckDepth, center + opening / 2);
-    path.lineTo(edge, center + opening / 2);
-  } else {
-    const edge = -width / 2 + skin;
-    path.moveTo(edge, center - opening / 2);
-    path.lineTo(edge, center + opening / 2);
-    path.lineTo(edge + neckDepth, center + opening / 2);
-    path.lineTo(edge + neckDepth, center + chamber / 2);
-    path.lineTo(edge + totalDepth, center + chamber / 2);
-    path.lineTo(edge + totalDepth, center - chamber / 2);
-    path.lineTo(edge + neckDepth, center - chamber / 2);
-    path.lineTo(edge + neckDepth, center - opening / 2);
+  shape.moveTo(left, bottom);
+  if (activeFaces.has('bottom')) {
+    xCenters.forEach((center) => {
+      shape.lineTo(center - opening / 2, bottom);
+      shape.lineTo(center - opening / 2, bottom + neckDepth);
+      shape.lineTo(center - shoulder / 2, bottom + shoulderDepth);
+      shape.lineTo(center - inner / 2, bottom + totalDepth);
+      shape.lineTo(center + inner / 2, bottom + totalDepth);
+      shape.lineTo(center + shoulder / 2, bottom + shoulderDepth);
+      shape.lineTo(center + opening / 2, bottom + neckDepth);
+      shape.lineTo(center + opening / 2, bottom);
+    });
   }
-  path.closePath();
-  shape.holes.push(path);
-};
+  shape.lineTo(right, bottom);
 
-const addProfileEndDetail = (
-  group: THREE.Group,
-  item: DIYSceneItem,
-  selected: boolean,
-  side: -1 | 1,
-  length: number,
-  width: number,
-  height: number,
-  columns: number,
-  rows: number,
-) => {
-  const face = new THREE.Group();
-  face.position.x = side * (length / 2 + 0.004);
-  face.rotation.y = side > 0 ? Math.PI / 2 : -Math.PI / 2;
-
-  const cellWidth = width / columns;
-  const cellHeight = height / rows;
-  const cellSize = Math.min(cellWidth, cellHeight);
-  const wall = Math.max(0.012, cellSize * 0.075);
-  const surfaceColor = COLOR_HEX[item.colorId] || '#d9dee4';
-  const surfaceMaterial = new THREE.MeshStandardMaterial({
-    color: surfaceColor,
-    metalness: 0.78,
-    roughness: 0.24,
-    emissive: selected ? new THREE.Color('#174ea6') : new THREE.Color('#000000'),
-    emissiveIntensity: selected ? 0.2 : 0,
-    side: THREE.DoubleSide,
-  });
-  const cavityMaterial = new THREE.MeshBasicMaterial({
-    color: '#171c22',
-    side: THREE.DoubleSide,
-    polygonOffset: true,
-    polygonOffsetFactor: -2,
-  });
-
-  const addPlane = (
-    planeWidth: number,
-    planeHeight: number,
-    x: number,
-    y: number,
-    material: THREE.Material,
-    z = 0,
-  ) => {
-    const mesh = new THREE.Mesh(new THREE.PlaneGeometry(planeWidth, planeHeight), material);
-    mesh.position.set(x, y, z);
-    mesh.renderOrder = 2;
-    face.add(mesh);
-    return mesh;
-  };
-
-  addPlane(width * 0.985, height * 0.985, 0, 0, cavityMaterial, 0);
-  addPlane(width, wall, 0, height / 2 - wall / 2, surfaceMaterial, 0.001);
-  addPlane(width, wall, 0, -height / 2 + wall / 2, surfaceMaterial, 0.001);
-  addPlane(wall, height, -width / 2 + wall / 2, 0, surfaceMaterial, 0.001);
-  addPlane(wall, height, width / 2 - wall / 2, 0, surfaceMaterial, 0.001);
-
-  for (let column = 1; column < columns; column += 1) {
-    addPlane(wall, height - wall * 2, -width / 2 + column * cellWidth, 0, surfaceMaterial, 0.001);
+  if (activeFaces.has('right')) {
+    yCenters.forEach((center) => {
+      shape.lineTo(right, center - opening / 2);
+      shape.lineTo(right - neckDepth, center - opening / 2);
+      shape.lineTo(right - shoulderDepth, center - shoulder / 2);
+      shape.lineTo(right - totalDepth, center - inner / 2);
+      shape.lineTo(right - totalDepth, center + inner / 2);
+      shape.lineTo(right - shoulderDepth, center + shoulder / 2);
+      shape.lineTo(right - neckDepth, center + opening / 2);
+      shape.lineTo(right, center + opening / 2);
+    });
   }
-  for (let row = 1; row < rows; row += 1) {
-    addPlane(width - wall * 2, wall, 0, -height / 2 + row * cellHeight, surfaceMaterial, 0.001);
+  shape.lineTo(right, top);
+
+  if (activeFaces.has('top')) {
+    [...xCenters].reverse().forEach((center) => {
+      shape.lineTo(center + opening / 2, top);
+      shape.lineTo(center + opening / 2, top - neckDepth);
+      shape.lineTo(center + shoulder / 2, top - shoulderDepth);
+      shape.lineTo(center + inner / 2, top - totalDepth);
+      shape.lineTo(center - inner / 2, top - totalDepth);
+      shape.lineTo(center - shoulder / 2, top - shoulderDepth);
+      shape.lineTo(center - opening / 2, top - neckDepth);
+      shape.lineTo(center - opening / 2, top);
+    });
   }
+  shape.lineTo(left, top);
 
-  for (let column = 0; column < columns; column += 1) {
-    for (let row = 0; row < rows; row += 1) {
-      const centerX = -width / 2 + (column + 0.5) * cellWidth;
-      const centerY = -height / 2 + (row + 0.5) * cellHeight;
-      const spokeLength = cellSize * 0.43;
-      const spokeThickness = Math.max(0.009, cellSize * 0.055);
-      [45, 135, 225, 315].forEach((degrees) => {
-        const angle = THREE.MathUtils.degToRad(degrees);
-        const spoke = addPlane(
-          spokeLength,
-          spokeThickness,
-          centerX + Math.cos(angle) * cellSize * 0.18,
-          centerY + Math.sin(angle) * cellSize * 0.18,
-          surfaceMaterial,
-          0.002,
-        );
-        spoke.rotation.z = angle;
-      });
-
-      const hub = new THREE.Mesh(
-        new THREE.RingGeometry(cellSize * 0.09, cellSize * 0.17, 24),
-        surfaceMaterial,
-      );
-      hub.position.set(centerX, centerY, 0.003);
-      hub.renderOrder = 3;
-      face.add(hub);
-
-      const slotOpening = cellSize * 0.27;
-      const slotDepth = wall * 1.45;
-      if (row === rows - 1) {
-        addPlane(slotOpening, slotDepth, centerX, height / 2 - slotDepth / 2, cavityMaterial, 0.004);
-      }
-      if (row === 0) {
-        addPlane(slotOpening, slotDepth, centerX, -height / 2 + slotDepth / 2, cavityMaterial, 0.004);
-      }
-      if (column === 0) {
-        addPlane(slotDepth, slotOpening, -width / 2 + slotDepth / 2, centerY, cavityMaterial, 0.004);
-      }
-      if (column === columns - 1) {
-        addPlane(slotDepth, slotOpening, width / 2 - slotDepth / 2, centerY, cavityMaterial, 0.004);
-      }
-    }
+  if (activeFaces.has('left')) {
+    [...yCenters].reverse().forEach((center) => {
+      shape.lineTo(left, center + opening / 2);
+      shape.lineTo(left + neckDepth, center + opening / 2);
+      shape.lineTo(left + shoulderDepth, center + shoulder / 2);
+      shape.lineTo(left + totalDepth, center + inner / 2);
+      shape.lineTo(left + totalDepth, center - inner / 2);
+      shape.lineTo(left + shoulderDepth, center - shoulder / 2);
+      shape.lineTo(left + neckDepth, center - opening / 2);
+      shape.lineTo(left, center - opening / 2);
+    });
   }
-
-  group.add(face);
+  shape.closePath();
+  return shape;
 };
 
 const createProfileObject = (item: DIYSceneItem, selected: boolean) => {
@@ -780,21 +689,12 @@ const createProfileObject = (item: DIYSceneItem, selected: boolean) => {
   const height = sectionHeight / SCENE_SCALE;
   const cellSize = Math.min(width, height);
   const activeFaces = getActiveProfileFaces(item.variantId);
-  const shape = new THREE.Shape();
-  shape.moveTo(-width / 2, -height / 2);
-  shape.lineTo(width / 2, -height / 2);
-  shape.lineTo(width / 2, height / 2);
-  shape.lineTo(-width / 2, height / 2);
-  shape.closePath();
 
   const columns = Math.max(1, Math.round(width / cellSize));
   const rows = Math.max(1, Math.round(height / cellSize));
   const xCenters = Array.from({ length: columns }, (_, index) => -width / 2 + ((index + 0.5) * width) / columns);
   const yCenters = Array.from({ length: rows }, (_, index) => -height / 2 + ((index + 0.5) * height) / rows);
-  if (activeFaces.has('top')) xCenters.forEach((center) => addTSlotHole(shape, 'top', center, width, height, cellSize));
-  if (activeFaces.has('bottom')) xCenters.forEach((center) => addTSlotHole(shape, 'bottom', center, width, height, cellSize));
-  if (activeFaces.has('right')) yCenters.forEach((center) => addTSlotHole(shape, 'right', center, width, height, cellSize));
-  if (activeFaces.has('left')) yCenters.forEach((center) => addTSlotHole(shape, 'left', center, width, height, cellSize));
+  const shape = createProfileSectionShape(width, height, cellSize, activeFaces, xCenters, yCenters);
 
   xCenters.forEach((x) => yCenters.forEach((y) => {
     const bore = new THREE.Path();
@@ -819,62 +719,6 @@ const createProfileObject = (item: DIYSceneItem, selected: boolean) => {
   body.receiveShadow = true;
   addEdges(body, item.colorId === 'black' ? '#64748b' : '#6b7280');
   group.add(body);
-
-  const grooveMaterial = new THREE.MeshStandardMaterial({ color: '#232a31', metalness: 0.25, roughness: 0.75 });
-  const grooveThickness = Math.max(0.014, cellSize * 0.055);
-  const grooveDepth = Math.max(0.01, cellSize * 0.035);
-  if (activeFaces.has('top')) xCenters.forEach((center) => {
-    const groove = new THREE.Mesh(new THREE.BoxGeometry(length * 0.985, grooveDepth, grooveThickness), grooveMaterial.clone());
-    groove.position.set(0, height / 2 + 0.001, -center);
-    group.add(groove);
-  });
-  if (activeFaces.has('bottom')) xCenters.forEach((center) => {
-    const groove = new THREE.Mesh(new THREE.BoxGeometry(length * 0.985, grooveDepth, grooveThickness), grooveMaterial.clone());
-    groove.position.set(0, -height / 2 - 0.001, -center);
-    group.add(groove);
-  });
-  if (activeFaces.has('right')) yCenters.forEach((center) => {
-    const groove = new THREE.Mesh(new THREE.BoxGeometry(length * 0.985, grooveThickness, grooveDepth), grooveMaterial.clone());
-    groove.position.set(0, center, -width / 2 - 0.001);
-    group.add(groove);
-  });
-  if (activeFaces.has('left')) yCenters.forEach((center) => {
-    const groove = new THREE.Mesh(new THREE.BoxGeometry(length * 0.985, grooveThickness, grooveDepth), grooveMaterial.clone());
-    groove.position.set(0, center, width / 2 + 0.001);
-    group.add(groove);
-  });
-
-  const railMaterial = makeMaterial(item.colorId, selected, item.kind);
-  railMaterial.roughness = 0.22;
-  const railHeight = Math.max(0.018, cellSize * 0.09);
-  const railWidth = Math.max(0.026, cellSize * 0.16);
-  const railOffset = cellSize * 0.23;
-  const addRail = (rail: THREE.Mesh) => {
-    rail.castShadow = true;
-    rail.receiveShadow = true;
-    addEdges(rail, item.colorId === 'black' ? '#7c8796' : '#7b8491');
-    group.add(rail);
-  };
-  if (activeFaces.has('top')) xCenters.forEach((center) => [-1, 1].forEach((direction) => {
-    const rail = new THREE.Mesh(new THREE.BoxGeometry(length * 0.99, railHeight, railWidth), railMaterial.clone());
-    rail.position.set(0, height / 2 + railHeight / 2, -center + direction * railOffset);
-    addRail(rail);
-  }));
-  if (activeFaces.has('bottom')) xCenters.forEach((center) => [-1, 1].forEach((direction) => {
-    const rail = new THREE.Mesh(new THREE.BoxGeometry(length * 0.99, railHeight, railWidth), railMaterial.clone());
-    rail.position.set(0, -height / 2 - railHeight / 2, -center + direction * railOffset);
-    addRail(rail);
-  }));
-  if (activeFaces.has('right')) yCenters.forEach((center) => [-1, 1].forEach((direction) => {
-    const rail = new THREE.Mesh(new THREE.BoxGeometry(length * 0.99, railWidth, railHeight), railMaterial.clone());
-    rail.position.set(0, center + direction * railOffset, -width / 2 - railHeight / 2);
-    addRail(rail);
-  }));
-  if (activeFaces.has('left')) yCenters.forEach((center) => [-1, 1].forEach((direction) => {
-    const rail = new THREE.Mesh(new THREE.BoxGeometry(length * 0.99, railWidth, railHeight), railMaterial.clone());
-    rail.position.set(0, center + direction * railOffset, width / 2 + railHeight / 2);
-    addRail(rail);
-  }));
 
   (item.holes || []).forEach((hole) => {
     const x = -length / 2 + (hole.positionMm / Math.max(20, item.length || 1000)) * length;
@@ -906,8 +750,6 @@ const createProfileObject = (item: DIYSceneItem, selected: boolean) => {
     }
     group.add(marker);
   });
-  addProfileEndDetail(group, item, selected, -1, length, width, height, columns, rows);
-  addProfileEndDetail(group, item, selected, 1, length, width, height, columns, rows);
   addSelectionHitbox(group, new THREE.BoxGeometry(length, Math.max(height + 0.12, 0.32), Math.max(width + 0.12, 0.32)));
   return group;
 };
@@ -1019,34 +861,6 @@ const customizeTranslateGizmo = (transform: TransformControls) => {
   removeUnwantedHandles(translatePicker, true);
 };
 
-const createFreeMoveHandle = () => {
-  const root = new THREE.Group();
-  root.name = 'profile-free-move-handle';
-  root.visible = false;
-  const square = new THREE.Mesh(
-    new THREE.BoxGeometry(0.18, 0.18, 0.09),
-    new THREE.MeshBasicMaterial({
-      color: '#8b5cf6',
-      transparent: true,
-      opacity: 0.98,
-      depthTest: false,
-      depthWrite: false,
-    }),
-  );
-  square.renderOrder = 1000;
-  square.userData.freeMoveHandle = true;
-  const pickerMaterial = new THREE.MeshBasicMaterial({
-    transparent: true,
-    opacity: 0,
-    depthWrite: false,
-  });
-  pickerMaterial.colorWrite = false;
-  const picker = new THREE.Mesh(new THREE.BoxGeometry(0.34, 0.34, 0.34), pickerMaterial);
-  picker.userData.freeMoveHandle = true;
-  root.add(square, picker);
-  return root;
-};
-
 const createProfileLengthHandles = () => {
   const root = new THREE.Group();
   root.name = 'profile-length-handles';
@@ -1107,20 +921,6 @@ const syncProfileLengthHandles = (
   });
 };
 
-const syncFreeMoveHandle = (
-  handle: THREE.Group,
-  selectedGroup: THREE.Group | undefined,
-  selectedItem: DIYSceneItem | undefined,
-) => {
-  if (!selectedGroup || !selectedItem) {
-    handle.visible = false;
-    return;
-  }
-  handle.visible = true;
-  handle.position.copy(selectedGroup.position);
-  handle.quaternion.copy(selectedGroup.quaternion);
-};
-
 const ThreeAssembly: React.FC<{
   items: DIYSceneItem[];
   selectedId: string | null;
@@ -1154,7 +954,6 @@ const ThreeAssembly: React.FC<{
   const orbitRef = useRef<OrbitControls | null>(null);
   const transformRef = useRef<TransformControls | null>(null);
   const lengthHandlesRef = useRef<THREE.Group | null>(null);
-  const freeMoveHandleRef = useRef<THREE.Group | null>(null);
   const contentRef = useRef<THREE.Group | null>(null);
   const groupsRef = useRef<Map<string, THREE.Group>>(new Map());
   const lastFrameSignatureRef = useRef('');
@@ -1218,8 +1017,6 @@ const ThreeAssembly: React.FC<{
     customizeTranslateGizmo(transform);
     const lengthHandles = createProfileLengthHandles();
     scene.add(lengthHandles);
-    const freeMoveHandle = createFreeMoveHandle();
-    scene.add(freeMoveHandle);
     const snapGuide = new THREE.Mesh(
       new THREE.TorusGeometry(0.18, 0.028, 10, 40),
       new THREE.MeshBasicMaterial({ color: '#0ea5e9', transparent: true, opacity: 0.95, depthTest: false }),
@@ -1252,7 +1049,6 @@ const ThreeAssembly: React.FC<{
       if (snap) {
         object.position.copy(snap.position);
         syncProfileLengthHandles(lengthHandles, object, item);
-        syncFreeMoveHandle(freeMoveHandle, object, item);
         if (lastSafeProfilePosition) lastSafeProfilePosition.copy(snap.position);
         else lastSafeProfilePosition = snap.position.clone();
         snapGuide.position.copy(snap.point);
@@ -1264,14 +1060,12 @@ const ThreeAssembly: React.FC<{
       if (profileCollides(object, item, object.position, itemsRef.current, groupsRef.current)) {
         if (lastSafeProfilePosition) object.position.copy(lastSafeProfilePosition);
         syncProfileLengthHandles(lengthHandles, object, item);
-        syncFreeMoveHandle(freeMoveHandle, object, item);
         snapGuide.visible = false;
         setSnapHint(snapLabelsRef.current.collision);
         return;
       }
       lastSafeProfilePosition = object.position.clone();
       syncProfileLengthHandles(lengthHandles, object, item);
-      syncFreeMoveHandle(freeMoveHandle, object, item);
       snapGuide.visible = false;
       setSnapHint(null);
     };
@@ -1342,6 +1136,8 @@ const ThreeAssembly: React.FC<{
       startPoint: THREE.Vector3;
       startPosition: THREE.Vector3;
       validPosition: THREE.Vector3;
+      moved: boolean;
+      axis?: THREE.Vector3;
     };
     let freeMoveState: FreeMoveState | null = null;
     let pointerStart: { x: number; y: number; button: number } | null = null;
@@ -1361,35 +1157,6 @@ const ThreeAssembly: React.FC<{
       return (current?.userData.itemId as string) || null;
     };
     const onPointerDown = (event: PointerEvent) => {
-      if (event.button === 0 && freeMoveHandle.visible) {
-        setPointerRay(event.clientX, event.clientY);
-        const moveHit = raycaster.intersectObjects(freeMoveHandle.children, true)[0];
-        const object = transform.object as THREE.Group | undefined;
-        const itemId = object?.userData.itemId as string | undefined;
-        const item = itemId ? itemsRef.current.find((entry) => entry.id === itemId) : undefined;
-        if (moveHit && object && item) {
-          const cameraDirection = camera.getWorldDirection(new THREE.Vector3()).normalize();
-          movePlane.setFromNormalAndCoplanarPoint(cameraDirection, moveHit.point);
-          const startPoint = raycaster.ray.intersectPlane(movePlane, new THREE.Vector3());
-          if (startPoint) {
-            freeMoveState = {
-              item,
-              object,
-              pointerId: event.pointerId,
-              startPoint,
-              startPosition: object.position.clone(),
-              validPosition: object.position.clone(),
-            };
-            orbit.enabled = false;
-            transform.enabled = false;
-            renderer.domElement.setPointerCapture?.(event.pointerId);
-            pointerStart = null;
-            event.preventDefault();
-            event.stopPropagation();
-            return;
-          }
-        }
-      }
       if (event.button === 0 && lengthHandles.visible) {
         setPointerRay(event.clientX, event.clientY);
         const handleHit = raycaster.intersectObjects(lengthHandles.children, true)[0];
@@ -1425,9 +1192,83 @@ const ThreeAssembly: React.FC<{
               renderer.domElement.setPointerCapture?.(event.pointerId);
               pointerStart = null;
               event.preventDefault();
-              event.stopPropagation();
+              event.stopImmediatePropagation();
               return;
             }
+          }
+        }
+      }
+      if (event.button === 0) {
+        setPointerRay(event.clientX, event.clientY);
+        const translatePicker = (transform as TransformGizmoInternals)._gizmo?.picker.translate;
+        const transformHandleHit = translatePicker
+          ? raycaster.intersectObjects(translatePicker.children, true)[0]
+          : undefined;
+        if (transformHandleHit) {
+          const axisName = transformHandleHit.object.name;
+          const axis = axisName === 'X'
+            ? new THREE.Vector3(1, 0, 0)
+            : axisName === 'Y'
+              ? new THREE.Vector3(0, 1, 0)
+              : axisName === 'Z'
+                ? new THREE.Vector3(0, 0, 1)
+                : null;
+          const selectedObject = transform.object as THREE.Group | undefined;
+          const selectedItemId = selectedObject?.userData.itemId as string | undefined;
+          const item = selectedItemId ? itemsRef.current.find((entry) => entry.id === selectedItemId) : undefined;
+          if (axis && selectedObject && item) {
+            const cameraDirection = camera.getWorldDirection(new THREE.Vector3()).normalize();
+            movePlane.setFromNormalAndCoplanarPoint(cameraDirection, transformHandleHit.point);
+            const startPoint = raycaster.ray.intersectPlane(movePlane, new THREE.Vector3());
+            if (startPoint) {
+              freeMoveState = {
+                item,
+                object: selectedObject,
+                pointerId: event.pointerId,
+                startPoint,
+                startPosition: selectedObject.position.clone(),
+                validPosition: selectedObject.position.clone(),
+                moved: false,
+                axis,
+              };
+              orbit.enabled = false;
+              transform.enabled = false;
+              renderer.domElement.setPointerCapture?.(event.pointerId);
+              pointerStart = null;
+              event.preventDefault();
+              event.stopImmediatePropagation();
+              return;
+            }
+          }
+        }
+        const selectedObject = transform.object as THREE.Group | undefined;
+        const selectedItemId = selectedObject?.userData.itemId as string | undefined;
+        const hit = raycaster.intersectObjects(content.children, true)[0];
+        let hitObject: THREE.Object3D | null = hit?.object || null;
+        while (hitObject && !hitObject.userData.itemId) hitObject = hitObject.parent;
+        const hitItemId = hitObject?.userData.itemId as string | undefined;
+        const item = selectedItemId ? itemsRef.current.find((entry) => entry.id === selectedItemId) : undefined;
+        if (hit && selectedObject && item && hitItemId === selectedItemId) {
+          const cameraDirection = camera.getWorldDirection(new THREE.Vector3()).normalize();
+          movePlane.setFromNormalAndCoplanarPoint(cameraDirection, hit.point);
+          const startPoint = raycaster.ray.intersectPlane(movePlane, new THREE.Vector3());
+          if (startPoint) {
+            freeMoveState = {
+              item,
+              object: selectedObject,
+              pointerId: event.pointerId,
+              startPoint,
+              startPosition: selectedObject.position.clone(),
+              validPosition: selectedObject.position.clone(),
+              moved: false,
+            };
+            orbit.enabled = false;
+            transform.enabled = false;
+            renderer.domElement.setPointerCapture?.(event.pointerId);
+            pointerStart = null;
+            event.preventDefault();
+            event.stopImmediatePropagation();
+            return;
           }
         }
       }
@@ -1441,7 +1282,14 @@ const ThreeAssembly: React.FC<{
         setPointerRay(event.clientX, event.clientY);
         const currentPoint = raycaster.ray.intersectPlane(movePlane, new THREE.Vector3());
         if (!currentPoint) return;
-        const nextPosition = state.startPosition.clone().add(currentPoint.sub(state.startPoint));
+        const movement = currentPoint.sub(state.startPoint);
+        if (state.axis) {
+          const axisDistance = movement.dot(state.axis);
+          movement.copy(state.axis).multiplyScalar(axisDistance);
+        }
+        if (movement.lengthSq() < 1e-7) return;
+        state.moved = true;
+        const nextPosition = state.startPosition.clone().add(movement);
         state.object.position.copy(nextPosition);
         if (state.item.kind === 'profile') {
           const snap = findMagneticProfileSnap(state.object, state.item, itemsRef.current, groupsRef.current);
@@ -1452,7 +1300,6 @@ const ThreeAssembly: React.FC<{
           } else if (profileCollides(state.object, state.item, nextPosition, itemsRef.current, groupsRef.current)) {
             state.object.position.copy(state.validPosition);
             syncProfileLengthHandles(lengthHandles, state.object, state.item);
-            syncFreeMoveHandle(freeMoveHandle, state.object, state.item);
             setSnapHint(snapLabelsRef.current.collision);
             return;
           } else {
@@ -1461,7 +1308,6 @@ const ThreeAssembly: React.FC<{
         }
         state.validPosition.copy(nextPosition);
         syncProfileLengthHandles(lengthHandles, state.object, state.item);
-        syncFreeMoveHandle(freeMoveHandle, state.object, state.item);
         event.preventDefault();
         return;
       }
@@ -1504,15 +1350,17 @@ const ThreeAssembly: React.FC<{
         if (renderer.domElement.hasPointerCapture?.(state.pointerId)) {
           renderer.domElement.releasePointerCapture?.(state.pointerId);
         }
-        onTransformRef.current(
-          state.item.id,
-          [
-            Math.round(state.validPosition.x * SCENE_SCALE),
-            Math.round(state.validPosition.y * SCENE_SCALE),
-            Math.round(state.validPosition.z * SCENE_SCALE),
-          ],
-          state.item.rotation,
-        );
+        if (state.moved) {
+          onTransformRef.current(
+            state.item.id,
+            [
+              Math.round(state.validPosition.x * SCENE_SCALE),
+              Math.round(state.validPosition.y * SCENE_SCALE),
+              Math.round(state.validPosition.z * SCENE_SCALE),
+            ],
+            state.item.rotation,
+          );
+        }
         transformWasDragging = false;
         event.preventDefault();
         event.stopPropagation();
@@ -1576,7 +1424,7 @@ const ThreeAssembly: React.FC<{
         y: THREE.MathUtils.clamp(event.clientY - rect.top, 8, Math.max(8, rect.height - 174)),
       });
     };
-    renderer.domElement.addEventListener('pointerdown', onPointerDown);
+    renderer.domElement.addEventListener('pointerdown', onPointerDown, { capture: true });
     renderer.domElement.addEventListener('pointermove', onPointerMove);
     renderer.domElement.addEventListener('pointerup', onPointerUp);
     renderer.domElement.addEventListener('pointercancel', onPointerUp);
@@ -1599,10 +1447,6 @@ const ThreeAssembly: React.FC<{
     let animationFrame = 0;
     const animate = () => {
       orbit.update();
-      if (freeMoveHandle.visible) {
-        const helperDistance = camera.position.distanceTo(freeMoveHandle.position);
-        freeMoveHandle.scale.setScalar(THREE.MathUtils.clamp(helperDistance * 0.1, 0.55, 2));
-      }
       if (lengthHandles.visible) {
         const helperDistance = camera.position.distanceTo(lengthHandles.position);
         const helperScale = THREE.MathUtils.clamp(helperDistance * 0.075, 0.34, 1.35);
@@ -1619,14 +1463,13 @@ const ThreeAssembly: React.FC<{
     orbitRef.current = orbit;
     transformRef.current = transform;
     lengthHandlesRef.current = lengthHandles;
-    freeMoveHandleRef.current = freeMoveHandle;
     contentRef.current = content;
 
     return () => {
       cancelAnimationFrame(animationFrame);
       resizeObserver?.disconnect();
       if (!resizeObserver) window.removeEventListener('resize', resize);
-      renderer.domElement.removeEventListener('pointerdown', onPointerDown);
+      renderer.domElement.removeEventListener('pointerdown', onPointerDown, { capture: true });
       renderer.domElement.removeEventListener('pointermove', onPointerMove);
       renderer.domElement.removeEventListener('pointerup', onPointerUp);
       renderer.domElement.removeEventListener('pointercancel', onPointerUp);
@@ -1639,8 +1482,6 @@ const ThreeAssembly: React.FC<{
       transform.dispose();
       disposeObject(lengthHandles);
       scene.remove(lengthHandles);
-      disposeObject(freeMoveHandle);
-      scene.remove(freeMoveHandle);
       snapGuide.geometry.dispose();
       (snapGuide.material as THREE.Material).dispose();
       orbit.dispose();
@@ -1653,7 +1494,6 @@ const ThreeAssembly: React.FC<{
       orbitRef.current = null;
       transformRef.current = null;
       lengthHandlesRef.current = null;
-      freeMoveHandleRef.current = null;
       contentRef.current = null;
       groupsRef.current.clear();
     };
@@ -1663,11 +1503,9 @@ const ThreeAssembly: React.FC<{
     const content = contentRef.current;
     const transform = transformRef.current;
     const lengthHandles = lengthHandlesRef.current;
-    const freeMoveHandle = freeMoveHandleRef.current;
-    if (!content || !transform || !lengthHandles || !freeMoveHandle) return;
+    if (!content || !transform || !lengthHandles) return;
     transform.detach();
     lengthHandles.visible = false;
-    freeMoveHandle.visible = false;
     content.children.slice().forEach((child) => {
       content.remove(child);
       disposeObject(child);
@@ -1697,7 +1535,6 @@ const ThreeAssembly: React.FC<{
     if (selected) transform.attach(selected);
     const selectedItem = selectedId ? items.find((item) => item.id === selectedId) : undefined;
     syncProfileLengthHandles(lengthHandles, selected, selectedItem);
-    syncFreeMoveHandle(freeMoveHandle, selected, selectedItem);
 
     const frameSignature = items.map((item) => [
       item.id,
