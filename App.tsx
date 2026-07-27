@@ -541,14 +541,40 @@ const Catalog: React.FC<{ language: Language }> = ({ language }) => {
   const accessoryProduct = ACCESSORY_PRODUCT;
   return (
     <div className="max-w-7xl mx-auto px-6 py-12">
-      <div className="mb-8 flex flex-wrap gap-3">
-        <Link to="/diy-designer" className="inline-flex items-center gap-2 bg-slate-950 text-white px-6 py-3 rounded-2xl font-black shadow-xl shadow-slate-900/20 hover:bg-blue-600 transition-all">
-          {language === 'cn' ? '3D DIY 设计器' : language === 'jp' ? '3D DIY デザイナー' : '3D DIY Designer'}
-          <ChevronRight className="w-4 h-4" />
+      <div className="mb-10 grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1fr)_260px]">
+        <Link to="/diy-designer" className="group relative overflow-hidden rounded-[2rem] bg-gradient-to-br from-slate-950 via-slate-900 to-blue-950 p-6 text-white shadow-2xl shadow-slate-900/20 transition-all hover:-translate-y-1 hover:shadow-blue-900/30 sm:p-8">
+          <div className="absolute -right-16 -top-20 h-64 w-64 rounded-full bg-blue-500/20 blur-3xl transition group-hover:bg-blue-400/30" />
+          <div className="relative flex flex-col gap-6 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex items-start gap-4">
+              <span className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl border border-white/15 bg-white/10 shadow-inner">
+                <Settings className="h-7 w-7 text-blue-300" />
+              </span>
+              <div>
+                <div className="text-[10px] font-black uppercase tracking-[0.28em] text-blue-300">Mengkaile 3D Workspace</div>
+                <h2 className="mt-2 text-2xl font-black tracking-tight sm:text-3xl">
+                  {language === 'cn' ? '进入 3D DIY 设计器' : language === 'jp' ? '3D DIY デザイナーを開く' : 'Open the 3D DIY Designer'}
+                </h2>
+                <p className="mt-2 max-w-2xl text-sm font-medium leading-relaxed text-slate-300">
+                  {language === 'cn'
+                    ? '拖入铝型材、洞洞板、铝板、海洋板和配件，实时调整尺寸、孔位与颜色。'
+                    : language === 'jp'
+                      ? 'プロファイル、ペグボード、アルミ板、マリンボード、金具を3Dで組み立てます。'
+                      : 'Build with profiles, pegboards, aluminum plates, marine boards and hardware in an interactive 3D workspace.'}
+                </p>
+              </div>
+            </div>
+            <span className="inline-flex shrink-0 items-center justify-center gap-2 self-start rounded-2xl bg-blue-600 px-5 py-3 text-sm font-black shadow-xl shadow-blue-600/30 transition group-hover:bg-blue-500 sm:self-center">
+              {language === 'cn' ? '开始设计' : language === 'jp' ? '設計を開始' : 'Start designing'}
+              <ChevronRight className="h-5 w-5" />
+            </span>
+          </div>
         </Link>
-        <Link to="/quick-quote" className="inline-flex items-center gap-2 bg-blue-600 text-white px-6 py-3 rounded-2xl font-black shadow-xl shadow-blue-600/20 hover:bg-blue-500 transition-all">
-          {t.quickQuote}
-          <ChevronRight className="w-4 h-4" />
+        <Link to="/quick-quote" className="flex items-center justify-between gap-3 rounded-[2rem] border border-blue-100 bg-blue-50 px-6 py-5 font-black text-blue-700 shadow-lg shadow-blue-600/5 transition-all hover:-translate-y-1 hover:bg-blue-100 lg:flex-col lg:items-start lg:justify-center">
+          <div>
+            <div className="text-[10px] uppercase tracking-widest text-blue-400">Fast pricing</div>
+            <div className="mt-1 text-xl">{t.quickQuote}</div>
+          </div>
+          <ChevronRight className="w-5 h-5" />
         </Link>
       </div>
       {/*<h2 className="text-5xl font-black text-slate-900 mb-12 tracking-tight">{t.catalog}</h2>*/}

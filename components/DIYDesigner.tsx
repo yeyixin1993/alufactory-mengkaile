@@ -483,6 +483,7 @@ const ThreeAssembly: React.FC<{
   onTransform: (id: string, position: Vec3, rotation: Vec3) => void;
 }> = ({ items, selectedId, mode, onSelect, onTransform }) => {
   const mountRef = useRef<HTMLDivElement>(null);
+  const [renderError, setRenderError] = useState<string | null>(null);
   const sceneRef = useRef<THREE.Scene | null>(null);
   const cameraRef = useRef<THREE.PerspectiveCamera | null>(null);
   const rendererRef = useRef<THREE.WebGLRenderer | null>(null);
@@ -490,6 +491,7 @@ const ThreeAssembly: React.FC<{
   const transformRef = useRef<TransformControls | null>(null);
   const contentRef = useRef<THREE.Group | null>(null);
   const groupsRef = useRef<Map<string, THREE.Group>>(new Map());
+  const lastFramedItemCountRef = useRef(0);
   const onSelectRef = useRef(onSelect);
   const onTransformRef = useRef(onTransform);
 
@@ -504,11 +506,25 @@ const ThreeAssembly: React.FC<{
     scene.fog = new THREE.Fog('#eef3f8', 28, 60);
     const camera = new THREE.PerspectiveCamera(42, 1, 0.02, 200);
     camera.position.set(14, 11, 16);
-    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
+    let renderer: THREE.WebGLRenderer;
+    try {
+      renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false, powerPreference: 'high-performance' });
+      setRenderError(null);
+    } catch (error) {
+      console.error('Unable to initialize the 3D designer', error);
+      setRenderError('3D rendering is unavailable on this device. Please enable WebGL or try a newer browser.');
+      return;
+    }
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     renderer.shadowMap.enabled = true;
     renderer.shadowMap.type = THREE.PCFShadowMap;
     renderer.outputColorSpace = THREE.SRGBColorSpace;
+    renderer.domElement.style.position = 'absolute';
+    renderer.domElement.style.inset = '0';
+    renderer.domElement.style.display = 'block';
+    renderer.domElement.style.width = '100%';
+    renderer.domElement.style.height = '100%';
+    renderer.domElement.style.touchAction = 'none';
     mount.appendChild(renderer.domElement);
 
     const orbit = new OrbitControls(camera, renderer.domElement);
@@ -578,14 +594,17 @@ const ThreeAssembly: React.FC<{
     renderer.domElement.addEventListener('pointerdown', onPointerDown);
 
     const resize = () => {
-      const width = Math.max(320, mount.clientWidth);
-      const height = Math.max(420, mount.clientHeight);
+      const rect = mount.getBoundingClientRect();
+      const width = Math.max(1, Math.round(rect.width));
+      const height = Math.max(1, Math.round(rect.height));
+      if (width < 2 || height < 2) return;
       camera.aspect = width / height;
       camera.updateProjectionMatrix();
       renderer.setSize(width, height, false);
     };
-    const resizeObserver = new ResizeObserver(resize);
-    resizeObserver.observe(mount);
+    const resizeObserver = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(resize) : null;
+    resizeObserver?.observe(mount);
+    if (!resizeObserver) window.addEventListener('resize', resize);
     resize();
 
     let animationFrame = 0;
@@ -605,7 +624,8 @@ const ThreeAssembly: React.FC<{
 
     return () => {
       cancelAnimationFrame(animationFrame);
-      resizeObserver.disconnect();
+      resizeObserver?.disconnect();
+      if (!resizeObserver) window.removeEventListener('resize', resize);
       renderer.domElement.removeEventListener('pointerdown', onPointerDown);
       transform.detach();
       transform.dispose();
@@ -656,9 +676,41 @@ const ThreeAssembly: React.FC<{
     groupsRef.current = groups;
     const selected = selectedId ? groups.get(selectedId) : undefined;
     if (selected) transform.attach(selected);
+
+    if (items.length > 0 && items.length !== lastFramedItemCountRef.current) {
+      const camera = cameraRef.current;
+      const orbit = orbitRef.current;
+      if (camera && orbit) {
+        const bounds = new THREE.Box3().setFromObject(content);
+        const sphere = bounds.getBoundingSphere(new THREE.Sphere());
+        if (Number.isFinite(sphere.radius) && sphere.radius > 0) {
+          const direction = camera.position.clone().sub(orbit.target);
+          if (direction.lengthSq() < 0.001) direction.set(1, 0.75, 1);
+          direction.normalize();
+          const halfFov = THREE.MathUtils.degToRad(camera.fov * 0.5);
+          const distance = Math.max(4, (sphere.radius / Math.sin(halfFov)) * 1.25);
+          orbit.target.copy(sphere.center);
+          camera.position.copy(sphere.center).add(direction.multiplyScalar(distance));
+          camera.near = Math.max(0.02, distance / 100);
+          camera.far = Math.max(200, distance * 20);
+          camera.updateProjectionMatrix();
+          orbit.update();
+        }
+      }
+    }
+    lastFramedItemCountRef.current = items.length;
   }, [items, selectedId]);
 
-  return <div ref={mountRef} className="w-full h-full min-h-[560px]" data-testid="diy-3d-canvas" />;
+  return (
+    <div className="relative h-[52vh] min-h-[380px] max-h-[620px] w-full sm:h-[62vh] xl:h-[calc(100vh-220px)] xl:min-h-[590px] xl:max-h-none">
+      <div ref={mountRef} className="absolute inset-0 overflow-hidden" data-testid="diy-3d-canvas" />
+      {renderError && (
+        <div className="absolute inset-0 z-20 flex items-center justify-center bg-slate-100 p-8 text-center">
+          <div className="max-w-sm rounded-2xl border border-red-200 bg-white p-6 text-sm font-bold text-red-700 shadow-xl">{renderError}</div>
+        </div>
+      )}
+    </div>
+  );
 };
 
 const getItemLabel = (item: DIYSceneItem, language: Language) => {
@@ -953,7 +1005,7 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({ language, user, onAddBatchToC
       </div>
 
       <div className="mx-auto grid max-w-[1800px] grid-cols-1 gap-3 p-3 xl:grid-cols-[260px_minmax(0,1fr)_330px]">
-        <aside className="order-2 rounded-3xl border border-slate-200 bg-white p-4 shadow-sm xl:order-1">
+        <aside className="order-1 rounded-3xl border border-slate-200 bg-white p-4 shadow-sm">
           <div className="flex items-center justify-between">
             <h2 className="text-sm font-black uppercase tracking-widest text-slate-500">{t.library}</h2>
             <Hammer className="h-5 w-5 text-blue-600" />
@@ -999,7 +1051,7 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({ language, user, onAddBatchToC
         </aside>
 
         <main
-          className="order-1 relative min-h-[590px] overflow-hidden rounded-3xl border border-slate-200 bg-[#eef3f8] shadow-sm xl:order-2"
+          className="order-2 relative overflow-hidden rounded-3xl border border-slate-200 bg-[#eef3f8] shadow-sm"
           onDragOver={(event) => event.preventDefault()}
           onDrop={(event) => {
             event.preventDefault();
