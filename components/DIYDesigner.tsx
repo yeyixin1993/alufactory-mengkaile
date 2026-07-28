@@ -152,9 +152,15 @@ const TEXT: Record<Language, Record<string, string>> = {
     groove: '槽位',
     holeType: '孔类型',
     addHole: '添加孔',
+    confirmHole: '确认打孔',
     tapping: '端面攻丝',
     left: '左端',
     right: '右端',
+    noTapping: '不攻丝',
+    leftEndTapping: '仅左端攻丝',
+    rightEndTapping: '仅右端攻丝',
+    bothEndTapping: '两端都攻丝',
+    tapPortsPerEnd: '每端攻丝孔位',
     oxidized: '氧化银白',
     electrophoretic: '电泳',
     powder: '喷粉',
@@ -233,9 +239,15 @@ const TEXT: Record<Language, Record<string, string>> = {
     groove: 'Groove',
     holeType: 'Hole type',
     addHole: 'Add hole',
+    confirmHole: 'Confirm hole',
     tapping: 'End tapping',
     left: 'Left end',
     right: 'Right end',
+    noTapping: 'No tapping',
+    leftEndTapping: 'Left end only',
+    rightEndTapping: 'Right end only',
+    bothEndTapping: 'Both ends',
+    tapPortsPerEnd: 'Tap ports per end',
     oxidized: 'Silver anodized',
     electrophoretic: 'Electrophoretic',
     powder: 'Powder coat',
@@ -314,9 +326,15 @@ const TEXT: Record<Language, Record<string, string>> = {
     groove: '溝',
     holeType: '穴タイプ',
     addHole: '穴を追加',
+    confirmHole: '穴位置を確定',
     tapping: '端面タップ',
     left: '左端',
     right: '右端',
+    noTapping: 'タップなし',
+    leftEndTapping: '左端のみ',
+    rightEndTapping: '右端のみ',
+    bothEndTapping: '両端',
+    tapPortsPerEnd: '片端のタップ穴数',
     oxidized: 'シルバーアルマイト',
     electrophoretic: '電着塗装',
     powder: '粉体塗装',
@@ -385,6 +403,8 @@ const buildProductionData = (items: DIYSceneItem[], language: Language) => {
     quantity: item.quantity,
     positionMm: item.position,
     rotationDeg: item.rotation,
+    leftTappingPorts: item.kind === 'profile' && item.tappingLeft ? getProfileTapPortCount(item.variantId) : 0,
+    rightTappingPorts: item.kind === 'profile' && item.tappingRight ? getProfileTapPortCount(item.variantId) : 0,
     remark: item.remark || '',
   }));
   const holes = normalizedItems.flatMap((item, index) => {
@@ -458,6 +478,12 @@ const profileSize = (variantId = '2020'): [number, number] => {
   const first = variantId.match(/^(\d{2})(\d{2,3})/);
   if (!first) return [20, 20];
   return [Number(first[1]), Number(first[2])];
+};
+
+const getProfileTapPortCount = (variantId = '2020') => {
+  const [width, height] = profileSize(variantId);
+  const moduleSize = Math.max(1, Math.min(width, height));
+  return Math.max(1, Math.round(width / moduleSize) * Math.round(height / moduleSize));
 };
 
 const createItem = (kind: DIYItemKind, index = 0, variantId?: string): DIYSceneItem => {
@@ -1046,6 +1072,62 @@ const createProfileObject = (item: DIYSceneItem, selected: boolean) => {
     addHoleMarker(hole.side, true);
     addHoleMarker(OPPOSITE_PROFILE_SIDE[hole.side], false);
   });
+
+  const addTappingMarkers = (end: 'left' | 'right') => {
+    const endX = end === 'left' ? -length / 2 - 0.018 : length / 2 + 0.018;
+    const normalRotation = end === 'left' ? -Math.PI / 2 : Math.PI / 2;
+    xCenters.forEach((sectionX) => yCenters.forEach((sectionY) => {
+      const marker = new THREE.Group();
+      const centerRadius = Math.min(cellSize * 0.095, 0.023);
+      const outerRadius = Math.min(cellSize * 0.23, 0.052);
+      const opening = new THREE.Mesh(
+        new THREE.CircleGeometry(centerRadius, 28),
+        new THREE.MeshBasicMaterial({
+          color: '#111827',
+          side: THREE.DoubleSide,
+          depthTest: false,
+          depthWrite: false,
+        }),
+      );
+      const threadRing = new THREE.Mesh(
+        new THREE.RingGeometry(centerRadius, outerRadius, 32),
+        new THREE.MeshBasicMaterial({
+          color: '#f59e0b',
+          side: THREE.DoubleSide,
+          depthTest: false,
+          depthWrite: false,
+        }),
+      );
+      const innerThread = new THREE.Mesh(
+        new THREE.RingGeometry(centerRadius * 0.56, centerRadius * 0.76, 28),
+        new THREE.MeshBasicMaterial({
+          color: '#fde68a',
+          side: THREE.DoubleSide,
+          depthTest: false,
+          depthWrite: false,
+        }),
+      );
+      const threadHighlight = new THREE.Mesh(
+        new THREE.TorusGeometry(outerRadius, Math.max(0.005, cellSize * 0.028), 10, 36),
+        new THREE.MeshBasicMaterial({
+          color: '#fbbf24',
+          depthTest: false,
+          depthWrite: false,
+        }),
+      );
+      marker.add(opening, threadRing, innerThread, threadHighlight);
+      marker.position.set(endX, sectionY, -sectionX);
+      marker.rotation.y = normalRotation;
+      marker.traverse((child) => {
+        child.userData.tappingDecoration = true;
+        child.renderOrder = 120;
+      });
+      group.add(marker);
+    }));
+  };
+
+  if (item.tappingLeft) addTappingMarkers('left');
+  if (item.tappingRight) addTappingMarkers('right');
   if (selected) addSelectionOutline(group);
   addSelectionHitbox(group, new THREE.BoxGeometry(length + 0.012, height + 0.018, width + 0.018));
   return group;
@@ -1229,7 +1311,7 @@ const ThreeAssembly: React.FC<{
   deleteLabel: string;
   frameAllLabel: string;
   drillMode: boolean;
-  drillDistanceLabels: { left: string; right: string };
+  drillEditorLabels: { position: string; left: string; right: string; confirm: string; cancel: string };
   operationLabels: { length: string; move: string; apply: string };
   onSelect: (id: string | null, additive?: boolean) => void;
   onSelectionChange: (ids: string[]) => void;
@@ -1247,7 +1329,7 @@ const ThreeAssembly: React.FC<{
   deleteLabel,
   frameAllLabel,
   drillMode,
-  drillDistanceLabels,
+  drillEditorLabels,
   operationLabels,
   onSelect,
   onSelectionChange,
@@ -1261,7 +1343,16 @@ const ThreeAssembly: React.FC<{
   const [renderError, setRenderError] = useState<string | null>(null);
   const [contextMenu, setContextMenu] = useState<{ id: string; x: number; y: number } | null>(null);
   const [snapHint, setSnapHint] = useState<string | null>(null);
-  const [drillMeasurement, setDrillMeasurement] = useState<{ left: number; right: number; x: number; y: number } | null>(null);
+  const [holeDraft, setHoleDraft] = useState<{
+    itemId: string;
+    side: ProfileSide;
+    displayGrooveIndex: number;
+    physicalGrooveIndex: number;
+    valueMm: number;
+    lengthMm: number;
+    x: number;
+    y: number;
+  } | null>(null);
   const [selectionRect, setSelectionRect] = useState<{ left: number; top: number; width: number; height: number } | null>(null);
   const [operationEditor, setOperationEditor] = useState<{
     kind: 'length' | 'move';
@@ -1295,7 +1386,7 @@ const ThreeAssembly: React.FC<{
   const onPlaceHoleRef = useRef(onPlaceHole);
   const drillModeRef = useRef(drillMode);
   const snapLabelsRef = useRef(snapLabels);
-  const drillDistanceLabelsRef = useRef(drillDistanceLabels);
+  const drillEditorLabelsRef = useRef(drillEditorLabels);
 
   const frameAll = () => {
     const content = contentRef.current;
@@ -1340,10 +1431,28 @@ const ThreeAssembly: React.FC<{
   useEffect(() => { onPlaceHoleRef.current = onPlaceHole; }, [onPlaceHole]);
   useEffect(() => {
     drillModeRef.current = drillMode;
-    if (!drillMode) setDrillMeasurement(null);
+    if (!drillMode) setHoleDraft(null);
   }, [drillMode]);
   useEffect(() => { snapLabelsRef.current = snapLabels; }, [snapLabels]);
-  useEffect(() => { drillDistanceLabelsRef.current = drillDistanceLabels; }, [drillDistanceLabels]);
+  useEffect(() => { drillEditorLabelsRef.current = drillEditorLabels; }, [drillEditorLabels]);
+
+  const applyHoleDraft = () => {
+    if (!holeDraft) return;
+    const positionMm = THREE.MathUtils.clamp(
+      Math.round(holeDraft.valueMm),
+      5,
+      Math.max(5, holeDraft.lengthMm - 5),
+    );
+    onSelectRef.current(holeDraft.itemId);
+    onPlaceHoleRef.current(
+      holeDraft.itemId,
+      holeDraft.side,
+      positionMm,
+      holeDraft.displayGrooveIndex,
+      holeDraft.physicalGrooveIndex,
+    );
+    setHoleDraft(null);
+  };
 
   const applyOperationEditor = () => {
     if (!operationEditor) return;
@@ -1466,7 +1575,7 @@ const ThreeAssembly: React.FC<{
       };
     };
     const formatSnapHint = (snap: ProfileSnap) => {
-      const distanceLabels = drillDistanceLabelsRef.current;
+      const distanceLabels = drillEditorLabelsRef.current;
       return `${snapLabelsRef.current[snap.label]} · ${distanceLabels.left} ${snap.targetEndDistances.left}mm · ${distanceLabels.right} ${snap.targetEndDistances.right}mm`;
     };
     const onObjectChange = () => {
@@ -1598,8 +1707,12 @@ const ThreeAssembly: React.FC<{
     const getContentHit = (clientX: number, clientY: number) => {
       setPointerRay(clientX, clientY);
       const hits = raycaster.intersectObjects(content.children, true);
-      return hits.find((hit) => !hit.object.userData.selectionProxy && !hit.object.userData.selectionDecoration)
-        || hits.find((hit) => !hit.object.userData.selectionDecoration)
+      return hits.find((hit) => (
+        !hit.object.userData.selectionProxy
+        && !hit.object.userData.selectionDecoration
+        && !hit.object.userData.tappingDecoration
+      ))
+        || hits.find((hit) => !hit.object.userData.selectionDecoration && !hit.object.userData.tappingDecoration)
         || null;
     };
     const getHitItemId = (clientX: number, clientY: number) => {
@@ -1987,14 +2100,17 @@ const ThreeAssembly: React.FC<{
               5,
               Math.max(5, (item.length || 1000) - 5),
             );
-            onSelectRef.current(item.id);
-            onPlaceHoleRef.current(item.id, side, positionMm, displayGrooveIndex, physicalGrooveIndex);
             const rect = renderer.domElement.getBoundingClientRect();
-            setDrillMeasurement({
-              left: positionMm,
-              right: Math.max(0, (item.length || 1000) - positionMm),
-              x: THREE.MathUtils.clamp(event.clientX - rect.left, 92, Math.max(92, rect.width - 92)),
-              y: THREE.MathUtils.clamp(event.clientY - rect.top - 54, 54, Math.max(54, rect.height - 54)),
+            onSelectRef.current(item.id);
+            setHoleDraft({
+              itemId: item.id,
+              side,
+              displayGrooveIndex,
+              physicalGrooveIndex,
+              valueMm: positionMm,
+              lengthMm: item.length || 1000,
+              x: THREE.MathUtils.clamp(event.clientX - rect.left, 150, Math.max(150, rect.width - 150)),
+              y: THREE.MathUtils.clamp(event.clientY - rect.top - 76, 58, Math.max(58, rect.height - 126)),
             });
           }
         }
@@ -2163,14 +2279,62 @@ const ThreeAssembly: React.FC<{
   return (
     <div className="relative h-[52vh] min-h-[380px] max-h-[620px] w-full sm:h-[62vh] xl:h-[calc(100vh-220px)] xl:min-h-[590px] xl:max-h-none">
       <div ref={mountRef} className="absolute inset-0 overflow-hidden" data-testid="diy-3d-canvas" />
-      {drillMeasurement && (
+      {holeDraft && (
         <div
-          className="pointer-events-none absolute z-30 -translate-x-1/2 rounded-xl border border-blue-200 bg-white/95 px-3 py-2 text-[10px] font-black text-slate-700 shadow-xl backdrop-blur"
-          style={{ left: drillMeasurement.x, top: drillMeasurement.y }}
+          className="absolute z-40 w-[280px] -translate-x-1/2 rounded-2xl border border-blue-200 bg-white/95 p-3 shadow-2xl backdrop-blur"
+          style={{ left: holeDraft.x, top: holeDraft.y }}
+          onPointerDown={(event) => event.stopPropagation()}
+          data-testid="diy-hole-position-editor"
         >
-          {drillDistanceLabels.left} {drillMeasurement.left}mm
-          <span className="mx-2 text-blue-500">·</span>
-          {drillDistanceLabels.right} {drillMeasurement.right}mm
+          <div className="mb-2 flex items-center justify-between gap-3">
+            <span className="text-[9px] font-black uppercase tracking-widest text-slate-400">
+              {drillEditorLabels.position}
+            </span>
+            <span className="rounded-full bg-blue-50 px-2 py-1 text-[9px] font-black text-blue-700">
+              {holeDraft.side} · P{holeDraft.physicalGrooveIndex + 1}
+            </span>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <input
+              type="number"
+              min={5}
+              max={Math.max(5, holeDraft.lengthMm - 5)}
+              value={holeDraft.valueMm}
+              autoFocus
+              aria-label={drillEditorLabels.position}
+              onChange={(event) => setHoleDraft((current) => current ? {
+                ...current,
+                valueMm: Number(event.target.value) || 0,
+              } : current)}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter') applyHoleDraft();
+                if (event.key === 'Escape') setHoleDraft(null);
+              }}
+              className="min-w-0 flex-1 rounded-xl border border-blue-200 bg-blue-50 px-3 py-2 text-right text-sm font-black text-slate-900 outline-none focus:border-blue-500"
+            />
+            <span className="text-[10px] font-black text-slate-400">mm</span>
+          </div>
+          <div className="mt-2 flex items-center justify-between rounded-xl bg-slate-50 px-3 py-2 text-[10px] font-black text-slate-600">
+            <span>{drillEditorLabels.left} {THREE.MathUtils.clamp(Math.round(holeDraft.valueMm), 5, Math.max(5, holeDraft.lengthMm - 5))}mm</span>
+            <span className="text-blue-400">↔</span>
+            <span>{drillEditorLabels.right} {Math.max(0, holeDraft.lengthMm - THREE.MathUtils.clamp(Math.round(holeDraft.valueMm), 5, Math.max(5, holeDraft.lengthMm - 5)))}mm</span>
+          </div>
+          <div className="mt-2 grid grid-cols-2 gap-2">
+            <button
+              type="button"
+              onClick={() => setHoleDraft(null)}
+              className="rounded-xl border border-slate-200 px-3 py-2 text-[10px] font-black text-slate-600 hover:bg-slate-50"
+            >
+              {drillEditorLabels.cancel}
+            </button>
+            <button
+              type="button"
+              onClick={applyHoleDraft}
+              className="rounded-xl bg-blue-600 px-3 py-2 text-[10px] font-black text-white hover:bg-blue-500"
+            >
+              {drillEditorLabels.confirm}
+            </button>
+          </div>
         </div>
       )}
       {operationEditor && (
@@ -2294,7 +2458,8 @@ const calculatePrice = (item: DIYSceneItem, user?: User | null) => {
     const discount = membership === 'vip_plus' ? 4 : membership === 'vip' ? 2 : 0;
     const material = ((item.length || 1000) / 1000) * Math.max(0, variant.price[profileFinishForColor(item.colorId)] - discount);
     const holes = (item.holes || []).reduce((sum, hole) => sum + (hole.type === 'through' ? 1 : 1.8), 0);
-    const tapping = (item.tappingLeft ? 1.5 : 0) + (item.tappingRight ? 1.5 : 0);
+    const tapPortCount = getProfileTapPortCount(item.variantId);
+    const tapping = (item.tappingLeft ? tapPortCount * 1.5 : 0) + (item.tappingRight ? tapPortCount * 1.5 : 0);
     const danger = (item.length || 0) > 20 && (item.length || 0) <= 100 ? 5 : 0;
     return Number(((material + holes + tapping + danger) * quantity).toFixed(1));
   }
@@ -2348,6 +2513,16 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({ language, user, onAddBatchToC
   const importRef = useRef<HTMLInputElement>(null);
 
   const selected = items.find((item) => item.id === selectedId) || null;
+  const selectedTapPortCount = selected?.kind === 'profile' ? getProfileTapPortCount(selected.variantId) : 0;
+  const selectedTappingMode = selected?.kind === 'profile'
+    ? selected.tappingLeft && selected.tappingRight
+      ? 'both'
+      : selected.tappingLeft
+        ? 'left'
+        : selected.tappingRight
+          ? 'right'
+          : 'none'
+    : 'none';
   const setSelectedId = (id: string | null) => {
     setSelectedIdState(id);
     setSelectedIds(id ? [id] : []);
@@ -2580,13 +2755,17 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({ language, user, onAddBatchToC
     return items.map((item) => {
       const totalPrice = calculatePrice(item, user);
       if (item.kind === 'profile') {
+        const tapPortCount = getProfileTapPortCount(item.variantId);
         const config = {
           length: item.length || 1000,
           variantId: item.variantId || '2020',
           finish: profileFinishForColor(item.colorId),
           colorId: item.colorId,
           holes: item.holes || [],
-          tapping: { left: [!!item.tappingLeft], right: [!!item.tappingRight] },
+          tapping: {
+            left: Array(tapPortCount).fill(!!item.tappingLeft),
+            right: Array(tapPortCount).fill(!!item.tappingRight),
+          },
           unitPrice: Number((totalPrice / Math.max(1, item.quantity)).toFixed(1)),
           remark: [item.remark?.trim(), `3D DIY position ${item.position.join(',')}mm; rotation ${item.rotation.join(',')}deg`].filter(Boolean).join('；'),
         };
@@ -2731,7 +2910,7 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({ language, user, onAddBatchToC
             <button onClick={undo} disabled={!history.length} className="diy-toolbar-button" aria-label="Undo"><Undo2 className="h-4 w-4" /></button>
             <button onClick={redo} disabled={!future.length} className="diy-toolbar-button" aria-label="Redo"><Redo2 className="h-4 w-4" /></button>
             <button onClick={() => setDrillMode(false)} className={`diy-toolbar-button gap-2 ${!drillMode ? 'diy-toolbar-active' : ''}`}><Move3D className="h-4 w-4" />{t.move}</button>
-            <button onClick={openDrillSetup} className={`diy-toolbar-button gap-2 ${drillMode ? 'diy-toolbar-active' : ''}`}><CircleDot className="h-4 w-4" />{t.drillMode}</button>
+            <button data-testid="diy-toolbar-drill" onClick={openDrillSetup} className={`diy-toolbar-button gap-2 ${drillMode ? 'diy-toolbar-active' : ''}`}><CircleDot className="h-4 w-4" />{t.drillMode}</button>
             <button onClick={save} className="diy-toolbar-button gap-2"><Save className="h-4 w-4" />{t.save}</button>
             <button onClick={load} className="diy-toolbar-button gap-2"><Upload className="h-4 w-4" />{t.load}</button>
             <button onClick={exportJson} className="diy-toolbar-button gap-2"><Download className="h-4 w-4" />{t.export}</button>
@@ -2796,7 +2975,13 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({ language, user, onAddBatchToC
             deleteLabel={t.delete}
             frameAllLabel={t.frameAll}
             drillMode={drillMode}
-            drillDistanceLabels={{ left: t.left, right: t.right }}
+            drillEditorLabels={{
+              position: t.holePosition,
+              left: t.left,
+              right: t.right,
+              confirm: t.confirmHole,
+              cancel: t.cancel,
+            }}
             operationLabels={{ length: t.currentLength, move: t.moveDistance, apply: t.apply }}
             onSelect={selectItem}
             onSelectionChange={setSelection}
@@ -3043,8 +3228,8 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({ language, user, onAddBatchToC
                         holes: selected.holes || [],
                         colorId: selected.colorId,
                         tapping: {
-                          left: Array(5).fill(!!selected.tappingLeft),
-                          right: Array(5).fill(!!selected.tappingRight),
+                          left: Array(selectedTapPortCount).fill(!!selected.tappingLeft),
+                          right: Array(selectedTapPortCount).fill(!!selected.tappingRight),
                         },
                       }}
                       selectedSide={previewSide}
@@ -3088,10 +3273,36 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({ language, user, onAddBatchToC
                     ))}
                   </div>
                   <div className="mt-4 border-t border-blue-100 pt-3">
-                    <div className="diy-field-label">{t.tapping}</div>
-                    <div className="flex gap-4 text-xs font-bold text-slate-600">
-                      <label className="flex items-center gap-2"><input type="checkbox" checked={!!selected.tappingLeft} onChange={(event) => updateSelected({ tappingLeft: event.target.checked })} />{t.left}</label>
-                      <label className="flex items-center gap-2"><input type="checkbox" checked={!!selected.tappingRight} onChange={(event) => updateSelected({ tappingRight: event.target.checked })} />{t.right}</label>
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="diy-field-label">{t.tapping}</div>
+                      <div className="mb-1.5 rounded-full bg-amber-100 px-2 py-1 text-[9px] font-black text-amber-800">
+                        {t.tapPortsPerEnd} · {selectedTapPortCount}
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-2 gap-2">
+                      {([
+                        { mode: 'none', label: t.noTapping, left: false, right: false },
+                        { mode: 'left', label: t.leftEndTapping, left: true, right: false },
+                        { mode: 'right', label: t.rightEndTapping, left: false, right: true },
+                        { mode: 'both', label: t.bothEndTapping, left: true, right: true },
+                      ] as const).map((option) => (
+                        <button
+                          key={option.mode}
+                          type="button"
+                          data-testid={`diy-tapping-${option.mode}`}
+                          onClick={() => updateSelected({
+                            tappingLeft: option.left,
+                            tappingRight: option.right,
+                          })}
+                          className={`rounded-xl border px-2 py-2.5 text-[10px] font-black transition ${
+                            selectedTappingMode === option.mode
+                              ? 'border-amber-500 bg-amber-500 text-white shadow-md shadow-amber-500/20'
+                              : 'border-slate-200 bg-white text-slate-600 hover:border-amber-300 hover:bg-amber-50'
+                          }`}
+                        >
+                          {option.label}
+                        </button>
+                      ))}
                     </div>
                   </div>
                 </div>

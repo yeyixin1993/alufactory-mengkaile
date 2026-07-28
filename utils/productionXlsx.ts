@@ -14,6 +14,8 @@ export interface ProductionWorkbookData {
     quantity: number;
     positionMm: number[];
     rotationDeg: number[];
+    leftTappingPorts: number;
+    rightTappingPorts: number;
     remark: string;
   }>;
   holes: Array<{
@@ -227,7 +229,8 @@ export const buildProductionXlsx = (production: ProductionWorkbookData) => {
   ];
   const partRows = production.parts.map((part) => [
     part.line, part.id, part.type, part.model, part.lengthMm ?? '', part.widthMm ?? '', part.heightMm ?? '',
-    part.thicknessMm ?? '', part.color, part.quantity, part.positionMm.join(', '), part.rotationDeg.join(', '), part.remark,
+    part.thicknessMm ?? '', part.color, part.quantity, part.positionMm.join(', '), part.rotationDeg.join(', '),
+    part.leftTappingPorts, part.rightTappingPorts, part.remark,
   ]);
   const holeRows = production.holes.map((hole) => [
     hole.partLine, hole.model, hole.holeLine, hole.entryFace, hole.entryGroove, hole.exitFace, hole.exitGroove,
@@ -244,9 +247,9 @@ export const buildProductionXlsx = (production: ProductionWorkbookData) => {
     {
       name: '零件明细',
       title: '萌开了 3D DIY 零件明细',
-      headers: ['序号', '零件ID', '类型', '型号', '长度mm', '宽度mm', '高度mm', '厚度mm', '颜色', '数量', '位置XYZ(mm)', '旋转XYZ(°)', '备注'],
+      headers: ['序号', '零件ID', '类型', '型号', '长度mm', '宽度mm', '高度mm', '厚度mm', '颜色', '数量', '位置XYZ(mm)', '旋转XYZ(°)', '左端攻丝孔数', '右端攻丝孔数', '备注'],
       rows: partRows,
-      widths: [8, 25, 14, 14, 12, 12, 12, 12, 15, 9, 20, 20, 38],
+      widths: [8, 25, 14, 14, 12, 12, 12, 12, 15, 9, 20, 20, 15, 15, 38],
     },
     {
       name: '打孔明细',
