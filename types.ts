@@ -57,6 +57,9 @@ export interface DrillHole {
   positionMm: number;
   type: HoleType;
   threadSize?: ThreadSize;
+  // Canonical slot on the physical extrusion. C/D face drawings mirror this index.
+  physicalGrooveIndex?: number;
+  // Entry-face display index retained for older saved orders and human-readable exports.
   grooveIndex?: number;
 }
 

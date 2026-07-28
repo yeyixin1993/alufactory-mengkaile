@@ -5,6 +5,7 @@ import { useNavigate } from 'react-router-dom';
 import { DrillHole, ProfileConfig, ProfileSide, TappingConfig, Language, HoleType, ProfileFinish, CartItem, Product, MiterCutConfig, MiterCutDirection, MiterCutSide, User, ThreadSize } from '../types';
 import { TRANSLATIONS, PROFILE_VARIANTS, PROFILE_COLORS, COLOR_ONLY_COLORED_SECTION_IDS } from '../constants';
 import { normalizeMembershipLevel } from '../utils/membership';
+import { displayGrooveToPhysical, getProfileGrooveCount } from '../utils/profileMachining';
 import { Plus, Trash2, List, ShoppingCart, Pencil, X, Hammer, Settings2, Copy } from 'lucide-react';
 import ProfileVisualizer from './ProfileVisualizer';
 
@@ -133,6 +134,11 @@ const ProfileEditor: React.FC<ProfileEditorProps> = ({ language, product, user, 
           type: newHoleType,
           threadSize: newHoleType === 'threaded' ? threadSize : undefined,
           grooveIndex: selectedGrooveIndex,
+          physicalGrooveIndex: displayGrooveToPhysical(
+            selectedSide,
+            selectedGrooveIndex,
+            Math.max(1, getProfileGrooveCount(selectedVariant.id, selectedSide)),
+          ),
         }
       ]);
       setNewHolePos('');
@@ -160,6 +166,11 @@ const ProfileEditor: React.FC<ProfileEditorProps> = ({ language, product, user, 
       type: newHoleType,
       threadSize: newHoleType === 'threaded' ? threadSize : undefined,
       grooveIndex: selectedGrooveIndex,
+      physicalGrooveIndex: displayGrooveToPhysical(
+        selectedSide,
+        selectedGrooveIndex,
+        Math.max(1, getProfileGrooveCount(selectedVariant.id, selectedSide)),
+      ),
     }));
 
     setHoles((prev) => [...prev, ...newItems]);
@@ -265,38 +276,7 @@ const ProfileEditor: React.FC<ProfileEditorProps> = ({ language, product, user, 
   };
 
   const currentUnitPrice = calculateItemUnitPrice(length, holes, tapping, miterCut);
-  const getEditorGrooveCount = (vId: string, side: ProfileSide): number => {
-    // 2020 N4 (square/round) - all 4 sides sealed
-    if ((vId === '2020-N4-SQ' || vId === '2020-N4-RD') ) return 0;
-    // 2020 N2 对边 - AC sealed, BD has groove
-    if (vId === '2020-N2-OPP' && (side === 'A' || side === 'C')) return 0;
-    if (vId === '2020-N2-OPP' && (side === 'B' || side === 'D')) return 1;
-    // 1515 N1 - A side sealed
-    if (vId === '1515-N1' && side === 'A') return 0;
-    // 1515 N2 - A and B sides sealed
-    if (vId === '1515-N2' && (side === 'A' || side === 'B')) return 0;
-    // 2047 - A side sealed (like 2040-N1-20), B/D have 2 grooves
-    if (vId === '2047' && side === 'A') return 0;
-    if (vId === '2047' && (side === 'B' || side === 'D')) return 2;
-    // 2040-N1-20: A side sealed
-    if (vId === '2040-N1-20' && side === 'A') return 0;
-    // 2040-N1-40 / 3060-N1-60: A has 1 groove, D sealed but uses 2-groove positions for drilling
-    if ((vId === '2040-N1-40' || vId === '3060-N1-60') && side === 'A') return 1;
-    if ((vId === '2040-N1-40' || vId === '3060-N1-60') && side === 'D') return 2;
-    // 2060: B/D have 3 grooves
-    if (vId === '2060' && (side === 'B' || side === 'D')) return 3;
-    // 20100: B/D have 5 grooves
-    if (vId === '20100' && (side === 'B' || side === 'D')) return 5;
-    // Standard rectangular profiles (2040, 3060, 2040 variants): B/D have 2 grooves
-    if (['2040', '3060', '2040-N1-20', '2040-N1-40', '3060-N1-60', '4080'].includes(vId) && (side === 'B' || side === 'D')) return 2;
-    // N1/N2/N3 rules
-    const name = (PROFILE_VARIANTS.find(v => v.id === vId)?.name || '').toLowerCase();
-    if (name.includes('n1') && side === 'A') return 0;
-    if (name.includes('n2') && (side === 'A' || side === 'B')) return 0;
-    if (name.includes('n3') && (side !== 'D')) return 0;
-    return 1;
-  };
-  const grooveCount = getEditorGrooveCount(selectedVariant.id, selectedSide);
+  const grooveCount = getProfileGrooveCount(selectedVariant.id, selectedSide);
 
   return (
     <div className="space-y-8">

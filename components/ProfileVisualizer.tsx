@@ -1,6 +1,11 @@
 import React from 'react';
 import { DrillHole, ProfileConfig, ProfileSide, TappingConfig, MiterCutConfig } from '../types';
 import { PROFILE_VARIANTS } from '../constants';
+import {
+  getHoleDisplayGrooveIndex,
+  getProfileGrooveCount,
+  OPPOSITE_PROFILE_SIDE,
+} from '../utils/profileMachining';
 
 interface ProfileVisualizerProps {
   config: ProfileConfig;
@@ -129,52 +134,7 @@ const ProfileVisualizer: React.FC<ProfileVisualizerProps> = ({
   // Even wider faces for 2060 and 20100
   const isExtraWideFace = ['2060', '20100'].includes(selectedVariant.id) && (selectedSide === 'B' || selectedSide === 'D');
 
-  const getGrooveCount = (side: ProfileSide): number => {
-    const id = selectedVariant.id;
-    const name = selectedVariant.name.toLowerCase();
-
-    // 2020 N4 (square/round) - all 4 sides sealed, no grooves
-    if ((id === '2020-N4-SQ' || id === '2020-N4-RD')) return 0;
-
-    // 2020 N2 对边 - AC sealed, BD has groove
-    if (id === '2020-N2-OPP' && (side === 'A' || side === 'C')) return 0;
-    if (id === '2020-N2-OPP' && (side === 'B' || side === 'D')) return 1;
-
-    // 1515 N1 - A side sealed (like 2020 N1)
-    if (id === '1515-N1' && side === 'A') return 0;
-
-    // 1515 N2 - A and B sides sealed (like 2020 N2)
-    if (id === '1515-N2' && (side === 'A' || side === 'B')) return 0;
-
-    // 2047 - A side sealed (like 2040-N1-20), B/D have 2 grooves
-    if (id === '2047' && side === 'A') return 0;
-    if (id === '2047' && (side === 'B' || side === 'D')) return 2;
-
-    // Specific exceptions for 2040 N1 variants
-    if (id === '2040-N1-20' && side === 'A') return 0;
-    if ((id === '2040-N1-40' || id === '3060-N1-60') && side === 'A') return 1;
-    // 2040-N1-40 / 3060-N1-60 D side: sealed but uses 2-groove positions for drilling
-    if ((id === '2040-N1-40' || id === '3060-N1-60') && side === 'D') return 2;
-
-    // 2060: B/D have 3 grooves
-    if (id === '2060' && (side === 'B' || side === 'D')) return 3;
-
-    // 20100: B/D have 5 grooves
-    if (id === '20100' && (side === 'B' || side === 'D')) return 5;
-
-    // 4080: B/D use same groove rule as 20100
-    if (id === '4080' && (side === 'B' || side === 'D')) return 2;
-
-    // Legacy name-based rules (2020 / 3030 and other variants that include N1/N2/N3)
-    if (name.includes('n1') && side === 'A') return 0;
-    if (name.includes('n2') && (side === 'A' || side === 'B')) return 0;
-    if (name.includes('n3') && (side !== 'D')) return 0;
-
-    // Two-groove rectangular profiles (include the 2040 N1 variants here so they still render two grooves when applicable)
-    if (['2040', '3060', '3060-N1-60', '2040-N1-20', '2040-N1-40'].includes(id) && (side === 'B' || side === 'D')) return 2;
-
-    return 1;
-  };
+  const getGrooveCount = (side: ProfileSide): number => getProfileGrooveCount(selectedVariant.id, side);
 
   const grooveCount = getGrooveCount(selectedSide);
 
@@ -187,10 +147,8 @@ const ProfileVisualizer: React.FC<ProfileVisualizerProps> = ({
     return getGrooveCount(side);
   };
   const visualGrooveCount = getVisualGrooveCount(selectedSide);
-  const oppositeMap: Record<ProfileSide, ProfileSide> = { 'A': 'C', 'B': 'D', 'C': 'A', 'D': 'B' };
-
   const getVisibleHoles = (side: ProfileSide) => {
-    const opposite = oppositeMap[side];
+    const opposite = OPPOSITE_PROFILE_SIDE[side];
     if (isRadiusProfile) return holes.filter(h => h.side === side);
     return holes.filter(h => h.side === side || h.side === opposite);
   };
@@ -346,16 +304,10 @@ const ProfileVisualizer: React.FC<ProfileVisualizerProps> = ({
             const isExit = hole.side !== selectedSide;
             const isCountersunkEntry = hole.type === 'countersunk' && !isExit;
             const isThreaded = hole.type === 'threaded';
-            const oppositeSide = oppositeMap[selectedSide];
-            const oppositeGrooveCount = getGrooveCount(oppositeSide);
             
             let verticalPos = '50%';
             if (grooveCount >= 2) {
-              const gi = hole.grooveIndex ?? 0;
-              const shouldMirrorOppositeGroove = isExit && hole.side === oppositeSide && oppositeGrooveCount >= 2;
-              const displayGrooveIndex = shouldMirrorOppositeGroove
-                ? Math.max(0, Math.min(grooveCount - 1, grooveCount - gi - 1))
-                : gi;
+              const displayGrooveIndex = getHoleDisplayGrooveIndex(hole, selectedSide, selectedVariant.id);
               verticalPos = `${((displayGrooveIndex + 1) / (grooveCount + 1)) * 100}%`;
             }
 

@@ -4,6 +4,7 @@ import { CartItem, User, ProductType, ProfileConfig, Language, ProfileSide, Addr
 import { TRANSLATIONS, PROFILE_COLORS, SHIPPING_RATES, SHIPPING_RATES_SF, SHIPPING_RATES_AN, PROFILE_WEIGHTS, SHIPPING_METHOD_NAMES } from '../constants';
 import type { ShippingMethod } from '../constants';
 import ProfileVisualizer from './ProfileVisualizer';
+import { describeHolePassage, getHolePhysicalGrooveIndex } from '../utils/profileMachining';
 import { calculateScrewPlan } from '../utils/screwCalculator';
 
 interface FactorySheetProps {
@@ -601,17 +602,19 @@ const FactorySheet: React.FC<FactorySheetProps> = ({ cart, user, language, order
                            <thead>
                              <tr className="bg-slate-100">
                                <th className="p-2 border border-slate-200">#</th>
-                               <th className="p-2 border border-slate-200">{t.side}</th>
+                               <th className="p-2 border border-slate-200">{t.side}（入口 → 出口）</th>
                                <th className="p-2 border border-slate-200">{t.position} (mm)</th>
                                <th className="p-2 border border-slate-200">{t.holeType}</th>
-                               <th className="p-2 border border-slate-200">{t.groove}</th>
+                               <th className="p-2 border border-slate-200">物理槽 ID</th>
                              </tr>
                            </thead>
                            <tbody>
                              {profileCfg.holes.map((hole, hIdx) => (
                                <tr key={hole.id} className="hover:bg-slate-50">
                                  <td className="p-2 border border-slate-100 font-bold">{hIdx + 1}</td>
-                                 <td className="p-2 border border-slate-100 font-black">{hole.side}</td>
+                                 <td className="p-2 border border-slate-100 font-black">
+                                   {describeHolePassage(hole, profileCfg.variantId || '2020', language)}
+                                 </td>
                                  <td className="p-2 border border-slate-100 font-black text-blue-600">{hole.positionMm}</td>
                                  <td className="p-2 border border-slate-100">
                                    {hole.type === 'countersunk'
@@ -620,7 +623,9 @@ const FactorySheet: React.FC<FactorySheetProps> = ({ cart, user, language, order
                                        ? `${t.typeThreaded || '螺纹孔'}${hole.threadSize ? ` (${hole.threadSize})` : ''}`
                                        : t.typeThrough}
                                  </td>
-                                 <td className="p-2 border border-slate-100">{hole.grooveIndex === 1 ? t.abbrBottom : t.abbrTop}</td>
+                                 <td className="p-2 border border-slate-100">
+                                   P{getHolePhysicalGrooveIndex(hole, profileCfg.variantId || '2020') + 1}
+                                 </td>
                                </tr>
                              ))}
                            </tbody>
