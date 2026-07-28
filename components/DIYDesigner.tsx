@@ -15,7 +15,6 @@ import {
   Paintbrush,
   PanelTop,
   Redo2,
-  RotateCcw,
   Rotate3D,
   Save,
   ShoppingCart,
@@ -48,6 +47,7 @@ import {
   OPPOSITE_PROFILE_SIDE,
   physicalGrooveToDisplay,
 } from '../utils/profileMachining';
+import { buildProductionXlsx } from '../utils/productionXlsx';
 
 type DIYItemKind = 'profile' | 'plate' | 'pegboard' | 'marine_board' | 'connector' | 'foot';
 
@@ -127,7 +127,9 @@ const TEXT: Record<Language, Record<string, string>> = {
     addDemo: '生成示例工作台',
     move: '移动',
     drillMode: '点选打孔',
-    drillModeHint: '打孔模式：直接点击型材表面，系统自动识别面、槽位和两端距离。',
+    drillModeHint: '先选择孔类型，再点击型材表面；系统自动识别面、槽位和两端距离。',
+    drillSetup: '选择打孔类型',
+    startDrilling: '确认并开始点选',
     rotate: '每次旋转 90°',
     save: '保存设计 JSON',
     load: '读取本地 JSON',
@@ -170,16 +172,24 @@ const TEXT: Record<Language, Record<string, string>> = {
     noParts: '还没有添加任何零件',
     remark: '备注',
     remarkPlaceholder: '为这个零件添加加工、安装或识别备注…',
-    rotateX: '绕 X 轴 +90°',
-    rotateY: '绕 Y 轴 +90°',
-    rotateZ: '绕 Z 轴 +90°',
+    rotateX: '绕红色轴顺时针 90°',
+    rotateY: '绕绿色轴顺时针 90°',
+    rotateZ: '绕蓝色轴顺时针 90°',
+    rotateStandard: '每次均按同一方向旋转 90°；连续点击四次回到原位。',
+    rotateCollision: '旋转后型材会与其他型材相互穿透，因此本次旋转未执行。请先将型材平移出一段距离后再试。',
     snapEnd: '磁吸：端点连接',
     snapSide: '磁吸：交叉连接',
     snapOffset: '磁吸：边缘对齐',
-    snapCollision: '已阻止型材相互穿透',
     frameAll: '显示全部',
     multiSelected: '批量选择',
     shiftHint: '按住 Shift 点击可增减选择；按住 Shift 在画布拖框可批量选中。',
+    newProfileLength: '输入型材长度',
+    addProfile: '添加型材',
+    cancel: '取消',
+    apply: '应用',
+    understood: '知道了',
+    moveDistance: '平移距离',
+    currentLength: '当前长度',
   },
   en: {
     title: 'Aluminum Profile 3D DIY Designer',
@@ -198,7 +208,9 @@ const TEXT: Record<Language, Record<string, string>> = {
     addDemo: 'Build demo workbench',
     move: 'Move',
     drillMode: 'Place holes',
-    drillModeHint: 'Drill mode: click a profile surface to detect its face, groove, and both end distances.',
+    drillModeHint: 'Choose a hole type first, then click a profile surface to detect its face, groove, and both end distances.',
+    drillSetup: 'Choose hole type',
+    startDrilling: 'Confirm and start placing holes',
     rotate: 'Rotate 90° per click',
     save: 'Save design JSON',
     load: 'Open local JSON',
@@ -241,16 +253,24 @@ const TEXT: Record<Language, Record<string, string>> = {
     noParts: 'No parts added yet',
     remark: 'Remark',
     remarkPlaceholder: 'Add machining, installation, or identification notes for this part…',
-    rotateX: 'Rotate X +90°',
-    rotateY: 'Rotate Y +90°',
-    rotateZ: 'Rotate Z +90°',
+    rotateX: 'Red axis clockwise 90°',
+    rotateY: 'Green axis clockwise 90°',
+    rotateZ: 'Blue axis clockwise 90°',
+    rotateStandard: 'Each click rotates 90° in the same direction; four clicks return to the starting orientation.',
+    rotateCollision: 'This rotation would make profiles overlap, so it was not applied. Move the profile away and try again.',
     snapEnd: 'Magnet: end connection',
     snapSide: 'Magnet: cross connection',
     snapOffset: 'Magnet: edge alignment',
-    snapCollision: 'Profile overlap prevented',
     frameAll: 'Frame all',
     multiSelected: 'Batch selection',
     shiftHint: 'Shift-click toggles items. Hold Shift and drag a marquee to select several parts.',
+    newProfileLength: 'Profile length',
+    addProfile: 'Add profile',
+    cancel: 'Cancel',
+    apply: 'Apply',
+    understood: 'Got it',
+    moveDistance: 'Move distance',
+    currentLength: 'Current length',
   },
   jp: {
     title: 'アルミプロファイル 3D DIY デザイナー',
@@ -269,7 +289,9 @@ const TEXT: Record<Language, Record<string, string>> = {
     addDemo: '作業台サンプルを作成',
     move: '移動',
     drillMode: 'クリック穴あけ',
-    drillModeHint: '穴あけモード：形材面をクリックすると、面・溝・両端距離を自動判定します。',
+    drillModeHint: '穴タイプを先に選択し、形材面をクリックすると面・溝・両端距離を自動判定します。',
+    drillSetup: '穴タイプを選択',
+    startDrilling: '確認して穴あけ開始',
     rotate: '1回90°回転',
     save: '設計JSON保存',
     load: 'ローカルJSON読込',
@@ -312,16 +334,24 @@ const TEXT: Record<Language, Record<string, string>> = {
     noParts: 'パーツがまだありません',
     remark: '備考',
     remarkPlaceholder: '加工、取付、識別用の備考を追加…',
-    rotateX: 'X軸 +90°',
-    rotateY: 'Y軸 +90°',
-    rotateZ: 'Z軸 +90°',
+    rotateX: '赤軸を時計回りに90°',
+    rotateY: '緑軸を時計回りに90°',
+    rotateZ: '青軸を時計回りに90°',
+    rotateStandard: '毎回同じ方向に90°回転し、4回で元の向きに戻ります。',
+    rotateCollision: '回転すると形材同士が重なるため実行できません。少し移動してから再度お試しください。',
     snapEnd: 'スナップ：端点接続',
     snapSide: 'スナップ：交差接続',
     snapOffset: 'スナップ：端揃え',
-    snapCollision: '形材同士の貫通を防止しました',
     frameAll: '全体表示',
     multiSelected: '一括選択',
     shiftHint: 'Shiftクリックで追加・解除、Shiftを押しながらドラッグして範囲選択します。',
+    newProfileLength: '形材長さ',
+    addProfile: '形材を追加',
+    cancel: 'キャンセル',
+    apply: '適用',
+    understood: '確認',
+    moveDistance: '移動距離',
+    currentLength: '現在の長さ',
   },
 };
 
@@ -414,50 +444,14 @@ const downloadTextFile = (content: string, mimeType: string, filename: string) =
   window.setTimeout(() => URL.revokeObjectURL(url), 0);
 };
 
-const xmlEscape = (value: unknown) => String(value ?? '')
-  .replace(/&/g, '&amp;')
-  .replace(/</g, '&lt;')
-  .replace(/>/g, '&gt;')
-  .replace(/"/g, '&quot;')
-  .replace(/'/g, '&apos;');
-
-const excelCell = (value: unknown, style = 'Body') => {
-  const numeric = typeof value === 'number' && Number.isFinite(value);
-  return `<Cell ss:StyleID="${style}"><Data ss:Type="${numeric ? 'Number' : 'String'}">${xmlEscape(value)}</Data></Cell>`;
-};
-
-const buildExcelXml = (items: DIYSceneItem[], language: Language) => {
-  const production = buildProductionData(items, language);
-  const partHeaders = ['序号', '零件ID', '类型', '型号', '长度mm', '宽度mm', '高度mm', '厚度mm', '颜色', '数量', '位置XYZ(mm)', '旋转XYZ(°)', '备注'];
-  const partRows = production.parts.map((part) => [
-    part.line, part.id, part.type, part.model, part.lengthMm || '', part.widthMm || '', part.heightMm || '',
-    part.thicknessMm || '', part.color, part.quantity, part.positionMm.join(', '), part.rotationDeg.join(', '), part.remark,
-  ]);
-  const holeHeaders = ['零件序号', '型号', '孔序号', '入口面', '入口二维槽位', '出口面', '出口二维槽位', '物理槽ID', '距左端mm', '距右端mm', '孔类型', '螺纹', '客户/工厂核对'];
-  const holeRows = production.holes.map((hole) => [
-    hole.partLine, hole.model, hole.holeLine, hole.entryFace, hole.entryGroove, hole.exitFace, hole.exitGroove,
-    hole.physicalGrooveId, hole.leftDistanceMm, hole.rightDistanceMm, hole.holeType, hole.threadSize, hole.verification,
-  ]);
-  const worksheet = (name: string, headers: string[], rows: unknown[][], widths: number[]) => `
-    <Worksheet ss:Name="${xmlEscape(name)}"><Table>
-      ${widths.map((width) => `<Column ss:Width="${width}"/>`).join('')}
-      <Row ss:StyleID="Title"><Cell ss:MergeAcross="${headers.length - 1}"><Data ss:Type="String">${xmlEscape(name)}</Data></Cell></Row>
-      <Row>${headers.map((header) => excelCell(header, 'Header')).join('')}</Row>
-      ${rows.map((row) => `<Row>${row.map((value) => excelCell(value)).join('')}</Row>`).join('')}
-    </Table><WorksheetOptions xmlns="urn:schemas-microsoft-com:office:excel"><FreezePanes/><FrozenNoSplit/><SplitHorizontal>2</SplitHorizontal><TopRowBottomPane>2</TopRowBottomPane></WorksheetOptions></Worksheet>`;
-  return `<?xml version="1.0"?>
-  <?mso-application progid="Excel.Sheet"?>
-  <Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet"
-    xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet"
-    xmlns:x="urn:schemas-microsoft-com:office:excel">
-    <Styles>
-      <Style ss:ID="Body"><Font ss:FontName="Arial" ss:Size="10"/><Alignment ss:Vertical="Center"/></Style>
-      <Style ss:ID="Title"><Font ss:FontName="Arial" ss:Size="16" ss:Bold="1" ss:Color="#FFFFFF"/><Interior ss:Color="#0F172A" ss:Pattern="Solid"/><Alignment ss:Vertical="Center"/><Borders><Border ss:Position="Bottom" ss:LineStyle="Continuous" ss:Weight="2" ss:Color="#2563EB"/></Borders></Style>
-      <Style ss:ID="Header"><Font ss:FontName="Arial" ss:Size="10" ss:Bold="1" ss:Color="#FFFFFF"/><Interior ss:Color="#2563EB" ss:Pattern="Solid"/><Alignment ss:Horizontal="Center" ss:Vertical="Center" ss:WrapText="1"/></Style>
-    </Styles>
-    ${worksheet('零件明细', partHeaders, partRows, [42, 150, 75, 90, 65, 65, 65, 65, 90, 48, 120, 120, 180])}
-    ${worksheet('打孔明细', holeHeaders, holeRows, [58, 90, 58, 58, 90, 58, 90, 70, 72, 72, 75, 65, 180])}
-  </Workbook>`;
+const downloadBinaryFile = (content: Uint8Array, mimeType: string, filename: string) => {
+  const blob = new Blob([content], { type: mimeType });
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement('a');
+  anchor.href = url;
+  anchor.download = filename;
+  anchor.click();
+  window.setTimeout(() => URL.revokeObjectURL(url), 0);
 };
 
 const profileSize = (variantId = '2020'): [number, number] => {
@@ -478,7 +472,7 @@ const createItem = (kind: DIYItemKind, index = 0, variantId?: string): DIYSceneI
       rotation: [0, 0, 0],
       colorId: 'natural',
       variantId: model,
-      length: 1000,
+      length: 200,
       holes: [],
       tappingLeft: false,
       tappingRight: false,
@@ -538,7 +532,7 @@ const buildDemoWorkbench = (): DIYSceneItem[] => {
 
 const disposeObject = (object: THREE.Object3D) => {
   object.traverse((child) => {
-    if (child instanceof THREE.Mesh) {
+    if (child instanceof THREE.Mesh || child instanceof THREE.Line || child instanceof THREE.LineSegments) {
       child.geometry.dispose();
       const materials = Array.isArray(child.material) ? child.material : [child.material];
       materials.forEach((material) => material.dispose());
@@ -550,8 +544,8 @@ const makeMaterial = (colorId: string, selected: boolean, kind: DIYItemKind) => 
   color: COLOR_HEX[colorId] || '#b9c0c7',
   metalness: kind === 'marine_board' ? 0.08 : kind === 'foot' ? 0.45 : 0.72,
   roughness: kind === 'marine_board' ? 0.68 : 0.28,
-  emissive: selected ? new THREE.Color('#174ea6') : new THREE.Color('#000000'),
-  emissiveIntensity: selected ? 0.18 : 0,
+  emissive: selected ? new THREE.Color('#2563eb') : new THREE.Color('#000000'),
+  emissiveIntensity: selected ? 0.42 : 0,
 });
 
 const addEdges = (mesh: THREE.Mesh, color = '#475569') => {
@@ -570,6 +564,36 @@ const addSelectionHitbox = (group: THREE.Group, geometry: THREE.BufferGeometry) 
   group.add(hitbox);
 };
 
+const addSelectionOutline = (group: THREE.Group) => {
+  const bounds = new THREE.Box3().setFromObject(group);
+  if (bounds.isEmpty()) return;
+  const size = bounds.getSize(new THREE.Vector3()).addScalar(0.055);
+  const center = bounds.getCenter(new THREE.Vector3());
+  const geometry = new THREE.BoxGeometry(size.x, size.y, size.z);
+  const glow = new THREE.Mesh(
+    geometry,
+    new THREE.MeshBasicMaterial({
+      color: '#2563eb',
+      transparent: true,
+      opacity: 0.12,
+      depthWrite: false,
+      depthTest: false,
+      side: THREE.DoubleSide,
+    }),
+  );
+  const outline = new THREE.LineSegments(
+    new THREE.EdgesGeometry(geometry),
+    new THREE.LineBasicMaterial({ color: '#0ea5e9', transparent: true, opacity: 1, depthTest: false }),
+  );
+  glow.position.copy(center);
+  outline.position.copy(center);
+  glow.renderOrder = 90;
+  outline.renderOrder = 91;
+  glow.userData.selectionDecoration = true;
+  outline.userData.selectionDecoration = true;
+  group.add(glow, outline);
+};
+
 const profileDimensions = (item: DIYSceneItem) => {
   const [widthMm, heightMm] = profileSize(item.variantId);
   return {
@@ -583,6 +607,7 @@ type ProfileSnap = {
   position: THREE.Vector3;
   point: THREE.Vector3;
   label: 'end' | 'side' | 'offset';
+  targetEndDistances: { left: number; right: number };
 };
 
 type ProfileBox = {
@@ -745,6 +770,8 @@ const findMagneticProfileSnap = (
   movingItem: DIYSceneItem,
   items: DIYSceneItem[],
   groups: Map<string, THREE.Group>,
+  maxDistance = 0.65,
+  planeTolerance = 0.06,
 ): ProfileSnap | null => {
   if (movingItem.kind !== 'profile') return null;
   const movingBox = profileBox(movingItem, moving);
@@ -800,20 +827,30 @@ const findMagneticProfileSnap = (
                 targetPoint,
                 currentMovingAnchor,
               );
-              if (!planeNormal || Math.abs(targetPoint.clone().sub(currentMovingAnchor).dot(planeNormal)) > 0.06) return;
+              if (!planeNormal || Math.abs(targetPoint.clone().sub(currentMovingAnchor).dot(planeNormal)) > planeTolerance) return;
               const candidatePosition = targetPoint.clone().sub(movingFaceOffset).sub(movingSlotAnchor);
               const distance = moving.position.distanceTo(candidatePosition);
-              if (distance > 0.65 || (best && distance >= best.distance)) return;
+              if (distance > maxDistance || (best && distance >= best.distance)) return;
               if (profileCollides(moving, movingItem, candidatePosition, items, groups)) return;
               const hasOffset = targetSlotAnchor.lengthSq() > 0.001
                 || movingSlotAnchor.lengthSq() > 0.001
                 || Math.abs(longitudinalOffset) > 0.001;
+              const targetLength = targetBox.halfSizes[0] * 2;
+              const targetLeft = THREE.MathUtils.clamp(
+                targetPoint.clone().sub(targetBox.center).dot(targetBox.axes[0]) + targetBox.halfSizes[0],
+                0,
+                targetLength,
+              );
               best = {
                 distance,
                 snap: {
                   position: candidatePosition,
                   point: targetPoint,
                   label: hasOffset ? 'offset' : targetAxisIndex === 0 || movingAxisIndex === 0 ? 'end' : 'side',
+                  targetEndDistances: {
+                    left: Math.round(targetLeft * SCENE_SCALE),
+                    right: Math.round((targetLength - targetLeft) * SCENE_SCALE),
+                  },
                 },
               };
               });
@@ -1009,6 +1046,7 @@ const createProfileObject = (item: DIYSceneItem, selected: boolean) => {
     addHoleMarker(hole.side, true);
     addHoleMarker(OPPOSITE_PROFILE_SIDE[hole.side], false);
   });
+  if (selected) addSelectionOutline(group);
   addSelectionHitbox(group, new THREE.BoxGeometry(length + 0.012, height + 0.018, width + 0.018));
   return group;
 };
@@ -1053,6 +1091,7 @@ const createBoardObject = (item: DIYSceneItem, selected: boolean) => {
     }
     group.add(holes);
   }
+  if (selected) addSelectionOutline(group);
   addSelectionHitbox(group, new THREE.BoxGeometry(width, height, Math.max(thickness + 0.16, 0.18)));
   return group;
 };
@@ -1080,6 +1119,7 @@ const createAccessoryObject = (item: DIYSceneItem, selected: boolean) => {
       addEdges(child);
     }
   });
+  if (selected) addSelectionOutline(group);
   addSelectionHitbox(group, new THREE.BoxGeometry(0.65, 0.65, 0.65));
   return group;
 };
@@ -1185,11 +1225,12 @@ const ThreeAssembly: React.FC<{
   selectedId: string | null;
   selectedIds: string[];
   rotationLabels: [string, string, string];
-  snapLabels: { end: string; side: string; offset: string; collision: string };
+  snapLabels: { end: string; side: string; offset: string };
   deleteLabel: string;
   frameAllLabel: string;
   drillMode: boolean;
   drillDistanceLabels: { left: string; right: string };
+  operationLabels: { length: string; move: string; apply: string };
   onSelect: (id: string | null, additive?: boolean) => void;
   onSelectionChange: (ids: string[]) => void;
   onTransform: (id: string, position: Vec3, rotation: Vec3) => void;
@@ -1207,6 +1248,7 @@ const ThreeAssembly: React.FC<{
   frameAllLabel,
   drillMode,
   drillDistanceLabels,
+  operationLabels,
   onSelect,
   onSelectionChange,
   onTransform,
@@ -1221,6 +1263,18 @@ const ThreeAssembly: React.FC<{
   const [snapHint, setSnapHint] = useState<string | null>(null);
   const [drillMeasurement, setDrillMeasurement] = useState<{ left: number; right: number; x: number; y: number } | null>(null);
   const [selectionRect, setSelectionRect] = useState<{ left: number; top: number; width: number; height: number } | null>(null);
+  const [operationEditor, setOperationEditor] = useState<{
+    kind: 'length' | 'move';
+    itemId: string;
+    valueMm: number;
+    x: number;
+    y: number;
+    fixedEnd?: Vec3;
+    axis?: Vec3;
+    side?: -1 | 1;
+    startPosition?: Vec3;
+    direction?: Vec3;
+  } | null>(null);
   const sceneRef = useRef<THREE.Scene | null>(null);
   const cameraRef = useRef<THREE.PerspectiveCamera | null>(null);
   const rendererRef = useRef<THREE.WebGLRenderer | null>(null);
@@ -1241,6 +1295,7 @@ const ThreeAssembly: React.FC<{
   const onPlaceHoleRef = useRef(onPlaceHole);
   const drillModeRef = useRef(drillMode);
   const snapLabelsRef = useRef(snapLabels);
+  const drillDistanceLabelsRef = useRef(drillDistanceLabels);
 
   const frameAll = () => {
     const content = contentRef.current;
@@ -1288,6 +1343,53 @@ const ThreeAssembly: React.FC<{
     if (!drillMode) setDrillMeasurement(null);
   }, [drillMode]);
   useEffect(() => { snapLabelsRef.current = snapLabels; }, [snapLabels]);
+  useEffect(() => { drillDistanceLabelsRef.current = drillDistanceLabels; }, [drillDistanceLabels]);
+
+  const applyOperationEditor = () => {
+    if (!operationEditor) return;
+    if (
+      operationEditor.kind === 'length'
+      && operationEditor.fixedEnd
+      && operationEditor.axis
+      && operationEditor.side
+    ) {
+      const lengthMm = THREE.MathUtils.clamp(Math.round(operationEditor.valueMm), 21, 3000);
+      const fixedEnd = new THREE.Vector3(...operationEditor.fixedEnd);
+      const axis = new THREE.Vector3(...operationEditor.axis).normalize();
+      const position = fixedEnd.addScaledVector(axis, operationEditor.side * (lengthMm / SCENE_SCALE) / 2);
+      onResizeProfileRef.current(
+        operationEditor.itemId,
+        lengthMm,
+        [
+          Math.round(position.x * SCENE_SCALE),
+          Math.round(position.y * SCENE_SCALE),
+          Math.round(position.z * SCENE_SCALE),
+        ],
+      );
+    }
+    if (
+      operationEditor.kind === 'move'
+      && operationEditor.startPosition
+      && operationEditor.direction
+    ) {
+      const item = itemsRef.current.find((entry) => entry.id === operationEditor.itemId);
+      if (item) {
+        const start = new THREE.Vector3(...operationEditor.startPosition);
+        const direction = new THREE.Vector3(...operationEditor.direction).normalize();
+        const position = start.addScaledVector(direction, operationEditor.valueMm / SCENE_SCALE);
+        onTransformRef.current(
+          operationEditor.itemId,
+          [
+            Math.round(position.x * SCENE_SCALE),
+            Math.round(position.y * SCENE_SCALE),
+            Math.round(position.z * SCENE_SCALE),
+          ],
+          item.rotation,
+        );
+      }
+    }
+    setOperationEditor(null);
+  };
 
   useEffect(() => {
     const mount = mountRef.current;
@@ -1353,6 +1455,20 @@ const ThreeAssembly: React.FC<{
         lastSafeProfilePosition = null;
       }
     };
+    const getSnapTolerances = (position: THREE.Vector3) => {
+      const rect = renderer.domElement.getBoundingClientRect();
+      const distance = Math.max(1, camera.position.distanceTo(position));
+      const visibleHeight = 2 * Math.tan(THREE.MathUtils.degToRad(camera.fov * 0.5)) * distance;
+      const worldPerPixel = visibleHeight / Math.max(1, rect.height);
+      return {
+        maxDistance: THREE.MathUtils.clamp(worldPerPixel * 42, 0.65, 2.8),
+        planeTolerance: THREE.MathUtils.clamp(worldPerPixel * 14, 0.06, 0.3),
+      };
+    };
+    const formatSnapHint = (snap: ProfileSnap) => {
+      const distanceLabels = drillDistanceLabelsRef.current;
+      return `${snapLabelsRef.current[snap.label]} · ${distanceLabels.left} ${snap.targetEndDistances.left}mm · ${distanceLabels.right} ${snap.targetEndDistances.right}mm`;
+    };
     const onObjectChange = () => {
       const object = transform.object as THREE.Group | undefined;
       const itemId = object?.userData.itemId as string | undefined;
@@ -1361,7 +1477,15 @@ const ThreeAssembly: React.FC<{
         snapGuide.visible = false;
         return;
       }
-      const snap = findMagneticProfileSnap(object, item, itemsRef.current, groupsRef.current);
+      const tolerances = getSnapTolerances(object.position);
+      const snap = findMagneticProfileSnap(
+        object,
+        item,
+        itemsRef.current,
+        groupsRef.current,
+        tolerances.maxDistance,
+        tolerances.planeTolerance,
+      );
       if (snap) {
         object.position.copy(snap.position);
         syncProfileLengthHandles(lengthHandles, object, item);
@@ -1370,14 +1494,14 @@ const ThreeAssembly: React.FC<{
         snapGuide.position.copy(snap.point);
         snapGuide.quaternion.copy(camera.quaternion);
         snapGuide.visible = true;
-        setSnapHint(snapLabelsRef.current[snap.label]);
+        setSnapHint(formatSnapHint(snap));
         return;
       }
       if (profileCollides(object, item, object.position, itemsRef.current, groupsRef.current)) {
         if (lastSafeProfilePosition) object.position.copy(lastSafeProfilePosition);
         syncProfileLengthHandles(lengthHandles, object, item);
         snapGuide.visible = false;
-        setSnapHint(snapLabelsRef.current.collision);
+        setSnapHint(null);
         return;
       }
       lastSafeProfilePosition = object.position.clone();
@@ -1474,13 +1598,16 @@ const ThreeAssembly: React.FC<{
     const getContentHit = (clientX: number, clientY: number) => {
       setPointerRay(clientX, clientY);
       const hits = raycaster.intersectObjects(content.children, true);
-      return hits.find((hit) => !hit.object.userData.selectionProxy) || hits[0] || null;
+      return hits.find((hit) => !hit.object.userData.selectionProxy && !hit.object.userData.selectionDecoration)
+        || hits.find((hit) => !hit.object.userData.selectionDecoration)
+        || null;
     };
     const getHitItemId = (clientX: number, clientY: number) => {
       const hit = getContentHit(clientX, clientY);
       return hit ? getItemIdFromObject(hit.object) : null;
     };
     const onPointerDown = (event: PointerEvent) => {
+      setOperationEditor(null);
       if (event.button === 0 && event.shiftKey) {
         const rect = renderer.domElement.getBoundingClientRect();
         marqueeState = {
@@ -1643,24 +1770,41 @@ const ThreeAssembly: React.FC<{
         const currentPoint = raycaster.ray.intersectPlane(movePlane, new THREE.Vector3());
         if (!currentPoint) return;
         const movement = currentPoint.sub(state.startPoint);
+        let moveDistanceMm: number;
+        let moveDirection: THREE.Vector3;
         if (state.axis) {
           const axisDistance = movement.dot(state.axis);
           movement.copy(state.axis).multiplyScalar(axisDistance);
+          moveDistanceMm = Math.round(axisDistance * SCENE_SCALE);
+          moveDirection = state.axis.clone();
+        } else {
+          moveDistanceMm = Math.round(movement.length() * SCENE_SCALE);
+          moveDirection = movement.lengthSq() > 1e-8
+            ? movement.clone().normalize()
+            : new THREE.Vector3(1, 0, 0);
         }
         if (movement.lengthSq() < 1e-7) return;
         state.moved = true;
         const nextPosition = state.startPosition.clone().add(movement);
         state.object.position.copy(nextPosition);
         if (state.item.kind === 'profile') {
-          const snap = findMagneticProfileSnap(state.object, state.item, itemsRef.current, groupsRef.current);
+          const tolerances = getSnapTolerances(state.object.position);
+          const snap = findMagneticProfileSnap(
+            state.object,
+            state.item,
+            itemsRef.current,
+            groupsRef.current,
+            tolerances.maxDistance,
+            tolerances.planeTolerance,
+          );
           if (snap) {
             nextPosition.copy(snap.position);
             state.object.position.copy(nextPosition);
-            setSnapHint(snapLabelsRef.current[snap.label]);
+            setSnapHint(formatSnapHint(snap));
           } else if (profileCollides(state.object, state.item, nextPosition, itemsRef.current, groupsRef.current)) {
             state.object.position.copy(state.validPosition);
             syncProfileLengthHandles(lengthHandles, state.object, state.item);
-            setSnapHint(snapLabelsRef.current.collision);
+            setSnapHint(null);
             return;
           } else {
             setSnapHint(null);
@@ -1668,6 +1812,26 @@ const ThreeAssembly: React.FC<{
         }
         state.validPosition.copy(nextPosition);
         syncProfileLengthHandles(lengthHandles, state.object, state.item);
+        const finalMovement = nextPosition.clone().sub(state.startPosition);
+        if (state.axis) {
+          moveDistanceMm = Math.round(finalMovement.dot(state.axis) * SCENE_SCALE);
+          moveDirection = state.axis.clone();
+        } else {
+          moveDistanceMm = Math.round(finalMovement.length() * SCENE_SCALE);
+          moveDirection = finalMovement.lengthSq() > 1e-8
+            ? finalMovement.normalize()
+            : moveDirection;
+        }
+        const rect = renderer.domElement.getBoundingClientRect();
+        setOperationEditor({
+          kind: 'move',
+          itemId: state.item.id,
+          valueMm: moveDistanceMm,
+          x: THREE.MathUtils.clamp(event.clientX - rect.left, 105, Math.max(105, rect.width - 105)),
+          y: THREE.MathUtils.clamp(event.clientY - rect.top - 54, 58, Math.max(58, rect.height - 58)),
+          startPosition: [state.startPosition.x, state.startPosition.y, state.startPosition.z],
+          direction: [moveDirection.x, moveDirection.y, moveDirection.z],
+        });
         event.preventDefault();
         return;
       }
@@ -1689,7 +1853,7 @@ const ThreeAssembly: React.FC<{
         ],
       };
       if (profileItemCollides(candidate, itemsRef.current)) {
-        setSnapHint(snapLabelsRef.current.collision);
+        setSnapHint(null);
         return;
       }
       state.validLength = nextLength;
@@ -1697,6 +1861,17 @@ const ThreeAssembly: React.FC<{
       state.object.position.copy(nextPosition);
       state.object.scale.set(nextLength / state.startLength, 1, 1);
       syncProfileLengthHandles(lengthHandles, state.object, state.item, nextLength, nextPosition);
+      const rect = renderer.domElement.getBoundingClientRect();
+      setOperationEditor({
+        kind: 'length',
+        itemId: state.item.id,
+        valueMm: Math.round(nextLength * SCENE_SCALE),
+        x: THREE.MathUtils.clamp(event.clientX - rect.left, 105, Math.max(105, rect.width - 105)),
+        y: THREE.MathUtils.clamp(event.clientY - rect.top - 54, 58, Math.max(58, rect.height - 58)),
+        fixedEnd: [state.fixedEnd.x, state.fixedEnd.y, state.fixedEnd.z],
+        axis: [state.axis.x, state.axis.y, state.axis.z],
+        side: state.side,
+      });
       setSnapHint(null);
       event.preventDefault();
     };
@@ -1998,6 +2173,43 @@ const ThreeAssembly: React.FC<{
           {drillDistanceLabels.right} {drillMeasurement.right}mm
         </div>
       )}
+      {operationEditor && (
+        <div
+          className="absolute z-40 -translate-x-1/2 rounded-2xl border border-blue-200 bg-white/95 p-2 shadow-2xl backdrop-blur"
+          style={{ left: operationEditor.x, top: operationEditor.y }}
+          onPointerDown={(event) => event.stopPropagation()}
+        >
+          <div className="mb-1 text-[9px] font-black uppercase tracking-widest text-slate-400">
+            {operationEditor.kind === 'length' ? operationLabels.length : operationLabels.move}
+          </div>
+          <div className="flex items-center gap-1.5">
+            <input
+              type="number"
+              value={operationEditor.valueMm}
+              min={operationEditor.kind === 'length' ? 21 : undefined}
+              max={operationEditor.kind === 'length' ? 3000 : undefined}
+              autoFocus
+              onChange={(event) => setOperationEditor((current) => current ? {
+                ...current,
+                valueMm: Number(event.target.value) || 0,
+              } : current)}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter') applyOperationEditor();
+                if (event.key === 'Escape') setOperationEditor(null);
+              }}
+              className="w-24 rounded-lg border border-blue-200 bg-blue-50 px-2 py-1.5 text-right text-xs font-black text-slate-900 outline-none focus:border-blue-500"
+            />
+            <span className="text-[10px] font-black text-slate-400">mm</span>
+            <button
+              type="button"
+              onClick={applyOperationEditor}
+              className="rounded-lg bg-blue-600 px-2 py-1.5 text-[10px] font-black text-white hover:bg-blue-500"
+            >
+              {operationLabels.apply}
+            </button>
+          </div>
+        </div>
+      )}
       {selectionRect && (
         <div
           className="pointer-events-none absolute z-40 border-2 border-blue-500 bg-blue-400/15"
@@ -2030,7 +2242,11 @@ const ThreeAssembly: React.FC<{
               }}
               className="flex w-full items-center gap-2 rounded-xl px-2.5 py-2 text-left text-[11px] font-black text-slate-700 transition hover:bg-blue-50 hover:text-blue-700"
             >
-              <Rotate3D className="h-3.5 w-3.5" />{label}
+              <span
+                className="h-2.5 w-2.5 shrink-0 rounded-full"
+                style={{ backgroundColor: ['#ef4444', '#22c55e', '#3b82f6'][axisIndex] }}
+              />
+              {label}
             </button>
           ))}
           <div className="my-1 border-t border-slate-100" />
@@ -2119,6 +2335,7 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({ language, user, onAddBatchToC
   const [history, setHistory] = useState<DIYSceneItem[][]>([]);
   const [future, setFuture] = useState<DIYSceneItem[][]>([]);
   const [notice, setNotice] = useState('');
+  const [rotationWarning, setRotationWarning] = useState(false);
   const [holePosition, setHolePosition] = useState(100);
   const [holeSide, setHoleSide] = useState<ProfileSide>('A');
   const [previewSide, setPreviewSide] = useState<ProfileSide>('A');
@@ -2126,6 +2343,8 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({ language, user, onAddBatchToC
   const [holeType, setHoleType] = useState<HoleType>('through');
   const [threadSize, setThreadSize] = useState<ThreadSize>('M6');
   const [drillMode, setDrillMode] = useState(false);
+  const [drillSetupOpen, setDrillSetupOpen] = useState(false);
+  const [pendingProfile, setPendingProfile] = useState<{ variantId: string; length: number } | null>(null);
   const importRef = useRef<HTMLInputElement>(null);
 
   const selected = items.find((item) => item.id === selectedId) || null;
@@ -2159,10 +2378,7 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({ language, user, onAddBatchToC
   const updateSelected = (patch: Partial<DIYSceneItem>) => {
     if (!selected) return;
     const candidate = { ...selected, ...patch };
-    if (profileItemCollides(candidate, items)) {
-      showNotice(t.snapCollision);
-      return;
-    }
+    if (profileItemCollides(candidate, items)) return;
     commit(items.map((item) => item.id === selected.id ? candidate : item), selected.id);
   };
 
@@ -2173,7 +2389,7 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({ language, user, onAddBatchToC
     rotation[axisIndex] = ((rotation[axisIndex] + direction * 90) % 360 + 360) % 360;
     const candidate = { ...item, rotation };
     if (profileItemCollides(candidate, items)) {
-      showNotice(t.snapCollision);
+      setRotationWarning(true);
       return;
     }
     commit(items.map((entry) => entry.id === itemId ? candidate : entry), itemId);
@@ -2225,7 +2441,7 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({ language, user, onAddBatchToC
     });
     const collision = next.some((item) => selectedSet.has(item.id) && profileItemCollides(item, next));
     if (collision) {
-      showNotice(t.snapCollision);
+      setRotationWarning(true);
       return;
     }
     commit(next, selectedIds[selectedIds.length - 1]);
@@ -2250,8 +2466,30 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({ language, user, onAddBatchToC
   }, [items, selectedIds]);
 
   const addItem = (kind: DIYItemKind, variantId?: string) => {
+    if (kind === 'profile') {
+      setPendingProfile({ variantId: variantId || '2020', length: 200 });
+      return;
+    }
     const item = createItem(kind, items.length, variantId);
     commit([...items, item], item.id);
+  };
+
+  const confirmProfileLength = () => {
+    if (!pendingProfile) return;
+    const item = {
+      ...createItem('profile', items.length, pendingProfile.variantId),
+      length: THREE.MathUtils.clamp(Math.round(pendingProfile.length), 21, 3000),
+    };
+    commit([...items, item], item.id);
+    setPendingProfile(null);
+  };
+
+  const openDrillSetup = () => {
+    if (drillMode) {
+      setDrillMode(false);
+      return;
+    }
+    setDrillSetupOpen(true);
   };
 
   const undo = () => {
@@ -2303,10 +2541,10 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({ language, user, onAddBatchToC
     );
   };
 
-  const exportExcel = () => downloadTextFile(
-    buildExcelXml(items, language),
-    'application/vnd.ms-excel;charset=utf-8',
-    `mengkaile-production-${new Date().toISOString().slice(0, 10)}.xml`,
+  const exportExcel = () => downloadBinaryFile(
+    buildProductionXlsx(buildProductionData(items, language)),
+    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    `mengkaile-production-${new Date().toISOString().slice(0, 10)}.xlsx`,
   );
 
   const importJson = (file?: File) => {
@@ -2493,7 +2731,7 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({ language, user, onAddBatchToC
             <button onClick={undo} disabled={!history.length} className="diy-toolbar-button" aria-label="Undo"><Undo2 className="h-4 w-4" /></button>
             <button onClick={redo} disabled={!future.length} className="diy-toolbar-button" aria-label="Redo"><Redo2 className="h-4 w-4" /></button>
             <button onClick={() => setDrillMode(false)} className={`diy-toolbar-button gap-2 ${!drillMode ? 'diy-toolbar-active' : ''}`}><Move3D className="h-4 w-4" />{t.move}</button>
-            <button onClick={() => setDrillMode((current) => !current)} className={`diy-toolbar-button gap-2 ${drillMode ? 'diy-toolbar-active' : ''}`}><CircleDot className="h-4 w-4" />{t.drillMode}</button>
+            <button onClick={openDrillSetup} className={`diy-toolbar-button gap-2 ${drillMode ? 'diy-toolbar-active' : ''}`}><CircleDot className="h-4 w-4" />{t.drillMode}</button>
             <button onClick={save} className="diy-toolbar-button gap-2"><Save className="h-4 w-4" />{t.save}</button>
             <button onClick={load} className="diy-toolbar-button gap-2"><Upload className="h-4 w-4" />{t.load}</button>
             <button onClick={exportJson} className="diy-toolbar-button gap-2"><Download className="h-4 w-4" />{t.export}</button>
@@ -2554,21 +2792,19 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({ language, user, onAddBatchToC
             selectedId={selectedId}
             selectedIds={selectedIds}
             rotationLabels={[t.rotateX, t.rotateY, t.rotateZ]}
-            snapLabels={{ end: t.snapEnd, side: t.snapSide, offset: t.snapOffset, collision: t.snapCollision }}
+            snapLabels={{ end: t.snapEnd, side: t.snapSide, offset: t.snapOffset }}
             deleteLabel={t.delete}
             frameAllLabel={t.frameAll}
             drillMode={drillMode}
             drillDistanceLabels={{ left: t.left, right: t.right }}
+            operationLabels={{ length: t.currentLength, move: t.moveDistance, apply: t.apply }}
             onSelect={selectItem}
             onSelectionChange={setSelection}
             onTransform={(id, position, rotation) => {
               const transformed = items.find((item) => item.id === id);
               if (!transformed) return;
               const candidate = { ...transformed, position, rotation };
-              if (profileItemCollides(candidate, items)) {
-                showNotice(t.snapCollision);
-                return;
-              }
+              if (profileItemCollides(candidate, items)) return;
               const next = items.map((item) => item.id === id ? candidate : item);
               commit(next, id);
             }}
@@ -2581,10 +2817,7 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({ language, user, onAddBatchToC
                 position,
                 holes: (resized.holes || []).filter((hole) => hole.positionMm <= length - 5),
               };
-              if (profileItemCollides(candidate, items)) {
-                showNotice(t.snapCollision);
-                return;
-              }
+              if (profileItemCollides(candidate, items)) return;
               commit(items.map((item) => item.id === id ? candidate : item), id);
             }}
             onRotate90={rotateItemBy90}
@@ -2612,13 +2845,22 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({ language, user, onAddBatchToC
               <div className="mt-5">
                 <div className="diy-field-label">{t.rotation} · 360°</div>
                 <div className="grid grid-cols-3 gap-2">
-                  {(['X', 'Y', 'Z'] as const).map((axis, axisIndex) => (
-                    <div key={axis} className="overflow-hidden rounded-xl border border-slate-200">
-                      <button onClick={() => rotateSelectedItems(axisIndex as RotationAxisIndex, 1)} className="w-full bg-slate-50 px-2 py-2 text-[10px] font-black text-slate-700 hover:bg-blue-50">+90° {axis}</button>
-                      <button onClick={() => rotateSelectedItems(axisIndex as RotationAxisIndex, -1)} className="w-full border-t border-slate-200 bg-white px-2 py-2 text-[10px] font-black text-slate-500 hover:bg-blue-50">−90° {axis}</button>
-                    </div>
+                  {([
+                    { label: t.rotateX, color: '#ef4444' },
+                    { label: t.rotateY, color: '#22c55e' },
+                    { label: t.rotateZ, color: '#3b82f6' },
+                  ]).map((axis, axisIndex) => (
+                    <button
+                      key={axis.label}
+                      onClick={() => rotateSelectedItems(axisIndex as RotationAxisIndex, 1)}
+                      className="flex min-h-16 flex-col items-center justify-center gap-1 rounded-xl border border-slate-200 bg-slate-50 px-2 py-2 text-[9px] font-black text-slate-700 hover:bg-blue-50"
+                    >
+                      <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: axis.color }} />
+                      {axis.label}
+                    </button>
                   ))}
                 </div>
+                <p className="mt-2 text-[10px] font-bold leading-relaxed text-slate-400">{t.rotateStandard}</p>
               </div>
               <div className="mt-5">
                 <div className="diy-field-label">{t.color}</div>
@@ -2754,22 +2996,21 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({ language, user, onAddBatchToC
                 <div className="diy-field-label">{t.rotation}</div>
                 <div className="grid grid-cols-3 gap-2">
                   {([
-                    { label: t.rotateX, index: 0 as const },
-                    { label: t.rotateY, index: 1 as const },
-                    { label: t.rotateZ, index: 2 as const },
+                    { label: t.rotateX, index: 0 as const, color: '#ef4444' },
+                    { label: t.rotateY, index: 1 as const, color: '#22c55e' },
+                    { label: t.rotateZ, index: 2 as const, color: '#3b82f6' },
                   ]).map((axis) => (
                     <div key={axis.index} className="overflow-hidden rounded-xl border border-slate-200 bg-slate-50">
-                      <button onClick={() => rotateSelectedBy90(axis.index, 1)} className="flex w-full flex-col items-center justify-center gap-1 px-2 py-2 text-[10px] font-black text-slate-700 transition hover:bg-blue-50 hover:text-blue-700">
+                      <button onClick={() => rotateSelectedBy90(axis.index, 1)} className="flex min-h-20 w-full flex-col items-center justify-center gap-1 px-2 py-2 text-[9px] font-black text-slate-700 transition hover:bg-blue-50 hover:text-blue-700">
+                        <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: axis.color }} />
                         <Rotate3D className="h-4 w-4" />
                         <span>{axis.label}</span>
-                      </button>
-                      <button onClick={() => rotateSelectedBy90(axis.index, -1)} className="flex w-full items-center justify-center gap-1 border-t border-slate-200 px-2 py-1.5 text-[9px] font-black text-slate-500 transition hover:bg-blue-50 hover:text-blue-700">
-                        <RotateCcw className="h-3 w-3" />−90°
                       </button>
                     </div>
                   ))}
                 </div>
-                <div className="mt-2 text-center text-[10px] font-bold text-slate-400">X {selected.rotation[0]}° · Y {selected.rotation[1]}° · Z {selected.rotation[2]}°</div>
+                <div className="mt-2 text-center text-[10px] font-bold text-slate-400">R {selected.rotation[0]}° · G {selected.rotation[1]}° · B {selected.rotation[2]}°</div>
+                <p className="mt-2 text-[10px] font-bold leading-relaxed text-slate-400">{t.rotateStandard}</p>
               </div>
 
               <label className="block">
@@ -2788,7 +3029,7 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({ language, user, onAddBatchToC
                   <div className="mb-3 flex items-center gap-2"><CircleDot className="h-4 w-4 text-blue-600" /><h3 className="text-xs font-black uppercase tracking-widest text-blue-900">{t.drilling}</h3></div>
                   <button
                     type="button"
-                    onClick={() => setDrillMode((current) => !current)}
+                    onClick={openDrillSetup}
                     className={`mb-3 w-full rounded-xl border px-3 py-2.5 text-xs font-black transition ${drillMode ? 'border-blue-600 bg-blue-600 text-white' : 'border-blue-200 bg-white text-blue-700 hover:bg-blue-50'}`}
                   >
                     {t.drillMode}
@@ -2868,6 +3109,83 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({ language, user, onAddBatchToC
           </button>
         </aside>
       </div>
+      {rotationWarning && (
+        <div className="fixed inset-0 z-[110] flex items-center justify-center bg-slate-950/45 p-4 backdrop-blur-sm">
+          <div className="w-full max-w-md rounded-3xl border border-amber-200 bg-white p-6 shadow-2xl">
+            <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-amber-100 text-xl">!</div>
+            <h2 className="mt-4 text-lg font-black text-slate-950">{t.rotation}</h2>
+            <p className="mt-2 text-sm font-bold leading-relaxed text-slate-600">{t.rotateCollision}</p>
+            <button onClick={() => setRotationWarning(false)} className="mt-6 w-full rounded-2xl bg-slate-950 px-4 py-3 text-sm font-black text-white hover:bg-blue-600">{t.understood}</button>
+          </div>
+        </div>
+      )}
+      {pendingProfile && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/45 p-4 backdrop-blur-sm">
+          <div className="w-full max-w-sm rounded-3xl border border-white/70 bg-white p-6 shadow-2xl">
+            <div className="text-[10px] font-black uppercase tracking-[0.2em] text-blue-600">{pendingProfile.variantId}</div>
+            <h2 className="mt-2 text-xl font-black text-slate-950">{t.newProfileLength}</h2>
+            <label className="mt-5 block">
+              <span className="diy-field-label">{t.length}</span>
+              <div className="flex items-center gap-2">
+                <input
+                  autoFocus
+                  type="number"
+                  min={21}
+                  max={3000}
+                  value={pendingProfile.length}
+                  onChange={(event) => setPendingProfile((current) => current ? {
+                    ...current,
+                    length: Number(event.target.value) || 0,
+                  } : current)}
+                  onKeyDown={(event) => {
+                    if (event.key === 'Enter') confirmProfileLength();
+                    if (event.key === 'Escape') setPendingProfile(null);
+                  }}
+                  className="min-w-0 flex-1 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-lg font-black text-slate-900 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                />
+                <span className="text-sm font-black text-slate-400">mm</span>
+              </div>
+            </label>
+            <p className="mt-2 text-xs font-bold text-slate-400">21–3000mm</p>
+            <div className="mt-6 grid grid-cols-2 gap-3">
+              <button onClick={() => setPendingProfile(null)} className="rounded-2xl border border-slate-200 px-4 py-3 text-sm font-black text-slate-600 hover:bg-slate-50">{t.cancel}</button>
+              <button onClick={confirmProfileLength} className="rounded-2xl bg-blue-600 px-4 py-3 text-sm font-black text-white hover:bg-blue-500">{t.addProfile}</button>
+            </div>
+          </div>
+        </div>
+      )}
+      {drillSetupOpen && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/45 p-4 backdrop-blur-sm">
+          <div className="w-full max-w-sm rounded-3xl border border-white/70 bg-white p-6 shadow-2xl">
+            <div className="flex items-center gap-2 text-blue-600"><CircleDot className="h-5 w-5" /><span className="text-[10px] font-black uppercase tracking-[0.2em]">{t.drilling}</span></div>
+            <h2 className="mt-2 text-xl font-black text-slate-950">{t.drillSetup}</h2>
+            <label className="mt-5 block">
+              <span className="diy-field-label">{t.holeType}</span>
+              <select value={holeType} onChange={(event) => setHoleType(event.target.value as HoleType)} className="diy-select">
+                <option value="through">{t.through}</option>
+                <option value="countersunk">{t.countersunk}</option>
+                <option value="threaded">{t.threaded}</option>
+              </select>
+            </label>
+            {holeType === 'threaded' && (
+              <label className="mt-4 block">
+                <span className="diy-field-label">Thread</span>
+                <select value={threadSize} onChange={(event) => setThreadSize(event.target.value as ThreadSize)} className="diy-select">
+                  {(['M3', 'M4', 'M5', 'M6', 'M8'] as ThreadSize[]).map((size) => <option key={size}>{size}</option>)}
+                </select>
+              </label>
+            )}
+            <p className="mt-4 rounded-2xl bg-blue-50 p-3 text-xs font-bold leading-relaxed text-blue-700">{t.drillModeHint}</p>
+            <div className="mt-6 grid grid-cols-2 gap-3">
+              <button onClick={() => setDrillSetupOpen(false)} className="rounded-2xl border border-slate-200 px-4 py-3 text-sm font-black text-slate-600 hover:bg-slate-50">{t.cancel}</button>
+              <button onClick={() => {
+                setDrillMode(true);
+                setDrillSetupOpen(false);
+              }} className="rounded-2xl bg-blue-600 px-4 py-3 text-sm font-black text-white hover:bg-blue-500">{t.startDrilling}</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
