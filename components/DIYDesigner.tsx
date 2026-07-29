@@ -745,28 +745,16 @@ const addSelectionOutline = (group: THREE.Group) => {
   const size = bounds.getSize(new THREE.Vector3()).addScalar(0.055);
   const center = bounds.getCenter(new THREE.Vector3());
   const geometry = new THREE.BoxGeometry(size.x, size.y, size.z);
-  const glow = new THREE.Mesh(
-    geometry,
-    new THREE.MeshBasicMaterial({
-      color: '#2563eb',
-      transparent: true,
-      opacity: 0.12,
-      depthWrite: false,
-      depthTest: false,
-      side: THREE.DoubleSide,
-    }),
-  );
+  const edgeGeometry = new THREE.EdgesGeometry(geometry);
+  geometry.dispose();
   const outline = new THREE.LineSegments(
-    new THREE.EdgesGeometry(geometry),
-    new THREE.LineBasicMaterial({ color: '#0ea5e9', transparent: true, opacity: 1, depthTest: false }),
+    edgeGeometry,
+    new THREE.LineBasicMaterial({ color: '#0ea5e9', transparent: true, opacity: 0.9, depthTest: false }),
   );
-  glow.position.copy(center);
   outline.position.copy(center);
-  glow.renderOrder = 90;
   outline.renderOrder = 91;
-  glow.userData.selectionDecoration = true;
   outline.userData.selectionDecoration = true;
-  group.add(glow, outline);
+  group.add(outline);
 };
 
 const profileDimensions = (item: DIYSceneItem) => {
@@ -1331,12 +1319,13 @@ const createProfileObject = (item: DIYSceneItem, selected: boolean) => {
     const x = -length / 2 + (hole.positionMm / Math.max(20, item.length || 1000)) * length;
     const addHoleMarker = (side: ProfileSide, isEntry: boolean) => {
       const markerType: HoleType = isEntry ? hole.type : 'through';
-      const innerRadius = markerType === 'threaded' ? 0.027 : 0.032;
+      const grooveRadius = cellSize * 0.13;
+      const innerRadius = markerType === 'threaded'
+        ? Math.min(0.022, grooveRadius * 0.7)
+        : Math.min(0.024, grooveRadius * 0.78);
       const outerRadius = markerType === 'countersunk'
         ? Math.max(0.058, cellSize * 0.32)
-        : markerType === 'threaded'
-          ? 0.043
-          : 0.039;
+        : grooveRadius * 0.96;
       const marker = new THREE.Group();
       const opening = new THREE.Mesh(
         new THREE.CircleGeometry(innerRadius, 28),
@@ -1357,6 +1346,31 @@ const createProfileObject = (item: DIYSceneItem, selected: boolean) => {
         }),
       );
       marker.add(rim, opening);
+      if (markerType === 'threaded') {
+        const dashMaterial = new THREE.MeshBasicMaterial({
+          color: '#f8fafc',
+          side: THREE.DoubleSide,
+          depthTest: false,
+          depthWrite: false,
+        });
+        const dashCount = 8;
+        const dashArc = (Math.PI * 2) / dashCount;
+        for (let dashIndex = 0; dashIndex < dashCount; dashIndex += 1) {
+          const dash = new THREE.Mesh(
+            new THREE.RingGeometry(
+              outerRadius * 0.72,
+              outerRadius * 0.98,
+              6,
+              1,
+              dashIndex * dashArc,
+              dashArc * 0.48,
+            ),
+            dashMaterial,
+          );
+          dash.position.z = 0.001;
+          marker.add(dash);
+        }
+      }
       marker.position.x = x;
       const crossPosition = grooveCoordinate(hole.side, getHolePhysicalGrooveIndex(hole, item.variantId));
       if (side === 'A' || side === 'C') {
@@ -1964,7 +1978,7 @@ const ThreeAssembly: React.FC<{
     orbit.mouseButtons.RIGHT = THREE.MOUSE.ROTATE;
     orbit.target.set(0, 4, 0);
     orbit.maxDistance = 55;
-    orbit.minDistance = 4;
+    orbit.minDistance = 0.75;
 
     const transform = new TransformControls(camera, renderer.domElement);
     transform.setMode('translate');
@@ -2010,17 +2024,23 @@ const ThreeAssembly: React.FC<{
     let transformDragActive = false;
     let lastSafeProfilePosition: THREE.Vector3 | null = null;
     let transformSnapLock: ProfileSnap | null = null;
+    let transformSnapPointerPosition: THREE.Vector3 | null = null;
+    let transformSnapSuppressed = false;
     const onDraggingChanged = (event: { value: unknown }) => {
       orbit.enabled = !event.value;
       transformDragActive = Boolean(event.value);
       if (event.value) {
         transformWasDragging = true;
         transformSnapLock = null;
+        transformSnapPointerPosition = null;
+        transformSnapSuppressed = false;
         const object = transform.object as THREE.Group | undefined;
         lastSafeProfilePosition = object?.position.clone() || null;
       } else {
         lastSafeProfilePosition = null;
         transformSnapLock = null;
+        transformSnapPointerPosition = null;
+        transformSnapSuppressed = false;
       }
     };
     const getSnapTolerances = (position: THREE.Vector3) => {
@@ -2033,6 +2053,7 @@ const ThreeAssembly: React.FC<{
         // while requiring the two candidate connection planes to remain close.
         maxDistance: THREE.MathUtils.clamp(worldPerPixel * 68, 0.8, 4.2),
         planeTolerance: THREE.MathUtils.clamp(worldPerPixel * 10, 0.05, 0.2),
+        releaseDistance: THREE.MathUtils.clamp(worldPerPixel * 7, 0.06, 0.22),
       };
     };
     const formatSnapHint = (snap: ProfileSnap) => {
@@ -2061,12 +2082,13 @@ const ThreeAssembly: React.FC<{
     };
     const retainSnapLock = (
       lock: ProfileSnap | null,
+      pointerPositionAtSnap: THREE.Vector3 | null,
       rawPosition: THREE.Vector3,
       releaseDistance: number,
       moving: THREE.Group,
       movingItem: DIYSceneItem,
     ) => {
-      if (!lock || rawPosition.distanceTo(lock.position) > releaseDistance) return null;
+      if (!lock || !pointerPositionAtSnap || rawPosition.distanceTo(pointerPositionAtSnap) > releaseDistance) return null;
       if (profileCollides(moving, movingItem, lock.position, itemsRef.current, groupsRef.current)) return null;
       return lock;
     };
@@ -2084,24 +2106,33 @@ const ThreeAssembly: React.FC<{
       }
       const tolerances = getSnapTolerances(object.position);
       const rawPosition = object.position.clone();
-      const candidateSnap = findMagneticProfileSnap(
-        object,
-        item,
-        itemsRef.current,
-        groupsRef.current,
-        tolerances.maxDistance,
-        tolerances.planeTolerance,
-        snapAlignmentRef.current,
-      );
       const retainedLock = retainSnapLock(
         transformSnapLock,
+        transformSnapPointerPosition,
         rawPosition,
-        tolerances.maxDistance * 1.35,
+        tolerances.releaseDistance,
         object,
         item,
       );
+      if (transformSnapLock && !retainedLock) {
+        transformSnapLock = null;
+        transformSnapPointerPosition = null;
+        transformSnapSuppressed = true;
+      }
+      const candidateSnap = transformSnapSuppressed
+        ? null
+        : findMagneticProfileSnap(
+          object,
+          item,
+          itemsRef.current,
+          groupsRef.current,
+          tolerances.maxDistance,
+          tolerances.planeTolerance,
+          snapAlignmentRef.current,
+        );
       const snap = retainedLock || candidateSnap;
       if (snap) {
+        if (!retainedLock) transformSnapPointerPosition = rawPosition.clone();
         transformSnapLock = snap;
         object.position.copy(snap.position);
         syncProfileLengthHandles(lengthHandles, object, item);
@@ -2111,6 +2142,7 @@ const ThreeAssembly: React.FC<{
         return;
       }
       transformSnapLock = null;
+      transformSnapPointerPosition = null;
       if (profileCollides(object, item, object.position, itemsRef.current, groupsRef.current)) {
         if (lastSafeProfilePosition) object.position.copy(lastSafeProfilePosition);
         syncProfileLengthHandles(lengthHandles, object, item);
@@ -2194,6 +2226,8 @@ const ThreeAssembly: React.FC<{
       moved: boolean;
       axis?: THREE.Vector3;
       snapLock?: ProfileSnap | null;
+      snapPointerPosition?: THREE.Vector3 | null;
+      snapSuppressed?: boolean;
     };
     let freeMoveState: FreeMoveState | null = null;
     let marqueeState: { pointerId: number; startX: number; startY: number; currentX: number; currentY: number } | null = null;
@@ -2333,6 +2367,8 @@ const ThreeAssembly: React.FC<{
                 moved: false,
                 axis,
                 snapLock: null,
+                snapPointerPosition: null,
+                snapSuppressed: false,
               };
               setOperationEditor({
                 kind: 'move',
@@ -2396,6 +2432,8 @@ const ThreeAssembly: React.FC<{
               validPosition: selectedObject.position.clone(),
               moved: false,
               snapLock: null,
+              snapPointerPosition: null,
+              snapSuppressed: false,
             };
             orbit.enabled = false;
             transform.enabled = false;
@@ -2445,30 +2483,40 @@ const ThreeAssembly: React.FC<{
         state.object.position.copy(nextPosition);
         if (state.item.kind === 'profile') {
           const tolerances = getSnapTolerances(state.object.position);
-          const candidateSnap = findMagneticProfileSnap(
-            state.object,
-            state.item,
-            itemsRef.current,
-            groupsRef.current,
-            tolerances.maxDistance,
-            tolerances.planeTolerance,
-            snapAlignmentRef.current,
-          );
           const retainedLock = retainSnapLock(
             state.snapLock || null,
+            state.snapPointerPosition || null,
             nextPosition,
-            tolerances.maxDistance * 1.35,
+            tolerances.releaseDistance,
             state.object,
             state.item,
           );
+          if (state.snapLock && !retainedLock) {
+            state.snapLock = null;
+            state.snapPointerPosition = null;
+            state.snapSuppressed = true;
+          }
+          const candidateSnap = state.snapSuppressed
+            ? null
+            : findMagneticProfileSnap(
+              state.object,
+              state.item,
+              itemsRef.current,
+              groupsRef.current,
+              tolerances.maxDistance,
+              tolerances.planeTolerance,
+              snapAlignmentRef.current,
+            );
           const snap = retainedLock || candidateSnap;
           if (snap) {
+            if (!retainedLock) state.snapPointerPosition = nextPosition.clone();
             state.snapLock = snap;
             nextPosition.copy(snap.position);
             state.object.position.copy(nextPosition);
             showSnapVisual(snap, state.object, state.item);
           } else if (profileCollides(state.object, state.item, nextPosition, itemsRef.current, groupsRef.current)) {
             state.snapLock = null;
+            state.snapPointerPosition = null;
             state.object.position.copy(state.validPosition);
             syncProfileLengthHandles(lengthHandles, state.object, state.item);
             hideSnapVisual();
@@ -2476,6 +2524,7 @@ const ThreeAssembly: React.FC<{
             return;
           } else {
             state.snapLock = null;
+            state.snapPointerPosition = null;
             hideSnapVisual();
             setSnapHint(null);
           }
@@ -2821,12 +2870,14 @@ const ThreeAssembly: React.FC<{
     });
     const groups = new Map<string, THREE.Group>();
     const selectedSet = new Set(selectedIds);
+    const showMultiSelectionOutline = selectedIds.length > 1;
     items.forEach((item) => {
+      const showSelectionOutline = showMultiSelectionOutline && selectedSet.has(item.id);
       const group = item.kind === 'profile'
-        ? createProfileObject(item, selectedSet.has(item.id))
+        ? createProfileObject(item, showSelectionOutline)
         : item.kind === 'plate' || item.kind === 'pegboard' || item.kind === 'marine_board'
-          ? createBoardObject(item, selectedSet.has(item.id))
-          : createAccessoryObject(item, selectedSet.has(item.id));
+          ? createBoardObject(item, showSelectionOutline)
+          : createAccessoryObject(item, showSelectionOutline);
       group.userData.itemId = item.id;
       group.traverse((child) => {
         child.userData.itemId = item.id;
