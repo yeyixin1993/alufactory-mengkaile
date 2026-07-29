@@ -8,6 +8,7 @@ import {
   CircleDot,
   Copy,
   Download,
+  Eye,
   Grid3X3,
   Hammer,
   Maximize2,
@@ -18,6 +19,7 @@ import {
   Rotate3D,
   Save,
   ShoppingCart,
+  ScanLine,
   Trash2,
   Undo2,
   Upload,
@@ -225,6 +227,9 @@ const TEXT: Record<Language, Record<string, string>> = {
     alignEnd: '后一位',
     connectedTo: '已连接到',
     frameAll: '显示全部',
+    transparentProfiles: '型材半透明',
+    machiningMarks: '加工标注',
+    machiningLegend: '加工符号',
     multiSelected: '批量选择',
     shiftHint: '按住 Shift 点击可增减选择；按住 Shift 在画布拖框可批量选中。',
     newProfileLength: '输入型材长度',
@@ -337,6 +342,9 @@ const TEXT: Record<Language, Record<string, string>> = {
     alignEnd: 'Next',
     connectedTo: 'Connected to',
     frameAll: 'Frame all',
+    transparentProfiles: 'Transparent profiles',
+    machiningMarks: 'Machining marks',
+    machiningLegend: 'Machining symbols',
     multiSelected: 'Batch selection',
     shiftHint: 'Shift-click toggles items. Hold Shift and drag a marquee to select several parts.',
     newProfileLength: 'Profile length',
@@ -449,6 +457,9 @@ const TEXT: Record<Language, Record<string, string>> = {
     alignEnd: '後位置',
     connectedTo: '接続先',
     frameAll: '全体表示',
+    transparentProfiles: '形材を半透明',
+    machiningMarks: '加工マーク',
+    machiningLegend: '加工記号',
     multiSelected: '一括選択',
     shiftHint: 'Shiftクリックで追加・解除、Shiftを押しながらドラッグして範囲選択します。',
     newProfileLength: '形材長さ',
@@ -715,18 +726,27 @@ const disposeObject = (object: THREE.Object3D) => {
   });
 };
 
-const makeMaterial = (colorId: string, selected: boolean, kind: DIYItemKind) => new THREE.MeshStandardMaterial({
+const makeMaterial = (
+  colorId: string,
+  selected: boolean,
+  kind: DIYItemKind,
+  opacity = 1,
+) => new THREE.MeshStandardMaterial({
   color: COLOR_HEX[colorId] || '#b9c0c7',
   metalness: kind === 'marine_board' ? 0.08 : kind === 'foot' ? 0.45 : 0.72,
   roughness: kind === 'marine_board' ? 0.68 : 0.28,
   emissive: selected ? new THREE.Color('#2563eb') : new THREE.Color('#000000'),
   emissiveIntensity: selected ? 0.42 : 0,
+  transparent: opacity < 1,
+  opacity,
+  depthWrite: opacity >= 1,
+  side: opacity < 1 ? THREE.DoubleSide : THREE.FrontSide,
 });
 
-const addEdges = (mesh: THREE.Mesh, color = '#475569') => {
+const addEdges = (mesh: THREE.Mesh, color = '#475569', opacity = 0.55) => {
   const edges = new THREE.LineSegments(
     new THREE.EdgesGeometry(mesh.geometry),
-    new THREE.LineBasicMaterial({ color, transparent: true, opacity: 0.55 }),
+    new THREE.LineBasicMaterial({ color, transparent: true, opacity }),
   );
   mesh.add(edges);
 };
@@ -1269,7 +1289,13 @@ const createProfileSectionShape = (
   return shape;
 };
 
-const createProfileObject = (item: DIYSceneItem, selected: boolean) => {
+const createProfileObject = (
+  item: DIYSceneItem,
+  selected: boolean,
+  transparentProfile = false,
+  showMachiningMarks = true,
+  machiningEmphasis = 0.72,
+) => {
   const group = new THREE.Group();
   const [sectionWidth, sectionHeight] = profileSize(item.variantId);
   const length = Math.max(20, item.length || 1000) / SCENE_SCALE;
@@ -1302,10 +1328,18 @@ const createProfileObject = (item: DIYSceneItem, selected: boolean) => {
   geometry.translate(-length / 2, 0, 0);
   geometry.computeVertexNormals();
 
-  const body = new THREE.Mesh(geometry, makeMaterial(item.colorId, selected, item.kind));
-  body.castShadow = true;
+  const body = new THREE.Mesh(
+    geometry,
+    makeMaterial(item.colorId, selected, item.kind, transparentProfile ? 0.24 : 1),
+  );
+  body.castShadow = !transparentProfile;
   body.receiveShadow = true;
-  addEdges(body, item.colorId === 'black' ? '#64748b' : '#6b7280');
+  body.renderOrder = transparentProfile ? 20 : 0;
+  addEdges(
+    body,
+    item.colorId === 'black' ? '#64748b' : '#6b7280',
+    transparentProfile ? 0.22 : 0.55,
+  );
   group.add(body);
 
   const grooveCoordinate = (side: ProfileSide, physicalGrooveIndex = 0) => {
@@ -1315,55 +1349,61 @@ const createProfileObject = (item: DIYSceneItem, selected: boolean) => {
     return span / 2 - ((index + 0.5) * span) / count;
   };
 
-  (item.holes || []).forEach((hole) => {
+  if (showMachiningMarks) (item.holes || []).forEach((hole) => {
     const x = -length / 2 + (hole.positionMm / Math.max(20, item.length || 1000)) * length;
     const addHoleMarker = (side: ProfileSide, isEntry: boolean) => {
       const markerType: HoleType = isEntry ? hole.type : 'through';
       const grooveRadius = cellSize * 0.13;
       const innerRadius = markerType === 'threaded'
-        ? Math.min(0.022, grooveRadius * 0.7)
-        : Math.min(0.024, grooveRadius * 0.78);
+        ? Math.min(0.018, grooveRadius * 0.58)
+        : Math.min(0.021, grooveRadius * 0.7);
       const outerRadius = markerType === 'countersunk'
-        ? Math.max(0.058, cellSize * 0.32)
-        : grooveRadius * 0.96;
+        ? Math.max(grooveRadius * 1.28, Math.min(0.036, cellSize * 0.18))
+        : grooveRadius * 0.88;
       const marker = new THREE.Group();
       const opening = new THREE.Mesh(
         new THREE.CircleGeometry(innerRadius, 28),
         new THREE.MeshBasicMaterial({
           color: '#0b1017',
           side: THREE.DoubleSide,
-          depthTest: false,
+          depthTest: true,
           depthWrite: false,
+          transparent: machiningEmphasis < 1,
+          opacity: Math.max(0.28, machiningEmphasis),
         }),
       );
       const rim = new THREE.Mesh(
         new THREE.RingGeometry(innerRadius, outerRadius, 28),
         new THREE.MeshBasicMaterial({
-          color: markerType === 'countersunk' ? '#cbd5e1' : markerType === 'threaded' ? '#64748b' : '#303944',
+          color: markerType === 'countersunk' ? '#f59e0b' : markerType === 'threaded' ? '#e11d48' : '#475569',
           side: THREE.DoubleSide,
-          depthTest: false,
+          depthTest: true,
           depthWrite: false,
+          transparent: true,
+          opacity: machiningEmphasis,
         }),
       );
       marker.add(rim, opening);
       if (markerType === 'threaded') {
         const dashMaterial = new THREE.MeshBasicMaterial({
-          color: '#f8fafc',
+          color: '#fecdd3',
           side: THREE.DoubleSide,
-          depthTest: false,
+          depthTest: true,
           depthWrite: false,
+          transparent: true,
+          opacity: machiningEmphasis,
         });
-        const dashCount = 8;
+        const dashCount = 6;
         const dashArc = (Math.PI * 2) / dashCount;
         for (let dashIndex = 0; dashIndex < dashCount; dashIndex += 1) {
           const dash = new THREE.Mesh(
             new THREE.RingGeometry(
-              outerRadius * 0.72,
-              outerRadius * 0.98,
+              outerRadius * 0.76,
+              outerRadius,
               6,
               1,
               dashIndex * dashArc,
-              dashArc * 0.48,
+              dashArc * 0.42,
             ),
             dashMaterial,
           );
@@ -1384,7 +1424,7 @@ const createProfileObject = (item: DIYSceneItem, selected: boolean) => {
       }
       marker.traverse((child) => {
         child.userData.holeDecoration = true;
-        child.renderOrder = 110;
+        child.renderOrder = transparentProfile ? 45 : 15;
       });
       group.add(marker);
     };
@@ -1397,56 +1437,55 @@ const createProfileObject = (item: DIYSceneItem, selected: boolean) => {
     const normalRotation = end === 'left' ? -Math.PI / 2 : Math.PI / 2;
     xCenters.forEach((sectionX) => yCenters.forEach((sectionY) => {
       const marker = new THREE.Group();
-      const centerRadius = Math.min(cellSize * 0.095, 0.023);
-      const outerRadius = Math.min(cellSize * 0.23, 0.052);
+      const centerRadius = Math.min(cellSize * 0.065, 0.016);
+      const outerRadius = Math.min(cellSize * 0.145, 0.032);
       const opening = new THREE.Mesh(
         new THREE.CircleGeometry(centerRadius, 28),
         new THREE.MeshBasicMaterial({
           color: '#111827',
           side: THREE.DoubleSide,
-          depthTest: false,
+          depthTest: true,
           depthWrite: false,
+          transparent: machiningEmphasis < 1,
+          opacity: Math.max(0.3, machiningEmphasis),
         }),
       );
-      const threadRing = new THREE.Mesh(
-        new THREE.RingGeometry(centerRadius, outerRadius, 32),
-        new THREE.MeshBasicMaterial({
-          color: '#ef4444',
-          side: THREE.DoubleSide,
-          depthTest: false,
-          depthWrite: false,
-        }),
-      );
-      const innerThread = new THREE.Mesh(
-        new THREE.RingGeometry(centerRadius * 0.56, centerRadius * 0.76, 28),
-        new THREE.MeshBasicMaterial({
-          color: '#fecaca',
-          side: THREE.DoubleSide,
-          depthTest: false,
-          depthWrite: false,
-        }),
-      );
-      const threadHighlight = new THREE.Mesh(
-        new THREE.TorusGeometry(outerRadius, Math.max(0.005, cellSize * 0.028), 10, 36),
-        new THREE.MeshBasicMaterial({
-          color: '#f87171',
-          depthTest: false,
-          depthWrite: false,
-        }),
-      );
-      marker.add(opening, threadRing, innerThread, threadHighlight);
+      marker.add(opening);
+      const tapDashMaterial = new THREE.MeshBasicMaterial({
+        color: '#ef4444',
+        side: THREE.DoubleSide,
+        depthTest: true,
+        depthWrite: false,
+        transparent: true,
+        opacity: machiningEmphasis,
+      });
+      const dashCount = 6;
+      const dashArc = (Math.PI * 2) / dashCount;
+      for (let dashIndex = 0; dashIndex < dashCount; dashIndex += 1) {
+        marker.add(new THREE.Mesh(
+          new THREE.RingGeometry(
+            outerRadius * 0.76,
+            outerRadius,
+            6,
+            1,
+            dashIndex * dashArc,
+            dashArc * 0.46,
+          ),
+          tapDashMaterial,
+        ));
+      }
       marker.position.set(endX, sectionY, -sectionX);
       marker.rotation.y = normalRotation;
       marker.traverse((child) => {
         child.userData.tappingDecoration = true;
-        child.renderOrder = 120;
+        child.renderOrder = transparentProfile ? 50 : 18;
       });
       group.add(marker);
     }));
   };
 
-  if (item.tappingLeft) addTappingMarkers('left');
-  if (item.tappingRight) addTappingMarkers('right');
+  if (showMachiningMarks && item.tappingLeft) addTappingMarkers('left');
+  if (showMachiningMarks && item.tappingRight) addTappingMarkers('right');
   if (selected) addSelectionOutline(group);
   addSelectionHitbox(group, new THREE.BoxGeometry(length + 0.012, height + 0.018, width + 0.018));
   return group;
@@ -1509,6 +1548,24 @@ const createAccessoryObject = (item: DIYSceneItem, selected: boolean) => {
     color: '#aeb7c2',
     metalness: 0.9,
     roughness: 0.2,
+  });
+  const screwBlue = new THREE.MeshStandardMaterial({
+    color: '#2563eb',
+    metalness: 0.72,
+    roughness: 0.22,
+    emissive: new THREE.Color(selected ? '#38bdf8' : '#0c4a6e'),
+    emissiveIntensity: selected ? 0.36 : 0.12,
+    transparent: true,
+    opacity: 0.9,
+  });
+  const screwCyan = new THREE.MeshStandardMaterial({
+    color: '#38bdf8',
+    metalness: 0.68,
+    roughness: 0.2,
+    emissive: new THREE.Color('#075985'),
+    emissiveIntensity: 0.12,
+    transparent: true,
+    opacity: 0.82,
   });
   let hitboxSize = new THREE.Vector3(0.65, 0.65, 0.65);
 
@@ -1577,7 +1634,7 @@ const createAccessoryObject = (item: DIYSceneItem, selected: boolean) => {
   } else if (item.kind === 'screw') {
     const screwLength = THREE.MathUtils.clamp((item.height || 35) / SCENE_SCALE, 0.16, 1.2);
     const shaftRadius = THREE.MathUtils.clamp((item.width || 12) / SCENE_SCALE * 0.28, 0.025, 0.07);
-    const shaft = new THREE.Mesh(new THREE.CylinderGeometry(shaftRadius, shaftRadius, screwLength, 24), steel);
+    const shaft = new THREE.Mesh(new THREE.CylinderGeometry(shaftRadius, shaftRadius, screwLength, 24), screwCyan);
     shaft.position.y = -screwLength * 0.36;
     const headRadius = shaftRadius * 1.85;
     const headHeight = Math.max(0.09, shaftRadius * 1.6);
@@ -1585,15 +1642,18 @@ const createAccessoryObject = (item: DIYSceneItem, selected: boolean) => {
     const headGeometry = isButtonHead
       ? new THREE.SphereGeometry(headRadius, 28, 14)
       : new THREE.CylinderGeometry(headRadius, headRadius, headHeight, 28);
-    const head = new THREE.Mesh(headGeometry, darkMetal);
+    const head = new THREE.Mesh(headGeometry, screwBlue);
     if (isButtonHead) head.scale.set(1, 0.55, 1);
     head.position.y = screwLength * 0.14;
     const collar = new THREE.Mesh(
       new THREE.CylinderGeometry(headRadius * 0.96, headRadius * 0.96, Math.max(0.018, headHeight * 0.2), 28),
-      darkMetal,
+      screwBlue,
     );
     collar.position.y = head.position.y - headHeight * 0.45;
-    const socket = new THREE.Mesh(new THREE.CylinderGeometry(headRadius * 0.38, headRadius * 0.38, 0.008, 6), new THREE.MeshBasicMaterial({ color: '#05080c' }));
+    const socket = new THREE.Mesh(
+      new THREE.CylinderGeometry(headRadius * 0.38, headRadius * 0.38, 0.008, 6),
+      new THREE.MeshBasicMaterial({ color: '#082f49' }),
+    );
     socket.position.y = head.position.y + (isButtonHead ? headRadius * 0.55 : headHeight / 2) + 0.006;
     group.add(shaft, collar, head, socket);
     hitboxSize.set(headRadius * 2.6, screwLength + headHeight + 0.16, headRadius * 2.6);
@@ -1602,7 +1662,13 @@ const createAccessoryObject = (item: DIYSceneItem, selected: boolean) => {
     if (child instanceof THREE.Mesh) {
       child.castShadow = true;
       child.receiveShadow = true;
-      if (!child.userData.accessoryDecoration) addEdges(child);
+      if (!child.userData.accessoryDecoration) {
+        addEdges(
+          child,
+          item.kind === 'screw' ? '#075985' : '#475569',
+          item.kind === 'screw' ? 0.72 : 0.55,
+        );
+      }
     }
   });
   if (selected) addSelectionOutline(group);
@@ -1722,6 +1788,15 @@ const ThreeAssembly: React.FC<{
   };
   deleteLabel: string;
   frameAllLabel: string;
+  displayLabels: {
+    transparentProfiles: string;
+    machiningMarks: string;
+    machiningLegend: string;
+    through: string;
+    countersunk: string;
+    threaded: string;
+    tapping: string;
+  };
   drillMode: boolean;
   drillEditorLabels: { position: string; left: string; right: string; confirm: string; cancel: string };
   operationLabels: { length: string; move: string; apply: string };
@@ -1749,6 +1824,7 @@ const ThreeAssembly: React.FC<{
   },
   deleteLabel,
   frameAllLabel,
+  displayLabels,
   drillMode,
   drillEditorLabels,
   operationLabels,
@@ -1767,6 +1843,8 @@ const ThreeAssembly: React.FC<{
   const [snapHint, setSnapHint] = useState<string | null>(null);
   const snapHintTimerRef = useRef<number>(0);
   const [snapAlignment, setSnapAlignment] = useState<SnapAlignment>('auto');
+  const [transparentProfiles, setTransparentProfiles] = useState(false);
+  const [showMachiningMarks, setShowMachiningMarks] = useState(true);
   const [holeDraft, setHoleDraft] = useState<{
     itemId: string;
     side: ProfileSide;
@@ -2873,8 +2951,19 @@ const ThreeAssembly: React.FC<{
     const showMultiSelectionOutline = selectedIds.length > 1;
     items.forEach((item) => {
       const showSelectionOutline = showMultiSelectionOutline && selectedSet.has(item.id);
+      const machiningEmphasis = selectedIds.length === 0
+        ? 0.72
+        : selectedSet.has(item.id)
+          ? 1
+          : 0.24;
       const group = item.kind === 'profile'
-        ? createProfileObject(item, showSelectionOutline)
+        ? createProfileObject(
+          item,
+          showSelectionOutline,
+          transparentProfiles,
+          showMachiningMarks,
+          machiningEmphasis,
+        )
         : item.kind === 'plate' || item.kind === 'pegboard' || item.kind === 'marine_board'
           ? createBoardObject(item, showSelectionOutline)
           : createAccessoryObject(item, showSelectionOutline);
@@ -2911,7 +3000,7 @@ const ThreeAssembly: React.FC<{
       frameAll();
     }
     lastFrameSignatureRef.current = frameSignature;
-  }, [items, selectedId, selectedIds]);
+  }, [items, selectedId, selectedIds, showMachiningMarks, transparentProfiles]);
 
   return (
     <div className="relative h-[52vh] min-h-[380px] max-h-[620px] w-full sm:h-[62vh] xl:h-[calc(100vh-220px)] xl:min-h-[590px] xl:max-h-none">
@@ -3024,16 +3113,50 @@ const ThreeAssembly: React.FC<{
           style={selectionRect}
         />
       )}
-      <button
-        type="button"
-        onClick={frameAll}
-        title={frameAllLabel}
-        aria-label={frameAllLabel}
-        className="absolute right-3 top-3 z-20 flex items-center gap-2 rounded-xl border border-slate-200 bg-white/95 px-3 py-2 text-[11px] font-black text-slate-700 shadow-lg backdrop-blur transition hover:border-blue-300 hover:text-blue-700"
-      >
-        <Maximize2 className="h-4 w-4" />
-        <span className="hidden sm:inline">{frameAllLabel}</span>
-      </button>
+      <div className="absolute right-3 top-3 z-20 flex items-center gap-1.5">
+        <button
+          type="button"
+          onClick={() => setTransparentProfiles((current) => !current)}
+          title={displayLabels.transparentProfiles}
+          aria-label={displayLabels.transparentProfiles}
+          aria-pressed={transparentProfiles}
+          data-testid="diy-transparent-profiles"
+          className={`flex items-center gap-2 rounded-xl border px-3 py-2 text-[11px] font-black shadow-lg backdrop-blur transition ${
+            transparentProfiles
+              ? 'border-sky-400 bg-sky-500 text-white'
+              : 'border-slate-200 bg-white/95 text-slate-700 hover:border-sky-300 hover:text-sky-700'
+          }`}
+        >
+          <Eye className="h-4 w-4" />
+          <span className="hidden md:inline">{displayLabels.transparentProfiles}</span>
+        </button>
+        <button
+          type="button"
+          onClick={() => setShowMachiningMarks((current) => !current)}
+          title={displayLabels.machiningMarks}
+          aria-label={displayLabels.machiningMarks}
+          aria-pressed={showMachiningMarks}
+          data-testid="diy-machining-marks"
+          className={`flex items-center gap-2 rounded-xl border px-3 py-2 text-[11px] font-black shadow-lg backdrop-blur transition ${
+            showMachiningMarks
+              ? 'border-rose-300 bg-white/95 text-rose-600'
+              : 'border-slate-200 bg-white/95 text-slate-400 hover:border-rose-200 hover:text-rose-500'
+          }`}
+        >
+          <ScanLine className="h-4 w-4" />
+          <span className="hidden md:inline">{displayLabels.machiningMarks}</span>
+        </button>
+        <button
+          type="button"
+          onClick={frameAll}
+          title={frameAllLabel}
+          aria-label={frameAllLabel}
+          className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white/95 px-3 py-2 text-[11px] font-black text-slate-700 shadow-lg backdrop-blur transition hover:border-blue-300 hover:text-blue-700"
+        >
+          <Maximize2 className="h-4 w-4" />
+          <span className="hidden sm:inline">{frameAllLabel}</span>
+        </button>
+      </div>
       <div className="absolute right-3 top-14 z-20 rounded-2xl border border-slate-200 bg-white/95 p-1.5 shadow-lg backdrop-blur">
         <div className="px-1.5 pb-1 text-[8px] font-black uppercase tracking-widest text-slate-400">
           {alignmentLabels.title}
@@ -3101,6 +3224,31 @@ const ThreeAssembly: React.FC<{
           {snapHint}
         </div>
       )}
+      {showMachiningMarks && (
+        <div className="pointer-events-none absolute bottom-3 left-3 z-20 rounded-2xl border border-white/80 bg-white/88 px-3 py-2 shadow-lg backdrop-blur">
+          <div className="mb-1.5 text-[8px] font-black uppercase tracking-[0.16em] text-slate-400">
+            {displayLabels.machiningLegend}
+          </div>
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[9px] font-black text-slate-600">
+            <span className="flex items-center gap-1">
+              <span className="h-2.5 w-2.5 rounded-full border-2 border-slate-500 bg-slate-950" />
+              {displayLabels.through}
+            </span>
+            <span className="flex items-center gap-1">
+              <span className="h-3 w-3 rounded-full border-[3px] border-amber-500 bg-slate-950" />
+              {displayLabels.countersunk}
+            </span>
+            <span className="flex items-center gap-1">
+              <span className="h-3 w-3 rounded-full border-2 border-dashed border-rose-500 bg-slate-950" />
+              {displayLabels.threaded}
+            </span>
+            <span className="flex items-center gap-1 text-red-600">
+              <span className="h-3 w-3 rounded-full border-2 border-dashed border-red-500" />
+              {displayLabels.tapping}
+            </span>
+          </div>
+        </div>
+      )}
       {renderError && (
         <div className="absolute inset-0 z-20 flex items-center justify-center bg-slate-100 p-8 text-center">
           <div className="max-w-sm rounded-2xl border border-red-200 bg-white p-6 text-sm font-bold text-red-700 shadow-xl">{renderError}</div>
@@ -3127,6 +3275,30 @@ const getItemLabel = (item: DIYSceneItem, language: Language) => {
     return `${label} · ${item.height || 0}mm${item.linkedHoleId ? ` · ${t.linkedHole}` : ''}`;
   }
   return t.foot;
+};
+
+const getProfileMachiningSummary = (item: DIYSceneItem, language: Language) => {
+  if (item.kind !== 'profile') return '';
+  const t = TEXT[language];
+  const holeCounts = (item.holes || []).reduce<Record<HoleType, number>>((counts, hole) => {
+    counts[hole.type] += 1;
+    return counts;
+  }, { through: 0, countersunk: 0, threaded: 0 });
+  const holeSummary = ([
+    ['through', t.through],
+    ['countersunk', t.countersunk],
+    ['threaded', t.threaded],
+  ] as Array<[HoleType, string]>)
+    .filter(([type]) => holeCounts[type] > 0)
+    .map(([type, label]) => `${label} ${holeCounts[type]}`);
+  const tappingSummary = item.tappingLeft && item.tappingRight
+    ? t.bothEndTapping
+    : item.tappingLeft
+      ? t.leftEndTapping
+      : item.tappingRight
+        ? t.rightEndTapping
+        : '';
+  return [...holeSummary, tappingSummary].filter(Boolean).join(' · ');
 };
 
 const profileFinishForColor = (colorId: string) => (colorId === 'natural' || colorId === 'silver' ? 'oxidized' : 'powder');
@@ -3761,6 +3933,15 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({ language, user, onAddBatchToC
             }}
             deleteLabel={t.delete}
             frameAllLabel={t.frameAll}
+            displayLabels={{
+              transparentProfiles: t.transparentProfiles,
+              machiningMarks: t.machiningMarks,
+              machiningLegend: t.machiningLegend,
+              through: t.through,
+              countersunk: t.countersunk,
+              threaded: t.threaded,
+              tapping: t.tapping,
+            }}
             drillMode={drillMode}
             drillEditorLabels={{
               position: t.holePosition,
@@ -3896,6 +4077,11 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({ language, user, onAddBatchToC
                     <span className="text-[10px] font-black opacity-60">{String(index + 1).padStart(2, '0')}</span>
                     <span className="min-w-0 flex-1">
                       <span className="block truncate text-xs font-bold">{getItemLabel(item, language)}</span>
+                      {!!getProfileMachiningSummary(item, language) && (
+                        <span className="mt-0.5 block truncate text-[10px] font-bold text-rose-500">
+                          {getProfileMachiningSummary(item, language)}
+                        </span>
+                      )}
                       {!!item.remark?.trim() && (
                         <span className="mt-0.5 block truncate text-[10px] font-bold text-slate-400">
                           {t.remark}：{item.remark.trim()}
