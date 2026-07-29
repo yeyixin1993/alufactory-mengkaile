@@ -49,7 +49,15 @@ import {
 } from '../utils/profileMachining';
 import { buildProductionXlsx } from '../utils/productionXlsx';
 
-type DIYItemKind = 'profile' | 'plate' | 'pegboard' | 'marine_board' | 'connector' | 'foot';
+type DIYItemKind =
+  | 'profile'
+  | 'plate'
+  | 'pegboard'
+  | 'marine_board'
+  | 'connector'
+  | 'hidden_connector'
+  | 'screw'
+  | 'foot';
 
 type Vec3 = [number, number, number];
 type RotationAxisIndex = 0 | 1 | 2;
@@ -123,7 +131,19 @@ const TEXT: Record<Language, Record<string, string>> = {
     pegboard: '彩色洞洞板',
     marine: '彩色海洋板',
     connector: '角码连接件',
+    hiddenConnector: '隐藏连接件（单孔面）',
+    screw: '内六角螺丝',
     foot: '调平脚',
+    profileParts: '铝型材',
+    panelParts: '板材',
+    fasteningParts: '连接与紧固',
+    otherParts: '其他配件',
+    accessorySpec: '配件规格',
+    bracketSize: '角码边长 (mm)',
+    connectorLength: '连接件长度 (mm)',
+    screwLength: '螺丝长度 (mm)',
+    oneHoleFaceHint: '隐藏连接件每个安装面仅设 1 个紧固孔。',
+    connectionPlacementHint: '拖动到型材连接处，并用移动与旋转按钮精确定位；可单独复制或删除。',
     addDemo: '生成示例工作台',
     move: '移动',
     drillMode: '点选打孔',
@@ -210,7 +230,19 @@ const TEXT: Record<Language, Record<string, string>> = {
     pegboard: 'Colored pegboard',
     marine: 'Colored marine board',
     connector: 'Corner bracket',
+    hiddenConnector: 'Hidden connector (one-hole face)',
+    screw: 'Socket-head screw',
     foot: 'Leveling foot',
+    profileParts: 'Profiles',
+    panelParts: 'Panels',
+    fasteningParts: 'Connections & fasteners',
+    otherParts: 'Other hardware',
+    accessorySpec: 'Accessory specification',
+    bracketSize: 'Bracket side (mm)',
+    connectorLength: 'Connector length (mm)',
+    screwLength: 'Screw length (mm)',
+    oneHoleFaceHint: 'The hidden connector uses one fastening hole on each mounting face.',
+    connectionPlacementHint: 'Drag it onto a profile joint, then use move and rotate for precise placement. Each part can be copied or deleted.',
     addDemo: 'Build demo workbench',
     move: 'Move',
     drillMode: 'Place holes',
@@ -297,7 +329,19 @@ const TEXT: Record<Language, Record<string, string>> = {
     pegboard: 'カラーペグボード',
     marine: 'カラーマリンボード',
     connector: 'コーナーブラケット',
+    hiddenConnector: '隠しコネクタ（片面1穴）',
+    screw: '六角穴付きボルト',
     foot: 'レベリングフット',
+    profileParts: 'プロファイル',
+    panelParts: 'パネル',
+    fasteningParts: '接続・締結部品',
+    otherParts: 'その他',
+    accessorySpec: '部品仕様',
+    bracketSize: 'ブラケット辺長 (mm)',
+    connectorLength: 'コネクタ長さ (mm)',
+    screwLength: 'ボルト長さ (mm)',
+    oneHoleFaceHint: '隠しコネクタは各取付面に締結穴を1つだけ使用します。',
+    connectionPlacementHint: 'プロファイル接続部へドラッグし、移動と回転で正確に配置できます。個別に複製・削除できます。',
     addDemo: '作業台サンプルを作成',
     move: '移動',
     drillMode: 'クリック穴あけ',
@@ -521,17 +565,59 @@ const createItem = (kind: DIYItemKind, index = 0, variantId?: string): DIYSceneI
       remark: '',
     };
   }
+  const accessoryDefaults: Record<'connector' | 'hidden_connector' | 'screw' | 'foot', {
+    name: string;
+    colorId: string;
+    width: number;
+    height: number;
+    thickness: number;
+    price: number;
+  }> = {
+    connector: {
+      name: 'Corner bracket',
+      colorId: 'silver',
+      width: 40,
+      height: 40,
+      thickness: 4,
+      price: 8,
+    },
+    hidden_connector: {
+      name: 'Hidden connector',
+      colorId: 'silver',
+      width: 60,
+      height: 18,
+      thickness: 12,
+      price: 10,
+    },
+    screw: {
+      name: 'Socket-head screw',
+      colorId: 'black',
+      width: 12,
+      height: 35,
+      thickness: 12,
+      price: 1.5,
+    },
+    foot: {
+      name: 'Leveling foot',
+      colorId: 'black',
+      width: 45,
+      height: 70,
+      thickness: 35,
+      price: 12,
+    },
+  };
+  const accessory = accessoryDefaults[kind as keyof typeof accessoryDefaults] || accessoryDefaults.connector;
   return {
     id: makeId(),
     kind,
-    name: kind === 'connector' ? 'Corner bracket' : 'Leveling foot',
+    name: accessory.name,
     position: [offset, kind === 'foot' ? 35 : 500, 0],
     rotation: [0, 0, 0],
-    colorId: kind === 'connector' ? 'silver' : 'black',
-    width: kind === 'connector' ? 35 : 45,
-    height: kind === 'connector' ? 35 : 70,
-    thickness: kind === 'connector' ? 4 : 35,
-    accessoryPrice: kind === 'connector' ? 8 : 12,
+    colorId: accessory.colorId,
+    width: accessory.width,
+    height: accessory.height,
+    thickness: accessory.thickness,
+    accessoryPrice: accessory.price,
     quantity: 1,
     remark: '',
   };
@@ -552,6 +638,22 @@ const buildDemoWorkbench = (): DIYSceneItem[] => {
   addProfile(720, [470, 370, -230], [0, 0, 90]);
   items.push({ ...createItem('pegboard'), position: [0, 1050, -270], width: 850, height: 420, colorId: 'sapphire_blue' });
   items.push({ ...createItem('marine_board'), position: [0, 790, 0], width: 1000, height: 520, thickness: 18, rotation: [90, 0, 0], colorId: 'coffee' });
+  [-470, 470].forEach((x) => [-230, 230].forEach((z) => {
+    items.push({
+      ...createItem('connector', items.length),
+      position: [x, 760, z],
+      rotation: [0, z < 0 ? 180 : 0, x < 0 ? 0 : 180],
+    });
+    items.push({
+      ...createItem('screw', items.length),
+      position: [x + (x < 0 ? 24 : -24), 780, z + (z < 0 ? 22 : -22)],
+      rotation: [90, 0, 0],
+    });
+  }));
+  items.push({
+    ...createItem('hidden_connector', items.length),
+    position: [0, 760, 258],
+  });
   [-470, 470].forEach((x) => [-230, 230].forEach((z) => items.push({ ...createItem('foot'), position: [x, 20, z] })));
   return items;
 };
@@ -1043,30 +1145,38 @@ const createProfileObject = (item: DIYSceneItem, selected: boolean) => {
       const marker = new THREE.Group();
       const opening = new THREE.Mesh(
         new THREE.CircleGeometry(innerRadius, 28),
-        new THREE.MeshStandardMaterial({ color: '#10151c', metalness: 0.15, roughness: 0.9, polygonOffset: true, polygonOffsetFactor: -2 }),
+        new THREE.MeshBasicMaterial({
+          color: '#0b1017',
+          side: THREE.DoubleSide,
+          depthTest: false,
+          depthWrite: false,
+        }),
       );
       const rim = new THREE.Mesh(
         new THREE.RingGeometry(innerRadius, outerRadius, 28),
-        new THREE.MeshStandardMaterial({
-          color: markerType === 'countersunk' ? '#89939e' : '#303944',
-          metalness: 0.72,
-          roughness: 0.3,
-          polygonOffset: true,
-          polygonOffsetFactor: -3,
+        new THREE.MeshBasicMaterial({
+          color: markerType === 'countersunk' ? '#cbd5e1' : markerType === 'threaded' ? '#64748b' : '#303944',
+          side: THREE.DoubleSide,
+          depthTest: false,
+          depthWrite: false,
         }),
       );
       marker.add(rim, opening);
       marker.position.x = x;
       const crossPosition = grooveCoordinate(hole.side, getHolePhysicalGrooveIndex(hole, item.variantId));
       if (side === 'A' || side === 'C') {
-        marker.position.y = side === 'A' ? height / 2 + 0.003 : -height / 2 - 0.003;
+        marker.position.y = side === 'A' ? height / 2 + 0.012 : -height / 2 - 0.012;
         marker.position.z = crossPosition;
         marker.rotation.x = side === 'A' ? -Math.PI / 2 : Math.PI / 2;
       } else {
         marker.position.y = crossPosition;
-        marker.position.z = side === 'B' ? width / 2 + 0.003 : -width / 2 - 0.003;
+        marker.position.z = side === 'B' ? width / 2 + 0.012 : -width / 2 - 0.012;
         if (side === 'D') marker.rotation.y = Math.PI;
       }
+      marker.traverse((child) => {
+        child.userData.holeDecoration = true;
+        child.renderOrder = 110;
+      });
       group.add(marker);
     };
     addHoleMarker(hole.side, true);
@@ -1092,7 +1202,7 @@ const createProfileObject = (item: DIYSceneItem, selected: boolean) => {
       const threadRing = new THREE.Mesh(
         new THREE.RingGeometry(centerRadius, outerRadius, 32),
         new THREE.MeshBasicMaterial({
-          color: '#f59e0b',
+          color: '#ef4444',
           side: THREE.DoubleSide,
           depthTest: false,
           depthWrite: false,
@@ -1101,7 +1211,7 @@ const createProfileObject = (item: DIYSceneItem, selected: boolean) => {
       const innerThread = new THREE.Mesh(
         new THREE.RingGeometry(centerRadius * 0.56, centerRadius * 0.76, 28),
         new THREE.MeshBasicMaterial({
-          color: '#fde68a',
+          color: '#fecaca',
           side: THREE.DoubleSide,
           depthTest: false,
           depthWrite: false,
@@ -1110,7 +1220,7 @@ const createProfileObject = (item: DIYSceneItem, selected: boolean) => {
       const threadHighlight = new THREE.Mesh(
         new THREE.TorusGeometry(outerRadius, Math.max(0.005, cellSize * 0.028), 10, 36),
         new THREE.MeshBasicMaterial({
-          color: '#fbbf24',
+          color: '#f87171',
           depthTest: false,
           depthWrite: false,
         }),
@@ -1181,28 +1291,106 @@ const createBoardObject = (item: DIYSceneItem, selected: boolean) => {
 const createAccessoryObject = (item: DIYSceneItem, selected: boolean) => {
   const group = new THREE.Group();
   const material = makeMaterial(item.colorId, selected, item.kind);
+  const darkMetal = new THREE.MeshStandardMaterial({
+    color: '#1f2937',
+    metalness: 0.82,
+    roughness: 0.25,
+  });
+  const steel = new THREE.MeshStandardMaterial({
+    color: '#aeb7c2',
+    metalness: 0.9,
+    roughness: 0.2,
+  });
+  let hitboxSize = new THREE.Vector3(0.65, 0.65, 0.65);
+
+  const addFrontHole = (x: number, y: number, z: number, radius = 0.055, color = '#1f2937') => {
+    const hole = new THREE.Mesh(
+      new THREE.CircleGeometry(radius, 24),
+      new THREE.MeshBasicMaterial({
+        color,
+        side: THREE.DoubleSide,
+        depthTest: false,
+        depthWrite: false,
+      }),
+    );
+    hole.position.set(x, y, z);
+    hole.userData.accessoryDecoration = true;
+    hole.renderOrder = 105;
+    group.add(hole);
+  };
+
   if (item.kind === 'foot') {
     const stem = new THREE.Mesh(new THREE.CylinderGeometry(0.075, 0.075, 0.5, 24), material);
     stem.position.y = 0.22;
     const pad = new THREE.Mesh(new THREE.CylinderGeometry(0.23, 0.28, 0.12, 28), material.clone());
     pad.position.y = -0.08;
     group.add(stem, pad);
-  } else {
-    const horizontal = new THREE.Mesh(new THREE.BoxGeometry(0.45, 0.08, 0.28), material);
-    const vertical = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.45, 0.28), material.clone());
-    horizontal.position.x = 0.18;
-    vertical.position.y = 0.18;
+  } else if (item.kind === 'connector') {
+    const size = THREE.MathUtils.clamp((item.width || 40) / SCENE_SCALE, 0.25, 0.9);
+    const plateThickness = THREE.MathUtils.clamp((item.thickness || 4) / SCENE_SCALE, 0.035, 0.1);
+    const depth = Math.max(0.22, size * 0.55);
+    const horizontal = new THREE.Mesh(new THREE.BoxGeometry(size, plateThickness, depth), material);
+    const vertical = new THREE.Mesh(new THREE.BoxGeometry(plateThickness, size, depth), material.clone());
+    horizontal.position.x = size / 2 - plateThickness / 2;
+    vertical.position.y = size / 2 - plateThickness / 2;
     group.add(horizontal, vertical);
+    const faceZ = depth / 2 + 0.008;
+    addFrontHole(size * 0.28, 0, faceZ);
+    addFrontHole(size * 0.7, 0, faceZ);
+    addFrontHole(0, size * 0.28, faceZ);
+    addFrontHole(0, size * 0.7, faceZ);
+    hitboxSize.set(size + 0.12, size + 0.12, depth + 0.15);
+  } else if (item.kind === 'hidden_connector') {
+    const length = THREE.MathUtils.clamp((item.width || 60) / SCENE_SCALE, 0.35, 1.2);
+    const faceHeight = THREE.MathUtils.clamp((item.height || 18) / SCENE_SCALE, 0.12, 0.35);
+    const depth = THREE.MathUtils.clamp((item.thickness || 12) / SCENE_SCALE, 0.08, 0.25);
+    const insert = new THREE.Mesh(new THREE.BoxGeometry(length, faceHeight, depth), material);
+    const guide = new THREE.Mesh(new THREE.BoxGeometry(length * 0.74, faceHeight * 0.36, depth + 0.018), steel);
+    guide.position.y = -faceHeight * 0.12;
+    group.add(insert, guide);
+    // This hidden connector intentionally has one fastening hole on each face.
+    addFrontHole(0, faceHeight * 0.12, depth / 2 + 0.012, Math.min(0.06, faceHeight * 0.28));
+    const rearHole = new THREE.Mesh(
+      new THREE.CircleGeometry(Math.min(0.06, faceHeight * 0.28), 24),
+      new THREE.MeshBasicMaterial({
+        color: '#1f2937',
+        side: THREE.DoubleSide,
+        depthTest: false,
+        depthWrite: false,
+      }),
+    );
+    rearHole.position.set(0, faceHeight * 0.12, -depth / 2 - 0.012);
+    rearHole.rotation.y = Math.PI;
+    rearHole.userData.accessoryDecoration = true;
+    rearHole.renderOrder = 105;
+    group.add(rearHole);
+    hitboxSize.set(length + 0.14, faceHeight + 0.16, depth + 0.16);
+  } else if (item.kind === 'screw') {
+    const screwLength = THREE.MathUtils.clamp((item.height || 35) / SCENE_SCALE, 0.16, 1.2);
+    const shaftRadius = THREE.MathUtils.clamp((item.width || 12) / SCENE_SCALE * 0.28, 0.025, 0.07);
+    const shaft = new THREE.Mesh(new THREE.CylinderGeometry(shaftRadius, shaftRadius, screwLength, 24), steel);
+    shaft.position.y = -screwLength * 0.36;
+    const headRadius = shaftRadius * 1.85;
+    const headHeight = Math.max(0.09, shaftRadius * 1.6);
+    const head = new THREE.Mesh(new THREE.CylinderGeometry(headRadius, headRadius, headHeight, 6), darkMetal);
+    head.position.y = screwLength * 0.14;
+    const washer = new THREE.Mesh(new THREE.TorusGeometry(headRadius * 0.9, Math.max(0.01, shaftRadius * 0.22), 8, 28), steel);
+    washer.rotation.x = Math.PI / 2;
+    washer.position.y = head.position.y - headHeight * 0.62;
+    const socket = new THREE.Mesh(new THREE.CylinderGeometry(headRadius * 0.38, headRadius * 0.38, 0.008, 6), new THREE.MeshBasicMaterial({ color: '#05080c' }));
+    socket.position.y = head.position.y + headHeight / 2 + 0.006;
+    group.add(shaft, washer, head, socket);
+    hitboxSize.set(headRadius * 2.6, screwLength + headHeight + 0.16, headRadius * 2.6);
   }
   group.traverse((child) => {
     if (child instanceof THREE.Mesh) {
       child.castShadow = true;
       child.receiveShadow = true;
-      addEdges(child);
+      if (!child.userData.accessoryDecoration) addEdges(child);
     }
   });
   if (selected) addSelectionOutline(group);
-  addSelectionHitbox(group, new THREE.BoxGeometry(0.65, 0.65, 0.65));
+  addSelectionHitbox(group, new THREE.BoxGeometry(hitboxSize.x, hitboxSize.y, hitboxSize.z));
   return group;
 };
 
@@ -1320,6 +1508,7 @@ const ThreeAssembly: React.FC<{
   onRotate90: (id: string, axisIndex: RotationAxisIndex, direction?: -1 | 1) => void;
   onDelete: (id: string) => void;
   onPlaceHole: (id: string, side: ProfileSide, positionMm: number, displayGrooveIndex: number, physicalGrooveIndex: number) => void;
+  onCancelDrillMode: () => void;
 }> = ({
   items,
   selectedId,
@@ -1338,6 +1527,7 @@ const ThreeAssembly: React.FC<{
   onRotate90,
   onDelete,
   onPlaceHole,
+  onCancelDrillMode,
 }) => {
   const mountRef = useRef<HTMLDivElement>(null);
   const [renderError, setRenderError] = useState<string | null>(null);
@@ -1384,6 +1574,7 @@ const ThreeAssembly: React.FC<{
   const onRotate90Ref = useRef(onRotate90);
   const onDeleteRef = useRef(onDelete);
   const onPlaceHoleRef = useRef(onPlaceHole);
+  const onCancelDrillModeRef = useRef(onCancelDrillMode);
   const drillModeRef = useRef(drillMode);
   const snapLabelsRef = useRef(snapLabels);
   const drillEditorLabelsRef = useRef(drillEditorLabels);
@@ -1429,6 +1620,7 @@ const ThreeAssembly: React.FC<{
   useEffect(() => { onRotate90Ref.current = onRotate90; }, [onRotate90]);
   useEffect(() => { onDeleteRef.current = onDelete; }, [onDelete]);
   useEffect(() => { onPlaceHoleRef.current = onPlaceHole; }, [onPlaceHole]);
+  useEffect(() => { onCancelDrillModeRef.current = onCancelDrillMode; }, [onCancelDrillMode]);
   useEffect(() => {
     drillModeRef.current = drillMode;
     if (!drillMode) setHoleDraft(null);
@@ -1711,8 +1903,13 @@ const ThreeAssembly: React.FC<{
         !hit.object.userData.selectionProxy
         && !hit.object.userData.selectionDecoration
         && !hit.object.userData.tappingDecoration
+        && !hit.object.userData.holeDecoration
       ))
-        || hits.find((hit) => !hit.object.userData.selectionDecoration && !hit.object.userData.tappingDecoration)
+        || hits.find((hit) => (
+          !hit.object.userData.selectionDecoration
+          && !hit.object.userData.tappingDecoration
+          && !hit.object.userData.holeDecoration
+        ))
         || null;
     };
     const getHitItemId = (clientX: number, clientY: number) => {
@@ -2074,6 +2271,7 @@ const ThreeAssembly: React.FC<{
       if (!start) return;
       const distance = Math.hypot(event.clientX - start.x, event.clientY - start.y);
       if (start.button === 0 && drillModeRef.current && distance <= 7) {
+        let validHoleSurface = false;
         const hit = getContentHit(event.clientX, event.clientY);
         const itemId = hit ? getItemIdFromObject(hit.object) : null;
         const item = itemId ? itemsRef.current.find((entry) => entry.id === itemId) : undefined;
@@ -2085,6 +2283,7 @@ const ThreeAssembly: React.FC<{
           const yDistance = Math.abs(Math.abs(localPoint.y) - dimensions.height / 2);
           const zDistance = Math.abs(Math.abs(localPoint.z) - dimensions.width / 2);
           if (endDistance >= Math.min(yDistance, zDistance)) {
+            validHoleSurface = true;
             const side: ProfileSide = yDistance <= zDistance
               ? (localPoint.y >= 0 ? 'A' : 'C')
               : (localPoint.z >= 0 ? 'B' : 'D');
@@ -2113,6 +2312,10 @@ const ThreeAssembly: React.FC<{
               y: THREE.MathUtils.clamp(event.clientY - rect.top - 76, 58, Math.max(58, rect.height - 126)),
             });
           }
+        }
+        if (!validHoleSurface) {
+          setHoleDraft(null);
+          onCancelDrillModeRef.current();
         }
         event.preventDefault();
         return;
@@ -2445,7 +2648,10 @@ const getItemLabel = (item: DIYSceneItem, language: Language) => {
   if (item.kind === 'plate') return `${t.plate} · ${item.width}×${item.height}`;
   if (item.kind === 'pegboard') return `${t.pegboard} · ${item.width}×${item.height}`;
   if (item.kind === 'marine_board') return `${t.marine} · ${item.width}×${item.height}`;
-  return item.kind === 'connector' ? t.connector : t.foot;
+  if (item.kind === 'connector') return t.connector;
+  if (item.kind === 'hidden_connector') return t.hiddenConnector;
+  if (item.kind === 'screw') return `${t.screw} · ${item.height || 0}mm`;
+  return t.foot;
 };
 
 const profileFinishForColor = (colorId: string) => (colorId === 'natural' || colorId === 'silver' ? 'oxidized' : 'powder');
@@ -2799,7 +3005,13 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({ language, user, onAddBatchToC
         };
         return { id: makeId(), product, quantity: item.quantity, config, totalPrice };
       }
-      const accessoryId = item.kind === 'connector' ? 'diy-corner-bracket' : 'diy-leveling-foot';
+      const accessoryDefinition = {
+        connector: { id: 'diy-corner-bracket', code: 1, label: t.connector, imageKey: '1' },
+        hidden_connector: { id: 'diy-hidden-connector-one-hole', code: 2, label: t.hiddenConnector, imageKey: '2' },
+        screw: { id: 'diy-socket-head-screw', code: 3, label: t.screw, imageKey: '3' },
+        foot: { id: 'diy-leveling-foot', code: 8, label: t.foot, imageKey: '8' },
+      }[item.kind as 'connector' | 'hidden_connector' | 'screw' | 'foot'];
+      const accessoryId = accessoryDefinition.id;
       const unitPrice = item.accessoryPrice || 0;
       return {
         id: makeId(),
@@ -2816,9 +3028,9 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({ language, user, onAddBatchToC
           unitTotal: totalPrice,
           lines: [{
             id: accessoryId,
-            code: item.kind === 'connector' ? 1 : 8,
-            name: item.kind === 'connector' ? t.connector : t.foot,
-            imageKey: item.kind === 'connector' ? '1' : '8',
+            code: accessoryDefinition.code,
+            name: accessoryDefinition.label,
+            imageKey: accessoryDefinition.imageKey,
             quantity: item.quantity,
             unitPrice,
             subtotal: totalPrice,
@@ -2888,14 +3100,40 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({ language, user, onAddBatchToC
 
   const grooveLabel = (index: number) => grooveOrdinal(index, language);
 
-  const palette = [
-    { kind: 'profile' as const, variantId: '2020', label: t.profile2020, icon: Box },
-    { kind: 'profile' as const, variantId: '2040', label: t.profile2040, icon: Box },
-    { kind: 'plate' as const, label: t.plate, icon: PanelTop },
-    { kind: 'pegboard' as const, label: t.pegboard, icon: Grid3X3 },
-    { kind: 'marine_board' as const, label: t.marine, icon: PanelTop },
-    { kind: 'connector' as const, label: t.connector, icon: Wrench },
-    { kind: 'foot' as const, label: t.foot, icon: CircleDot },
+  const paletteGroups = [
+    {
+      id: 'profiles',
+      label: t.profileParts,
+      items: [
+        { kind: 'profile' as const, variantId: '2020', label: t.profile2020, icon: Box },
+        { kind: 'profile' as const, variantId: '2040', label: t.profile2040, icon: Box },
+      ],
+    },
+    {
+      id: 'panels',
+      label: t.panelParts,
+      items: [
+        { kind: 'plate' as const, label: t.plate, icon: PanelTop },
+        { kind: 'pegboard' as const, label: t.pegboard, icon: Grid3X3 },
+        { kind: 'marine_board' as const, label: t.marine, icon: PanelTop },
+      ],
+    },
+    {
+      id: 'fasteners',
+      label: t.fasteningParts,
+      items: [
+        { kind: 'connector' as const, label: t.connector, icon: Wrench },
+        { kind: 'hidden_connector' as const, label: t.hiddenConnector, icon: Box },
+        { kind: 'screw' as const, label: t.screw, icon: CircleDot },
+      ],
+    },
+    {
+      id: 'other',
+      label: t.otherParts,
+      items: [
+        { kind: 'foot' as const, label: t.foot, icon: CircleDot },
+      ],
+    },
   ];
 
   return (
@@ -2930,22 +3168,37 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({ language, user, onAddBatchToC
             <Hammer className="h-5 w-5 text-blue-600" />
           </div>
           <p className="mt-2 text-xs font-medium leading-relaxed text-slate-400">{t.dragHint}</p>
-          <div className="mt-4 grid grid-cols-2 gap-2 xl:grid-cols-1">
-            {palette.map((entry) => {
-              const Icon = entry.icon;
-              return (
-                <button
-                  key={`${entry.kind}-${entry.variantId || ''}`}
-                  draggable
-                  onDragStart={(event) => event.dataTransfer.setData('application/x-mengkaile-part', JSON.stringify({ kind: entry.kind, variantId: entry.variantId }))}
-                  onClick={() => addItem(entry.kind, entry.variantId)}
-                  className="group flex items-center gap-3 rounded-2xl border border-slate-200 bg-slate-50 p-3 text-left transition hover:border-blue-400 hover:bg-blue-50"
-                >
-                  <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-white text-slate-500 shadow-sm group-hover:text-blue-600"><Icon className="h-5 w-5" /></span>
-                  <span className="text-xs font-black text-slate-700">{entry.label}</span>
-                </button>
-              );
-            })}
+          <div className="mt-4 space-y-4">
+            {paletteGroups.map((paletteGroup) => (
+              <section key={paletteGroup.id}>
+                <div className="mb-2 flex items-center gap-2 text-[9px] font-black uppercase tracking-[0.18em] text-slate-400">
+                  <span className="h-px flex-1 bg-slate-100" />
+                  {paletteGroup.label}
+                  <span className="h-px flex-1 bg-slate-100" />
+                </div>
+                <div className="grid grid-cols-2 gap-2 xl:grid-cols-1">
+                  {paletteGroup.items.map((entry) => {
+                    const Icon = entry.icon;
+                    return (
+                      <button
+                        key={`${entry.kind}-${'variantId' in entry ? entry.variantId || '' : ''}`}
+                        data-testid={`diy-add-${entry.kind}${'variantId' in entry && entry.variantId ? `-${entry.variantId}` : ''}`}
+                        draggable
+                        onDragStart={(event) => event.dataTransfer.setData('application/x-mengkaile-part', JSON.stringify({
+                          kind: entry.kind,
+                          variantId: 'variantId' in entry ? entry.variantId : undefined,
+                        }))}
+                        onClick={() => addItem(entry.kind, 'variantId' in entry ? entry.variantId : undefined)}
+                        className="group flex items-center gap-3 rounded-2xl border border-slate-200 bg-slate-50 p-3 text-left transition hover:border-blue-400 hover:bg-blue-50"
+                      >
+                        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-white text-slate-500 shadow-sm group-hover:text-blue-600"><Icon className="h-5 w-5" /></span>
+                        <span className="text-xs font-black text-slate-700">{entry.label}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </section>
+            ))}
           </div>
           <button onClick={() => commit(buildDemoWorkbench(), null)} className="mt-3 w-full rounded-2xl bg-slate-900 px-4 py-3 text-xs font-black text-white transition hover:bg-blue-600">
             {t.addDemo}
@@ -3008,6 +3261,10 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({ language, user, onAddBatchToC
             onRotate90={rotateItemBy90}
             onDelete={deleteItem}
             onPlaceHole={placeHoleFrom3D}
+            onCancelDrillMode={() => {
+              setDrillMode(false);
+              setSelectedId(null);
+            }}
           />
           <div className="pointer-events-none absolute left-4 top-4 rounded-2xl border border-white/80 bg-white/85 px-4 py-3 shadow-lg backdrop-blur">
             <div className="text-[10px] font-black uppercase tracking-widest text-slate-400">{t.total}</div>
@@ -3145,6 +3402,46 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({ language, user, onAddBatchToC
                       {(selected.kind === 'marine_board' ? [12, 18] : selected.kind === 'pegboard' ? [2, 5] : [1, 2, 3, 4, 5]).map((value) => <option key={value} value={value}>{value}mm</option>)}
                     </select>
                   </label>
+                </div>
+              )}
+
+              {(selected.kind === 'connector' || selected.kind === 'hidden_connector' || selected.kind === 'screw') && (
+                <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                  <div className="mb-3 flex items-center gap-2">
+                    <Wrench className="h-4 w-4 text-blue-600" />
+                    <h3 className="text-xs font-black uppercase tracking-widest text-slate-700">{t.accessorySpec}</h3>
+                  </div>
+                  {selected.kind === 'connector' && (
+                    <NumberField
+                      label={t.bracketSize}
+                      value={selected.width || 40}
+                      min={25}
+                      max={90}
+                      onChange={(value) => updateSelected({ width: value, height: value })}
+                    />
+                  )}
+                  {selected.kind === 'hidden_connector' && (
+                    <>
+                      <NumberField
+                        label={t.connectorLength}
+                        value={selected.width || 60}
+                        min={35}
+                        max={120}
+                        onChange={(value) => updateSelected({ width: value })}
+                      />
+                      <p className="mt-2 rounded-xl bg-blue-50 px-3 py-2 text-[10px] font-bold leading-relaxed text-blue-700">{t.oneHoleFaceHint}</p>
+                    </>
+                  )}
+                  {selected.kind === 'screw' && (
+                    <NumberField
+                      label={t.screwLength}
+                      value={selected.height || 35}
+                      min={16}
+                      max={120}
+                      onChange={(value) => updateSelected({ height: value })}
+                    />
+                  )}
+                  <p className="mt-2 text-[10px] font-bold leading-relaxed text-slate-400">{t.connectionPlacementHint}</p>
                 </div>
               )}
 
