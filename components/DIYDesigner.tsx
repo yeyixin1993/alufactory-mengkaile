@@ -1868,18 +1868,22 @@ const ThreeAssembly: React.FC<{
 
   const applyOperationEditor = () => {
     if (!operationEditor) return;
+    const editor = operationEditor;
+    // Close first so a parent item update cannot leave the floating editor
+    // mounted while the scene is synchronising.
+    setOperationEditor(null);
     if (
-      operationEditor.kind === 'length'
-      && operationEditor.fixedEnd
-      && operationEditor.axis
-      && operationEditor.side
+      editor.kind === 'length'
+      && editor.fixedEnd
+      && editor.axis
+      && editor.side
     ) {
-      const lengthMm = THREE.MathUtils.clamp(Math.round(operationEditor.valueMm), 21, 3000);
-      const fixedEnd = new THREE.Vector3(...operationEditor.fixedEnd);
-      const axis = new THREE.Vector3(...operationEditor.axis).normalize();
-      const position = fixedEnd.addScaledVector(axis, operationEditor.side * (lengthMm / SCENE_SCALE) / 2);
+      const lengthMm = THREE.MathUtils.clamp(Math.round(editor.valueMm), 21, 3000);
+      const fixedEnd = new THREE.Vector3(...editor.fixedEnd);
+      const axis = new THREE.Vector3(...editor.axis).normalize();
+      const position = fixedEnd.addScaledVector(axis, editor.side * (lengthMm / SCENE_SCALE) / 2);
       onResizeProfileRef.current(
-        operationEditor.itemId,
+        editor.itemId,
         lengthMm,
         [
           Math.round(position.x * SCENE_SCALE),
@@ -1889,17 +1893,17 @@ const ThreeAssembly: React.FC<{
       );
     }
     if (
-      operationEditor.kind === 'move'
-      && operationEditor.startPosition
-      && operationEditor.direction
+      editor.kind === 'move'
+      && editor.startPosition
+      && editor.direction
     ) {
-      const item = itemsRef.current.find((entry) => entry.id === operationEditor.itemId);
+      const item = itemsRef.current.find((entry) => entry.id === editor.itemId);
       if (item) {
-        const start = new THREE.Vector3(...operationEditor.startPosition);
-        const direction = new THREE.Vector3(...operationEditor.direction).normalize();
-        const position = start.addScaledVector(direction, operationEditor.valueMm / SCENE_SCALE);
+        const start = new THREE.Vector3(...editor.startPosition);
+        const direction = new THREE.Vector3(...editor.direction).normalize();
+        const position = start.addScaledVector(direction, editor.valueMm / SCENE_SCALE);
         onTransformRef.current(
-          operationEditor.itemId,
+          editor.itemId,
           [
             Math.round(position.x * SCENE_SCALE),
             Math.round(position.y * SCENE_SCALE),
@@ -1909,7 +1913,6 @@ const ThreeAssembly: React.FC<{
         );
       }
     }
-    setOperationEditor(null);
   };
 
   useEffect(() => {
@@ -2414,18 +2417,9 @@ const ThreeAssembly: React.FC<{
         const currentPoint = raycaster.ray.intersectPlane(movePlane, new THREE.Vector3());
         if (!currentPoint) return;
         const movement = currentPoint.sub(state.startPoint);
-        let moveDistanceMm: number;
-        let moveDirection: THREE.Vector3;
         if (state.axis) {
           const axisDistance = movement.dot(state.axis);
           movement.copy(state.axis).multiplyScalar(axisDistance);
-          moveDistanceMm = Math.round(axisDistance * SCENE_SCALE);
-          moveDirection = state.axis.clone();
-        } else {
-          moveDistanceMm = Math.round(movement.length() * SCENE_SCALE);
-          moveDirection = movement.lengthSq() > 1e-8
-            ? movement.clone().normalize()
-            : new THREE.Vector3(1, 0, 0);
         }
         if (movement.lengthSq() < 1e-7) return;
         state.moved = true;
@@ -2470,26 +2464,6 @@ const ThreeAssembly: React.FC<{
         }
         state.validPosition.copy(nextPosition);
         syncProfileLengthHandles(lengthHandles, state.object, state.item);
-        const finalMovement = nextPosition.clone().sub(state.startPosition);
-        if (state.axis) {
-          moveDistanceMm = Math.round(finalMovement.dot(state.axis) * SCENE_SCALE);
-          moveDirection = state.axis.clone();
-        } else {
-          moveDistanceMm = Math.round(finalMovement.length() * SCENE_SCALE);
-          moveDirection = finalMovement.lengthSq() > 1e-8
-            ? finalMovement.normalize()
-            : moveDirection;
-        }
-        const rect = renderer.domElement.getBoundingClientRect();
-        setOperationEditor({
-          kind: 'move',
-          itemId: state.item.id,
-          valueMm: moveDistanceMm,
-          x: THREE.MathUtils.clamp(event.clientX - rect.left, 105, Math.max(105, rect.width - 105)),
-          y: THREE.MathUtils.clamp(event.clientY - rect.top - 54, 58, Math.max(58, rect.height - 58)),
-          startPosition: [state.startPosition.x, state.startPosition.y, state.startPosition.z],
-          direction: [moveDirection.x, moveDirection.y, moveDirection.z],
-        });
         event.preventDefault();
         return;
       }
@@ -2584,6 +2558,21 @@ const ThreeAssembly: React.FC<{
             ],
             state.item.rotation,
           );
+        }
+        if (state.axis && state.moved) {
+          const movement = state.validPosition.clone().sub(state.startPosition);
+          const rect = renderer.domElement.getBoundingClientRect();
+          setOperationEditor({
+            kind: 'move',
+            itemId: state.item.id,
+            valueMm: Math.round(movement.dot(state.axis) * SCENE_SCALE),
+            x: THREE.MathUtils.clamp(event.clientX - rect.left, 105, Math.max(105, rect.width - 105)),
+            y: THREE.MathUtils.clamp(event.clientY - rect.top - 54, 58, Math.max(58, rect.height - 58)),
+            startPosition: [state.startPosition.x, state.startPosition.y, state.startPosition.z],
+            direction: [state.axis.x, state.axis.y, state.axis.z],
+          });
+        } else {
+          setOperationEditor(null);
         }
         hideSnapVisual();
         window.clearTimeout(snapHintTimerRef.current);
@@ -2923,6 +2912,13 @@ const ThreeAssembly: React.FC<{
               className="w-24 rounded-lg border border-blue-200 bg-blue-50 px-2 py-1.5 text-right text-xs font-black text-slate-900 outline-none focus:border-blue-500"
             />
             <span className="text-[10px] font-black text-slate-400">mm</span>
+            <button
+              type="button"
+              onClick={() => setOperationEditor(null)}
+              className="rounded-lg border border-slate-200 px-2 py-1.5 text-[10px] font-black text-slate-500 hover:bg-slate-50"
+            >
+              {drillEditorLabels.cancel}
+            </button>
             <button
               type="button"
               onClick={applyOperationEditor}
