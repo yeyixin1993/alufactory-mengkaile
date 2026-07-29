@@ -220,9 +220,9 @@ const TEXT: Record<Language, Record<string, string>> = {
     snapOffset: '磁吸：边缘对齐',
     snapMode: '磁吸对齐',
     snapAuto: '自动',
-    alignStart: '齐左',
-    alignCenter: '居中',
-    alignEnd: '齐右',
+    alignStart: '前一位',
+    alignCenter: '同一线',
+    alignEnd: '后一位',
     connectedTo: '已连接到',
     frameAll: '显示全部',
     multiSelected: '批量选择',
@@ -332,9 +332,9 @@ const TEXT: Record<Language, Record<string, string>> = {
     snapOffset: 'Magnet: edge alignment',
     snapMode: 'Snap alignment',
     snapAuto: 'Auto',
-    alignStart: 'Start',
-    alignCenter: 'Center',
-    alignEnd: 'End',
+    alignStart: 'Previous',
+    alignCenter: 'Center line',
+    alignEnd: 'Next',
     connectedTo: 'Connected to',
     frameAll: 'Frame all',
     multiSelected: 'Batch selection',
@@ -444,9 +444,9 @@ const TEXT: Record<Language, Record<string, string>> = {
     snapOffset: 'スナップ：端揃え',
     snapMode: 'スナップ位置',
     snapAuto: '自動',
-    alignStart: '左揃え',
-    alignCenter: '中央',
-    alignEnd: '右揃え',
+    alignStart: '前位置',
+    alignCenter: '同一線',
+    alignEnd: '後位置',
     connectedTo: '接続先',
     frameAll: '全体表示',
     multiSelected: '一括選択',
@@ -1090,20 +1090,27 @@ const findMagneticProfileSnap = (
             const targetLongitudinalOffsets: Array<{ offset: number; alignment: ProfileSnap['alignment'] }> = targetAxisIndex === 0
               ? [{ offset: 0, alignment: 'center' }]
               : (() => {
-                const tangent = targetBox.axes[0];
-                const movingProjectedHalf = movingBox.axes.reduce(
-                  (sum, movingAxis, movingIndex) => (
-                    sum + movingBox.halfSizes[movingIndex] * Math.abs(movingAxis.dot(tangent))
-                  ),
-                  0,
-                );
-                const insideAlignment = Math.max(0, targetBox.halfSizes[0] - movingProjectedHalf);
-                const candidates: Array<{ offset: number; alignment: ProfileSnap['alignment'] }> = [
-                  { offset: 0, alignment: 'center' },
-                  { offset: -insideAlignment, alignment: 'start' },
-                  { offset: insideAlignment, alignment: 'end' },
-                ];
-                return candidates;
+                const [targetWidthMm, targetHeightMm] = profileSize(targetItem.variantId);
+                const [movingWidthMm, movingHeightMm] = profileSize(movingItem.variantId);
+                const moduleStep = Math.min(
+                  targetWidthMm,
+                  targetHeightMm,
+                  movingWidthMm,
+                  movingHeightMm,
+                ) / SCENE_SCALE;
+                // Standard extrusion joints use exactly three longitudinal
+                // planes around either end: one module before, on the end
+                // centre-line, or one module after. Non-module offsets remain
+                // possible through the numeric move editor, but are never
+                // selected automatically.
+                return [-1, 1].flatMap((endDirection) => {
+                  const endPlane = endDirection * targetBox.halfSizes[0];
+                  return [
+                    { offset: endPlane - moduleStep, alignment: 'start' as const },
+                    { offset: endPlane, alignment: 'center' as const },
+                    { offset: endPlane + moduleStep, alignment: 'end' as const },
+                  ];
+                });
               })();
             const filteredLongitudinalOffsets = preferredAlignment === 'auto'
               ? targetLongitudinalOffsets
@@ -1152,6 +1159,7 @@ const findMagneticProfileSnap = (
                     targetAxisIndex,
                     targetDirection,
                     targetSlotIndex,
+                    longitudinalOffset.toFixed(4),
                     alignment,
                   ].join(':'),
                   targetItemId: targetItem.id,
@@ -2314,6 +2322,7 @@ const ThreeAssembly: React.FC<{
             movePlane.setFromNormalAndCoplanarPoint(cameraDirection, transformHandleHit.point);
             const startPoint = raycaster.ray.intersectPlane(movePlane, new THREE.Vector3());
             if (startPoint) {
+              const rect = renderer.domElement.getBoundingClientRect();
               freeMoveState = {
                 item,
                 object: selectedObject,
@@ -2325,6 +2334,15 @@ const ThreeAssembly: React.FC<{
                 axis,
                 snapLock: null,
               };
+              setOperationEditor({
+                kind: 'move',
+                itemId: item.id,
+                valueMm: 0,
+                x: THREE.MathUtils.clamp(event.clientX - rect.left, 105, Math.max(105, rect.width - 105)),
+                y: THREE.MathUtils.clamp(event.clientY - rect.top - 54, 58, Math.max(58, rect.height - 58)),
+                startPosition: [selectedObject.position.x, selectedObject.position.y, selectedObject.position.z],
+                direction: [axis.x, axis.y, axis.z],
+              });
               orbit.enabled = false;
               transform.enabled = false;
               renderer.domElement.setPointerCapture?.(event.pointerId);
@@ -2464,6 +2482,16 @@ const ThreeAssembly: React.FC<{
         }
         state.validPosition.copy(nextPosition);
         syncProfileLengthHandles(lengthHandles, state.object, state.item);
+        if (state.axis) {
+          const moveDistanceMm = Math.round(
+            nextPosition.clone().sub(state.startPosition).dot(state.axis) * SCENE_SCALE,
+          );
+          setOperationEditor((current) => (
+            current?.kind === 'move' && current.itemId === state.item.id
+              ? { ...current, valueMm: moveDistanceMm }
+              : current
+          ));
+        }
         event.preventDefault();
         return;
       }
@@ -2559,18 +2587,25 @@ const ThreeAssembly: React.FC<{
             state.item.rotation,
           );
         }
-        if (state.axis && state.moved) {
+        if (state.axis) {
           const movement = state.validPosition.clone().sub(state.startPosition);
           const rect = renderer.domElement.getBoundingClientRect();
-          setOperationEditor({
-            kind: 'move',
-            itemId: state.item.id,
-            valueMm: Math.round(movement.dot(state.axis) * SCENE_SCALE),
-            x: THREE.MathUtils.clamp(event.clientX - rect.left, 105, Math.max(105, rect.width - 105)),
-            y: THREE.MathUtils.clamp(event.clientY - rect.top - 54, 58, Math.max(58, rect.height - 58)),
-            startPosition: [state.startPosition.x, state.startPosition.y, state.startPosition.z],
-            direction: [state.axis.x, state.axis.y, state.axis.z],
-          });
+          setOperationEditor((current) => (
+            current?.kind === 'move' && current.itemId === state.item.id
+              ? {
+                ...current,
+                valueMm: Math.round(movement.dot(state.axis) * SCENE_SCALE),
+              }
+              : {
+                kind: 'move',
+                itemId: state.item.id,
+                valueMm: Math.round(movement.dot(state.axis) * SCENE_SCALE),
+                x: THREE.MathUtils.clamp(event.clientX - rect.left, 105, Math.max(105, rect.width - 105)),
+                y: THREE.MathUtils.clamp(event.clientY - rect.top - 54, 58, Math.max(58, rect.height - 58)),
+                startPosition: [state.startPosition.x, state.startPosition.y, state.startPosition.z],
+                direction: [state.axis.x, state.axis.y, state.axis.z],
+              }
+          ));
         } else {
           setOperationEditor(null);
         }
@@ -2691,9 +2726,12 @@ const ThreeAssembly: React.FC<{
       });
     };
     renderer.domElement.addEventListener('pointerdown', onPointerDown, { capture: true });
-    renderer.domElement.addEventListener('pointermove', onPointerMove);
-    renderer.domElement.addEventListener('pointerup', onPointerUp);
-    renderer.domElement.addEventListener('pointercancel', onPointerUp);
+    // The numeric editor can appear while an axis pointer is still down.
+    // Listen on window capture so releasing over that editor always completes
+    // the canvas gesture instead of leaving a stale item in drag state.
+    window.addEventListener('pointermove', onPointerMove, true);
+    window.addEventListener('pointerup', onPointerUp, true);
+    window.addEventListener('pointercancel', onPointerUp, true);
     renderer.domElement.addEventListener('contextmenu', onContextMenu);
 
     const resize = () => {
@@ -2740,9 +2778,9 @@ const ThreeAssembly: React.FC<{
       resizeObserver?.disconnect();
       if (!resizeObserver) window.removeEventListener('resize', resize);
       renderer.domElement.removeEventListener('pointerdown', onPointerDown, { capture: true });
-      renderer.domElement.removeEventListener('pointermove', onPointerMove);
-      renderer.domElement.removeEventListener('pointerup', onPointerUp);
-      renderer.domElement.removeEventListener('pointercancel', onPointerUp);
+      window.removeEventListener('pointermove', onPointerMove, true);
+      window.removeEventListener('pointerup', onPointerUp, true);
+      window.removeEventListener('pointercancel', onPointerUp, true);
       renderer.domElement.removeEventListener('contextmenu', onContextMenu);
       transform.removeEventListener('dragging-changed', onDraggingChanged);
       transform.removeEventListener('objectChange', onObjectChange);
@@ -2900,7 +2938,7 @@ const ThreeAssembly: React.FC<{
               value={operationEditor.valueMm}
               min={operationEditor.kind === 'length' ? 21 : undefined}
               max={operationEditor.kind === 'length' ? 3000 : undefined}
-              autoFocus
+              autoFocus={operationEditor.kind === 'length'}
               onChange={(event) => setOperationEditor((current) => current ? {
                 ...current,
                 valueMm: Number(event.target.value) || 0,
