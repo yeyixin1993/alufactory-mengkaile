@@ -792,7 +792,53 @@ const screwHeadForHole = (hole: DrillHole): DIYScrewHead | null => {
   return null;
 };
 
-const linkedScrewTransform = (profile: DIYSceneItem, hole: DrillHole) => {
+const itemQuaternion = (item: DIYSceneItem) => new THREE.Quaternion().setFromEuler(new THREE.Euler(
+  THREE.MathUtils.degToRad(item.rotation[0]),
+  THREE.MathUtils.degToRad(item.rotation[1]),
+  THREE.MathUtils.degToRad(item.rotation[2]),
+  'XYZ',
+));
+
+const rayProfileInterval = (
+  originWorldMm: THREE.Vector3,
+  directionWorld: THREE.Vector3,
+  target: DIYSceneItem,
+) => {
+  if (target.kind !== 'profile') return null;
+  const inverseQuaternion = itemQuaternion(target).invert();
+  const origin = originWorldMm.clone()
+    .sub(new THREE.Vector3(...target.position))
+    .applyQuaternion(inverseQuaternion);
+  const direction = directionWorld.clone().applyQuaternion(inverseQuaternion).normalize();
+  const [widthMm, heightMm] = profileSize(target.variantId);
+  const halfSizes = [
+    Math.max(20, target.length || 1000) / 2,
+    heightMm / 2,
+    widthMm / 2,
+  ];
+  const originValues = [origin.x, origin.y, origin.z];
+  const directionValues = [direction.x, direction.y, direction.z];
+  let entry = -Infinity;
+  let exit = Infinity;
+  for (let axisIndex = 0; axisIndex < 3; axisIndex += 1) {
+    const axisOrigin = originValues[axisIndex];
+    const axisDirection = directionValues[axisIndex];
+    const halfSize = halfSizes[axisIndex];
+    if (Math.abs(axisDirection) < 1e-7) {
+      if (axisOrigin < -halfSize || axisOrigin > halfSize) return null;
+      continue;
+    }
+    const first = (-halfSize - axisOrigin) / axisDirection;
+    const second = (halfSize - axisOrigin) / axisDirection;
+    entry = Math.max(entry, Math.min(first, second));
+    exit = Math.min(exit, Math.max(first, second));
+    if (entry > exit) return null;
+  }
+  if (exit < 0) return null;
+  return { entry: Math.max(0, entry), exit };
+};
+
+const linkedScrewTransform = (profile: DIYSceneItem, hole: DrillHole, items: DIYSceneItem[]) => {
   const [widthMm, heightMm] = profileSize(profile.variantId);
   const lengthMm = Math.max(20, profile.length || 1000);
   const grooveCount = Math.max(1, getProfileGrooveCount(profile.variantId, hole.side));
@@ -805,39 +851,62 @@ const linkedScrewTransform = (profile: DIYSceneItem, hole: DrillHole) => {
   const grooveCoordinateMm = grooveSpanMm / 2
     - ((physicalGrooveIndex + 0.5) * grooveSpanMm) / grooveCount;
   const penetrationMm = hole.side === 'A' || hole.side === 'C' ? heightMm : widthMm;
-  const screwLengthMm = Math.max(16, Math.ceil((penetrationMm + 8) / 5) * 5);
-  const headOffsetMm = 4;
+  const headEmbedMm = hole.type === 'countersunk' ? 5 : 4.5;
   const localPosition = new THREE.Vector3(
     -lengthMm / 2 + hole.positionMm,
     0,
     0,
   );
+  const localOutward = new THREE.Vector3();
   const localRotation = new THREE.Quaternion();
   if (hole.side === 'A') {
-    localPosition.y = heightMm / 2 + headOffsetMm;
+    localPosition.y = heightMm / 2;
+    localOutward.set(0, 1, 0);
   } else if (hole.side === 'C') {
-    localPosition.y = -heightMm / 2 - headOffsetMm;
+    localPosition.y = -heightMm / 2;
+    localOutward.set(0, -1, 0);
     localRotation.setFromEuler(new THREE.Euler(Math.PI, 0, 0, 'XYZ'));
   } else if (hole.side === 'B') {
     localPosition.y = grooveCoordinateMm;
-    localPosition.z = widthMm / 2 + headOffsetMm;
+    localPosition.z = widthMm / 2;
+    localOutward.set(0, 0, 1);
     localRotation.setFromEuler(new THREE.Euler(Math.PI / 2, 0, 0, 'XYZ'));
   } else {
     localPosition.y = grooveCoordinateMm;
-    localPosition.z = -widthMm / 2 - headOffsetMm;
+    localPosition.z = -widthMm / 2;
+    localOutward.set(0, 0, -1);
     localRotation.setFromEuler(new THREE.Euler(-Math.PI / 2, 0, 0, 'XYZ'));
   }
   if (hole.side === 'A' || hole.side === 'C') localPosition.z = grooveCoordinateMm;
+  // The screw model's head occupies local +Y. Move its seat into the
+  // extrusion by exactly the head depth so the top is flush with the surface.
+  localPosition.addScaledVector(localOutward, -headEmbedMm);
 
-  const profileQuaternion = new THREE.Quaternion().setFromEuler(new THREE.Euler(
-    THREE.MathUtils.degToRad(profile.rotation[0]),
-    THREE.MathUtils.degToRad(profile.rotation[1]),
-    THREE.MathUtils.degToRad(profile.rotation[2]),
-    'XYZ',
-  ));
+  const profileQuaternion = itemQuaternion(profile);
   const worldPosition = localPosition
     .applyQuaternion(profileQuaternion)
     .add(new THREE.Vector3(...profile.position));
+  const penetrationDirection = localOutward.clone().multiplyScalar(-1).applyQuaternion(profileQuaternion).normalize();
+  const sourceExitDistance = Math.max(1, penetrationMm - headEmbedMm);
+  const receivingProfiles = items
+    .filter((item) => item.kind === 'profile' && item.id !== profile.id)
+    .map((target) => {
+      const interval = rayProfileInterval(worldPosition, penetrationDirection, target);
+      return interval ? { target, ...interval } : null;
+    })
+    .filter((entry): entry is { target: DIYSceneItem; entry: number; exit: number } => Boolean(entry))
+    // A valid mating extrusion starts at, or shortly after, the source exit.
+    // This avoids visually extending a screw toward an unrelated remote part.
+    .filter((entry) => entry.entry >= sourceExitDistance - 2 && entry.entry <= sourceExitDistance + 35)
+    .sort((first, second) => first.entry - second.entry);
+  const receiver = receivingProfiles[0];
+  const receiverInsertionMm = receiver
+    ? THREE.MathUtils.clamp((receiver.exit - receiver.entry) * 0.55, 6, 12)
+    : 8;
+  const screwLengthMm = Math.max(
+    12,
+    Math.ceil((receiver ? receiver.entry : sourceExitDistance) + receiverInsertionMm),
+  );
   const worldQuaternion = profileQuaternion.clone().multiply(localRotation);
   const worldEuler = new THREE.Euler().setFromQuaternion(worldQuaternion, 'XYZ');
   return {
@@ -855,10 +924,14 @@ const linkedScrewTransform = (profile: DIYSceneItem, hole: DrillHole) => {
   };
 };
 
-const createLinkedScrew = (profile: DIYSceneItem, hole: DrillHole): DIYSceneItem | null => {
+const createLinkedScrew = (
+  profile: DIYSceneItem,
+  hole: DrillHole,
+  items: DIYSceneItem[],
+): DIYSceneItem | null => {
   const screwHead = screwHeadForHole(hole);
   if (!screwHead) return null;
-  const transform = linkedScrewTransform(profile, hole);
+  const transform = linkedScrewTransform(profile, hole, items);
   return {
     ...createItem('screw'),
     id: makeId(),
@@ -882,7 +955,7 @@ const syncLinkedScrews = (source: DIYSceneItem[]) => {
     const profile = profiles.get(item.linkedProfileId);
     const hole = profile?.holes?.find((entry) => entry.id === item.linkedHoleId);
     if (!profile || !hole || !screwHeadForHole(hole)) return [];
-    const transform = linkedScrewTransform(profile, hole);
+    const transform = linkedScrewTransform(profile, hole, source);
     return [{
       ...item,
       position: transform.position,
@@ -1070,7 +1143,7 @@ const findMagneticProfileSnap = (
 ): ProfileSnap | null => {
   if (movingItem.kind !== 'profile') return null;
   const movingBox = profileBox(movingItem, moving);
-  let best: { distance: number; snap: ProfileSnap } | null = null;
+  let best: { priority: number; distance: number; snap: ProfileSnap } | null = null;
 
   items.forEach((targetItem) => {
     if (targetItem.id === movingItem.id || targetItem.kind !== 'profile') return;
@@ -1092,12 +1165,42 @@ const findMagneticProfileSnap = (
           [-1, 1].forEach((movingDirection) => {
             const movingNormal = movingNormalAxis.clone().multiplyScalar(movingDirection);
             if (targetNormal.dot(movingNormal) > -0.995) return;
+            const perpendicularProfiles = Math.abs(targetBox.axes[0].dot(movingBox.axes[0])) < 0.05;
+            // A perpendicular automatic joint must be an end of the moving
+            // extrusion landing on a side of the stationary extrusion. This
+            // deliberately excludes centre-on-end and side-on-side candidates
+            // that create a T joint or leave one extrusion protruding.
+            if (perpendicularProfiles && (movingAxisIndex !== 0 || targetAxisIndex === 0)) return;
             const movingFaceOffset = movingNormal.clone().multiplyScalar(movingBox.halfSizes[movingAxisIndex]);
             const movingSlotAnchors = profileFaceSlotAnchors(movingItem, movingBox, movingAxisIndex, movingDirection);
             if (!movingSlotAnchors.length) return;
             const targetLongitudinalOffsets: Array<{ offset: number; alignment: ProfileSnap['alignment'] }> = targetAxisIndex === 0
               ? [{ offset: 0, alignment: 'center' }]
               : (() => {
+                if (perpendicularProfiles) {
+                  const movingHalfAlongTarget = movingBox.axes.reduce(
+                    (sum, axis, axisIndex) => sum + Math.abs(axis.dot(targetBox.axes[0])) * movingBox.halfSizes[axisIndex],
+                    0,
+                  );
+                  // Two standard flush L-joints:
+                  // 1) the moving profile sits just inside the target end;
+                  // 2) it caps the target end from the outside.
+                  // Both align actual outside faces, rather than aligning
+                  // centre-lines or stepping by a whole nominal module.
+                  return [-1, 1].flatMap((endDirection) => {
+                    const endPlane = endDirection * targetBox.halfSizes[0];
+                    return [
+                      {
+                        offset: endPlane - endDirection * movingHalfAlongTarget,
+                        alignment: 'start' as const,
+                      },
+                      {
+                        offset: endPlane + endDirection * movingHalfAlongTarget,
+                        alignment: 'end' as const,
+                      },
+                    ];
+                  });
+                }
                 const [targetWidthMm, targetHeightMm] = profileSize(targetItem.variantId);
                 const [movingWidthMm, movingHeightMm] = profileSize(movingItem.variantId);
                 const moduleStep = Math.min(
@@ -1140,7 +1243,15 @@ const findMagneticProfileSnap = (
               if (!planeNormal || Math.abs(targetPoint.clone().sub(currentMovingAnchor).dot(planeNormal)) > planeTolerance) return;
               const candidatePosition = targetPoint.clone().sub(movingFaceOffset).sub(movingSlotAnchor);
               const distance = moving.position.distanceTo(candidatePosition);
-              if (distance > maxDistance || (best && distance >= best.distance)) return;
+              const priority = perpendicularProfiles
+                ? 0
+                : targetAxisIndex === 0 || movingAxisIndex === 0
+                  ? 1
+                  : 2;
+              if (
+                distance > maxDistance
+                || (best && (priority > best.priority || (priority === best.priority && distance >= best.distance)))
+              ) return;
               if (profileCollides(moving, movingItem, candidatePosition, items, groups)) return;
               const hasOffset = targetSlotAnchor.lengthSq() > 0.001
                 || movingSlotAnchor.lengthSq() > 0.001
@@ -1152,11 +1263,18 @@ const findMagneticProfileSnap = (
                 targetLength,
               );
               best = {
+                priority,
                 distance,
                 snap: {
                   position: candidatePosition,
                   point: targetPoint,
-                  label: hasOffset ? 'offset' : targetAxisIndex === 0 || movingAxisIndex === 0 ? 'end' : 'side',
+                  label: perpendicularProfiles
+                    ? 'end'
+                    : hasOffset
+                      ? 'offset'
+                      : targetAxisIndex === 0 || movingAxisIndex === 0
+                        ? 'end'
+                        : 'side',
                   alignment,
                   key: [
                     movingItem.id,
@@ -1635,26 +1753,28 @@ const createAccessoryObject = (item: DIYSceneItem, selected: boolean) => {
     const screwLength = THREE.MathUtils.clamp((item.height || 35) / SCENE_SCALE, 0.16, 1.2);
     const shaftRadius = THREE.MathUtils.clamp((item.width || 12) / SCENE_SCALE * 0.28, 0.025, 0.07);
     const shaft = new THREE.Mesh(new THREE.CylinderGeometry(shaftRadius, shaftRadius, screwLength, 24), screwCyan);
-    shaft.position.y = -screwLength * 0.36;
+    // Local origin is the underside of the head; the shaft always travels
+    // toward -Y through the source profile and into the mating tapped profile.
+    shaft.position.y = -screwLength / 2;
     const headRadius = shaftRadius * 1.85;
-    const headHeight = Math.max(0.09, shaftRadius * 1.6);
+    const headHeight = Math.max(0.045, shaftRadius * 1.45);
     const isButtonHead = item.screwHead === 'button_socket';
     const headGeometry = isButtonHead
       ? new THREE.SphereGeometry(headRadius, 28, 14)
       : new THREE.CylinderGeometry(headRadius, headRadius, headHeight, 28);
     const head = new THREE.Mesh(headGeometry, screwBlue);
-    if (isButtonHead) head.scale.set(1, 0.55, 1);
-    head.position.y = screwLength * 0.14;
+    if (isButtonHead) head.scale.set(1, headHeight / (headRadius * 2), 1);
+    head.position.y = headHeight / 2;
     const collar = new THREE.Mesh(
       new THREE.CylinderGeometry(headRadius * 0.96, headRadius * 0.96, Math.max(0.018, headHeight * 0.2), 28),
       screwBlue,
     );
-    collar.position.y = head.position.y - headHeight * 0.45;
+    collar.position.y = Math.max(0.009, headHeight * 0.1);
     const socket = new THREE.Mesh(
       new THREE.CylinderGeometry(headRadius * 0.38, headRadius * 0.38, 0.008, 6),
       new THREE.MeshBasicMaterial({ color: '#082f49' }),
     );
-    socket.position.y = head.position.y + (isButtonHead ? headRadius * 0.55 : headHeight / 2) + 0.006;
+    socket.position.y = headHeight + 0.006;
     group.add(shaft, collar, head, socket);
     hitboxSize.set(headRadius * 2.6, screwLength + headHeight + 0.16, headRadius * 2.6);
   }
@@ -2129,9 +2249,11 @@ const ThreeAssembly: React.FC<{
       return {
         // Keep the attraction radius usable when the whole assembly is framed,
         // while requiring the two candidate connection planes to remain close.
-        maxDistance: THREE.MathUtils.clamp(worldPerPixel * 68, 0.8, 4.2),
-        planeTolerance: THREE.MathUtils.clamp(worldPerPixel * 10, 0.05, 0.2),
-        releaseDistance: THREE.MathUtils.clamp(worldPerPixel * 7, 0.06, 0.22),
+        // Once captured, a larger hysteresis band prevents normal pointer
+        // jitter from immediately dropping an otherwise valid flush joint.
+        maxDistance: THREE.MathUtils.clamp(worldPerPixel * 92, 1.1, 5.5),
+        planeTolerance: THREE.MathUtils.clamp(worldPerPixel * 16, 0.08, 0.32),
+        releaseDistance: THREE.MathUtils.clamp(worldPerPixel * 14, 0.12, 0.42),
       };
     };
     const formatSnapHint = (snap: ProfileSnap) => {
@@ -3459,7 +3581,7 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({ language, user, onAddBatchToC
       (profile.holes || []).forEach((hole) => {
         const key = `${profile.id}:${hole.id}`;
         if (!screwHeadForHole(hole) || linkedKeys.has(key)) return;
-        const screw = createLinkedScrew(profile, hole);
+        const screw = createLinkedScrew(profile, hole, next);
         if (!screw) return;
         next.push(screw);
         linkedKeys.add(key);
