@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { HashRouter, Routes, Route, Link, useLocation, useNavigate, useParams } from 'react-router-dom';
-import { ShoppingCart, User as UserIcon, LogOut, Menu, X, Globe, Home, Package, History, Settings, FileDown, Eye, Truck, MapPin, Plus, Trash2, Edit2, CheckCircle, ArrowLeft, Lock, Save, UserCheck, Key, Info, Pencil, ChevronRight, Download } from 'lucide-react';
+import { ShoppingCart, User as UserIcon, LogOut, Menu, X, Globe, Home, Package, History, Settings, FileDown, Eye, Truck, MapPin, Plus, Trash2, Edit2, CheckCircle, ArrowLeft, Lock, Save, UserCheck, Key, Info, Pencil, ChevronRight, Download, ExternalLink } from 'lucide-react';
 import { Language, User, CartItem, Product, ProductType, ProfileConfig, Order, ProfileSide, DrillHole, Address, ProfileVariant, ColorDef } from './types';
 import { TRANSLATIONS, INITIAL_PRODUCTS, PROFILE_COLORS, PROFILE_VARIANTS, PROFILE_WEIGHTS, SHIPPING_RATES, SHIPPING_RATES_SF, SHIPPING_RATES_AN, SHIPPING_METHOD_NAMES } from './constants';
 import type { ShippingMethod } from './constants';
@@ -542,7 +542,12 @@ const Catalog: React.FC<{ language: Language }> = ({ language }) => {
   return (
     <div className="max-w-7xl mx-auto px-6 py-12">
       <div className="mb-10 grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1fr)_260px]">
-        <Link to="/diy-designer" className="group relative overflow-hidden rounded-[2rem] bg-gradient-to-br from-slate-950 via-slate-900 to-blue-950 p-6 text-white shadow-2xl shadow-slate-900/20 transition-all hover:-translate-y-1 hover:shadow-blue-900/30 sm:p-8">
+        <Link
+          to="/diy-designer"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="group relative overflow-hidden rounded-[2rem] bg-gradient-to-br from-slate-950 via-slate-900 to-blue-950 p-6 text-white shadow-2xl shadow-slate-900/20 transition-all hover:-translate-y-1 hover:shadow-blue-900/30 sm:p-8"
+        >
           <div className="absolute -right-16 -top-20 h-64 w-64 rounded-full bg-blue-500/20 blur-3xl transition group-hover:bg-blue-400/30" />
           <div className="relative flex flex-col gap-6 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex items-start gap-4">
@@ -564,8 +569,8 @@ const Catalog: React.FC<{ language: Language }> = ({ language }) => {
               </div>
             </div>
             <span className="inline-flex shrink-0 items-center justify-center gap-2 self-start rounded-2xl bg-blue-600 px-5 py-3 text-sm font-black shadow-xl shadow-blue-600/30 transition group-hover:bg-blue-500 sm:self-center">
-              {language === 'cn' ? '开始设计' : language === 'jp' ? '設計を開始' : 'Start designing'}
-              <ChevronRight className="h-5 w-5" />
+              {language === 'cn' ? '新窗口开始设计' : language === 'jp' ? '新しい画面で開く' : 'Open in new window'}
+              <ExternalLink className="h-4 w-4" />
             </span>
           </div>
         </Link>
@@ -2082,6 +2087,7 @@ const App: React.FC = () => {
   const [cart, setCart] = useState<CartItem[]>(() => readCachedArray<CartItem>(getCacheKey(CART_CACHE_PREFIX)));
   const [draftProfiles, setDraftProfiles] = useState<CartItem[]>(() => readCachedArray<CartItem>(getCacheKey(DRAFT_CACHE_PREFIX)));
   const [user, setUser] = useState<User | null>(null);
+  const [currentHash, setCurrentHash] = useState(() => window.location.hash);
   const t = TRANSLATIONS[language];
   const userMembership = normalizeMembershipLevel(user?.membershipLevel);
   const userStatusLabel = userMembership === 'vip_plus' ? 'VIP+' : userMembership === 'vip' ? 'VIP' : 'standard';
@@ -2089,6 +2095,12 @@ const App: React.FC = () => {
   const skipNextCartPersistRef = useRef(false);
   const skipNextDraftPersistRef = useRef(false);
   const skipNextServerSyncRef = useRef(false);
+
+  useEffect(() => {
+    const handleHashChange = () => setCurrentHash(window.location.hash);
+    window.addEventListener('hashchange', handleHashChange);
+    return () => window.removeEventListener('hashchange', handleHashChange);
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -2251,12 +2263,13 @@ const App: React.FC = () => {
     writeCachedArray(getCacheKey(CART_CACHE_PREFIX, user?.id), []);
   };
 
-  const isPreviewRoute = window.location.hash.startsWith('#/preview');
+  const isPreviewRoute = currentHash.startsWith('#/preview');
+  const isDesignerRoute = currentHash.startsWith('#/diy-designer');
 
   return (
     <HashRouter>
-      <div className={`min-h-screen font-sans text-slate-900 selection:bg-blue-100 selection:text-blue-900 ${isPreviewRoute ? '' : 'bg-slate-50 pb-20'}`}>
-        {!isPreviewRoute && <nav className="bg-white/90 backdrop-blur-xl sticky top-0 z-40 border-b border-slate-100 shadow-sm">
+      <div className={`min-h-screen font-sans text-slate-900 selection:bg-blue-100 selection:text-blue-900 ${isPreviewRoute || isDesignerRoute ? '' : 'bg-slate-50 pb-20'}`}>
+        {!isPreviewRoute && !isDesignerRoute && <nav className="bg-white/90 backdrop-blur-xl sticky top-0 z-40 border-b border-slate-100 shadow-sm">
           <div className="max-w-7xl mx-auto px-6 h-24 flex items-center justify-between">
             <Link to="/" className="flex items-center gap-5 group">
               <div className="w-14 h-14 bg-slate-900 rounded-[1.25rem] flex items-center justify-center text-white font-black text-3xl shadow-2xl shadow-slate-900/20 group-hover:scale-110 group-hover:bg-blue-600 transition-all duration-500">M</div>
@@ -2281,8 +2294,14 @@ const App: React.FC = () => {
             <div className="flex items-center gap-2 sm:gap-6">
               <div className="hidden lg:flex gap-10 items-center">
                 {/*<Link to="/" className="text-sm font-black text-slate-500 hover:text-blue-600 transition-all tracking-widest uppercase">{t.catalog}</Link>*/}
-                <Link to="/diy-designer" className="text-sm font-black text-slate-500 hover:text-blue-600 transition-all tracking-widest uppercase">
+                <Link
+                  to="/diy-designer"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1.5 text-sm font-black text-slate-500 hover:text-blue-600 transition-all tracking-widest uppercase"
+                >
                   {language === 'cn' ? '3D DIY' : language === 'jp' ? '3D DIY' : '3D DIY'}
+                  <ExternalLink className="h-3.5 w-3.5" />
                 </Link>
                 {user && <Link to="/history" className="text-sm font-black text-slate-500 hover:text-blue-600 transition-all tracking-widest uppercase">{t.history}</Link>}
               </div>

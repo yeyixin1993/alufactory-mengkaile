@@ -218,6 +218,12 @@ const TEXT: Record<Language, Record<string, string>> = {
     snapEnd: '磁吸：端点连接',
     snapSide: '磁吸：交叉连接',
     snapOffset: '磁吸：边缘对齐',
+    snapMode: '磁吸对齐',
+    snapAuto: '自动',
+    alignStart: '齐左',
+    alignCenter: '居中',
+    alignEnd: '齐右',
+    connectedTo: '已连接到',
     frameAll: '显示全部',
     multiSelected: '批量选择',
     shiftHint: '按住 Shift 点击可增减选择；按住 Shift 在画布拖框可批量选中。',
@@ -324,6 +330,12 @@ const TEXT: Record<Language, Record<string, string>> = {
     snapEnd: 'Magnet: end connection',
     snapSide: 'Magnet: cross connection',
     snapOffset: 'Magnet: edge alignment',
+    snapMode: 'Snap alignment',
+    snapAuto: 'Auto',
+    alignStart: 'Start',
+    alignCenter: 'Center',
+    alignEnd: 'End',
+    connectedTo: 'Connected to',
     frameAll: 'Frame all',
     multiSelected: 'Batch selection',
     shiftHint: 'Shift-click toggles items. Hold Shift and drag a marquee to select several parts.',
@@ -430,6 +442,12 @@ const TEXT: Record<Language, Record<string, string>> = {
     snapEnd: 'スナップ：端点接続',
     snapSide: 'スナップ：交差接続',
     snapOffset: 'スナップ：端揃え',
+    snapMode: 'スナップ位置',
+    snapAuto: '自動',
+    alignStart: '左揃え',
+    alignCenter: '中央',
+    alignEnd: '右揃え',
+    connectedTo: '接続先',
     frameAll: '全体表示',
     multiSelected: '一括選択',
     shiftHint: 'Shiftクリックで追加・解除、Shiftを押しながらドラッグして範囲選択します。',
@@ -871,8 +889,16 @@ type ProfileSnap = {
   position: THREE.Vector3;
   point: THREE.Vector3;
   label: 'end' | 'side' | 'offset';
+  alignment: 'start' | 'center' | 'end';
+  key: string;
+  targetItemId: string;
+  targetName: string;
+  targetPort: string;
+  movingPort: string;
   targetEndDistances: { left: number; right: number };
 };
+
+type SnapAlignment = 'auto' | ProfileSnap['alignment'];
 
 type ProfileBox = {
   center: THREE.Vector3;
@@ -965,10 +991,6 @@ const profileCollides = (
   });
 };
 
-const uniqueOffsets = (values: number[]) => (
-  values.filter((value, index) => values.findIndex((candidate) => Math.abs(candidate - value) < 0.001) === index)
-);
-
 const boxFaceSide = (axisIndex: number, direction: number): ProfileSide | null => {
   if (axisIndex === 1) return direction > 0 ? 'A' : 'C';
   if (axisIndex === 2) return direction > 0 ? 'B' : 'D';
@@ -1036,6 +1058,7 @@ const findMagneticProfileSnap = (
   groups: Map<string, THREE.Group>,
   maxDistance = 0.65,
   planeTolerance = 0.06,
+  preferredAlignment: SnapAlignment = 'auto',
 ): ProfileSnap | null => {
   if (movingItem.kind !== 'profile') return null;
   const movingBox = profileBox(movingItem, moving);
@@ -1064,8 +1087,8 @@ const findMagneticProfileSnap = (
             const movingFaceOffset = movingNormal.clone().multiplyScalar(movingBox.halfSizes[movingAxisIndex]);
             const movingSlotAnchors = profileFaceSlotAnchors(movingItem, movingBox, movingAxisIndex, movingDirection);
             if (!movingSlotAnchors.length) return;
-            const targetLongitudinalOffsets = targetAxisIndex === 0
-              ? [0]
+            const targetLongitudinalOffsets: Array<{ offset: number; alignment: ProfileSnap['alignment'] }> = targetAxisIndex === 0
+              ? [{ offset: 0, alignment: 'center' }]
               : (() => {
                 const tangent = targetBox.axes[0];
                 const movingProjectedHalf = movingBox.axes.reduce(
@@ -1075,14 +1098,22 @@ const findMagneticProfileSnap = (
                   0,
                 );
                 const insideAlignment = Math.max(0, targetBox.halfSizes[0] - movingProjectedHalf);
-                return uniqueOffsets([0, -insideAlignment, insideAlignment]);
+                const candidates: Array<{ offset: number; alignment: ProfileSnap['alignment'] }> = [
+                  { offset: 0, alignment: 'center' },
+                  { offset: -insideAlignment, alignment: 'start' },
+                  { offset: insideAlignment, alignment: 'end' },
+                ];
+                return candidates;
               })();
+            const filteredLongitudinalOffsets = preferredAlignment === 'auto'
+              ? targetLongitudinalOffsets
+              : targetLongitudinalOffsets.filter((entry) => entry.alignment === preferredAlignment);
 
-            targetSlotAnchors.forEach((targetSlotAnchor) => targetLongitudinalOffsets.forEach((longitudinalOffset) => {
+            targetSlotAnchors.forEach((targetSlotAnchor, targetSlotIndex) => filteredLongitudinalOffsets.forEach(({ offset: longitudinalOffset, alignment }) => {
               const targetPoint = targetFaceCenter.clone()
                 .add(targetSlotAnchor)
                 .addScaledVector(targetBox.axes[0], longitudinalOffset);
-              movingSlotAnchors.forEach((movingSlotAnchor) => {
+              movingSlotAnchors.forEach((movingSlotAnchor, movingSlotIndex) => {
               const currentMovingAnchor = movingBox.center.clone().add(movingFaceOffset).add(movingSlotAnchor);
               const planeNormal = getCandidatePlaneNormal(
                 movingBox,
@@ -1111,6 +1142,26 @@ const findMagneticProfileSnap = (
                   position: candidatePosition,
                   point: targetPoint,
                   label: hasOffset ? 'offset' : targetAxisIndex === 0 || movingAxisIndex === 0 ? 'end' : 'side',
+                  alignment,
+                  key: [
+                    movingItem.id,
+                    movingAxisIndex,
+                    movingDirection,
+                    movingSlotIndex,
+                    targetItem.id,
+                    targetAxisIndex,
+                    targetDirection,
+                    targetSlotIndex,
+                    alignment,
+                  ].join(':'),
+                  targetItemId: targetItem.id,
+                  targetName: targetItem.variantId || targetItem.name,
+                  targetPort: targetAxisIndex === 0
+                    ? `END-${targetDirection > 0 ? 'R' : 'L'}`
+                    : `${boxFaceSide(targetAxisIndex, targetDirection) || 'FACE'}-P${targetSlotIndex + 1}`,
+                  movingPort: movingAxisIndex === 0
+                    ? `END-${movingDirection > 0 ? 'R' : 'L'}`
+                    : `${boxFaceSide(movingAxisIndex, movingDirection) || 'FACE'}-P${movingSlotIndex + 1}`,
                   targetEndDistances: {
                     left: Math.round(targetLeft * SCENE_SCALE),
                     right: Math.round((targetLength - targetLeft) * SCENE_SCALE),
@@ -1639,6 +1690,14 @@ const ThreeAssembly: React.FC<{
   selectedIds: string[];
   rotationLabels: [string, string, string];
   snapLabels: { end: string; side: string; offset: string };
+  alignmentLabels: {
+    title: string;
+    auto: string;
+    start: string;
+    center: string;
+    end: string;
+    connectedTo: string;
+  };
   deleteLabel: string;
   frameAllLabel: string;
   drillMode: boolean;
@@ -1658,6 +1717,14 @@ const ThreeAssembly: React.FC<{
   selectedIds,
   rotationLabels,
   snapLabels,
+  alignmentLabels = {
+    title: 'Snap',
+    auto: 'Auto',
+    start: 'Start',
+    center: 'Center',
+    end: 'End',
+    connectedTo: 'Connected to',
+  },
   deleteLabel,
   frameAllLabel,
   drillMode,
@@ -1676,6 +1743,8 @@ const ThreeAssembly: React.FC<{
   const [renderError, setRenderError] = useState<string | null>(null);
   const [contextMenu, setContextMenu] = useState<{ id: string; x: number; y: number } | null>(null);
   const [snapHint, setSnapHint] = useState<string | null>(null);
+  const snapHintTimerRef = useRef<number>(0);
+  const [snapAlignment, setSnapAlignment] = useState<SnapAlignment>('auto');
   const [holeDraft, setHoleDraft] = useState<{
     itemId: string;
     side: ProfileSide;
@@ -1706,6 +1775,10 @@ const ThreeAssembly: React.FC<{
   const transformRef = useRef<TransformControls | null>(null);
   const lengthHandlesRef = useRef<THREE.Group | null>(null);
   const contentRef = useRef<THREE.Group | null>(null);
+
+  useEffect(() => () => {
+    window.clearTimeout(snapHintTimerRef.current);
+  }, []);
   const groupsRef = useRef<Map<string, THREE.Group>>(new Map());
   const lastFrameSignatureRef = useRef('');
   const itemsRef = useRef(items);
@@ -1720,6 +1793,8 @@ const ThreeAssembly: React.FC<{
   const onCancelDrillModeRef = useRef(onCancelDrillMode);
   const drillModeRef = useRef(drillMode);
   const snapLabelsRef = useRef(snapLabels);
+  const alignmentLabelsRef = useRef(alignmentLabels);
+  const snapAlignmentRef = useRef(snapAlignment);
   const drillEditorLabelsRef = useRef(drillEditorLabels);
 
   const frameAll = () => {
@@ -1769,6 +1844,8 @@ const ThreeAssembly: React.FC<{
     if (!drillMode) setHoleDraft(null);
   }, [drillMode]);
   useEffect(() => { snapLabelsRef.current = snapLabels; }, [snapLabels]);
+  useEffect(() => { alignmentLabelsRef.current = alignmentLabels; }, [alignmentLabels]);
+  useEffect(() => { snapAlignmentRef.current = snapAlignment; }, [snapAlignment]);
   useEffect(() => { drillEditorLabelsRef.current = drillEditorLabels; }, [drillEditorLabels]);
 
   const applyHoleDraft = () => {
@@ -1893,17 +1970,46 @@ const ThreeAssembly: React.FC<{
     snapGuide.visible = false;
     snapGuide.renderOrder = 100;
     scene.add(snapGuide);
+    const snapPreview = new THREE.Group();
+    const snapPreviewFill = new THREE.Mesh(
+      new THREE.BoxGeometry(1, 1, 1),
+      new THREE.MeshBasicMaterial({
+        color: '#0ea5e9',
+        transparent: true,
+        opacity: 0.11,
+        depthTest: false,
+        depthWrite: false,
+      }),
+    );
+    const snapPreviewOutline = new THREE.LineSegments(
+      new THREE.EdgesGeometry(new THREE.BoxGeometry(1, 1, 1)),
+      new THREE.LineBasicMaterial({
+        color: '#0284c7',
+        transparent: true,
+        opacity: 0.98,
+        depthTest: false,
+      }),
+    );
+    snapPreviewFill.renderOrder = 97;
+    snapPreviewOutline.renderOrder = 98;
+    snapPreview.add(snapPreviewFill, snapPreviewOutline);
+    snapPreview.visible = false;
+    scene.add(snapPreview);
     let transformWasDragging = false;
+    let transformDragActive = false;
     let lastSafeProfilePosition: THREE.Vector3 | null = null;
-    let snapHintTimer = 0;
+    let transformSnapLock: ProfileSnap | null = null;
     const onDraggingChanged = (event: { value: unknown }) => {
       orbit.enabled = !event.value;
+      transformDragActive = Boolean(event.value);
       if (event.value) {
         transformWasDragging = true;
+        transformSnapLock = null;
         const object = transform.object as THREE.Group | undefined;
         lastSafeProfilePosition = object?.position.clone() || null;
       } else {
         lastSafeProfilePosition = null;
+        transformSnapLock = null;
       }
     };
     const getSnapTolerances = (position: THREE.Vector3) => {
@@ -1920,46 +2026,90 @@ const ThreeAssembly: React.FC<{
     };
     const formatSnapHint = (snap: ProfileSnap) => {
       const distanceLabels = drillEditorLabelsRef.current;
-      return `${snapLabelsRef.current[snap.label]} · ${distanceLabels.left} ${snap.targetEndDistances.left}mm · ${distanceLabels.right} ${snap.targetEndDistances.right}mm`;
+      const alignmentLabel = alignmentLabelsRef.current[snap.alignment];
+      return `${snapLabelsRef.current[snap.label]} · ${alignmentLabel} · ${alignmentLabelsRef.current.connectedTo} ${snap.targetName} ${snap.targetPort} · ${distanceLabels.left} ${snap.targetEndDistances.left}mm · ${distanceLabels.right} ${snap.targetEndDistances.right}mm`;
+    };
+    const showSnapVisual = (snap: ProfileSnap, object: THREE.Group, item: DIYSceneItem) => {
+      const dimensions = profileDimensions(item);
+      snapGuide.position.copy(snap.point);
+      snapGuide.quaternion.copy(camera.quaternion);
+      snapGuide.visible = true;
+      snapPreview.position.copy(snap.position);
+      snapPreview.quaternion.copy(object.quaternion);
+      snapPreview.scale.set(
+        dimensions.length + 0.05,
+        dimensions.height + 0.05,
+        dimensions.width + 0.05,
+      );
+      snapPreview.visible = true;
+      setSnapHint(formatSnapHint(snap));
+    };
+    const hideSnapVisual = () => {
+      snapGuide.visible = false;
+      snapPreview.visible = false;
+    };
+    const retainSnapLock = (
+      lock: ProfileSnap | null,
+      rawPosition: THREE.Vector3,
+      releaseDistance: number,
+      moving: THREE.Group,
+      movingItem: DIYSceneItem,
+    ) => {
+      if (!lock || rawPosition.distanceTo(lock.position) > releaseDistance) return null;
+      if (profileCollides(moving, movingItem, lock.position, itemsRef.current, groupsRef.current)) return null;
+      return lock;
     };
     const onObjectChange = () => {
+      if (!transformDragActive) {
+        hideSnapVisual();
+        return;
+      }
       const object = transform.object as THREE.Group | undefined;
       const itemId = object?.userData.itemId as string | undefined;
       const item = itemId ? itemsRef.current.find((entry) => entry.id === itemId) : undefined;
       if (!object || !item || item.kind !== 'profile') {
-        snapGuide.visible = false;
+        hideSnapVisual();
         return;
       }
       const tolerances = getSnapTolerances(object.position);
-      const snap = findMagneticProfileSnap(
+      const rawPosition = object.position.clone();
+      const candidateSnap = findMagneticProfileSnap(
         object,
         item,
         itemsRef.current,
         groupsRef.current,
         tolerances.maxDistance,
         tolerances.planeTolerance,
+        snapAlignmentRef.current,
       );
+      const retainedLock = retainSnapLock(
+        transformSnapLock,
+        rawPosition,
+        tolerances.maxDistance * 1.35,
+        object,
+        item,
+      );
+      const snap = retainedLock || candidateSnap;
       if (snap) {
+        transformSnapLock = snap;
         object.position.copy(snap.position);
         syncProfileLengthHandles(lengthHandles, object, item);
         if (lastSafeProfilePosition) lastSafeProfilePosition.copy(snap.position);
         else lastSafeProfilePosition = snap.position.clone();
-        snapGuide.position.copy(snap.point);
-        snapGuide.quaternion.copy(camera.quaternion);
-        snapGuide.visible = true;
-        setSnapHint(formatSnapHint(snap));
+        showSnapVisual(snap, object, item);
         return;
       }
+      transformSnapLock = null;
       if (profileCollides(object, item, object.position, itemsRef.current, groupsRef.current)) {
         if (lastSafeProfilePosition) object.position.copy(lastSafeProfilePosition);
         syncProfileLengthHandles(lengthHandles, object, item);
-        snapGuide.visible = false;
+        hideSnapVisual();
         setSnapHint(null);
         return;
       }
       lastSafeProfilePosition = object.position.clone();
       syncProfileLengthHandles(lengthHandles, object, item);
-      snapGuide.visible = false;
+      hideSnapVisual();
       setSnapHint(null);
     };
     const onTransformMouseUp = () => {
@@ -1975,9 +2125,9 @@ const ThreeAssembly: React.FC<{
           Math.round(THREE.MathUtils.radToDeg(object.rotation.z)),
         ],
       );
-      snapGuide.visible = false;
-      window.clearTimeout(snapHintTimer);
-      snapHintTimer = window.setTimeout(() => setSnapHint(null), 1000);
+      hideSnapVisual();
+      window.clearTimeout(snapHintTimerRef.current);
+      snapHintTimerRef.current = window.setTimeout(() => setSnapHint(null), 1000);
     };
     transform.addEventListener('dragging-changed', onDraggingChanged);
     transform.addEventListener('objectChange', onObjectChange);
@@ -2032,6 +2182,7 @@ const ThreeAssembly: React.FC<{
       validPosition: THREE.Vector3;
       moved: boolean;
       axis?: THREE.Vector3;
+      snapLock?: ProfileSnap | null;
     };
     let freeMoveState: FreeMoveState | null = null;
     let marqueeState: { pointerId: number; startX: number; startY: number; currentX: number; currentY: number } | null = null;
@@ -2070,6 +2221,7 @@ const ThreeAssembly: React.FC<{
     };
     const onPointerDown = (event: PointerEvent) => {
       setOperationEditor(null);
+      hideSnapVisual();
       if (event.button === 0 && event.shiftKey) {
         const rect = renderer.domElement.getBoundingClientRect();
         marqueeState = {
@@ -2168,6 +2320,7 @@ const ThreeAssembly: React.FC<{
                 validPosition: selectedObject.position.clone(),
                 moved: false,
                 axis,
+                snapLock: null,
               };
               orbit.enabled = false;
               transform.enabled = false;
@@ -2221,6 +2374,7 @@ const ThreeAssembly: React.FC<{
               startPosition: selectedObject.position.clone(),
               validPosition: selectedObject.position.clone(),
               moved: false,
+              snapLock: null,
             };
             orbit.enabled = false;
             transform.enabled = false;
@@ -2279,24 +2433,38 @@ const ThreeAssembly: React.FC<{
         state.object.position.copy(nextPosition);
         if (state.item.kind === 'profile') {
           const tolerances = getSnapTolerances(state.object.position);
-          const snap = findMagneticProfileSnap(
+          const candidateSnap = findMagneticProfileSnap(
             state.object,
             state.item,
             itemsRef.current,
             groupsRef.current,
             tolerances.maxDistance,
             tolerances.planeTolerance,
+            snapAlignmentRef.current,
           );
+          const retainedLock = retainSnapLock(
+            state.snapLock || null,
+            nextPosition,
+            tolerances.maxDistance * 1.35,
+            state.object,
+            state.item,
+          );
+          const snap = retainedLock || candidateSnap;
           if (snap) {
+            state.snapLock = snap;
             nextPosition.copy(snap.position);
             state.object.position.copy(nextPosition);
-            setSnapHint(formatSnapHint(snap));
+            showSnapVisual(snap, state.object, state.item);
           } else if (profileCollides(state.object, state.item, nextPosition, itemsRef.current, groupsRef.current)) {
+            state.snapLock = null;
             state.object.position.copy(state.validPosition);
             syncProfileLengthHandles(lengthHandles, state.object, state.item);
+            hideSnapVisual();
             setSnapHint(null);
             return;
           } else {
+            state.snapLock = null;
+            hideSnapVisual();
             setSnapHint(null);
           }
         }
@@ -2417,6 +2585,9 @@ const ThreeAssembly: React.FC<{
             state.item.rotation,
           );
         }
+        hideSnapVisual();
+        window.clearTimeout(snapHintTimerRef.current);
+        snapHintTimerRef.current = window.setTimeout(() => setSnapHint(null), 1400);
         transformWasDragging = false;
         event.preventDefault();
         event.stopPropagation();
@@ -2587,13 +2758,14 @@ const ThreeAssembly: React.FC<{
       transform.removeEventListener('dragging-changed', onDraggingChanged);
       transform.removeEventListener('objectChange', onObjectChange);
       transform.removeEventListener('mouseUp', onTransformMouseUp);
-      window.clearTimeout(snapHintTimer);
       transform.detach();
       transform.dispose();
       disposeObject(lengthHandles);
       scene.remove(lengthHandles);
       snapGuide.geometry.dispose();
       (snapGuide.material as THREE.Material).dispose();
+      disposeObject(snapPreview);
+      scene.remove(snapPreview);
       orbit.dispose();
       disposeObject(content);
       renderer.dispose();
@@ -2777,6 +2949,33 @@ const ThreeAssembly: React.FC<{
         <Maximize2 className="h-4 w-4" />
         <span className="hidden sm:inline">{frameAllLabel}</span>
       </button>
+      <div className="absolute right-3 top-14 z-20 rounded-2xl border border-slate-200 bg-white/95 p-1.5 shadow-lg backdrop-blur">
+        <div className="px-1.5 pb-1 text-[8px] font-black uppercase tracking-widest text-slate-400">
+          {alignmentLabels.title}
+        </div>
+        <div className="flex gap-1">
+          {([
+            { value: 'auto', label: alignmentLabels.auto },
+            { value: 'start', label: alignmentLabels.start },
+            { value: 'center', label: alignmentLabels.center },
+            { value: 'end', label: alignmentLabels.end },
+          ] as Array<{ value: SnapAlignment; label: string }>).map((option) => (
+            <button
+              key={option.value}
+              type="button"
+              data-testid={`diy-snap-align-${option.value}`}
+              onClick={() => setSnapAlignment(option.value)}
+              className={`rounded-lg px-2 py-1.5 text-[9px] font-black transition ${
+                snapAlignment === option.value
+                  ? 'bg-sky-500 text-white shadow-sm'
+                  : 'bg-slate-50 text-slate-500 hover:bg-sky-50 hover:text-sky-700'
+              }`}
+            >
+              {option.label}
+            </button>
+          ))}
+        </div>
+      </div>
       {contextMenu && (
         <div
           className="absolute z-30 w-36 rounded-2xl border border-slate-200 bg-white p-2 shadow-2xl"
@@ -3467,6 +3666,14 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({ language, user, onAddBatchToC
             selectedIds={selectedIds}
             rotationLabels={[t.rotateX, t.rotateY, t.rotateZ]}
             snapLabels={{ end: t.snapEnd, side: t.snapSide, offset: t.snapOffset }}
+            alignmentLabels={{
+              title: t.snapMode,
+              auto: t.snapAuto,
+              start: t.alignStart,
+              center: t.alignCenter,
+              end: t.alignEnd,
+              connectedTo: t.connectedTo,
+            }}
             deleteLabel={t.delete}
             frameAllLabel={t.frameAll}
             drillMode={drillMode}
