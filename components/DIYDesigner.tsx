@@ -65,6 +65,12 @@ type Vec3 = [number, number, number];
 type RotationAxisIndex = 0 | 1 | 2;
 type DIYScrewHead = 'socket_cylinder' | 'button_socket';
 
+const PROFILE_AXIS_ROTATIONS: Record<RotationAxisIndex, Vec3> = {
+  0: [0, 0, 0],
+  1: [0, 0, 90],
+  2: [0, -90, 0],
+};
+
 interface DIYSceneItem {
   id: string;
   kind: DIYItemKind;
@@ -132,8 +138,7 @@ const TEXT: Record<Language, Record<string, string>> = {
     project: '项目结构',
     properties: '参数与加工',
     empty: '选择一个零件以编辑参数',
-    profile2020: '2020 铝型材',
-    profile2040: '2040 铝型材',
+    profile: '铝型材',
     plate: '彩色铝板',
     pegboard: '彩色洞洞板',
     marine: '彩色海洋板',
@@ -164,7 +169,7 @@ const TEXT: Record<Language, Record<string, string>> = {
     drillModeHint: '先选择孔类型，再点击型材表面；系统自动识别面、槽位和两端距离。',
     drillSetup: '选择打孔类型',
     startDrilling: '确认并开始点选',
-    rotate: '每次旋转 90°',
+    rotate: '型材方向',
     save: '保存设计 JSON',
     load: '读取本地 JSON',
     export: '生产 JSON',
@@ -212,10 +217,10 @@ const TEXT: Record<Language, Record<string, string>> = {
     noParts: '还没有添加任何零件',
     remark: '备注',
     remarkPlaceholder: '为这个零件添加加工、安装或识别备注…',
-    rotateX: '绕红色轴顺时针 90°',
-    rotateY: '绕绿色轴顺时针 90°',
-    rotateZ: '绕蓝色轴顺时针 90°',
-    rotateStandard: '每次均按同一方向旋转 90°；连续点击四次回到原位。',
+    rotateX: '朝红色方向',
+    rotateY: '朝绿色方向',
+    rotateZ: '朝蓝色方向',
+    rotateStandard: '点击后，型材长度方向会直接对齐对应颜色的箭头。',
     rotateCollision: '旋转后型材会与其他型材相互穿透，因此本次旋转未执行。请先将型材平移出一段距离后再试。',
     snapEnd: '磁吸：端点连接',
     snapSide: '磁吸：交叉连接',
@@ -232,7 +237,7 @@ const TEXT: Record<Language, Record<string, string>> = {
     machiningLegend: '加工符号',
     multiSelected: '批量选择',
     shiftHint: '按住 Shift 点击可增减选择；按住 Shift 在画布拖框可批量选中。',
-    newProfileLength: '输入型材长度',
+    newProfileLength: '选择型材规格与长度',
     addProfile: '添加型材',
     cancel: '取消',
     apply: '应用',
@@ -247,8 +252,7 @@ const TEXT: Record<Language, Record<string, string>> = {
     project: 'Project structure',
     properties: 'Properties & machining',
     empty: 'Select a part to edit it',
-    profile2020: '2020 profile',
-    profile2040: '2040 profile',
+    profile: 'Aluminum profile',
     plate: 'Colored aluminum plate',
     pegboard: 'Colored pegboard',
     marine: 'Colored marine board',
@@ -279,7 +283,7 @@ const TEXT: Record<Language, Record<string, string>> = {
     drillModeHint: 'Choose a hole type first, then click a profile surface to detect its face, groove, and both end distances.',
     drillSetup: 'Choose hole type',
     startDrilling: 'Confirm and start placing holes',
-    rotate: 'Rotate 90° per click',
+    rotate: 'Profile direction',
     save: 'Save design JSON',
     load: 'Open local JSON',
     export: 'Production JSON',
@@ -327,10 +331,10 @@ const TEXT: Record<Language, Record<string, string>> = {
     noParts: 'No parts added yet',
     remark: 'Remark',
     remarkPlaceholder: 'Add machining, installation, or identification notes for this part…',
-    rotateX: 'Red axis clockwise 90°',
-    rotateY: 'Green axis clockwise 90°',
-    rotateZ: 'Blue axis clockwise 90°',
-    rotateStandard: 'Each click rotates 90° in the same direction; four clicks return to the starting orientation.',
+    rotateX: 'Point toward red',
+    rotateY: 'Point toward green',
+    rotateZ: 'Point toward blue',
+    rotateStandard: 'Click a color to align the profile length directly with that arrow.',
     rotateCollision: 'This rotation would make profiles overlap, so it was not applied. Move the profile away and try again.',
     snapEnd: 'Magnet: end connection',
     snapSide: 'Magnet: cross connection',
@@ -347,7 +351,7 @@ const TEXT: Record<Language, Record<string, string>> = {
     machiningLegend: 'Machining symbols',
     multiSelected: 'Batch selection',
     shiftHint: 'Shift-click toggles items. Hold Shift and drag a marquee to select several parts.',
-    newProfileLength: 'Profile length',
+    newProfileLength: 'Choose profile and length',
     addProfile: 'Add profile',
     cancel: 'Cancel',
     apply: 'Apply',
@@ -362,8 +366,7 @@ const TEXT: Record<Language, Record<string, string>> = {
     project: 'プロジェクト構成',
     properties: '設定と加工',
     empty: '編集するパーツを選択してください',
-    profile2020: '2020 プロファイル',
-    profile2040: '2040 プロファイル',
+    profile: 'アルミ形材',
     plate: 'カラーアルミ板',
     pegboard: 'カラーペグボード',
     marine: 'カラーマリンボード',
@@ -394,7 +397,7 @@ const TEXT: Record<Language, Record<string, string>> = {
     drillModeHint: '穴タイプを先に選択し、形材面をクリックすると面・溝・両端距離を自動判定します。',
     drillSetup: '穴タイプを選択',
     startDrilling: '確認して穴あけ開始',
-    rotate: '1回90°回転',
+    rotate: '形材の方向',
     save: '設計JSON保存',
     load: 'ローカルJSON読込',
     export: '生産JSON',
@@ -442,10 +445,10 @@ const TEXT: Record<Language, Record<string, string>> = {
     noParts: 'パーツがまだありません',
     remark: '備考',
     remarkPlaceholder: '加工、取付、識別用の備考を追加…',
-    rotateX: '赤軸を時計回りに90°',
-    rotateY: '緑軸を時計回りに90°',
-    rotateZ: '青軸を時計回りに90°',
-    rotateStandard: '毎回同じ方向に90°回転し、4回で元の向きに戻ります。',
+    rotateX: '赤方向へ向ける',
+    rotateY: '緑方向へ向ける',
+    rotateZ: '青方向へ向ける',
+    rotateStandard: '色をクリックすると、形材の長さ方向がその矢印に直接揃います。',
     rotateCollision: '回転すると形材同士が重なるため実行できません。少し移動してから再度お試しください。',
     snapEnd: 'スナップ：端点接続',
     snapSide: 'スナップ：交差接続',
@@ -462,7 +465,7 @@ const TEXT: Record<Language, Record<string, string>> = {
     machiningLegend: '加工記号',
     multiSelected: '一括選択',
     shiftHint: 'Shiftクリックで追加・解除、Shiftを押しながらドラッグして範囲選択します。',
-    newProfileLength: '形材長さ',
+    newProfileLength: '形材規格と長さを選択',
     addProfile: '形材を追加',
     cancel: 'キャンセル',
     apply: '適用',
@@ -582,10 +585,19 @@ const profileSize = (variantId = '2020'): [number, number] => {
   return [Number(first[1]), Number(first[2])];
 };
 
-const getProfileTapPortCount = (variantId = '2020') => {
+const getProfileTapGrid = (variantId = '2020') => {
   const [width, height] = profileSize(variantId);
   const moduleSize = Math.max(1, Math.min(width, height));
-  return Math.max(1, Math.round(width / moduleSize) * Math.round(height / moduleSize));
+  if (variantId === '2047') return { columns: 1, rows: 3 };
+  return {
+    columns: Math.max(1, Math.round(width / moduleSize)),
+    rows: Math.max(1, Math.round(height / moduleSize)),
+  };
+};
+
+const getProfileTapPortCount = (variantId = '2020') => {
+  const { columns, rows } = getProfileTapGrid(variantId);
+  return columns * rows;
 };
 
 const createItem = (kind: DIYItemKind, index = 0, variantId?: string): DIYSceneItem => {
@@ -1092,9 +1104,7 @@ const profileFaceSlotAnchors = (
 ) => {
   if (axisIndex === 0) {
     const dimensions = profileDimensions(item);
-    const cellSize = Math.min(dimensions.width, dimensions.height);
-    const rows = Math.max(1, Math.round(dimensions.height / cellSize));
-    const columns = Math.max(1, Math.round(dimensions.width / cellSize));
+    const { columns, rows } = getProfileTapGrid(item.variantId);
     return centeredModuleOffsets(dimensions.height, rows).flatMap((vertical) => (
       centeredModuleOffsets(dimensions.width, columns).map((depth) => (
         box.axes[1].clone().multiplyScalar(vertical).addScaledVector(box.axes[2], depth)
@@ -1316,6 +1326,9 @@ type ProfileFace = 'top' | 'right' | 'bottom' | 'left';
 
 const getActiveProfileFaces = (variantId = '2020'): Set<ProfileFace> => {
   const active = new Set<ProfileFace>(['top', 'right', 'bottom', 'left']);
+  if (variantId === '2020R' || variantId === '3030R') {
+    return new Set<ProfileFace>(['bottom', 'left']);
+  }
   if (variantId.includes('N4')) return new Set<ProfileFace>();
   if (variantId.includes('N3')) return new Set<ProfileFace>(['bottom']);
   if (variantId.includes('N2-OPP')) return new Set<ProfileFace>(['right', 'left']);
@@ -1335,6 +1348,7 @@ const createProfileSectionShape = (
   activeFaces: Set<ProfileFace>,
   xCenters: number[],
   yCenters: number[],
+  roundedSector = false,
 ) => {
   const opening = cellSize * 0.26;
   const shoulder = cellSize * 0.44;
@@ -1362,6 +1376,26 @@ const createProfileSectionShape = (
     });
   }
   shape.lineTo(right, bottom);
+
+  if (roundedSector) {
+    // R profiles have two slotted flat faces and one continuous
+    // quarter-circle outer face, rather than a rounded square shell.
+    shape.absarc(left, bottom, Math.min(width, height), 0, Math.PI / 2, false);
+    if (activeFaces.has('left')) {
+      [...yCenters].reverse().forEach((center) => {
+        shape.lineTo(left, center + opening / 2);
+        shape.lineTo(left + neckDepth, center + opening / 2);
+        shape.lineTo(left + shoulderDepth, center + shoulder / 2);
+        shape.lineTo(left + totalDepth, center + inner / 2);
+        shape.lineTo(left + totalDepth, center - inner / 2);
+        shape.lineTo(left + shoulderDepth, center - shoulder / 2);
+        shape.lineTo(left + neckDepth, center - opening / 2);
+        shape.lineTo(left, center - opening / 2);
+      });
+    }
+    shape.closePath();
+    return shape;
+  }
 
   if (activeFaces.has('right')) {
     yCenters.forEach((center) => {
@@ -1424,11 +1458,23 @@ const createProfileObject = (
 
   const columns = Math.max(1, Math.round(width / cellSize));
   const rows = Math.max(1, Math.round(height / cellSize));
-  const xCenters = Array.from({ length: columns }, (_, index) => -width / 2 + ((index + 0.5) * width) / columns);
-  const yCenters = Array.from({ length: rows }, (_, index) => -height / 2 + ((index + 0.5) * height) / rows);
-  const shape = createProfileSectionShape(width, height, cellSize, activeFaces, xCenters, yCenters);
+  const grooveXCenters = Array.from({ length: columns }, (_, index) => -width / 2 + ((index + 0.5) * width) / columns);
+  const grooveYCenters = Array.from({ length: rows }, (_, index) => -height / 2 + ((index + 0.5) * height) / rows);
+  const tapGrid = getProfileTapGrid(item.variantId);
+  const tapXCenters = Array.from({ length: tapGrid.columns }, (_, index) => -width / 2 + ((index + 0.5) * width) / tapGrid.columns);
+  const tapYCenters = Array.from({ length: tapGrid.rows }, (_, index) => -height / 2 + ((index + 0.5) * height) / tapGrid.rows);
+  const roundedSector = item.variantId === '2020R' || item.variantId === '3030R';
+  const shape = createProfileSectionShape(
+    width,
+    height,
+    cellSize,
+    activeFaces,
+    grooveXCenters,
+    grooveYCenters,
+    roundedSector,
+  );
 
-  xCenters.forEach((x) => yCenters.forEach((y) => {
+  tapXCenters.forEach((x) => tapYCenters.forEach((y) => {
     const bore = new THREE.Path();
     bore.absarc(x, y, cellSize * 0.13, 0, Math.PI * 2, false);
     shape.holes.push(bore);
@@ -1553,7 +1599,7 @@ const createProfileObject = (
   const addTappingMarkers = (end: 'left' | 'right') => {
     const endX = end === 'left' ? -length / 2 - 0.018 : length / 2 + 0.018;
     const normalRotation = end === 'left' ? -Math.PI / 2 : Math.PI / 2;
-    xCenters.forEach((sectionX) => yCenters.forEach((sectionY) => {
+    tapXCenters.forEach((sectionX) => tapYCenters.forEach((sectionY) => {
       const marker = new THREE.Group();
       const centerRadius = Math.min(cellSize * 0.065, 0.016);
       const outerRadius = Math.min(cellSize * 0.145, 0.032);
@@ -1897,6 +1943,7 @@ const ThreeAssembly: React.FC<{
   selectedId: string | null;
   selectedIds: string[];
   rotationLabels: [string, string, string];
+  rotationMenuTitle: string;
   snapLabels: { end: string; side: string; offset: string };
   alignmentLabels: {
     title: string;
@@ -1924,7 +1971,7 @@ const ThreeAssembly: React.FC<{
   onSelectionChange: (ids: string[]) => void;
   onTransform: (id: string, position: Vec3, rotation: Vec3) => void;
   onResizeProfile: (id: string, length: number, position: Vec3) => void;
-  onRotate90: (id: string, axisIndex: RotationAxisIndex, direction?: -1 | 1) => void;
+  onOrientAxis: (id: string, axisIndex: RotationAxisIndex) => void;
   onDelete: (id: string) => void;
   onPlaceHole: (id: string, side: ProfileSide, positionMm: number, displayGrooveIndex: number, physicalGrooveIndex: number) => void;
   onCancelDrillMode: () => void;
@@ -1933,6 +1980,7 @@ const ThreeAssembly: React.FC<{
   selectedId,
   selectedIds,
   rotationLabels,
+  rotationMenuTitle,
   snapLabels,
   alignmentLabels = {
     title: 'Snap',
@@ -1952,7 +2000,7 @@ const ThreeAssembly: React.FC<{
   onSelectionChange,
   onTransform,
   onResizeProfile,
-  onRotate90,
+  onOrientAxis,
   onDelete,
   onPlaceHole,
   onCancelDrillMode,
@@ -2007,7 +2055,7 @@ const ThreeAssembly: React.FC<{
   const onSelectionChangeRef = useRef(onSelectionChange);
   const onTransformRef = useRef(onTransform);
   const onResizeProfileRef = useRef(onResizeProfile);
-  const onRotate90Ref = useRef(onRotate90);
+  const onOrientAxisRef = useRef(onOrientAxis);
   const onDeleteRef = useRef(onDelete);
   const onPlaceHoleRef = useRef(onPlaceHole);
   const onCancelDrillModeRef = useRef(onCancelDrillMode);
@@ -2055,7 +2103,7 @@ const ThreeAssembly: React.FC<{
   useEffect(() => { onSelectionChangeRef.current = onSelectionChange; }, [onSelectionChange]);
   useEffect(() => { onTransformRef.current = onTransform; }, [onTransform]);
   useEffect(() => { onResizeProfileRef.current = onResizeProfile; }, [onResizeProfile]);
-  useEffect(() => { onRotate90Ref.current = onRotate90; }, [onRotate90]);
+  useEffect(() => { onOrientAxisRef.current = onOrientAxis; }, [onOrientAxis]);
   useEffect(() => { onDeleteRef.current = onDelete; }, [onDelete]);
   useEffect(() => { onPlaceHoleRef.current = onPlaceHole; }, [onPlaceHole]);
   useEffect(() => { onCancelDrillModeRef.current = onCancelDrillMode; }, [onCancelDrillMode]);
@@ -3312,12 +3360,12 @@ const ThreeAssembly: React.FC<{
           style={{ left: contextMenu.x, top: contextMenu.y }}
           onContextMenu={(event) => event.preventDefault()}
         >
-          <div className="px-2 pb-1.5 text-[9px] font-black uppercase tracking-widest text-slate-400">+90°</div>
+          <div className="px-2 pb-1.5 text-[9px] font-black uppercase tracking-widest text-slate-400">{rotationMenuTitle}</div>
           {rotationLabels.map((label, axisIndex) => (
             <button
               key={label}
               onClick={() => {
-                onRotate90Ref.current(contextMenu.id, axisIndex as RotationAxisIndex);
+                onOrientAxisRef.current(contextMenu.id, axisIndex as RotationAxisIndex);
                 setContextMenu(null);
               }}
               className="flex w-full items-center gap-2 rounded-xl px-2.5 py-2 text-left text-[11px] font-black text-slate-700 transition hover:bg-blue-50 hover:text-blue-700"
@@ -3543,12 +3591,10 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({ language, user, onAddBatchToC
     commit(items.map((item) => item.id === selected.id ? candidate : item), selected.id);
   };
 
-  const rotateItemBy90 = (itemId: string, axisIndex: RotationAxisIndex, direction: -1 | 1 = 1) => {
+  const orientItemToAxis = (itemId: string, axisIndex: RotationAxisIndex) => {
     const item = items.find((entry) => entry.id === itemId);
     if (!item) return;
-    const rotation = [...item.rotation] as Vec3;
-    rotation[axisIndex] = ((rotation[axisIndex] + direction * 90) % 360 + 360) % 360;
-    const candidate = { ...item, rotation };
+    const candidate = { ...item, rotation: [...PROFILE_AXIS_ROTATIONS[axisIndex]] as Vec3 };
     if (profileItemCollides(candidate, items)) {
       setRotationWarning(true);
       return;
@@ -3556,9 +3602,9 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({ language, user, onAddBatchToC
     commit(items.map((entry) => entry.id === itemId ? candidate : entry), itemId);
   };
 
-  const rotateSelectedBy90 = (axisIndex: RotationAxisIndex, direction: -1 | 1 = 1) => {
+  const orientSelectedToAxis = (axisIndex: RotationAxisIndex) => {
     if (!selected) return;
-    rotateItemBy90(selected.id, axisIndex, direction);
+    orientItemToAxis(selected.id, axisIndex);
   };
 
   const deleteItem = (itemId: string) => {
@@ -3616,14 +3662,12 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({ language, user, onAddBatchToC
     setSelectedIds((current) => current.filter((id) => items.some((item) => item.id === id)));
   };
 
-  const rotateSelectedItems = (axisIndex: RotationAxisIndex, direction: -1 | 1) => {
+  const orientSelectedItems = (axisIndex: RotationAxisIndex) => {
     if (!selectedIds.length) return;
     const selectedSet = new Set(selectedIds);
     const next = items.map((item) => {
       if (!selectedSet.has(item.id)) return item;
-      const rotation = [...item.rotation] as Vec3;
-      rotation[axisIndex] = ((rotation[axisIndex] + direction * 90) % 360 + 360) % 360;
-      return { ...item, rotation };
+      return { ...item, rotation: [...PROFILE_AXIS_ROTATIONS[axisIndex]] as Vec3 };
     });
     const collision = next.some((item) => selectedSet.has(item.id) && profileItemCollides(item, next));
     if (collision) {
@@ -3917,8 +3961,7 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({ language, user, onAddBatchToC
       id: 'profiles',
       label: t.profileParts,
       items: [
-        { kind: 'profile' as const, variantId: '2020', label: t.profile2020, icon: Box },
-        { kind: 'profile' as const, variantId: '2040', label: t.profile2040, icon: Box },
+        { kind: 'profile' as const, label: t.profile, icon: Box },
       ],
     },
     {
@@ -4044,6 +4087,7 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({ language, user, onAddBatchToC
             selectedId={selectedId}
             selectedIds={selectedIds}
             rotationLabels={[t.rotateX, t.rotateY, t.rotateZ]}
+            rotationMenuTitle={t.rotation}
             snapLabels={{ end: t.snapEnd, side: t.snapSide, offset: t.snapOffset }}
             alignmentLabels={{
               title: t.snapMode,
@@ -4102,7 +4146,7 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({ language, user, onAddBatchToC
               if (profileItemCollides(candidate, items)) return;
               commit(items.map((item) => item.id === id ? candidate : item), id);
             }}
-            onRotate90={rotateItemBy90}
+            onOrientAxis={orientItemToAxis}
             onDelete={deleteItem}
             onPlaceHole={placeHoleFrom3D}
             onCancelDrillMode={() => {
@@ -4129,7 +4173,7 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({ language, user, onAddBatchToC
                 <button onClick={deleteSelected} className="diy-toolbar-button gap-2 text-red-600 hover:border-red-300 hover:bg-red-50"><Trash2 className="h-4 w-4" />{t.delete}</button>
               </div>
               <div className="mt-5">
-                <div className="diy-field-label">{t.rotation} · 360°</div>
+                <div className="diy-field-label">{t.rotation}</div>
                 <div className="grid grid-cols-3 gap-2">
                   {([
                     { label: t.rotateX, color: '#ef4444' },
@@ -4138,7 +4182,7 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({ language, user, onAddBatchToC
                   ]).map((axis, axisIndex) => (
                     <button
                       key={axis.label}
-                      onClick={() => rotateSelectedItems(axisIndex as RotationAxisIndex, 1)}
+                      onClick={() => orientSelectedItems(axisIndex as RotationAxisIndex)}
                       className="flex min-h-16 flex-col items-center justify-center gap-1 rounded-xl border border-slate-200 bg-slate-50 px-2 py-2 text-[9px] font-black text-slate-700 hover:bg-blue-50"
                     >
                       <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: axis.color }} />
@@ -4340,7 +4384,7 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({ language, user, onAddBatchToC
                     { label: t.rotateZ, index: 2 as const, color: '#3b82f6' },
                   ]).map((axis) => (
                     <div key={axis.index} className="overflow-hidden rounded-xl border border-slate-200 bg-slate-50">
-                      <button onClick={() => rotateSelectedBy90(axis.index, 1)} className="flex min-h-20 w-full flex-col items-center justify-center gap-1 px-2 py-2 text-[9px] font-black text-slate-700 transition hover:bg-blue-50 hover:text-blue-700">
+                      <button onClick={() => orientSelectedToAxis(axis.index)} className="flex min-h-20 w-full flex-col items-center justify-center gap-1 px-2 py-2 text-[9px] font-black text-slate-700 transition hover:bg-blue-50 hover:text-blue-700">
                         <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: axis.color }} />
                         <Rotate3D className="h-4 w-4" />
                         <span>{axis.label}</span>
@@ -4348,7 +4392,6 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({ language, user, onAddBatchToC
                     </div>
                   ))}
                 </div>
-                <div className="mt-2 text-center text-[10px] font-bold text-slate-400">R {selected.rotation[0]}° · G {selected.rotation[1]}° · B {selected.rotation[2]}°</div>
                 <p className="mt-2 text-[10px] font-bold leading-relaxed text-slate-400">{t.rotateStandard}</p>
               </div>
 
@@ -4494,14 +4537,29 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({ language, user, onAddBatchToC
       )}
       {pendingProfile && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/45 p-4 backdrop-blur-sm">
-          <div className="w-full max-w-sm rounded-3xl border border-white/70 bg-white p-6 shadow-2xl">
-            <div className="text-[10px] font-black uppercase tracking-[0.2em] text-blue-600">{pendingProfile.variantId}</div>
+          <div className="w-full max-w-md rounded-3xl border border-white/70 bg-white p-6 shadow-2xl">
+            <div className="text-[10px] font-black uppercase tracking-[0.2em] text-blue-600">{t.profile}</div>
             <h2 className="mt-2 text-xl font-black text-slate-950">{t.newProfileLength}</h2>
+            <label className="mt-5 block">
+              <span className="diy-field-label">{t.model}</span>
+              <select
+                autoFocus
+                value={pendingProfile.variantId}
+                onChange={(event) => setPendingProfile((current) => current ? {
+                  ...current,
+                  variantId: event.target.value,
+                } : current)}
+                className="diy-select"
+              >
+                {PROFILE_VARIANTS.map((variant) => (
+                  <option key={variant.id} value={variant.id}>{variant.name}</option>
+                ))}
+              </select>
+            </label>
             <label className="mt-5 block">
               <span className="diy-field-label">{t.length}</span>
               <div className="flex items-center gap-2">
                 <input
-                  autoFocus
                   type="number"
                   min={21}
                   max={3000}

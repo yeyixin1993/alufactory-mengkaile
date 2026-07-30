@@ -10,6 +10,9 @@ export const OPPOSITE_PROFILE_SIDE: Record<ProfileSide, ProfileSide> = {
 
 export const getProfileGrooveCount = (variantId = '2020', side: ProfileSide): number => {
   if (variantId === '2020-N4-SQ' || variantId === '2020-N4-RD') return 0;
+  if (variantId === '2020R' || variantId === '3030R') {
+    return side === 'C' || side === 'D' ? 1 : 0;
+  }
   if (variantId === '2020-N2-OPP') return side === 'B' || side === 'D' ? 1 : 0;
   if (variantId === '1515-N1' && side === 'A') return 0;
   if (variantId === '1515-N2' && (side === 'A' || side === 'B')) return 0;
