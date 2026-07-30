@@ -1441,6 +1441,84 @@ const createProfileSectionShape = (
   return shape;
 };
 
+const createRoundedN4SectionShape = (
+  width: number,
+  height: number,
+) => {
+  const left = -width / 2;
+  const right = width / 2;
+  const bottom = -height / 2;
+  const top = height / 2;
+  const cornerRadius = Math.min(width, height) * 0.275;
+  const shape = new THREE.Shape();
+
+  // 2020 N4 "圆形" is the rounded-square section shown in the product
+  // drawing: four short flat faces joined by broad corner radii. It is not
+  // a circular tube.
+  shape.moveTo(left + cornerRadius, bottom);
+  shape.lineTo(right - cornerRadius, bottom);
+  shape.quadraticCurveTo(right, bottom, right, bottom + cornerRadius);
+  shape.lineTo(right, top - cornerRadius);
+  shape.quadraticCurveTo(right, top, right - cornerRadius, top);
+  shape.lineTo(left + cornerRadius, top);
+  shape.quadraticCurveTo(left, top, left, top - cornerRadius);
+  shape.lineTo(left, bottom + cornerRadius);
+  shape.quadraticCurveTo(left, bottom, left + cornerRadius, bottom);
+  shape.closePath();
+
+  const outerInsetX = width * 0.125;
+  const outerInsetY = height * 0.125;
+  const shoulderX = width * 0.285;
+  const shoulderY = height * 0.285;
+  const innerX = width * 0.16;
+  const innerY = height * 0.16;
+
+  const addVoid = (points: Array<[number, number]>) => {
+    const hole = new THREE.Path();
+    hole.moveTo(points[0][0], points[0][1]);
+    points.slice(1).forEach(([x, y]) => hole.lineTo(x, y));
+    hole.closePath();
+    shape.holes.push(hole);
+  };
+
+  // Four symmetric lightening chambers leave the central tapping boss and
+  // its four structural webs visible on the end face.
+  addVoid([
+    [-shoulderX, top - outerInsetY],
+    [shoulderX, top - outerInsetY],
+    [shoulderX, top - shoulderY],
+    [innerX, innerY],
+    [-innerX, innerY],
+    [-shoulderX, top - shoulderY],
+  ]);
+  addVoid([
+    [right - outerInsetX, -shoulderY],
+    [right - outerInsetX, shoulderY],
+    [right - shoulderX, shoulderY],
+    [innerX, innerY],
+    [innerX, -innerY],
+    [right - shoulderX, -shoulderY],
+  ]);
+  addVoid([
+    [shoulderX, bottom + outerInsetY],
+    [-shoulderX, bottom + outerInsetY],
+    [-shoulderX, bottom + shoulderY],
+    [-innerX, -innerY],
+    [innerX, -innerY],
+    [shoulderX, bottom + shoulderY],
+  ]);
+  addVoid([
+    [left + outerInsetX, shoulderY],
+    [left + outerInsetX, -shoulderY],
+    [left + shoulderX, -shoulderY],
+    [-innerX, -innerY],
+    [-innerX, innerY],
+    [left + shoulderX, shoulderY],
+  ]);
+
+  return shape;
+};
+
 const createProfileObject = (
   item: DIYSceneItem,
   selected: boolean,
@@ -1464,15 +1542,17 @@ const createProfileObject = (
   const tapXCenters = Array.from({ length: tapGrid.columns }, (_, index) => -width / 2 + ((index + 0.5) * width) / tapGrid.columns);
   const tapYCenters = Array.from({ length: tapGrid.rows }, (_, index) => -height / 2 + ((index + 0.5) * height) / tapGrid.rows);
   const roundedSector = item.variantId === '2020R' || item.variantId === '3030R';
-  const shape = createProfileSectionShape(
-    width,
-    height,
-    cellSize,
-    activeFaces,
-    grooveXCenters,
-    grooveYCenters,
-    roundedSector,
-  );
+  const shape = item.variantId === '2020-N4-RD'
+    ? createRoundedN4SectionShape(width, height)
+    : createProfileSectionShape(
+        width,
+        height,
+        cellSize,
+        activeFaces,
+        grooveXCenters,
+        grooveYCenters,
+        roundedSector,
+      );
 
   tapXCenters.forEach((x) => tapYCenters.forEach((y) => {
     const bore = new THREE.Path();
