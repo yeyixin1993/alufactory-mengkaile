@@ -6,9 +6,12 @@ import { TransformControls } from 'three/addons/controls/TransformControls.js';
 import {
   Box,
   CircleDot,
+  ChevronDown,
   Copy,
   Download,
   Eye,
+  FileJson,
+  FileSpreadsheet,
   Grid3X3,
   Hammer,
   Maximize2,
@@ -56,7 +59,7 @@ import {
   OPPOSITE_PROFILE_SIDE,
   physicalGrooveToDisplay,
 } from '../utils/profileMachining';
-import { buildProductionXlsx } from '../utils/productionXlsx';
+import { buildProductionXlsx, parseProductionXlsx, type ProductionWorkbookData } from '../utils/productionXlsx';
 
 type DIYItemKind =
   | 'profile'
@@ -198,6 +201,11 @@ const TEXT: Record<Language, Record<string, string>> = {
     load: '读取本地 JSON',
     export: '生产 JSON',
     exportExcel: '生产 Excel',
+    jsonFiles: 'JSON',
+    excelFiles: 'Excel',
+    loadExcel: '读取本地 Excel',
+    excelLoaded: 'Excel已读取，列表与价格已更新',
+    excelImportFailed: 'Excel读取失败，请选择本设计器导出的生产Excel',
     addCart: '加入购物车',
     total: '设计估价',
     length: '长度 (mm)',
@@ -319,6 +327,11 @@ const TEXT: Record<Language, Record<string, string>> = {
     load: 'Open local JSON',
     export: 'Production JSON',
     exportExcel: 'Production Excel',
+    jsonFiles: 'JSON',
+    excelFiles: 'Excel',
+    loadExcel: 'Open local Excel',
+    excelLoaded: 'Excel loaded; parts and pricing updated',
+    excelImportFailed: 'Unable to read Excel. Choose a production workbook exported by this designer.',
     addCart: 'Add design to cart',
     total: 'Design estimate',
     length: 'Length (mm)',
@@ -440,6 +453,11 @@ const TEXT: Record<Language, Record<string, string>> = {
     load: 'ローカルJSON読込',
     export: '生産JSON',
     exportExcel: '生産Excel',
+    jsonFiles: 'JSON',
+    excelFiles: 'Excel',
+    loadExcel: 'ローカルExcel読込',
+    excelLoaded: 'Excelを読み込み、部品表と価格を更新しました',
+    excelImportFailed: 'Excelを読み込めません。デザイナーから出力した生産Excelを選択してください。',
     addCart: 'カートに追加',
     total: '見積金額',
     length: '長さ (mm)',
@@ -875,6 +893,77 @@ const createItem = (kind: DIYItemKind, index = 0, variantId?: string): DIYSceneI
     remark: '',
   };
 };
+
+const IMPORTABLE_ITEM_KINDS: DIYItemKind[] = [
+  'profile', 'plate', 'pegboard', 'marine_board', 'connector', 'extruded_connector',
+  'l_connector', 't_connector', 'hidden_connector', 'tee_connector', 'screw', 'foot',
+];
+
+const workbookColorId = (part: ProductionWorkbookData['parts'][number], kind: DIYItemKind) => {
+  if (part.colorId) return part.colorId;
+  const colors = kind === 'marine_board' ? MARINE_BOARD_COLORS : PROFILE_COLORS;
+  return colors.find((color) => Object.values(color.name).some((name) => name === part.color))?.id
+    || (kind === 'marine_board' ? 'wood_natural' : 'natural');
+};
+
+const itemsFromProductionWorkbook = (production: ProductionWorkbookData): DIYSceneItem[] => production.parts.flatMap((part, index) => {
+  if (!IMPORTABLE_ITEM_KINDS.includes(part.type as DIYItemKind)) return [];
+  const kind = part.type as DIYItemKind;
+  const requestedSeries = ACCESSORY_PROFILE_SIZES.includes(part.accessoryProfileSize as DIYAccessoryProfileSize)
+    ? part.accessoryProfileSize as DIYAccessoryProfileSize
+    : undefined;
+  const base = createItem(kind, index, kind === 'profile' ? part.model : requestedSeries);
+  const variantId = kind === 'profile' ? (part.model || '2020') : base.variantId;
+  const holes = kind === 'profile'
+    ? production.holes
+      .filter((hole) => hole.partId ? hole.partId === part.id : hole.partLine === part.line)
+      .map((hole) => {
+        const side = (['A', 'B', 'C', 'D'].includes(hole.entryFace) ? hole.entryFace : 'A') as ProfileSide;
+        const physicalGrooveIndex = Math.max(0, Number(hole.physicalGrooveId.match(/\d+/)?.[0] || 1) - 1);
+        const type = (['through', 'countersunk', 'threaded'].includes(hole.holeType) ? hole.holeType : 'through') as HoleType;
+        const importedThreadSize = (['M3', 'M4', 'M5', 'M6', 'M8'].includes(hole.threadSize)
+          ? hole.threadSize
+          : undefined) as ThreadSize | undefined;
+        return {
+          id: hole.holeId || makeId(),
+          side,
+          positionMm: hole.leftDistanceMm,
+          type,
+          threadSize: type === 'threaded' ? importedThreadSize || 'M6' : undefined,
+          grooveIndex: physicalGrooveToDisplay(side, physicalGrooveIndex, Math.max(1, getProfileGrooveCount(variantId, side))),
+          physicalGrooveIndex,
+        };
+      })
+    : base.holes;
+  const position = (part.positionMm.length === 3 ? part.positionMm : base.position) as Vec3;
+  const rotation = (part.rotationDeg.length === 3 ? part.rotationDeg : base.rotation) as Vec3;
+  return [{
+    ...base,
+    id: part.id || base.id,
+    name: kind === 'profile' ? variantId : base.name,
+    variantId,
+    accessoryProfileSize: requestedSeries || base.accessoryProfileSize,
+    length: part.lengthMm ?? base.length,
+    width: part.widthMm ?? base.width,
+    height: part.heightMm ?? base.height,
+    thickness: part.thicknessMm ?? base.thickness,
+    colorId: workbookColorId(part, kind),
+    quantity: Math.max(1, Math.round(part.quantity || 1)),
+    position,
+    rotation,
+    holes,
+    tappingLeft: kind === 'profile' ? part.leftTappingPorts > 0 : base.tappingLeft,
+    tappingRight: kind === 'profile' ? part.rightTappingPorts > 0 : base.tappingRight,
+    screwHead: (part.screwHead === 'socket_cylinder' || part.screwHead === 'button_socket')
+      ? part.screwHead
+      : base.screwHead,
+    linkedProfileId: part.linkedProfileId,
+    linkedHoleId: part.linkedHoleId,
+    autoGenerated: kind === 'screw' && !!part.linkedProfileId && !!part.linkedHoleId,
+    pegHolePattern: kind === 'pegboard' ? 'ikea' : base.pegHolePattern,
+    remark: part.remark || '',
+  }];
+});
 
 const buildDemoWorkbench = (): DIYSceneItem[] => {
   const items: DIYSceneItem[] = [];
@@ -2477,6 +2566,8 @@ const ThreeAssembly: React.FC<{
   };
   deleteLabel: string;
   frameAllLabel: string;
+  fillScrewsLabel: string;
+  fillScrewsHint: string;
   displayLabels: {
     transparentProfiles: string;
     machiningMarks: string;
@@ -2495,6 +2586,7 @@ const ThreeAssembly: React.FC<{
   onResizeProfile: (id: string, length: number, position: Vec3) => void;
   onRotateQuarterTurn: (id: string, axisIndex: RotationAxisIndex) => void;
   onDelete: (id: string) => void;
+  onFillScrews: () => void;
   onPlaceHole: (id: string, side: ProfileSide, positionMm: number, displayGrooveIndex: number, physicalGrooveIndex: number) => void;
   onCancelDrillMode: () => void;
 }> = ({
@@ -2514,6 +2606,8 @@ const ThreeAssembly: React.FC<{
   },
   deleteLabel,
   frameAllLabel,
+  fillScrewsLabel,
+  fillScrewsHint,
   displayLabels,
   drillMode,
   drillEditorLabels,
@@ -2524,6 +2618,7 @@ const ThreeAssembly: React.FC<{
   onResizeProfile,
   onRotateQuarterTurn,
   onDelete,
+  onFillScrews,
   onPlaceHole,
   onCancelDrillMode,
 }) => {
@@ -3833,6 +3928,17 @@ const ThreeAssembly: React.FC<{
       <div className="absolute right-3 top-3 z-20 flex items-center gap-1.5">
         <button
           type="button"
+          onClick={onFillScrews}
+          title={fillScrewsHint}
+          aria-label={fillScrewsLabel}
+          data-testid="diy-fill-screws"
+          className="flex items-center gap-2 rounded-xl border border-blue-200 bg-white/95 px-3 py-2 text-[11px] font-black text-blue-700 shadow-lg backdrop-blur transition hover:border-blue-400 hover:bg-blue-50"
+        >
+          <Wrench className="h-4 w-4" />
+          <span className="hidden lg:inline">{fillScrewsLabel}</span>
+        </button>
+        <button
+          type="button"
           onClick={() => setTransparentProfiles((current) => !current)}
           title={displayLabels.transparentProfiles}
           aria-label={displayLabels.transparentProfiles}
@@ -4086,7 +4192,9 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({ language, user, onAddBatchToC
   const [drillSetupOpen, setDrillSetupOpen] = useState(false);
   const [pendingProfile, setPendingProfile] = useState<{ variantId: string; length: number } | null>(null);
   const [selectedAccessoryProfileSize, setSelectedAccessoryProfileSize] = useState<DIYAccessoryProfileSize>('2020');
+  const [fileMenu, setFileMenu] = useState<'json' | 'excel' | null>(null);
   const importRef = useRef<HTMLInputElement>(null);
+  const excelImportRef = useRef<HTMLInputElement>(null);
 
   const selected = items.find((item) => item.id === selectedId) || null;
   const selectedTapPortCount = selected?.kind === 'profile' ? getProfileTapPortCount(selected.variantId) : 0;
@@ -4365,6 +4473,20 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({ language, user, onAddBatchToC
     reader.readAsText(file);
   };
 
+  const importExcel = async (file?: File) => {
+    if (!file) return;
+    try {
+      const production = parseProductionXlsx(await file.arrayBuffer());
+      const importedItems = normalizeDesignItems(itemsFromProductionWorkbook(production));
+      if (!importedItems.length) throw new Error('No supported parts found in workbook');
+      commit(importedItems, null);
+      showNotice(`${t.excelLoaded} · ${importedItems.length}`);
+    } catch (error) {
+      console.warn('Unable to import DIY production workbook', error);
+      showNotice(t.excelImportFailed);
+    }
+  };
+
   const toCartItems = (): CartItem[] => {
     const profileProduct = INITIAL_PRODUCTS.find((product) => product.type === ProductType.PROFILE)!;
     const plateProduct = INITIAL_PRODUCTS.find((product) => product.type === ProductType.ALUMINUM_PLATE)!;
@@ -4582,13 +4704,45 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({ language, user, onAddBatchToC
             <button onClick={redo} disabled={!future.length} className="diy-toolbar-button" aria-label="Redo"><Redo2 className="h-4 w-4" /></button>
             <button onClick={() => setDrillMode(false)} className={`diy-toolbar-button gap-2 ${!drillMode ? 'diy-toolbar-active' : ''}`}><Move3D className="h-4 w-4" />{t.move}</button>
             <button data-testid="diy-toolbar-drill" onClick={openDrillSetup} className={`diy-toolbar-button gap-2 ${drillMode ? 'diy-toolbar-active' : ''}`}><CircleDot className="h-4 w-4" />{t.drillMode}</button>
-            {/* 内六角螺丝及一键填充入口暂时隐藏；保留底层数据兼容旧设计。 */}
-            <button onClick={save} className="diy-toolbar-button gap-2"><Save className="h-4 w-4" />{t.save}</button>
-            <button onClick={load} className="diy-toolbar-button gap-2"><Upload className="h-4 w-4" />{t.load}</button>
-            <button onClick={exportJson} className="diy-toolbar-button gap-2"><Download className="h-4 w-4" />{t.export}</button>
-            <button onClick={exportExcel} className="diy-toolbar-button gap-2"><Download className="h-4 w-4" />{t.exportExcel}</button>
+            <div className="relative">
+              <button
+                type="button"
+                data-testid="diy-json-menu"
+                onClick={() => setFileMenu((current) => current === 'json' ? null : 'json')}
+                className={`diy-toolbar-button gap-2 ${fileMenu === 'json' ? 'diy-toolbar-active' : ''}`}
+              >
+                <FileJson className="h-4 w-4" />{t.jsonFiles}<ChevronDown className="h-3.5 w-3.5" />
+              </button>
+              {fileMenu === 'json' && (
+                <div className="absolute right-0 top-full z-50 mt-2 w-52 rounded-2xl border border-slate-200 bg-white p-2 shadow-2xl">
+                  <button type="button" onClick={() => { save(); setFileMenu(null); }} className="flex w-full items-center gap-2 rounded-xl px-3 py-2.5 text-left text-xs font-black text-slate-700 hover:bg-blue-50 hover:text-blue-700"><Save className="h-4 w-4" />{t.save}</button>
+                  <button type="button" onClick={() => { load(); setFileMenu(null); }} className="flex w-full items-center gap-2 rounded-xl px-3 py-2.5 text-left text-xs font-black text-slate-700 hover:bg-blue-50 hover:text-blue-700"><Upload className="h-4 w-4" />{t.load}</button>
+                  <button type="button" onClick={() => { exportJson(); setFileMenu(null); }} className="flex w-full items-center gap-2 rounded-xl px-3 py-2.5 text-left text-xs font-black text-slate-700 hover:bg-blue-50 hover:text-blue-700"><Download className="h-4 w-4" />{t.export}</button>
+                </div>
+              )}
+            </div>
+            <div className="relative">
+              <button
+                type="button"
+                data-testid="diy-excel-menu"
+                onClick={() => setFileMenu((current) => current === 'excel' ? null : 'excel')}
+                className={`diy-toolbar-button gap-2 ${fileMenu === 'excel' ? 'diy-toolbar-active' : ''}`}
+              >
+                <FileSpreadsheet className="h-4 w-4" />{t.excelFiles}<ChevronDown className="h-3.5 w-3.5" />
+              </button>
+              {fileMenu === 'excel' && (
+                <div className="absolute right-0 top-full z-50 mt-2 w-52 rounded-2xl border border-slate-200 bg-white p-2 shadow-2xl">
+                  <button type="button" onClick={() => { exportExcel(); setFileMenu(null); }} className="flex w-full items-center gap-2 rounded-xl px-3 py-2.5 text-left text-xs font-black text-slate-700 hover:bg-blue-50 hover:text-blue-700"><Download className="h-4 w-4" />{t.exportExcel}</button>
+                  <button type="button" data-testid="diy-load-excel" onClick={() => { excelImportRef.current?.click(); setFileMenu(null); }} className="flex w-full items-center gap-2 rounded-xl px-3 py-2.5 text-left text-xs font-black text-slate-700 hover:bg-blue-50 hover:text-blue-700"><Upload className="h-4 w-4" />{t.loadExcel}</button>
+                </div>
+              )}
+            </div>
             <input ref={importRef} type="file" accept="application/json,.json" className="hidden" onChange={(event) => {
               importJson(event.target.files?.[0]);
+              event.target.value = '';
+            }} />
+            <input ref={excelImportRef} type="file" accept="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,.xlsx" className="hidden" onChange={(event) => {
+              importExcel(event.target.files?.[0]);
               event.target.value = '';
             }} />
           </div>
@@ -4708,6 +4862,8 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({ language, user, onAddBatchToC
             }}
             deleteLabel={t.delete}
             frameAllLabel={t.frameAll}
+            fillScrewsLabel={t.fillScrews}
+            fillScrewsHint={t.fillScrewsHint}
             displayLabels={{
               transparentProfiles: t.transparentProfiles,
               machiningMarks: t.machiningMarks,
@@ -4757,6 +4913,7 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({ language, user, onAddBatchToC
             }}
             onRotateQuarterTurn={rotateItemQuarterTurn}
             onDelete={deleteItem}
+            onFillScrews={fillScrews}
             onPlaceHole={placeHoleFrom3D}
             onCancelDrillMode={() => {
               setDrillMode(false);
@@ -5042,14 +5199,6 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({ language, user, onAddBatchToC
                     {t.drillMode}
                   </button>
                   <p className="mb-3 text-[10px] font-bold leading-relaxed text-blue-700">{t.drillModeHint}</p>
-                  <button
-                    type="button"
-                    onClick={fillScrews}
-                    className="mb-2 flex w-full items-center justify-center gap-2 rounded-xl border border-blue-200 bg-white px-3 py-2.5 text-xs font-black text-blue-700 transition hover:border-blue-400 hover:bg-blue-50"
-                  >
-                    <Wrench className="h-4 w-4" />{t.fillScrews}
-                  </button>
-                  <p className="mb-3 text-[10px] font-bold leading-relaxed text-slate-500">{t.fillScrewsHint}</p>
                   <div className="mb-4 rounded-2xl border border-blue-100 bg-white p-2">
                     <ProfileVisualizer
                       config={{

@@ -1,3 +1,5 @@
+import { strFromU8, unzipSync } from 'fflate';
+
 type WorkbookCell = string | number | null | undefined;
 
 export interface ProductionWorkbookData {
@@ -11,18 +13,25 @@ export interface ProductionWorkbookData {
     widthMm?: number;
     heightMm?: number;
     thicknessMm?: number;
+    colorId?: string;
     color: string;
+    pegHolePattern?: string;
     quantity: number;
     positionMm: number[];
     rotationDeg: number[];
     leftTappingPorts: number;
     rightTappingPorts: number;
+    screwHead?: string;
+    linkedProfileId?: string;
+    linkedHoleId?: string;
     remark: string;
   }>;
   holes: Array<{
     partLine: number;
+    partId?: string;
     model: string;
     holeLine: number;
+    holeId?: string;
     entryFace: string;
     entryGroove: string;
     exitFace: string;
@@ -230,11 +239,11 @@ export const buildProductionXlsx = (production: ProductionWorkbookData) => {
   ];
   const partRows = production.parts.map((part) => [
     part.line, part.id, part.type, part.model, part.accessoryProfileSize ?? '', part.lengthMm ?? '', part.widthMm ?? '', part.heightMm ?? '',
-    part.thicknessMm ?? '', part.color, part.quantity, part.positionMm.join(', '), part.rotationDeg.join(', '),
-    part.leftTappingPorts, part.rightTappingPorts, part.remark,
+    part.thicknessMm ?? '', part.color, part.colorId ?? '', part.quantity, part.pegHolePattern ?? '', part.positionMm.join(', '), part.rotationDeg.join(', '),
+    part.leftTappingPorts, part.rightTappingPorts, part.screwHead ?? '', part.linkedProfileId ?? '', part.linkedHoleId ?? '', part.remark,
   ]);
   const holeRows = production.holes.map((hole) => [
-    hole.partLine, hole.model, hole.holeLine, hole.entryFace, hole.entryGroove, hole.exitFace, hole.exitGroove,
+    hole.partLine, hole.partId ?? '', hole.model, hole.holeLine, hole.holeId ?? '', hole.entryFace, hole.entryGroove, hole.exitFace, hole.exitGroove,
     hole.physicalGrooveId, hole.leftDistanceMm, hole.rightDistanceMm, hole.holeType, hole.threadSize, hole.verification,
   ]);
   const sheets: SheetDefinition[] = [
@@ -248,16 +257,16 @@ export const buildProductionXlsx = (production: ProductionWorkbookData) => {
     {
       name: '零件明细',
       title: '萌开了 3D DIY 零件明细',
-      headers: ['序号', '零件ID', '类型', '型号', '适配型材规格', '长度mm', '宽度mm', '高度mm', '厚度mm', '颜色', '数量', '位置XYZ(mm)', '旋转XYZ(°)', '左端攻丝孔数', '右端攻丝孔数', '备注'],
+      headers: ['序号', '零件ID', '类型', '型号', '适配型材规格', '长度mm', '宽度mm', '高度mm', '厚度mm', '颜色', '颜色ID', '数量', '洞洞板孔型', '位置XYZ(mm)', '旋转XYZ(°)', '左端攻丝孔数', '右端攻丝孔数', '螺丝头型', '关联型材ID', '关联孔ID', '备注'],
       rows: partRows,
-      widths: [8, 25, 14, 14, 16, 12, 12, 12, 12, 15, 9, 20, 20, 15, 15, 38],
+      widths: [8, 25, 14, 14, 16, 12, 12, 12, 12, 15, 14, 9, 14, 20, 20, 15, 15, 14, 25, 25, 38],
     },
     {
       name: '打孔明细',
       title: '萌开了 3D DIY 打孔明细',
-      headers: ['零件序号', '型号', '孔序号', '入口面', '入口二维槽位', '出口面', '出口二维槽位', '物理槽ID', '距左端mm', '距右端mm', '孔类型', '螺纹', '客户/工厂核对'],
+      headers: ['零件序号', '零件ID', '型号', '孔序号', '孔ID', '入口面', '入口二维槽位', '出口面', '出口二维槽位', '物理槽ID', '距左端mm', '距右端mm', '孔类型', '螺纹', '客户/工厂核对'],
       rows: holeRows,
-      widths: [11, 14, 10, 10, 15, 10, 15, 12, 13, 13, 14, 10, 42],
+      widths: [11, 25, 14, 10, 25, 10, 15, 10, 15, 12, 13, 13, 14, 10, 42],
     },
   ];
 
@@ -313,4 +322,141 @@ export const buildProductionXlsx = (production: ProductionWorkbookData) => {
     })),
   ];
   return zipStore(entries);
+};
+
+const RELATIONSHIP_NAMESPACE = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships';
+
+const xmlDocument = (content: Uint8Array) => new DOMParser().parseFromString(strFromU8(content), 'application/xml');
+
+const columnIndexFromReference = (reference: string) => {
+  const letters = reference.match(/^[A-Z]+/)?.[0] || 'A';
+  return letters.split('').reduce((value, letter) => value * 26 + letter.charCodeAt(0) - 64, 0) - 1;
+};
+
+const workbookSheetPath = (
+  files: Record<string, Uint8Array>,
+  sheetName: string,
+  fallbackPath: string,
+) => {
+  const workbook = files['xl/workbook.xml'];
+  const relationships = files['xl/_rels/workbook.xml.rels'];
+  if (!workbook || !relationships) return fallbackPath;
+  const workbookDoc = xmlDocument(workbook);
+  const relationshipDoc = xmlDocument(relationships);
+  const sheet = Array.from(workbookDoc.getElementsByTagName('sheet'))
+    .find((entry) => entry.getAttribute('name') === sheetName);
+  const relationId = sheet?.getAttribute('r:id') || sheet?.getAttributeNS(RELATIONSHIP_NAMESPACE, 'id');
+  if (!relationId) return fallbackPath;
+  const relationship = Array.from(relationshipDoc.getElementsByTagName('Relationship'))
+    .find((entry) => entry.getAttribute('Id') === relationId);
+  const target = relationship?.getAttribute('Target');
+  if (!target) return fallbackPath;
+  if (target.startsWith('/')) return target.slice(1);
+  return target.startsWith('xl/') ? target : `xl/${target.replace(/^\.\//, '')}`;
+};
+
+const sharedStringValues = (files: Record<string, Uint8Array>) => {
+  const sharedStrings = files['xl/sharedStrings.xml'];
+  if (!sharedStrings) return [];
+  const document = xmlDocument(sharedStrings);
+  return Array.from(document.getElementsByTagName('si')).map((item) => (
+    Array.from(item.getElementsByTagName('t')).map((text) => text.textContent || '').join('')
+  ));
+};
+
+const worksheetRecords = (
+  files: Record<string, Uint8Array>,
+  path: string,
+  sharedStrings: string[],
+) => {
+  const worksheet = files[path];
+  if (!worksheet) return [];
+  const document = xmlDocument(worksheet);
+  const rows = Array.from(document.getElementsByTagName('row')).map((row) => {
+    const values: string[] = [];
+    Array.from(row.getElementsByTagName('c')).forEach((cell) => {
+      const index = columnIndexFromReference(cell.getAttribute('r') || 'A1');
+      const type = cell.getAttribute('t');
+      const inlineText = Array.from(cell.getElementsByTagName('t')).map((text) => text.textContent || '').join('');
+      const rawValue = cell.getElementsByTagName('v')[0]?.textContent || '';
+      values[index] = type === 's' ? sharedStrings[Number(rawValue)] || '' : inlineText || rawValue;
+    });
+    return values;
+  });
+  const headers = rows[1] || [];
+  return rows.slice(2).filter((row) => row.some((value) => value !== '')).map((row) => (
+    headers.reduce<Record<string, string>>((record, header, index) => {
+      if (header) record[header] = row[index] || '';
+      return record;
+    }, {})
+  ));
+};
+
+const optionalNumber = (value: string) => {
+  if (value === '') return undefined;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : undefined;
+};
+
+const vectorValues = (value: string) => {
+  const values = String(value || '').split(/[,，\s]+/).filter(Boolean).map(Number).filter(Number.isFinite);
+  return values.length === 3 ? values : [0, 0, 0];
+};
+
+export const parseProductionXlsx = (content: ArrayBuffer): ProductionWorkbookData => {
+  const files = unzipSync(new Uint8Array(content));
+  const sharedStrings = sharedStringValues(files);
+  const partRecords = worksheetRecords(
+    files,
+    workbookSheetPath(files, '零件明细', 'xl/worksheets/sheet2.xml'),
+    sharedStrings,
+  );
+  const holeRecords = worksheetRecords(
+    files,
+    workbookSheetPath(files, '打孔明细', 'xl/worksheets/sheet3.xml'),
+    sharedStrings,
+  );
+  if (!partRecords.length) throw new Error('No production parts found in workbook');
+  return {
+    parts: partRecords.map((record, index) => ({
+      line: optionalNumber(record['序号']) || index + 1,
+      id: record['零件ID'] || `excel_part_${index + 1}`,
+      type: record['类型'] || '',
+      model: record['型号'] || '',
+      accessoryProfileSize: record['适配型材规格'] || undefined,
+      lengthMm: optionalNumber(record['长度mm']),
+      widthMm: optionalNumber(record['宽度mm']),
+      heightMm: optionalNumber(record['高度mm']),
+      thicknessMm: optionalNumber(record['厚度mm']),
+      color: record['颜色'] || '',
+      colorId: record['颜色ID'] || undefined,
+      quantity: optionalNumber(record['数量']) || 1,
+      pegHolePattern: record['洞洞板孔型'] || undefined,
+      positionMm: vectorValues(record['位置XYZ(mm)']),
+      rotationDeg: vectorValues(record['旋转XYZ(°)']),
+      leftTappingPorts: optionalNumber(record['左端攻丝孔数']) || 0,
+      rightTappingPorts: optionalNumber(record['右端攻丝孔数']) || 0,
+      screwHead: record['螺丝头型'] || undefined,
+      linkedProfileId: record['关联型材ID'] || undefined,
+      linkedHoleId: record['关联孔ID'] || undefined,
+      remark: record['备注'] || '',
+    })),
+    holes: holeRecords.map((record, index) => ({
+      partLine: optionalNumber(record['零件序号']) || 0,
+      partId: record['零件ID'] || undefined,
+      model: record['型号'] || '',
+      holeLine: optionalNumber(record['孔序号']) || index + 1,
+      holeId: record['孔ID'] || undefined,
+      entryFace: record['入口面'] || 'A',
+      entryGroove: record['入口二维槽位'] || '-',
+      exitFace: record['出口面'] || 'C',
+      exitGroove: record['出口二维槽位'] || '-',
+      physicalGrooveId: record['物理槽ID'] || 'P1',
+      leftDistanceMm: optionalNumber(record['距左端mm']) || 0,
+      rightDistanceMm: optionalNumber(record['距右端mm']) || 0,
+      holeType: record['孔类型'] || 'through',
+      threadSize: record['螺纹'] || '',
+      verification: record['客户/工厂核对'] || '',
+    })),
+  };
 };
