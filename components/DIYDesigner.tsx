@@ -1789,15 +1789,6 @@ const createBoardObject = (item: DIYSceneItem, selected: boolean) => {
   addEdges(board, item.kind === 'marine_board' ? '#5b3b2d' : '#334155');
   group.add(board);
 
-  if (item.kind === 'marine_board') {
-    const grainMaterial = new THREE.LineBasicMaterial({ color: '#2f211a', transparent: true, opacity: 0.22 });
-    for (let i = -4; i <= 4; i += 1) {
-      const y = (i / 10) * height;
-      const points = [new THREE.Vector3(-width / 2, y, thickness / 2 + 0.003), new THREE.Vector3(width / 2, y + Math.sin(i) * 0.05, thickness / 2 + 0.003)];
-      group.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(points), grainMaterial));
-    }
-  }
-
   if (item.kind === 'pegboard') {
     const spacingMm = 50;
     const columns = Math.min(24, Math.max(2, Math.floor((item.width || 900) / spacingMm)));
