@@ -1337,12 +1337,12 @@ const Cart: React.FC<{
                           .map((line: any) => `${line?.name || `#${line?.code || '-'}`}×${Number(line?.quantity || 0)}`)
                           .join('；') || '-';
                         const accessoryImageByCode: Record<string, string> = {
-                          '1': '/images/accessory/1.jpg',
+                          '1': '/images/accessory/1.svg',
                           '2': '/images/accessory/2.jpg',
                           '3': '/images/accessory/3.jpg',
-                          '5': '/images/accessory/5.jpg',
+                          '5': '/images/accessory/5.svg',
                           '7': '/images/accessory/7.jpg',
-                          '7L': '/images/accessory/7L.jpg',
+                          '7L': '/images/accessory/7L.svg',
                           '7T': '/images/accessory/7T.jpg',
                           '8': '/images/accessory/8.jpg',
                           '9': '/images/accessory/9.jpg',

@@ -64,6 +64,7 @@ type DIYItemKind =
   | 'pegboard'
   | 'marine_board'
   | 'connector'
+  | 'l_connector'
   | 'hidden_connector'
   | 'screw'
   | 'foot';
@@ -153,8 +154,9 @@ const TEXT: Record<Language, Record<string, string>> = {
     plate: '彩色铝板',
     pegboard: '彩色洞洞板',
     marine: '彩色海洋板',
-    connector: '角码连接件',
-    hiddenConnector: '隐藏连接件（单孔面）',
+    connector: '1号角码连接件',
+    lConnector: '7号L型连接板',
+    hiddenConnector: '5号隐藏角码（单孔面）',
     screw: '内六角螺丝',
     socketCylinderScrew: '圆柱头内六角螺丝',
     buttonSocketScrew: '半圆头内六角螺丝',
@@ -268,8 +270,9 @@ const TEXT: Record<Language, Record<string, string>> = {
     plate: 'Colored aluminum plate',
     pegboard: 'Colored pegboard',
     marine: 'Colored marine board',
-    connector: 'Corner bracket',
-    hiddenConnector: 'Hidden connector (one-hole face)',
+    connector: 'No.1 corner bracket',
+    lConnector: 'No.7 L connecting plate',
+    hiddenConnector: 'No.5 hidden bracket (one-hole face)',
     screw: 'Socket-head screw',
     socketCylinderScrew: 'Socket cylinder-head screw',
     buttonSocketScrew: 'Button-head socket screw',
@@ -383,8 +386,9 @@ const TEXT: Record<Language, Record<string, string>> = {
     plate: 'カラーアルミ板',
     pegboard: 'カラーペグボード',
     marine: 'カラーマリンボード',
-    connector: 'コーナーブラケット',
-    hiddenConnector: '隠しコネクタ（片面1穴）',
+    connector: '1番コーナーブラケット',
+    lConnector: '7番L型連結プレート',
+    hiddenConnector: '5番隠しブラケット（片面1穴）',
     screw: '六角穴付きボルト',
     socketCylinderScrew: '六角穴付き円筒頭ボルト',
     buttonSocketScrew: '六角穴付きボタンボルト',
@@ -623,6 +627,26 @@ const naturalScrewUnitPrice = (variantId = '2020') => {
   return 1.5;
 };
 
+const ACCESSORY_PRICES_2020: Partial<Record<DIYItemKind, {
+  natural: number;
+  colored: number;
+  naturalBulk: number;
+  coloredBulk: number;
+}>> = {
+  connector: { natural: 1, colored: 3, naturalBulk: 0.9, coloredBulk: 2.5 },
+  hidden_connector: { natural: 1, colored: 3, naturalBulk: 0.9, coloredBulk: 2.5 },
+  l_connector: { natural: 3, colored: 3.5, naturalBulk: 2.5, coloredBulk: 3 },
+};
+
+const getStandardAccessoryUnitPrice = (item: DIYSceneItem) => {
+  const prices = ACCESSORY_PRICES_2020[item.kind];
+  if (!prices) return null;
+  const isNatural = item.colorId === 'natural' || item.colorId === 'silver';
+  const isBulk = Math.max(1, item.quantity || 1) >= 20;
+  if (isNatural) return isBulk ? prices.naturalBulk : prices.natural;
+  return isBulk ? prices.coloredBulk : prices.colored;
+};
+
 const createItem = (kind: DIYItemKind, index = 0, variantId?: string): DIYSceneItem => {
   const offset = index * 80;
   if (kind === 'profile') {
@@ -659,7 +683,7 @@ const createItem = (kind: DIYItemKind, index = 0, variantId?: string): DIYSceneI
       remark: '',
     };
   }
-  const accessoryDefaults: Record<'connector' | 'hidden_connector' | 'screw' | 'foot', {
+  const accessoryDefaults: Record<'connector' | 'l_connector' | 'hidden_connector' | 'screw' | 'foot', {
     name: string;
     colorId: string;
     width: number;
@@ -668,20 +692,28 @@ const createItem = (kind: DIYItemKind, index = 0, variantId?: string): DIYSceneI
     price: number;
   }> = {
     connector: {
-      name: 'Corner bracket',
+      name: 'No.1 corner bracket',
       colorId: 'silver',
       width: 40,
       height: 40,
       thickness: 4,
-      price: 8,
+      price: 1,
+    },
+    l_connector: {
+      name: 'No.7 L connecting plate',
+      colorId: 'silver',
+      width: 60,
+      height: 60,
+      thickness: 4,
+      price: 3,
     },
     hidden_connector: {
-      name: 'Hidden connector',
+      name: 'No.5 hidden bracket',
       colorId: 'silver',
       width: 60,
       height: 18,
       thickness: 12,
-      price: 10,
+      price: 1,
     },
     screw: {
       name: 'Socket-head screw',
@@ -1918,6 +1950,22 @@ const createAccessoryObject = (item: DIYSceneItem, selected: boolean) => {
     addFrontHole(0, size * 0.28, faceZ);
     addFrontHole(0, size * 0.7, faceZ);
     hitboxSize.set(size + 0.12, size + 0.12, depth + 0.15);
+  } else if (item.kind === 'l_connector') {
+    const size = THREE.MathUtils.clamp((item.width || 60) / SCENE_SCALE, 0.4, 1.2);
+    const armWidth = Math.max(0.16, size * 0.3);
+    const plateThickness = THREE.MathUtils.clamp((item.thickness || 4) / SCENE_SCALE, 0.035, 0.1);
+    const horizontal = new THREE.Mesh(new THREE.BoxGeometry(size, armWidth, plateThickness), material);
+    const vertical = new THREE.Mesh(new THREE.BoxGeometry(armWidth, size, plateThickness), material.clone());
+    horizontal.position.y = -size / 2 + armWidth / 2;
+    vertical.position.x = -size / 2 + armWidth / 2;
+    group.add(horizontal, vertical);
+    const faceZ = plateThickness / 2 + 0.008;
+    const holeRadius = Math.min(0.06, armWidth * 0.22);
+    addFrontHole(-size * 0.3, -size * 0.35, faceZ, holeRadius);
+    addFrontHole(size * 0.2, -size * 0.35, faceZ, holeRadius);
+    addFrontHole(-size * 0.35, -size * 0.02, faceZ, holeRadius);
+    addFrontHole(-size * 0.35, size * 0.28, faceZ, holeRadius);
+    hitboxSize.set(size + 0.12, size + 0.12, plateThickness + 0.16);
   } else if (item.kind === 'hidden_connector') {
     const length = THREE.MathUtils.clamp((item.width || 60) / SCENE_SCALE, 0.35, 1.2);
     const faceHeight = THREE.MathUtils.clamp((item.height || 18) / SCENE_SCALE, 0.12, 0.35);
@@ -3608,6 +3656,7 @@ const getItemLabel = (item: DIYSceneItem, language: Language) => {
   if (item.kind === 'pegboard') return `${t.pegboard} · ${item.width}×${item.height}`;
   if (item.kind === 'marine_board') return `${t.marine} · ${item.width}×${item.height}`;
   if (item.kind === 'connector') return t.connector;
+  if (item.kind === 'l_connector') return t.lConnector;
   if (item.kind === 'hidden_connector') return t.hiddenConnector;
   if (item.kind === 'screw') {
     const label = item.screwHead === 'socket_cylinder'
@@ -3669,7 +3718,8 @@ const calculatePrice = (item: DIYSceneItem, user?: User | null) => {
         : (MARINE_BOARD_PRICE[thickness] || 0) + (isMarineNaturalColor(item.colorId) ? 0 : MARINE_COLOR_SURCHARGE);
     return Number((area * rate * quantity).toFixed(1));
   }
-  return Number(((item.accessoryPrice || 0) * quantity).toFixed(1));
+  const standardAccessoryPrice = getStandardAccessoryUnitPrice(item);
+  return Number((((standardAccessoryPrice ?? item.accessoryPrice) || 0) * quantity).toFixed(1));
 };
 
 const NumberField: React.FC<{ label: string; value: number; min?: number; max?: number; step?: number; onChange: (value: number) => void }> = ({ label, value, min, max, step = 1, onChange }) => (
@@ -4046,17 +4096,18 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({ language, user, onAddBatchToC
         return { id: makeId(), product, quantity: item.quantity, config, totalPrice };
       }
       const accessoryDefinition = {
-        connector: { id: 'diy-corner-bracket', code: 1, label: t.connector, imageKey: '1' },
-        hidden_connector: { id: 'diy-hidden-connector-one-hole', code: 2, label: t.hiddenConnector, imageKey: '2' },
+        connector: { id: '1', code: 1, label: t.connector, imageKey: '1' },
+        l_connector: { id: '7L', code: 7, label: t.lConnector, imageKey: '7L' },
+        hidden_connector: { id: '5', code: 5, label: t.hiddenConnector, imageKey: '5' },
         screw: item.screwHead === 'button_socket'
           ? { id: 'diy-button-socket-screw', code: 3, label: t.buttonSocketScrew, imageKey: '3' }
           : item.screwHead === 'socket_cylinder'
             ? { id: 'diy-socket-cylinder-screw', code: 3, label: t.socketCylinderScrew, imageKey: '3' }
             : { id: 'diy-socket-head-screw', code: 3, label: t.screw, imageKey: '3' },
         foot: { id: 'diy-leveling-foot', code: 8, label: t.foot, imageKey: '8' },
-      }[item.kind as 'connector' | 'hidden_connector' | 'screw' | 'foot'];
+      }[item.kind as 'connector' | 'l_connector' | 'hidden_connector' | 'screw' | 'foot'];
       const accessoryId = accessoryDefinition.id;
-      const unitPrice = item.accessoryPrice || 0;
+      const unitPrice = Number((totalPrice / Math.max(1, item.quantity)).toFixed(2));
       return {
         id: makeId(),
         product: accessoryProduct,
@@ -4170,16 +4221,11 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({ language, user, onAddBatchToC
       items: [
         { kind: 'connector' as const, label: t.connector, icon: Wrench },
         { kind: 'hidden_connector' as const, label: t.hiddenConnector, icon: Box },
+        { kind: 'l_connector' as const, label: t.lConnector, icon: PanelTop },
         { kind: 'screw' as const, label: t.screw, icon: CircleDot },
       ],
     },
-    {
-      id: 'other',
-      label: t.otherParts,
-      items: [
-        { kind: 'foot' as const, label: t.foot, icon: CircleDot },
-      ],
-    },
+    // 调平脚暂时从零件库隐藏；旧设计中已有的调平脚仍可显示、编辑和下单。
   ];
 
   return (
@@ -4490,7 +4536,7 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({ language, user, onAddBatchToC
                 </div>
               )}
 
-              {(selected.kind === 'connector' || selected.kind === 'hidden_connector' || selected.kind === 'screw') && (
+              {(selected.kind === 'connector' || selected.kind === 'l_connector' || selected.kind === 'hidden_connector' || selected.kind === 'screw') && (
                 <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
                   <div className="mb-3 flex items-center gap-2">
                     <Wrench className="h-4 w-4 text-blue-600" />
@@ -4502,6 +4548,15 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({ language, user, onAddBatchToC
                       value={selected.width || 40}
                       min={25}
                       max={90}
+                      onChange={(value) => updateSelected({ width: value, height: value })}
+                    />
+                  )}
+                  {selected.kind === 'l_connector' && (
+                    <NumberField
+                      label={t.bracketSize}
+                      value={selected.width || 60}
+                      min={40}
+                      max={120}
                       onChange={(value) => updateSelected({ width: value, height: value })}
                     />
                   )}
