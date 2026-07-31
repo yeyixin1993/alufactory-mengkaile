@@ -722,8 +722,20 @@ const getAvailableAccessorySizes = (kind: DIYConnectionKind) => (
   ACCESSORY_PROFILE_SIZES.filter((size) => Boolean(ACCESSORY_PRICES[kind][size]))
 );
 
-const getAccessoryDimensions = (kind: DIYConnectionKind, profileSeries: DIYAccessoryProfileSize) => {
+const getAccessoryGeometryModuleSize = (
+  kind: DIYConnectionKind,
+  profileSeries: DIYAccessoryProfileSize,
+) => {
   const moduleSize = Number(profileSeries.slice(0, 2));
+  // No.7 L/T plates use one shared physical part for both 1515 and 2020.
+  if ((kind === 'l_connector' || kind === 't_connector') && (profileSeries === '1515' || profileSeries === '2020')) {
+    return 20;
+  }
+  return moduleSize;
+};
+
+const getAccessoryDimensions = (kind: DIYConnectionKind, profileSeries: DIYAccessoryProfileSize) => {
+  const moduleSize = getAccessoryGeometryModuleSize(kind, profileSeries);
   if (kind === 'connector') {
     return { width: moduleSize, height: moduleSize, thickness: Math.max(3.2, moduleSize * 0.16) };
   }
@@ -2300,7 +2312,10 @@ const createAccessoryObject = (item: DIYSceneItem, selected: boolean) => {
     // from No.9, which is a three-dimensional internal corner connector.
     const width = THREE.MathUtils.clamp((item.width || 60) / SCENE_SCALE, 0.4, 1.45);
     const height = THREE.MathUtils.clamp((item.height || 65) / SCENE_SCALE, 0.42, 1.55);
-    const profileModule = Number((item.accessoryProfileSize || '2020').slice(0, 2)) / SCENE_SCALE;
+    const profileModule = getAccessoryGeometryModuleSize(
+      't_connector',
+      item.accessoryProfileSize || '2020',
+    ) / SCENE_SCALE;
     const armWidth = THREE.MathUtils.clamp(profileModule * 0.9, 0.12, 0.38);
     const plateThickness = THREE.MathUtils.clamp((item.thickness || 3) / SCENE_SCALE, 0.03, 0.12);
     const crossbar = new THREE.Mesh(new THREE.BoxGeometry(width, armWidth, plateThickness), material);
