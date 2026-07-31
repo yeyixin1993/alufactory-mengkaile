@@ -141,7 +141,8 @@ const LanguageSwitcher: React.FC<{ current: Language, onChange: (l: Language) =>
   <select 
     value={current} 
     onChange={(e) => onChange(e.target.value as Language)}
-    className="px-3 py-2 bg-white border border-slate-200 rounded-lg text-xs font-black text-slate-700 hover:border-slate-300 transition-all cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-500"
+    aria-label="Language"
+    className="max-w-[58px] sm:max-w-none px-1.5 sm:px-3 py-2 bg-white border border-slate-200 rounded-lg text-[10px] sm:text-xs font-black text-slate-700 hover:border-slate-300 transition-all cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-500"
   >
     <option value="en">EN</option>
     <option value="cn">中文</option>
@@ -2280,14 +2281,14 @@ const App: React.FC = () => {
     <HashRouter>
       <div className={`min-h-screen font-sans text-slate-900 selection:bg-blue-100 selection:text-blue-900 ${isPreviewRoute || isDesignerRoute ? '' : 'bg-slate-50 pb-20'}`}>
         {!isPreviewRoute && !isDesignerRoute && <nav className="bg-white/90 backdrop-blur-xl sticky top-0 z-40 border-b border-slate-100 shadow-sm">
-          <div className="max-w-7xl mx-auto px-6 h-24 flex items-center justify-between">
-            <Link to="/" className="flex items-center gap-5 group">
-              <div className="w-14 h-14 bg-slate-900 rounded-[1.25rem] flex items-center justify-center text-white font-black text-3xl shadow-2xl shadow-slate-900/20 group-hover:scale-110 group-hover:bg-blue-600 transition-all duration-500">M</div>
-              <div className="flex items-center gap-2">
-                <span className="font-black text-2xl tracking-tight hidden sm:block">{t.title}</span>
+          <div className="max-w-7xl mx-auto px-2 sm:px-6 min-h-[72px] sm:h-24 flex items-center gap-2 sm:gap-6">
+            <Link to="/" className="flex min-w-0 shrink items-center gap-2 sm:gap-5 group">
+              <div className="w-9 h-9 sm:w-14 sm:h-14 shrink-0 bg-slate-900 rounded-xl sm:rounded-[1.25rem] flex items-center justify-center text-white font-black text-xl sm:text-3xl shadow-2xl shadow-slate-900/20 group-hover:scale-105 group-hover:bg-blue-600 transition-all duration-500">M</div>
+              <div className="flex min-w-0 items-center gap-2">
+                <span className="block max-w-[82px] font-black text-[10px] leading-tight sm:max-w-none sm:text-2xl sm:leading-normal tracking-tight">{t.title}</span>
                 {user && (
                   <span
-                    className={`inline-flex items-center px-2.5 py-1 rounded-full text-[10px] sm:text-xs font-black tracking-wider border shadow-sm ${
+                    className={`hidden lg:inline-flex items-center px-2.5 py-1 rounded-full text-[10px] sm:text-xs font-black tracking-wider border shadow-sm ${
                       userMembership === 'vip_plus'
                         ? 'bg-gradient-to-r from-amber-400 to-yellow-300 text-amber-900 border-amber-300'
                         : userMembership === 'vip'
@@ -2301,49 +2302,32 @@ const App: React.FC = () => {
               </div>
             </Link>
             
-            <div className="flex items-center gap-2 sm:gap-6">
-              <div className="hidden lg:flex gap-10 items-center">
-                {/*<Link to="/" className="text-sm font-black text-slate-500 hover:text-blue-600 transition-all tracking-widest uppercase">{t.catalog}</Link>*/}
-                <Link
-                  to="/diy-designer"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-flex items-center gap-1.5 text-sm font-black text-slate-500 hover:text-blue-600 transition-all tracking-widest uppercase"
-                >
-                  {language === 'cn' ? '3D DIY' : language === 'jp' ? '3D DIY' : '3D DIY'}
-                  <ExternalLink className="h-3.5 w-3.5" />
-                </Link>
-                {user && <Link to="/history" className="text-sm font-black text-slate-500 hover:text-blue-600 transition-all tracking-widest uppercase">{t.history}</Link>}
-              </div>
-              {/* Mobile: prominent history button */}
-              {user && (
-                <Link to="/history" className="hidden sm:flex md:hidden items-center gap-1 px-3 py-2 bg-blue-50 border-2 border-blue-300 text-blue-600 rounded-lg hover:bg-blue-100 transition-all font-bold text-xs" aria-label={t.history}>
-                  <History className="w-4 h-4" />
-                  <span>{t.history}</span>
-                </Link>
-              )}
-              {user && (
-                <Link to="/history" className="sm:hidden p-2 bg-blue-100 border-2 border-blue-400 text-blue-600 rounded-lg flex items-center justify-center hover:bg-blue-200 transition-all font-bold" aria-label={t.history}>
-                  <History className="w-5 h-5" />
-                </Link>
-              )}
+            <div className="ml-auto flex shrink-0 items-center gap-1 sm:gap-4">
+              <Link
+                to="/history"
+                className="inline-flex items-center gap-1 px-1.5 sm:px-3 py-2 text-slate-600 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-all font-black text-[10px] sm:text-sm"
+                aria-label={t.history}
+              >
+                <History className="w-4 h-4 sm:w-5 sm:h-5" />
+                <span>{t.history}</span>
+              </Link>
               <LanguageSwitcher current={language} onChange={setLanguage} />
               
               {user ? (
-                <div className="flex items-center gap-2 sm:gap-4">
+                <div className="flex items-center gap-1 sm:gap-4">
                   <Link to="/history" className="hidden md:flex items-center gap-3 px-6 py-3 bg-slate-50 border border-slate-100 rounded-2xl hover:bg-white hover:shadow-xl transition-all group">
                      <UserIcon className="w-5 h-5 text-slate-400 group-hover:text-blue-600" />
                      <span className="text-sm font-black text-slate-800">{user.name}</span>
                   </Link>
-                  <button onClick={() => ApiService.logout().then(() => setUser(null))} className="p-3 sm:p-4 bg-red-50 text-red-400 hover:bg-red-500 hover:text-white rounded-[1.25rem] transition-all shadow-lg shadow-red-500/5"><LogOut className="w-5 sm:w-6 h-5 sm:h-6"/></button>
+                  <button onClick={() => ApiService.logout().then(() => setUser(null))} className="p-2 sm:p-4 bg-red-50 text-red-400 hover:bg-red-500 hover:text-white rounded-xl sm:rounded-[1.25rem] transition-all shadow-lg shadow-red-500/5" aria-label={language === 'cn' ? '退出登录' : language === 'jp' ? 'ログアウト' : 'Log out'}><LogOut className="w-4 h-4 sm:w-6 sm:h-6"/></button>
                 </div>
               ) : (
-                <Link to="/login" className="bg-slate-900 text-white px-6 sm:px-8 py-3 sm:py-4 rounded-[1.25rem] text-xs sm:text-sm font-black shadow-2xl shadow-slate-900/10 hover:bg-blue-600 transition-all tracking-widest uppercase">{t.login}</Link>
+                <Link to="/login" className="bg-slate-900 text-white px-2 sm:px-8 py-2 sm:py-4 rounded-xl sm:rounded-[1.25rem] text-[10px] sm:text-sm font-black shadow-2xl shadow-slate-900/10 hover:bg-blue-600 transition-all whitespace-nowrap tracking-wide sm:tracking-widest uppercase">{t.login}</Link>
               )}
 
-              <Link to="/cart" className="relative p-3 sm:p-4 bg-blue-600 text-white rounded-[1.25rem] shadow-2xl shadow-blue-600/30 hover:bg-blue-500 transition-all hover:scale-110 active:scale-90">
-                <ShoppingCart className="w-5 sm:w-6 h-5 sm:h-6" />
-                {cart.length > 0 && <span className="absolute -top-3 -right-3 bg-red-500 text-white text-[12px] w-8 h-8 flex items-center justify-center rounded-full border-4 border-white font-black shadow-2xl animate-bounce">{cart.length}</span>}
+              <Link to="/cart" className="relative p-2 sm:p-4 bg-blue-600 text-white rounded-xl sm:rounded-[1.25rem] shadow-2xl shadow-blue-600/30 hover:bg-blue-500 transition-all hover:scale-105 active:scale-90" aria-label={language === 'cn' ? '购物车' : language === 'jp' ? 'カート' : 'Cart'}>
+                <ShoppingCart className="w-4 h-4 sm:w-6 sm:h-6" />
+                {cart.length > 0 && <span className="absolute -top-2 -right-2 sm:-top-3 sm:-right-3 bg-red-500 text-white text-[9px] sm:text-[12px] w-5 h-5 sm:w-8 sm:h-8 flex items-center justify-center rounded-full border-2 sm:border-4 border-white font-black shadow-2xl animate-bounce">{cart.length}</span>}
               </Link>
             </div>
           </div>
