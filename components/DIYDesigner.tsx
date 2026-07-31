@@ -747,7 +747,9 @@ const getStandardAccessoryUnitPrice = (item: DIYSceneItem) => {
   const profileSeries = item.accessoryProfileSize || '2020';
   const prices = ACCESSORY_PRICES[item.kind][profileSeries];
   if (!prices) return null;
-  const isNatural = item.colorId === 'natural' || item.colorId === 'silver';
+  // Only silver white uses the natural-price tier. Bright silver is a
+  // decorative color and follows the same price tier as every other color.
+  const isNatural = item.colorId === 'natural';
   const isBulk = Math.max(1, item.quantity || 1) >= 20;
   if (isNatural) return isBulk ? prices.naturalBulk : prices.natural;
   return isBulk ? prices.coloredBulk : prices.colored;
@@ -799,7 +801,7 @@ const createItem = (kind: DIYItemKind, index = 0, variantId?: string): DIYSceneI
   }> = {
     connector: {
       name: 'No.1 corner bracket',
-      colorId: 'silver',
+      colorId: 'natural',
       width: 20,
       height: 20,
       thickness: 3.2,
@@ -807,7 +809,7 @@ const createItem = (kind: DIYItemKind, index = 0, variantId?: string): DIYSceneI
     },
     extruded_connector: {
       name: 'No.2 extruded corner bracket',
-      colorId: 'silver',
+      colorId: 'natural',
       width: 28,
       height: 28,
       thickness: 3,
@@ -815,7 +817,7 @@ const createItem = (kind: DIYItemKind, index = 0, variantId?: string): DIYSceneI
     },
     l_connector: {
       name: 'No.7 L connecting plate',
-      colorId: 'silver',
+      colorId: 'natural',
       width: 60,
       height: 60,
       thickness: 4,
@@ -823,7 +825,7 @@ const createItem = (kind: DIYItemKind, index = 0, variantId?: string): DIYSceneI
     },
     t_connector: {
       name: 'No.7 T connecting plate',
-      colorId: 'silver',
+      colorId: 'natural',
       width: 60,
       height: 65,
       thickness: 3,
@@ -831,7 +833,7 @@ const createItem = (kind: DIYItemKind, index = 0, variantId?: string): DIYSceneI
     },
     hidden_connector: {
       name: 'No.5 hidden bracket',
-      colorId: 'silver',
+      colorId: 'natural',
       width: 25,
       height: 10,
       thickness: 5,
@@ -839,7 +841,7 @@ const createItem = (kind: DIYItemKind, index = 0, variantId?: string): DIYSceneI
     },
     tee_connector: {
       name: 'No.9 three-way connector',
-      colorId: 'silver',
+      colorId: 'natural',
       width: 30,
       height: 30,
       thickness: 20,
@@ -2201,61 +2203,34 @@ const createAccessoryObject = (item: DIYSceneItem, selected: boolean) => {
     pad.position.y = -0.08;
     group.add(stem, pad);
   } else if (item.kind === 'connector') {
-    // No.1 is a die-cast external angle bracket: two perpendicular mounting
-    // faces, a centered triangular gusset, raised side lips and one slot per face.
+    // No.1 is the compact triangular corner insert. Its two outer ends finish
+    // flush with the triangle instead of extending as L-shaped rails like No.2.
     const size = THREE.MathUtils.clamp((item.width || 20) / SCENE_SCALE, 0.2, 0.9);
     const plateThickness = THREE.MathUtils.clamp((item.thickness || 3.2) / SCENE_SCALE, 0.032, 0.1);
     const depth = THREE.MathUtils.clamp(size * 0.78, 0.15, 0.62);
-    const horizontal = new THREE.Mesh(new THREE.BoxGeometry(size, plateThickness, depth), material);
-    const vertical = new THREE.Mesh(new THREE.BoxGeometry(plateThickness, size, depth), material.clone());
-    horizontal.position.set(size / 2, plateThickness / 2, 0);
-    vertical.position.set(plateThickness / 2, size / 2, 0);
-
-    const gussetShape = new THREE.Shape();
-    gussetShape.moveTo(plateThickness, plateThickness);
-    gussetShape.lineTo(size * 0.8, plateThickness);
-    gussetShape.lineTo(plateThickness, size * 0.8);
-    gussetShape.closePath();
-    const gussetDepth = depth * 0.34;
-    const gusset = new THREE.Mesh(
-      new THREE.ExtrudeGeometry(gussetShape, {
-        depth: gussetDepth,
+    const triangleShape = new THREE.Shape();
+    triangleShape.moveTo(0, 0);
+    triangleShape.lineTo(size, 0);
+    triangleShape.lineTo(0, size);
+    triangleShape.closePath();
+    const triangle = new THREE.Mesh(
+      new THREE.ExtrudeGeometry(triangleShape, {
+        depth,
         bevelEnabled: true,
         bevelSegments: 2,
-        bevelSize: Math.min(0.012, plateThickness * 0.28),
-        bevelThickness: Math.min(0.01, gussetDepth * 0.12),
+        bevelSize: Math.min(0.014, plateThickness * 0.32),
+        bevelThickness: Math.min(0.01, depth * 0.06),
       }),
-      material.clone(),
+      material,
     );
-    gusset.position.z = -gussetDepth / 2;
+    triangle.position.z = -depth / 2;
+    group.add(triangle);
 
-    const lipHeight = Math.max(0.014, plateThickness * 0.42);
-    const lipWidth = Math.max(0.012, depth * 0.09);
-    const horizontalLip = new THREE.Mesh(
-      new THREE.BoxGeometry(size * 0.78, lipHeight, lipWidth),
-      material.clone(),
-    );
-    horizontalLip.position.set(size * 0.56, plateThickness + lipHeight / 2, depth / 2 - lipWidth / 2);
-    const verticalLip = new THREE.Mesh(
-      new THREE.BoxGeometry(lipHeight, size * 0.78, lipWidth),
-      material.clone(),
-    );
-    verticalLip.position.set(plateThickness + lipHeight / 2, size * 0.56, depth / 2 - lipWidth / 2);
-    group.add(horizontal, vertical, gusset, horizontalLip, verticalLip);
-
-    const holeRadius = THREE.MathUtils.clamp(size * 0.115, 0.026, 0.075);
-    addSurfaceHole(
-      new THREE.Vector3(size * 0.61, plateThickness + 0.002, 0),
-      'y',
-      holeRadius,
-      1.42,
-    );
-    addSurfaceHole(
-      new THREE.Vector3(plateThickness + 0.002, size * 0.61, 0),
-      'x',
-      holeRadius,
-      1.42,
-    );
+    // Two recessed mounting points remain visible on the broad faces without
+    // adding any geometry beyond the triangular outline.
+    const holeRadius = THREE.MathUtils.clamp(size * 0.105, 0.022, 0.065);
+    addFrontHole(size * 0.27, size * 0.27, depth / 2 + 0.012, holeRadius);
+    addFrontHole(size * 0.27, size * 0.27, -depth / 2 - 0.012, holeRadius);
     hitboxSize.set(size + 0.14, size + 0.14, depth + 0.18);
   } else if (item.kind === 'extruded_connector') {
     // No.2 follows the continuous A6063 extrusion: two orthogonal mounting
@@ -2371,41 +2346,17 @@ const createAccessoryObject = (item: DIYSceneItem, selected: boolean) => {
     addSetScrew(0, verticalHoleY, depth / 2 + 0.004, holeRadius);
     hitboxSize.set(length + 0.14, length + 0.14, depth + ridgeHeight + 0.16);
   } else if (item.kind === 'tee_connector') {
-    // No.9 is the compact three-dimensional connector fitted into the ends of
-    // three profiles meeting on mutually perpendicular axes.
+    // No.9 is shown as one compact square three-way block. The profile-facing
+    // ports are represented by recessed holes; no arms protrude from the cube.
     const profileModule = Number((item.accessoryProfileSize || '2020').slice(0, 2)) / SCENE_SCALE;
-    const coreSize = THREE.MathUtils.clamp(profileModule * 0.9, 0.13, 0.34);
-    const armLength = THREE.MathUtils.clamp(profileModule * 0.72, 0.11, 0.28);
-    const armWidth = THREE.MathUtils.clamp(profileModule * 0.46, 0.07, 0.18);
-    const armThickness = THREE.MathUtils.clamp(profileModule * 0.25, 0.04, 0.1);
+    const coreSize = THREE.MathUtils.clamp(profileModule, 0.15, 0.42);
     const core = new THREE.Mesh(new THREE.BoxGeometry(coreSize, coreSize, coreSize), material);
-    const armX = new THREE.Mesh(new THREE.BoxGeometry(armLength, armWidth, armThickness), material.clone());
-    const armY = new THREE.Mesh(new THREE.BoxGeometry(armWidth, armLength, armThickness), material.clone());
-    const armZ = new THREE.Mesh(new THREE.BoxGeometry(armWidth, armThickness, armLength), material.clone());
-    armX.position.x = coreSize / 2 + armLength / 2;
-    armY.position.y = -(coreSize / 2 + armLength / 2);
-    armZ.position.z = coreSize / 2 + armLength / 2;
-    group.add(core, armX, armY, armZ);
-
-    const ridge = Math.max(0.012, armThickness * 0.26);
-    const ridgeX = new THREE.Mesh(new THREE.BoxGeometry(armLength * 0.9, ridge, ridge), steel);
-    ridgeX.position.set(armX.position.x, armWidth * 0.3, armThickness / 2 + ridge / 2);
-    const ridgeY = new THREE.Mesh(new THREE.BoxGeometry(ridge, armLength * 0.9, ridge), steel);
-    ridgeY.position.set(armWidth * 0.3, armY.position.y, armThickness / 2 + ridge / 2);
-    const ridgeZ = new THREE.Mesh(new THREE.BoxGeometry(ridge, ridge, armLength * 0.9), steel);
-    ridgeZ.position.set(armWidth * 0.3, armThickness / 2 + ridge / 2, armZ.position.z);
-    group.add(ridgeX, ridgeY, ridgeZ);
-
+    group.add(core);
     const holeRadius = THREE.MathUtils.clamp(profileModule * 0.13, 0.02, 0.055);
-    const holeOffset = armLength * 0.2;
-    addSurfaceHole(new THREE.Vector3(armX.position.x - holeOffset, 0, armThickness / 2 + 0.004), 'z', holeRadius);
-    addSurfaceHole(new THREE.Vector3(armX.position.x + holeOffset, 0, armThickness / 2 + 0.004), 'z', holeRadius);
-    addSurfaceHole(new THREE.Vector3(0, armY.position.y - holeOffset, armThickness / 2 + 0.004), 'z', holeRadius);
-    addSurfaceHole(new THREE.Vector3(0, armY.position.y + holeOffset, armThickness / 2 + 0.004), 'z', holeRadius);
-    addSurfaceHole(new THREE.Vector3(armWidth / 2 + 0.004, 0, armZ.position.z - holeOffset), 'x', holeRadius);
-    addSurfaceHole(new THREE.Vector3(armWidth / 2 + 0.004, 0, armZ.position.z + holeOffset), 'x', holeRadius);
-    const reach = coreSize + armLength;
-    hitboxSize.set(reach + 0.14, reach + 0.14, reach + 0.14);
+    addSurfaceHole(new THREE.Vector3(coreSize / 2 + 0.004, 0, 0), 'x', holeRadius);
+    addSurfaceHole(new THREE.Vector3(0, -coreSize / 2 - 0.004, 0), 'y', holeRadius);
+    addSurfaceHole(new THREE.Vector3(0, 0, coreSize / 2 + 0.004), 'z', holeRadius);
+    hitboxSize.set(coreSize + 0.14, coreSize + 0.14, coreSize + 0.14);
   } else if (item.kind === 'screw') {
     const screwLength = THREE.MathUtils.clamp((item.height || 35) / SCENE_SCALE, 0.16, 1.2);
     const shaftRadius = THREE.MathUtils.clamp((item.width || 12) / SCENE_SCALE * 0.28, 0.025, 0.07);
@@ -4128,7 +4079,7 @@ const getProfileMachiningSummary = (item: DIYSceneItem, language: Language) => {
   return [...holeSummary, tappingSummary].filter(Boolean).join(' · ');
 };
 
-const profileFinishForColor = (colorId: string) => (colorId === 'natural' || colorId === 'silver' ? 'oxidized' : 'powder');
+const profileFinishForColor = (colorId: string) => (colorId === 'natural' ? 'oxidized' : 'powder');
 
 const calculatePrice = (item: DIYSceneItem, user?: User | null) => {
   const quantity = Math.max(1, item.quantity || 1);
@@ -4576,7 +4527,7 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({ language, user, onAddBatchToC
         config: {
           type: 'profile_accessory',
           profileSize: item.accessoryProfileSize || '2020',
-          colorMode: item.colorId === 'natural' || item.colorId === 'silver' ? 'natural' : 'colored',
+          colorMode: item.colorId === 'natural' ? 'natural' : 'colored',
           colorId: item.colorId,
           colorName: PROFILE_COLORS.find((color) => color.id === item.colorId)?.name[language] || item.colorId,
           quantities: { [accessoryId]: item.quantity },
