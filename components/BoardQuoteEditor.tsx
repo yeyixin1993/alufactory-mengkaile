@@ -1,7 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Language, Product, CartItem, User } from '../types';
-import { TRANSLATIONS, PROFILE_COLORS } from '../constants';
+import { TRANSLATIONS, PROFILE_COLORS, MARINE_BOARD_COLORS } from '../constants';
 import { normalizeMembershipLevel } from '../utils/membership';
 
 interface BoardQuoteEditorProps {
@@ -196,25 +196,13 @@ const BoardQuoteEditor: React.FC<BoardQuoteEditorProps> = ({ language, product, 
   const [marineSpecId, setMarineSpecId] = useState<MarineSpecId>(
     initialCfg.marineSpecId === 'marine_bbb_plain' ? 'marine_bbb_plain' : 'marine_bbb_uv_film'
   );
-  const [colorId, setColorId] = useState<string>(initialCfg.colorId || 'natural');
+  const normalizedInitialColorId = isMarineBoard && initialCfg.colorId === 'natural'
+    ? 'wood_natural'
+    : initialCfg.colorId;
+  const [colorId, setColorId] = useState<string>(normalizedInitialColorId || (isMarineBoard ? 'wood_natural' : 'natural'));
   const [swatchImgError, setSwatchImgError] = useState(false);
 
-  const marineColorOptions = useMemo(() => {
-    if (!isMarineBoard) return PROFILE_COLORS;
-    const base = PROFILE_COLORS.filter((c) => c.id !== 'natural');
-    return [
-      {
-        id: 'natural',
-        name: {
-          en: 'Original',
-          cn: '原色',
-          jp: '原色',
-        },
-        maxLength: 3000,
-      },
-      ...base,
-    ];
-  }, [isMarineBoard]);
+  const marineColorOptions = useMemo(() => MARINE_BOARD_COLORS, []);
 
   const selectedColorName = useMemo(() => {
     const source = isMarineBoard ? marineColorOptions : PROFILE_COLORS;
@@ -256,7 +244,9 @@ const BoardQuoteEditor: React.FC<BoardQuoteEditorProps> = ({ language, product, 
     const marineBaseRate = isMarineBoard
       ? (MARINE_BOARD_SPEC_PRICE_PER_SQM[marineSpecId]?.[effectiveThickness] || 0)
       : 0;
-    const marineColorSurcharge = isMarineBoard && colorId !== 'natural' ? MARINE_BOARD_COLORED_SURCHARGE_PER_SQM : 0;
+    const marineColorSurcharge = isMarineBoard && colorId !== 'wood_natural' && colorId !== 'natural'
+      ? MARINE_BOARD_COLORED_SURCHARGE_PER_SQM
+      : 0;
     const unitRate = isMarineBoard
       ? (marineBaseRate + marineColorSurcharge)
       : (priceMap[effectiveThickness] || 0);
@@ -287,6 +277,10 @@ const BoardQuoteEditor: React.FC<BoardQuoteEditorProps> = ({ language, product, 
       thickness: effectiveThickness,
       colorId,
       colorName: selectedColorName,
+      pegHolePattern: isPegboard ? 'ikea' : undefined,
+      pegHolePatternName: isPegboard
+        ? (language === 'cn' ? '宜家孔（竖向长圆孔）' : language === 'jp' ? 'IKEA穴（縦長穴）' : 'IKEA holes (vertical slots)')
+        : undefined,
       marineSpecId: isMarineBoard ? marineSpecId : undefined,
       marineSpecName: isMarineBoard ? MARINE_SPECS[marineSpecId].name[language] : undefined,
       width: calc.w,
@@ -465,13 +459,13 @@ const BoardQuoteEditor: React.FC<BoardQuoteEditorProps> = ({ language, product, 
         </div>
       )}
 
-      {colorId !== 'natural' && (
+      {(colorId !== 'natural' || colorId === 'wood_natural') && (
         <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4">
           <div className="text-xs font-black text-slate-500 mb-2">{language === 'cn' ? '色板图' : language === 'jp' ? 'カラースウォッチ' : 'Color Swatch'}</div>
           {!swatchImgError ? (
             <div className="w-full max-w-md h-40 rounded-xl border border-slate-200 bg-white overflow-hidden">
               <img
-                src={`/images/color_${colorId}.png`}
+                src={colorId === 'wood_natural' ? '/images/color_wood_natural.svg' : `/images/color_${colorId}.png`}
                 alt={selectedColorName}
                 className="w-full h-full object-contain"
                 onError={() => setSwatchImgError(true)}
@@ -518,12 +512,13 @@ const BoardQuoteEditor: React.FC<BoardQuoteEditorProps> = ({ language, product, 
                           const cx = rx + ((c + 1) * rw) / (pegCols + 1);
                           const cy = ry + ((r + 1) * rh) / (pegRows + 1);
                           return (
-                            <ellipse
+                            <rect
                               key={`h-${c}-${r}`}
-                              cx={cx}
-                              cy={cy}
-                              rx={Math.max(2, rw / 100)}
-                              ry={Math.max(3, rh / 70)}
+                              x={cx - Math.max(1.7, rw / 115)}
+                              y={cy - Math.max(4.5, rh / 48)}
+                              width={Math.max(3.4, rw / 57.5)}
+                              height={Math.max(9, rh / 24)}
+                              rx={Math.max(1.7, rw / 115)}
                               fill="#94a3b8"
                               opacity="0.9"
                             />
@@ -632,6 +627,11 @@ const BoardQuoteEditor: React.FC<BoardQuoteEditorProps> = ({ language, product, 
         )}
         {isDoor && <div className="text-xs font-bold text-slate-600">{ui.doorNote}</div>}
         {isDoor && <div className="text-xs font-bold text-slate-600">{ui.doorSizeLimit}</div>}
+        {isPegboard && (
+          <div className="text-xs font-bold text-slate-600">
+            {language === 'cn' ? '默认孔型：宜家孔（竖向长圆孔）。' : language === 'jp' ? '標準穴：IKEA穴（縦長穴）。' : 'Default hole pattern: IKEA vertical slots.'}
+          </div>
+        )}
         {isPegboard && <div className="text-xs font-bold text-slate-600">{ui.pegboardLimit}</div>}
         {(isPegboard || isDoor) && <div className="text-xs font-bold text-slate-500">{ui.diagramNotice}</div>}
         {(isPegboard || isDoor) && <div className="text-xs font-bold text-slate-500">{ui.wechatNotice}</div>}

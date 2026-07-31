@@ -761,6 +761,19 @@ export const PROFILE_COLORS: ColorDef[] = [
   { id: 'british_grey', name: { en: 'British Grey', cn: '英伦灰', jp: 'ブリティッシュグレー' }, maxLength: 3000 },
 ];
 
+export const MARINE_WOOD_NATURAL_COLOR: ColorDef = {
+  id: 'wood_natural',
+  name: { en: 'Natural Wood', cn: '木材原色', jp: '木材原色' },
+  maxLength: 3000,
+};
+
+// Marine board uses its own natural wood finish. Keep aluminum "Silver White"
+// out of this list so factory documents and saved designs cannot confuse them.
+export const MARINE_BOARD_COLORS: ColorDef[] = [
+  MARINE_WOOD_NATURAL_COLOR,
+  ...PROFILE_COLORS.filter((color) => color.id !== 'natural'),
+];
+
 // OLD PRICES (commented out 2026-03-15):
 // export const PROFILE_VARIANTS: ProfileVariant[] = [
 //   { id: '1515', name: '1515', wallThickness: 1, price: { oxidized: 10, electrophoretic: 15, powder: 18 } },

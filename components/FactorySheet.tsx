@@ -1,7 +1,7 @@
 
 import React from 'react';
 import { CartItem, User, ProductType, ProfileConfig, Language, ProfileSide, Address } from '../types';
-import { TRANSLATIONS, PROFILE_COLORS, SHIPPING_RATES, SHIPPING_RATES_SF, SHIPPING_RATES_AN, PROFILE_WEIGHTS, SHIPPING_METHOD_NAMES } from '../constants';
+import { TRANSLATIONS, PROFILE_COLORS, MARINE_BOARD_COLORS, SHIPPING_RATES, SHIPPING_RATES_SF, SHIPPING_RATES_AN, PROFILE_WEIGHTS, SHIPPING_METHOD_NAMES } from '../constants';
 import type { ShippingMethod } from '../constants';
 import ProfileVisualizer from './ProfileVisualizer';
 import { describeHolePassage, getHolePhysicalGrooveIndex } from '../utils/profileMachining';
@@ -63,16 +63,19 @@ const pickFirstNonEmpty = (...values: any[]): string => {
   return '';
 };
 
-const resolveBoardColorLabel = (cfg: any, language: Language): string => {
+const resolveBoardColorLabel = (cfg: any, language: Language, productType?: ProductType): string => {
   if (!cfg || typeof cfg !== 'object') return '-';
 
   const colorObj = (cfg.color && typeof cfg.color === 'object') ? cfg.color : {};
   const selectedColorObj = (cfg.selectedColor && typeof cfg.selectedColor === 'object') ? cfg.selectedColor : {};
-  const mappedById = cfg.colorId ? PROFILE_COLORS.find(c => c.id === cfg.colorId)?.name?.[language] : '';
+  const isMarineBoard = productType === ProductType.MARINE_BOARD;
+  const normalizedColorId = isMarineBoard && cfg.colorId === 'natural' ? 'wood_natural' : cfg.colorId;
+  const colorSource = isMarineBoard ? MARINE_BOARD_COLORS : PROFILE_COLORS;
+  const mappedById = normalizedColorId ? colorSource.find(c => c.id === normalizedColorId)?.name?.[language] : '';
 
   return pickFirstNonEmpty(
-    cfg.colorName,
     mappedById,
+    cfg.colorName,
     cfg.color_name,
     cfg.colorLabel,
     cfg.color_label,
@@ -742,7 +745,10 @@ const FactorySheet: React.FC<FactorySheetProps> = ({ cart, user, language, order
                       <div><span className="text-slate-400">{language === 'cn' ? '厚度' : language === 'jp' ? '厚さ' : 'Thickness'}:</span> <span className="font-black">{cfg.thickness ?? '-'}mm</span></div>
                       <div><span className="text-slate-400">{language === 'cn' ? '宽' : language === 'jp' ? '幅' : 'Width'}:</span> <span className="font-black">{cfg.width ?? '-'}mm</span></div>
                       <div><span className="text-slate-400">{language === 'cn' ? '高' : language === 'jp' ? '高さ' : 'Height'}:</span> <span className="font-black">{cfg.height ?? '-'}mm</span></div>
-                      <div><span className="text-slate-400">{language === 'cn' ? '颜色' : language === 'jp' ? '色' : 'Color'}:</span> <span className="font-black">{resolveBoardColorLabel(cfg, language)}</span></div>
+                      <div><span className="text-slate-400">{language === 'cn' ? '颜色' : language === 'jp' ? '色' : 'Color'}:</span> <span className="font-black">{resolveBoardColorLabel(cfg, language, item.product.type)}</span></div>
+                      {item.product.type === ProductType.PEGBOARD && (
+                        <div><span className="text-slate-400">{language === 'cn' ? '孔型' : language === 'jp' ? '穴形状' : 'Hole Pattern'}:</span> <span className="font-black">{cfg.pegHolePatternName || (language === 'cn' ? '宜家孔（竖向长圆孔）' : language === 'jp' ? 'IKEA穴（縦長穴）' : 'IKEA holes (vertical slots)')}</span></div>
+                      )}
                       {item.product.type === ProductType.MARINE_BOARD && (
                         <div><span className="text-slate-400">{language === 'cn' ? '海洋板规格' : language === 'jp' ? '海洋板仕様' : 'Marine Spec'}:</span> <span className="font-black">{cfg.marineSpecName || (cfg.marineSpecId === 'marine_bbb_plain' ? (language === 'cn' ? 'BBB素板' : language === 'jp' ? 'BBB素板' : 'BBB plain board') : (language === 'cn' ? 'BBB两面UV清漆+覆膜' : language === 'jp' ? 'BBB両面UVクリア+フィルム' : 'BBB double-side UV varnish + film'))}</span></div>
                       )}
@@ -760,8 +766,12 @@ const FactorySheet: React.FC<FactorySheetProps> = ({ cart, user, language, order
                       </div>
                     )}
                     {(() => {
-                      const showSwatch = !!cfg?.colorId && String(cfg.colorId) !== 'natural';
-                      const swatchSrc = showSwatch ? `/images/color_${cfg.colorId}.png` : '';
+                      const showSwatch = !!cfg?.colorId && (String(cfg.colorId) !== 'natural' || item.product.type === ProductType.MARINE_BOARD);
+                      const swatchSrc = showSwatch
+                        ? (String(cfg.colorId) === 'wood_natural' || (item.product.type === ProductType.MARINE_BOARD && String(cfg.colorId) === 'natural')
+                          ? '/images/color_wood_natural.svg'
+                          : `/images/color_${cfg.colorId}.png`)
+                        : '';
                       return showSwatch ? (
                         <div className="mt-3">
                           <div className="w-36 h-24 rounded-lg border border-slate-200 bg-white overflow-hidden relative">

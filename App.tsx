@@ -2050,6 +2050,7 @@ const ProductDetail: React.FC<{
             />
           ) : isBoardLikeProduct ? (
             <BoardQuoteEditor
+              key={`${product.id}-${editItem?.id || 'new'}`}
               language={language}
               product={product}
               user={user}

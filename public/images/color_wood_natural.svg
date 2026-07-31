@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="720" height="420" viewBox="0 0 720 420">
+  <defs>
+    <linearGradient id="wood" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#c9985f"/>
+      <stop offset=".18" stop-color="#ddb77e"/>
+      <stop offset=".42" stop-color="#c9955b"/>
+      <stop offset=".65" stop-color="#e0bb82"/>
+      <stop offset=".83" stop-color="#bd8650"/>
+      <stop offset="1" stop-color="#d5a86d"/>
+    </linearGradient>
+    <filter id="soft">
+      <feGaussianBlur stdDeviation="0.65"/>
+    </filter>
+  </defs>
+  <rect width="720" height="420" fill="url(#wood)"/>
+  <g fill="none" stroke="#85542f" stroke-linecap="round" opacity=".32" filter="url(#soft)">
+    <path d="M-20 34 C105 5 170 72 305 41 S535 18 760 54" stroke-width="4"/>
+    <path d="M-10 76 C120 49 196 100 320 72 S558 54 744 91" stroke-width="2"/>
+    <path d="M-12 130 C128 101 214 157 356 124 S564 101 750 140" stroke-width="5"/>
+    <path d="M-20 190 C88 159 205 218 338 184 S567 162 750 204" stroke-width="3"/>
+    <path d="M-12 248 C128 216 203 279 348 241 S570 225 748 264" stroke-width="4"/>
+    <path d="M-15 310 C110 279 218 340 352 304 S560 285 752 327" stroke-width="2"/>
+    <path d="M-10 372 C124 343 215 398 350 366 S568 344 748 386" stroke-width="5"/>
+  </g>
+  <g fill="none" stroke="#f1d39f" opacity=".25">
+    <path d="M-20 110 C140 74 231 146 388 104 S590 85 760 120" stroke-width="2"/>
+    <path d="M-20 280 C125 250 230 313 382 273 S590 251 760 292" stroke-width="3"/>
+  </g>
+</svg>
