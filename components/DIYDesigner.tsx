@@ -2410,6 +2410,8 @@ const ThreeAssembly: React.FC<{
     let transformSnapLock: ProfileSnap | null = null;
     let transformSnapPointerPosition: THREE.Vector3 | null = null;
     let transformSnapSuppressed = false;
+    let transformSnapRearmAt = 0;
+    let snapVisualHideTimer: number | null = null;
     const onDraggingChanged = (event: { value: unknown }) => {
       orbit.enabled = !event.value;
       transformDragActive = Boolean(event.value);
@@ -2418,6 +2420,7 @@ const ThreeAssembly: React.FC<{
         transformSnapLock = null;
         transformSnapPointerPosition = null;
         transformSnapSuppressed = false;
+        transformSnapRearmAt = 0;
         const object = transform.object as THREE.Group | undefined;
         lastSafeProfilePosition = object?.position.clone() || null;
       } else {
@@ -2425,6 +2428,7 @@ const ThreeAssembly: React.FC<{
         transformSnapLock = null;
         transformSnapPointerPosition = null;
         transformSnapSuppressed = false;
+        transformSnapRearmAt = 0;
       }
     };
     const getSnapTolerances = (position: THREE.Vector3) => {
@@ -2435,11 +2439,11 @@ const ThreeAssembly: React.FC<{
       return {
         // Keep the attraction radius usable when the whole assembly is framed,
         // while requiring the two candidate connection planes to remain close.
-        // Once captured, a larger hysteresis band prevents normal pointer
-        // jitter from immediately dropping an otherwise valid flush joint.
-        maxDistance: THREE.MathUtils.clamp(worldPerPixel * 92, 1.1, 5.5),
-        planeTolerance: THREE.MathUtils.clamp(worldPerPixel * 16, 0.08, 0.32),
-        releaseDistance: THREE.MathUtils.clamp(worldPerPixel * 14, 0.12, 0.42),
+        // A practical release band and short re-arm delay prevent pointer
+        // jitter from flashing the joint while still allowing an easy pull-away.
+        maxDistance: THREE.MathUtils.clamp(worldPerPixel * 118, 1.35, 6.8),
+        planeTolerance: THREE.MathUtils.clamp(worldPerPixel * 22, 0.1, 0.42),
+        releaseDistance: THREE.MathUtils.clamp(worldPerPixel * 34, 0.24, 0.75),
       };
     };
     const formatSnapHint = (snap: ProfileSnap) => {
@@ -2448,6 +2452,10 @@ const ThreeAssembly: React.FC<{
       return `${snapLabelsRef.current[snap.label]} · ${alignmentLabel} · ${alignmentLabelsRef.current.connectedTo} ${snap.targetName} ${snap.targetPort} · ${distanceLabels.left} ${snap.targetEndDistances.left}mm · ${distanceLabels.right} ${snap.targetEndDistances.right}mm`;
     };
     const showSnapVisual = (snap: ProfileSnap, object: THREE.Group, item: DIYSceneItem) => {
+      if (snapVisualHideTimer !== null) {
+        window.clearTimeout(snapVisualHideTimer);
+        snapVisualHideTimer = null;
+      }
       const dimensions = profileDimensions(item);
       snapGuide.position.copy(snap.point);
       snapGuide.quaternion.copy(camera.quaternion);
@@ -2462,9 +2470,15 @@ const ThreeAssembly: React.FC<{
       snapPreview.visible = true;
       setSnapHint(formatSnapHint(snap));
     };
-    const hideSnapVisual = () => {
-      snapGuide.visible = false;
-      snapPreview.visible = false;
+    const hideSnapVisual = (delayMs = 0) => {
+      if (snapVisualHideTimer !== null) window.clearTimeout(snapVisualHideTimer);
+      const hide = () => {
+        snapGuide.visible = false;
+        snapPreview.visible = false;
+        snapVisualHideTimer = null;
+      };
+      if (delayMs > 0) snapVisualHideTimer = window.setTimeout(hide, delayMs);
+      else hide();
     };
     const retainSnapLock = (
       lock: ProfileSnap | null,
@@ -2504,7 +2518,9 @@ const ThreeAssembly: React.FC<{
         transformSnapLock = null;
         transformSnapPointerPosition = null;
         transformSnapSuppressed = true;
+        transformSnapRearmAt = Date.now() + 180;
       }
+      if (transformSnapSuppressed && Date.now() >= transformSnapRearmAt) transformSnapSuppressed = false;
       const candidateSnap = transformSnapSuppressed
         ? null
         : findMagneticProfileSnap(
@@ -2538,7 +2554,7 @@ const ThreeAssembly: React.FC<{
       }
       lastSafeProfilePosition = object.position.clone();
       syncProfileLengthHandles(lengthHandles, object, item);
-      hideSnapVisual();
+      hideSnapVisual(260);
       setSnapHint(null);
     };
     const onTransformMouseUp = () => {
@@ -2554,7 +2570,7 @@ const ThreeAssembly: React.FC<{
           Math.round(THREE.MathUtils.radToDeg(object.rotation.z)),
         ],
       );
-      hideSnapVisual();
+      hideSnapVisual(650);
       window.clearTimeout(snapHintTimerRef.current);
       snapHintTimerRef.current = window.setTimeout(() => setSnapHint(null), 1000);
     };
@@ -2614,6 +2630,7 @@ const ThreeAssembly: React.FC<{
       snapLock?: ProfileSnap | null;
       snapPointerPosition?: THREE.Vector3 | null;
       snapSuppressed?: boolean;
+      snapRearmAt?: number;
     };
     let freeMoveState: FreeMoveState | null = null;
     let marqueeState: { pointerId: number; startX: number; startY: number; currentX: number; currentY: number } | null = null;
@@ -2755,6 +2772,7 @@ const ThreeAssembly: React.FC<{
                 snapLock: null,
                 snapPointerPosition: null,
                 snapSuppressed: false,
+                snapRearmAt: 0,
               };
               setOperationEditor({
                 kind: 'move',
@@ -2820,6 +2838,7 @@ const ThreeAssembly: React.FC<{
               snapLock: null,
               snapPointerPosition: null,
               snapSuppressed: false,
+              snapRearmAt: 0,
             };
             orbit.enabled = false;
             transform.enabled = false;
@@ -2881,7 +2900,9 @@ const ThreeAssembly: React.FC<{
             state.snapLock = null;
             state.snapPointerPosition = null;
             state.snapSuppressed = true;
+            state.snapRearmAt = Date.now() + 180;
           }
+          if (state.snapSuppressed && Date.now() >= (state.snapRearmAt || 0)) state.snapSuppressed = false;
           const candidateSnap = state.snapSuppressed
             ? null
             : findMagneticProfileSnap(
@@ -2905,13 +2926,13 @@ const ThreeAssembly: React.FC<{
             state.snapPointerPosition = null;
             state.object.position.copy(state.validPosition);
             syncProfileLengthHandles(lengthHandles, state.object, state.item);
-            hideSnapVisual();
+            hideSnapVisual(260);
             setSnapHint(null);
             return;
           } else {
             state.snapLock = null;
             state.snapPointerPosition = null;
-            hideSnapVisual();
+            hideSnapVisual(260);
             setSnapHint(null);
           }
         }
@@ -3044,7 +3065,7 @@ const ThreeAssembly: React.FC<{
         } else {
           setOperationEditor(null);
         }
-        hideSnapVisual();
+        hideSnapVisual(650);
         window.clearTimeout(snapHintTimerRef.current);
         snapHintTimerRef.current = window.setTimeout(() => setSnapHint(null), 1400);
         transformWasDragging = false;
@@ -3210,6 +3231,7 @@ const ThreeAssembly: React.FC<{
 
     return () => {
       cancelAnimationFrame(animationFrame);
+      if (snapVisualHideTimer !== null) window.clearTimeout(snapVisualHideTimer);
       resizeObserver?.disconnect();
       if (!resizeObserver) window.removeEventListener('resize', resize);
       renderer.domElement.removeEventListener('pointerdown', onPointerDown, { capture: true });
