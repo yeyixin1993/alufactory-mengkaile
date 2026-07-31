@@ -774,6 +774,19 @@ export const MARINE_BOARD_COLORS: ColorDef[] = [
   ...PROFILE_COLORS.filter((color) => color.id !== 'natural'),
 ];
 
+export const MARINE_BOARD_ORIGINAL_ORDER_NAME: Record<Language, string> = {
+  en: 'Original',
+  cn: '原色',
+  jp: '原色',
+};
+
+export const getMarineBoardOrderColorName = (colorId: string, language: Language) => {
+  if (colorId === 'wood_natural' || colorId === 'natural') {
+    return MARINE_BOARD_ORIGINAL_ORDER_NAME[language];
+  }
+  return MARINE_BOARD_COLORS.find((color) => color.id === colorId)?.name[language] || colorId;
+};
+
 // OLD PRICES (commented out 2026-03-15):
 // export const PROFILE_VARIANTS: ProfileVariant[] = [
 //   { id: '1515', name: '1515', wallThickness: 1, price: { oxidized: 10, electrophoretic: 15, powder: 18 } },

@@ -1,7 +1,7 @@
 
 import React from 'react';
 import { CartItem, User, ProductType, ProfileConfig, Language, ProfileSide, Address } from '../types';
-import { TRANSLATIONS, PROFILE_COLORS, MARINE_BOARD_COLORS, SHIPPING_RATES, SHIPPING_RATES_SF, SHIPPING_RATES_AN, PROFILE_WEIGHTS, SHIPPING_METHOD_NAMES } from '../constants';
+import { TRANSLATIONS, PROFILE_COLORS, getMarineBoardOrderColorName, SHIPPING_RATES, SHIPPING_RATES_SF, SHIPPING_RATES_AN, PROFILE_WEIGHTS, SHIPPING_METHOD_NAMES } from '../constants';
 import type { ShippingMethod } from '../constants';
 import ProfileVisualizer from './ProfileVisualizer';
 import { describeHolePassage, getHolePhysicalGrooveIndex } from '../utils/profileMachining';
@@ -69,9 +69,11 @@ const resolveBoardColorLabel = (cfg: any, language: Language, productType?: Prod
   const colorObj = (cfg.color && typeof cfg.color === 'object') ? cfg.color : {};
   const selectedColorObj = (cfg.selectedColor && typeof cfg.selectedColor === 'object') ? cfg.selectedColor : {};
   const isMarineBoard = productType === ProductType.MARINE_BOARD;
-  const normalizedColorId = isMarineBoard && cfg.colorId === 'natural' ? 'wood_natural' : cfg.colorId;
-  const colorSource = isMarineBoard ? MARINE_BOARD_COLORS : PROFILE_COLORS;
-  const mappedById = normalizedColorId ? colorSource.find(c => c.id === normalizedColorId)?.name?.[language] : '';
+  const mappedById = cfg.colorId
+    ? (isMarineBoard
+      ? getMarineBoardOrderColorName(String(cfg.colorId), language)
+      : PROFILE_COLORS.find(c => c.id === cfg.colorId)?.name?.[language])
+    : '';
 
   return pickFirstNonEmpty(
     mappedById,
@@ -177,7 +179,15 @@ const FactorySheet: React.FC<FactorySheetProps> = ({ cart, user, language, order
         remark = customRemark;
       }
 
-      const tapLabel = bothSideTap ? '两端攻丝' : oneSideTap ? '一端攻丝' : '无';
+      const leftTapCount = Array.isArray(cfg.tapping?.left) ? cfg.tapping.left.filter(Boolean).length : 0;
+      const rightTapCount = Array.isArray(cfg.tapping?.right) ? cfg.tapping.right.filter(Boolean).length : 0;
+      const tapLabel = bothSideTap
+        ? `两端攻丝（左${leftTapCount}孔 / 右${rightTapCount}孔）`
+        : leftTapCount > 0
+          ? `左端攻丝（${leftTapCount}孔）`
+          : rightTapCount > 0
+            ? `右端攻丝（${rightTapCount}孔）`
+            : '无';
       
       // Miter cut label for map key (kept simple)
       let miterLabel = '';

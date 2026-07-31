@@ -3,7 +3,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { HashRouter, Routes, Route, Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { ShoppingCart, User as UserIcon, LogOut, Menu, X, Globe, Home, Package, History, Settings, FileDown, Eye, Truck, MapPin, Plus, Trash2, Edit2, CheckCircle, ArrowLeft, Lock, Save, UserCheck, Key, Info, Pencil, ChevronRight, Download, ExternalLink } from 'lucide-react';
 import { Language, User, CartItem, Product, ProductType, ProfileConfig, Order, ProfileSide, DrillHole, Address, ProfileVariant, ColorDef } from './types';
-import { TRANSLATIONS, INITIAL_PRODUCTS, PROFILE_COLORS, PROFILE_VARIANTS, PROFILE_WEIGHTS, SHIPPING_RATES, SHIPPING_RATES_SF, SHIPPING_RATES_AN, SHIPPING_METHOD_NAMES } from './constants';
+import { TRANSLATIONS, INITIAL_PRODUCTS, PROFILE_COLORS, PROFILE_VARIANTS, PROFILE_WEIGHTS, SHIPPING_RATES, SHIPPING_RATES_SF, SHIPPING_RATES_AN, SHIPPING_METHOD_NAMES, getMarineBoardOrderColorName } from './constants';
 import type { ShippingMethod } from './constants';
 import { ApiService } from './services/apiService';
 import ProfileEditor from './components/ProfileEditor';
@@ -1459,7 +1459,11 @@ const Cart: React.FC<{
                       {(() => {
                         const cfg: any = item.config || {};
                         const showSwatch = !!cfg?.colorId && String(cfg.colorId) !== 'natural';
-                        const swatchSrc = showSwatch ? `/images/color_${cfg.colorId}.png` : '';
+                        const swatchSrc = showSwatch
+                          ? (String(cfg.colorId) === 'wood_natural'
+                            ? '/images/color_wood_natural.svg'
+                            : `/images/color_${cfg.colorId}.png`)
+                          : '';
                         return showSwatch ? (
                           <div className="mb-4 rounded-2xl border border-slate-200 bg-slate-50 p-3">
                             <div className="text-xs font-black text-slate-700 mb-2">{language === 'cn' ? '色板图' : language === 'jp' ? 'カラースウォッチ' : 'Color Swatch'}</div>
@@ -1485,7 +1489,12 @@ const Cart: React.FC<{
                         <span className="px-3 py-1.5 rounded-xl bg-slate-100 text-slate-700">{language === 'cn' ? '厚度' : language === 'jp' ? '厚さ' : 'Thickness'}: {(item.config as any)?.thickness ?? '-' }mm</span>
                         <span className="px-3 py-1.5 rounded-xl bg-slate-100 text-slate-700">{language === 'cn' ? '宽' : language === 'jp' ? '幅' : 'Width'}: {(item.config as any)?.width ?? '-'}mm</span>
                         <span className="px-3 py-1.5 rounded-xl bg-slate-100 text-slate-700">{language === 'cn' ? '高' : language === 'jp' ? '高さ' : 'Height'}: {(item.config as any)?.height ?? '-'}mm</span>
-                        <span className="px-3 py-1.5 rounded-xl bg-slate-100 text-slate-700">{language === 'cn' ? '颜色' : language === 'jp' ? '色' : 'Color'}: {(item.config as any)?.colorName || (((item.config as any)?.colorId && PROFILE_COLORS.find(c => c.id === (item.config as any).colorId)?.name?.[language]) || '-')}</span>
+                        <span className="px-3 py-1.5 rounded-xl bg-slate-100 text-slate-700">
+                          {language === 'cn' ? '颜色' : language === 'jp' ? '色' : 'Color'}:{' '}
+                          {item.product.type === ProductType.MARINE_BOARD
+                            ? getMarineBoardOrderColorName(String((item.config as any)?.colorId || 'natural'), language)
+                            : ((item.config as any)?.colorName || (((item.config as any)?.colorId && PROFILE_COLORS.find(c => c.id === (item.config as any).colorId)?.name?.[language]) || '-'))}
+                        </span>
                         {item.product.type === ProductType.MARINE_BOARD && (
                           <span className="px-3 py-1.5 rounded-xl bg-slate-100 text-slate-700">{language === 'cn' ? '海洋板规格' : language === 'jp' ? '海洋板仕様' : 'Marine Spec'}: {((item.config as any)?.marineSpecName || ((item.config as any)?.marineSpecId === 'marine_bbb_plain'
                             ? (language === 'cn' ? 'BBB素板' : language === 'jp' ? 'BBB素板' : 'BBB plain board')

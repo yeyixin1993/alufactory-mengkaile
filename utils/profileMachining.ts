@@ -35,6 +35,16 @@ export const getProfileGrooveCount = (variantId = '2020', side: ProfileSide): nu
   return 1;
 };
 
+export const getProfileTapPortCount = (variantId = '2020'): number => {
+  if (variantId === '2047') return 3;
+  const sizeMatch = variantId.match(/^(\d{2})(\d{2,3})/);
+  if (!sizeMatch) return 1;
+  const width = Number(sizeMatch[1]);
+  const height = Number(sizeMatch[2]);
+  const moduleSize = Math.max(1, Math.min(width, height));
+  return Math.max(1, Math.round(width / moduleSize) * Math.round(height / moduleSize));
+};
+
 const clampGroove = (index: number, grooveCount: number) => (
   Math.max(0, Math.min(Math.max(1, grooveCount) - 1, Math.round(index)))
 );

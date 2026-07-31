@@ -1,7 +1,12 @@
 import React, { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Language, Product, CartItem, User } from '../types';
-import { TRANSLATIONS, PROFILE_COLORS, MARINE_BOARD_COLORS } from '../constants';
+import {
+  TRANSLATIONS,
+  PROFILE_COLORS,
+  MARINE_BOARD_COLORS,
+  MARINE_BOARD_ORIGINAL_ORDER_NAME,
+} from '../constants';
 import { normalizeMembershipLevel } from '../utils/membership';
 
 interface BoardQuoteEditorProps {
@@ -202,7 +207,11 @@ const BoardQuoteEditor: React.FC<BoardQuoteEditorProps> = ({ language, product, 
   const [colorId, setColorId] = useState<string>(normalizedInitialColorId || (isMarineBoard ? 'wood_natural' : 'natural'));
   const [swatchImgError, setSwatchImgError] = useState(false);
 
-  const marineColorOptions = useMemo(() => MARINE_BOARD_COLORS, []);
+  const marineColorOptions = useMemo(() => MARINE_BOARD_COLORS.map((color) => (
+    color.id === 'wood_natural'
+      ? { ...color, name: MARINE_BOARD_ORIGINAL_ORDER_NAME }
+      : color
+  )), []);
 
   const selectedColorName = useMemo(() => {
     const source = isMarineBoard ? marineColorOptions : PROFILE_COLORS;

@@ -5,7 +5,7 @@ import { useNavigate } from 'react-router-dom';
 import { DrillHole, ProfileConfig, ProfileSide, TappingConfig, Language, HoleType, ProfileFinish, CartItem, Product, MiterCutConfig, MiterCutDirection, MiterCutSide, User, ThreadSize } from '../types';
 import { TRANSLATIONS, PROFILE_VARIANTS, PROFILE_COLORS, COLOR_ONLY_COLORED_SECTION_IDS } from '../constants';
 import { normalizeMembershipLevel } from '../utils/membership';
-import { displayGrooveToPhysical, getProfileGrooveCount } from '../utils/profileMachining';
+import { displayGrooveToPhysical, getProfileGrooveCount, getProfileTapPortCount } from '../utils/profileMachining';
 import { Plus, Trash2, List, ShoppingCart, Pencil, X, Hammer, Settings2, Copy } from 'lucide-react';
 import ProfileVisualizer from './ProfileVisualizer';
 
@@ -34,6 +34,17 @@ const MAX_PROFILE_LENGTH_MM = 3000;
 const PROFILE_VIP_DISCOUNT_PER_METER = 2;
 const PROFILE_VIP_PLUS_DISCOUNT_PER_METER = 4;
 
+const normalizeTappingForVariant = (
+  variantId: string,
+  tapping?: TappingConfig,
+): TappingConfig => {
+  const portCount = getProfileTapPortCount(variantId);
+  return {
+    left: Array.from({ length: portCount }, (_, index) => !!tapping?.left?.[index]),
+    right: Array.from({ length: portCount }, (_, index) => !!tapping?.right?.[index]),
+  };
+};
+
 const ProfileEditor: React.FC<ProfileEditorProps> = ({ language, product, user, initialItem, returnCartPath = '/cart', onAddBatchToCart, onUpdateItem, draftProfiles, setDraftProfiles }) => {
   const t = TRANSLATIONS[language];
   const currency = getCurrency(language);
@@ -51,7 +62,10 @@ const ProfileEditor: React.FC<ProfileEditorProps> = ({ language, product, user, 
   const [finish, setFinish] = useState<ProfileFinish>(initialConfig?.finish || 'oxidized');
   const [colorId, setColorId] = useState<string>(initialConfig?.colorId || 'natural');
   const [length, setLength] = useState<number>(initialConfig?.length || 1000);
-  const [tapping, setTapping] = useState<TappingConfig>(initialConfig?.tapping || { left: [false, false], right: [false, false] });
+  const [tapping, setTapping] = useState<TappingConfig>(() => normalizeTappingForVariant(
+    initialConfig?.variantId || '2020',
+    initialConfig?.tapping,
+  ));
   const [holes, setHoles] = useState<DrillHole[]>(initialConfig?.holes || []);
   const [miterCut, setMiterCut] = useState<MiterCutConfig>(initialConfig?.miterCut || { left: { enabled: false, direction: 'up', side: 'AC' }, right: { enabled: false, direction: 'up', side: 'AC' } });
   const [showMiterCut, setShowMiterCut] = useState<boolean>(!!(initialConfig?.miterCut?.left?.enabled || initialConfig?.miterCut?.right?.enabled));
@@ -84,6 +98,10 @@ const ProfileEditor: React.FC<ProfileEditorProps> = ({ language, product, user, 
     setSelectedGrooveIndex(0);
     setProfileImgError(false);
   }, [variantId, selectedSide]);
+
+  useEffect(() => {
+    setTapping((current) => normalizeTappingForVariant(variantId, current));
+  }, [variantId]);
 
   useEffect(() => {
     setColorImgError(false);
@@ -222,7 +240,7 @@ const ProfileEditor: React.FC<ProfileEditorProps> = ({ language, product, user, 
       setDraftProfiles(draftProfiles.map(item => item.id === editingId ? { ...item, config, totalPrice: parseFloat((unitPrice * item.quantity).toFixed(1)) } : item));
       setEditingId(null);
       setHoles([]);
-      setTapping({ left: [false, false], right: [false, false] });
+      setTapping(normalizeTappingForVariant(variantId));
       setMiterCut({ ...defaultMiterCut });
       setShowMiterCut(false);
     } else {
@@ -240,7 +258,7 @@ const ProfileEditor: React.FC<ProfileEditorProps> = ({ language, product, user, 
         setDraftProfiles([...draftProfiles, { id: Math.random().toString(36).substr(2, 9), product, quantity: 1, config, totalPrice: unitPrice }]);
       }
       setHoles([]);
-      setTapping({ left: [false, false], right: [false, false] });
+      setTapping(normalizeTappingForVariant(variantId));
       setMiterCut({ ...defaultMiterCut });
       setShowMiterCut(false);
       setRemark('');
@@ -313,12 +331,22 @@ const ProfileEditor: React.FC<ProfileEditorProps> = ({ language, product, user, 
           {/* Cross-section diagram */}
           <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4 inline-flex flex-col items-center gap-2">
             {!profileImgError && (
-              <img
-                src={`/images/profile_${variantId}.png`}
-                alt={`${selectedVariant.name} cross-section`}
-                className="max-h-32 md:max-h-48 object-contain"
-                onError={() => setProfileImgError(true)}
-              />
+              <div className="relative inline-block">
+                <img
+                  src={`/images/profile_${variantId}.png`}
+                  alt={`${selectedVariant.name} cross-section`}
+                  className="block max-h-32 object-contain md:max-h-48"
+                  onError={() => setProfileImgError(true)}
+                />
+                {variantId === '2047' && [43.6, 57.7, 71.8].map((left, index) => (
+                  <span
+                    key={`2047-tap-port-${index}`}
+                    className="pointer-events-none absolute h-4 w-4 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-dashed border-red-500 bg-red-100/35 shadow-[0_0_0_2px_rgba(255,255,255,0.8)]"
+                    style={{ left: `${left}%`, top: '54%' }}
+                    aria-hidden="true"
+                  />
+                ))}
+              </div>
             )}
             {profileImgError && (
               <div className="text-slate-400 text-xs font-bold text-center p-4 md:p-8">
@@ -327,6 +355,11 @@ const ProfileEditor: React.FC<ProfileEditorProps> = ({ language, product, user, 
               </div>
             )}
             <span className="text-[10px] text-slate-400 font-bold">{selectedVariant.name} 截面图</span>
+            {variantId === '2047' && !profileImgError && (
+              <span className="rounded-full bg-red-50 px-2.5 py-1 text-[10px] font-black text-red-600">
+                {language === 'cn' ? '端面攻丝位 ×3' : language === 'jp' ? '端面タップ位置 ×3' : 'End-face tap ports ×3'}
+              </span>
+            )}
           </div>
           {/* Color swatch */}
           {finish !== 'oxidized' && (
@@ -628,7 +661,7 @@ const ProfileEditor: React.FC<ProfileEditorProps> = ({ language, product, user, 
                         <td className="px-4 text-right">
                           <div className="flex gap-1 justify-end opacity-0 group-hover:opacity-100 transition-opacity">
                             <button onClick={() => duplicateDraftItem(item)} title={t.copy} className="p-2 text-slate-400 hover:text-emerald-600 hover:bg-white rounded-xl transition-all"><Copy className="w-4 h-4"/></button>
-                            <button onClick={() => { setEditingId(item.id); setVariantId(item.config.variantId); setLength(item.config.length); setHoles(item.config.holes); setTapping(item.config.tapping); setFinish(item.config.finish); setColorId(item.config.colorId); setRemark(item.config.remark || ''); const mc = item.config.miterCut || { left: { enabled: false, direction: 'up', side: 'AC' }, right: { enabled: false, direction: 'up', side: 'AC' } }; setMiterCut(mc); setShowMiterCut(!!(mc.left?.enabled || mc.right?.enabled)); }} className="p-2 text-slate-400 hover:text-blue-600 hover:bg-white rounded-xl transition-all"><Pencil className="w-4 h-4"/></button>
+                            <button onClick={() => { setEditingId(item.id); setVariantId(item.config.variantId); setLength(item.config.length); setHoles(item.config.holes); setTapping(normalizeTappingForVariant(item.config.variantId, item.config.tapping)); setFinish(item.config.finish); setColorId(item.config.colorId); setRemark(item.config.remark || ''); const mc = item.config.miterCut || { left: { enabled: false, direction: 'up', side: 'AC' }, right: { enabled: false, direction: 'up', side: 'AC' } }; setMiterCut(mc); setShowMiterCut(!!(mc.left?.enabled || mc.right?.enabled)); }} className="p-2 text-slate-400 hover:text-blue-600 hover:bg-white rounded-xl transition-all"><Pencil className="w-4 h-4"/></button>
                             <button onClick={() => setDraftProfiles(draftProfiles.filter(x => x.id !== item.id))} className="p-2 text-slate-400 hover:text-red-500 hover:bg-white rounded-xl transition-all"><Trash2 className="w-4 h-4"/></button>
                           </div>
                         </td>

@@ -4,6 +4,7 @@ import { PROFILE_VARIANTS } from '../constants';
 import {
   getHoleDisplayGrooveIndex,
   getProfileGrooveCount,
+  getProfileTapPortCount,
   OPPOSITE_PROFILE_SIDE,
 } from '../utils/profileMachining';
 
@@ -137,6 +138,9 @@ const ProfileVisualizer: React.FC<ProfileVisualizerProps> = ({
   const getGrooveCount = (side: ProfileSide): number => getProfileGrooveCount(selectedVariant.id, side);
 
   const grooveCount = getGrooveCount(selectedSide);
+  const tappingPortCount = selectedSide === 'B' || selectedSide === 'D'
+    ? getProfileTapPortCount(selectedVariant.id)
+    : Math.max(1, grooveCount);
 
   // Visual groove count: how many groove lines to actually draw.
   // For sealed faces that still allow drill positioning (e.g. 2040-N1-40 D), visual = 0.
@@ -209,31 +213,15 @@ const ProfileVisualizer: React.FC<ProfileVisualizerProps> = ({
         className={`relative w-full px-8 bg-slate-50 border border-slate-200 rounded flex items-center justify-center select-none transition-all duration-300 overflow-visible ${isExtraWideFace ? 'h-48' : isWideFace ? 'h-32' : 'h-24'}`}
       >
         {/* Tapping Indicators */}
-        {grooveCount === 0 && (
-          <>
-            {renderTapIndicator('left', 0, '50%')}
-            {renderTapIndicator('right', 0, '50%')}
-          </>
-        )}
-        {grooveCount === 1 && (
-          <>
-            {renderTapIndicator('left', 0, '50%')}
-            {renderTapIndicator('right', 0, '50%')}
-          </>
-        )}
-        {grooveCount >= 2 && (
-          <>
-            {Array.from({ length: grooveCount }, (_, i) => {
-              const pct = `${((i + 1) / (grooveCount + 1)) * 100}%`;
-              return (
-                <React.Fragment key={`tap-${i}`}>
-                  {renderTapIndicator('left', i, pct)}
-                  {renderTapIndicator('right', i, pct)}
-                </React.Fragment>
-              );
-            })}
-          </>
-        )}
+        {Array.from({ length: tappingPortCount }, (_, i) => {
+          const pct = `${((i + 1) / (tappingPortCount + 1)) * 100}%`;
+          return (
+            <React.Fragment key={`tap-${i}`}>
+              {renderTapIndicator('left', i, pct)}
+              {renderTapIndicator('right', i, pct)}
+            </React.Fragment>
+          );
+        })}
 
         {/* The Bar */}
         <div 

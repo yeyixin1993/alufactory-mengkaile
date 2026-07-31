@@ -25,7 +25,13 @@ import {
   Upload,
   Wrench,
 } from 'lucide-react';
-import { INITIAL_PRODUCTS, PROFILE_COLORS, PROFILE_VARIANTS, MARINE_BOARD_COLORS } from '../constants';
+import {
+  INITIAL_PRODUCTS,
+  PROFILE_COLORS,
+  PROFILE_VARIANTS,
+  MARINE_BOARD_COLORS,
+  getMarineBoardOrderColorName,
+} from '../constants';
 import ProfileVisualizer from './ProfileVisualizer';
 import {
   CartItem,
@@ -45,6 +51,7 @@ import {
   getHoleDisplayGrooveIndex,
   getHolePhysicalGrooveIndex,
   getProfileGrooveCount,
+  getProfileTapPortCount,
   grooveOrdinal,
   OPPOSITE_PROFILE_SIDE,
   physicalGrooveToDisplay,
@@ -508,7 +515,9 @@ const buildProductionData = (items: DIYSceneItem[], language: Language) => {
     heightMm: item.height,
     thicknessMm: item.thickness,
     colorId: item.colorId,
-    color: getDesignerColorName(item.colorId, language, item.kind),
+    color: item.kind === 'marine_board'
+      ? getMarineBoardOrderColorName(item.colorId, language)
+      : getDesignerColorName(item.colorId, language, item.kind),
     pegHolePattern: item.kind === 'pegboard' ? 'ikea' : undefined,
     pegHolePatternName: item.kind === 'pegboard'
       ? (language === 'cn' ? '宜家孔（竖向长圆孔）' : language === 'jp' ? 'IKEA穴（縦長穴）' : 'IKEA holes (vertical slots)')
@@ -604,11 +613,6 @@ const getProfileTapGrid = (variantId = '2020') => {
     columns: Math.max(1, Math.round(width / moduleSize)),
     rows: Math.max(1, Math.round(height / moduleSize)),
   };
-};
-
-const getProfileTapPortCount = (variantId = '2020') => {
-  const { columns, rows } = getProfileTapGrid(variantId);
-  return columns * rows;
 };
 
 const createItem = (kind: DIYItemKind, index = 0, variantId?: string): DIYSceneItem => {
@@ -3978,7 +3982,9 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({ language, user, onAddBatchToC
           height: item.height,
           thickness,
           colorId: item.colorId,
-          colorName: getDesignerColorName(item.colorId, language, item.kind),
+          colorName: item.kind === 'marine_board'
+            ? getMarineBoardOrderColorName(item.colorId, language)
+            : getDesignerColorName(item.colorId, language, item.kind),
           pegHolePattern: item.kind === 'pegboard' ? 'ikea' : undefined,
           pegHolePatternName: item.kind === 'pegboard'
             ? (language === 'cn' ? '宜家孔（竖向长圆孔）' : language === 'jp' ? 'IKEA穴（縦長穴）' : 'IKEA holes (vertical slots)')
