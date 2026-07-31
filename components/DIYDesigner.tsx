@@ -3253,7 +3253,10 @@ const ThreeAssembly: React.FC<{
   }, [items, selectedId, selectedIds, showMachiningMarks, transparentProfiles]);
 
   return (
-    <div className="relative h-[52vh] min-h-[380px] max-h-[620px] w-full sm:h-[62vh] xl:h-[calc(100vh-220px)] xl:min-h-[590px] xl:max-h-none">
+    <div
+      className="relative h-[52vh] min-h-[380px] max-h-[620px] w-full bg-[#eef3f8] sm:h-[62vh] xl:h-full xl:min-h-0 xl:max-h-none"
+      data-testid="diy-assembly-viewport"
+    >
       <div ref={mountRef} className="absolute inset-0 overflow-hidden" data-testid="diy-3d-canvas" />
       {holeDraft && (
         <div
@@ -4072,8 +4075,8 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({ language, user, onAddBatchToC
   ];
 
   return (
-    <div className="min-h-[calc(100vh-88px)] bg-slate-100">
-      <div className="border-b border-slate-200 bg-white px-4 py-4 sm:px-6">
+    <div className="min-h-[calc(100vh-88px)] bg-slate-100 xl:flex xl:h-screen xl:min-h-0 xl:flex-col xl:overflow-hidden">
+      <div className="shrink-0 border-b border-slate-200 bg-white px-4 py-4 sm:px-6">
         <div className="mx-auto flex max-w-[1800px] flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
           <div>
             <h1 className="text-2xl font-black tracking-tight text-slate-950 sm:text-3xl">{t.title}</h1>
@@ -4104,8 +4107,8 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({ language, user, onAddBatchToC
         </div>
       </div>
 
-      <div className="mx-auto grid max-w-[1800px] grid-cols-1 gap-3 p-3 xl:grid-cols-[260px_minmax(0,1fr)_330px]">
-        <aside className="order-1 rounded-3xl border border-slate-200 bg-white p-4 shadow-sm">
+      <div className="mx-auto grid w-full max-w-[1800px] grid-cols-1 gap-3 p-3 xl:min-h-0 xl:flex-1 xl:grid-cols-[260px_minmax(0,1fr)_330px] xl:items-stretch xl:overflow-hidden">
+        <aside className="order-1 rounded-3xl border border-slate-200 bg-white p-4 shadow-sm xl:min-h-0 xl:overflow-y-auto">
           <div className="flex items-center justify-between">
             <h2 className="text-sm font-black uppercase tracking-widest text-slate-500">{t.library}</h2>
             <Hammer className="h-5 w-5 text-blue-600" />
@@ -4150,7 +4153,7 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({ language, user, onAddBatchToC
         </aside>
 
         <main
-          className="order-2 relative overflow-hidden rounded-3xl border border-slate-200 bg-[#eef3f8] shadow-sm"
+          className="order-2 relative overflow-hidden rounded-3xl border border-slate-200 bg-[#eef3f8] shadow-sm xl:h-full xl:min-h-0"
           onDragOver={(event) => event.preventDefault()}
           onDrop={(event) => {
             event.preventDefault();
@@ -4242,7 +4245,7 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({ language, user, onAddBatchToC
           {notice && <div className="absolute bottom-5 left-1/2 -translate-x-1/2 rounded-2xl bg-slate-950 px-5 py-3 text-sm font-black text-white shadow-2xl">{notice}</div>}
         </main>
 
-        <aside className="order-3 rounded-3xl border border-slate-200 bg-white p-4 shadow-sm">
+        <aside className="order-3 rounded-3xl border border-slate-200 bg-white p-4 shadow-sm xl:min-h-0 xl:overflow-y-auto">
           {selectedIds.length > 1 ? (
             <>
               <button onClick={() => setSelectedId(null)} className="mb-3 text-xs font-black text-blue-600 transition hover:text-blue-500">← {t.backToProject}</button>
