@@ -6,6 +6,7 @@ export interface ProductionWorkbookData {
     id: string;
     type: string;
     model: string;
+    accessoryProfileSize?: string;
     lengthMm?: number;
     widthMm?: number;
     heightMm?: number;
@@ -228,7 +229,7 @@ export const buildProductionXlsx = (production: ProductionWorkbookData) => {
     ['生产核对', '加工前同时核对入口面/槽、出口面/槽、物理槽ID及距左右端尺寸。'],
   ];
   const partRows = production.parts.map((part) => [
-    part.line, part.id, part.type, part.model, part.lengthMm ?? '', part.widthMm ?? '', part.heightMm ?? '',
+    part.line, part.id, part.type, part.model, part.accessoryProfileSize ?? '', part.lengthMm ?? '', part.widthMm ?? '', part.heightMm ?? '',
     part.thicknessMm ?? '', part.color, part.quantity, part.positionMm.join(', '), part.rotationDeg.join(', '),
     part.leftTappingPorts, part.rightTappingPorts, part.remark,
   ]);
@@ -247,9 +248,9 @@ export const buildProductionXlsx = (production: ProductionWorkbookData) => {
     {
       name: '零件明细',
       title: '萌开了 3D DIY 零件明细',
-      headers: ['序号', '零件ID', '类型', '型号', '长度mm', '宽度mm', '高度mm', '厚度mm', '颜色', '数量', '位置XYZ(mm)', '旋转XYZ(°)', '左端攻丝孔数', '右端攻丝孔数', '备注'],
+      headers: ['序号', '零件ID', '类型', '型号', '适配型材规格', '长度mm', '宽度mm', '高度mm', '厚度mm', '颜色', '数量', '位置XYZ(mm)', '旋转XYZ(°)', '左端攻丝孔数', '右端攻丝孔数', '备注'],
       rows: partRows,
-      widths: [8, 25, 14, 14, 12, 12, 12, 12, 15, 9, 20, 20, 15, 15, 38],
+      widths: [8, 25, 14, 14, 16, 12, 12, 12, 12, 15, 9, 20, 20, 15, 15, 38],
     },
     {
       name: '打孔明细',

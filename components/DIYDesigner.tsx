@@ -64,14 +64,18 @@ type DIYItemKind =
   | 'pegboard'
   | 'marine_board'
   | 'connector'
+  | 'extruded_connector'
   | 'l_connector'
   | 'hidden_connector'
+  | 'tee_connector'
   | 'screw'
   | 'foot';
 
 type Vec3 = [number, number, number];
 type RotationAxisIndex = 0 | 1 | 2;
 type DIYScrewHead = 'socket_cylinder' | 'button_socket';
+type DIYAccessoryProfileSize = '1515' | '2020' | '3030' | '4040';
+type DIYConnectionKind = 'connector' | 'extruded_connector' | 'hidden_connector' | 'l_connector' | 'tee_connector';
 
 interface DIYSceneItem {
   id: string;
@@ -90,6 +94,7 @@ interface DIYSceneItem {
   tappingLeft?: boolean;
   tappingRight?: boolean;
   accessoryPrice?: number;
+  accessoryProfileSize?: DIYAccessoryProfileSize;
   remark?: string;
   screwHead?: DIYScrewHead;
   linkedProfileId?: string;
@@ -155,8 +160,10 @@ const TEXT: Record<Language, Record<string, string>> = {
     pegboard: '彩色洞洞板',
     marine: '彩色海洋板',
     connector: '1号角码连接件',
+    extrudedConnector: '2号挤压角码',
     lConnector: '7号L型连接板',
     hiddenConnector: '5号隐藏角码（单孔面）',
+    teeConnector: '9号三通连接板',
     screw: '内六角螺丝',
     socketCylinderScrew: '圆柱头内六角螺丝',
     buttonSocketScrew: '半圆头内六角螺丝',
@@ -171,6 +178,8 @@ const TEXT: Record<Language, Record<string, string>> = {
     fasteningParts: '连接与紧固',
     otherParts: '其他配件',
     accessorySpec: '配件规格',
+    accessoryProfileSize: '适配型材规格',
+    availableForSeries: '仅显示当前规格可用配件',
     bracketSize: '角码边长 (mm)',
     connectorLength: '连接件长度 (mm)',
     screwLength: '螺丝长度 (mm)',
@@ -271,8 +280,10 @@ const TEXT: Record<Language, Record<string, string>> = {
     pegboard: 'Colored pegboard',
     marine: 'Colored marine board',
     connector: 'No.1 corner bracket',
+    extrudedConnector: 'No.2 extruded bracket',
     lConnector: 'No.7 L connecting plate',
     hiddenConnector: 'No.5 hidden bracket (one-hole face)',
+    teeConnector: 'No.9 tee connector',
     screw: 'Socket-head screw',
     socketCylinderScrew: 'Socket cylinder-head screw',
     buttonSocketScrew: 'Button-head socket screw',
@@ -287,6 +298,8 @@ const TEXT: Record<Language, Record<string, string>> = {
     fasteningParts: 'Connections & fasteners',
     otherParts: 'Other hardware',
     accessorySpec: 'Accessory specification',
+    accessoryProfileSize: 'Compatible profile series',
+    availableForSeries: 'Only compatible parts are shown',
     bracketSize: 'Bracket side (mm)',
     connectorLength: 'Connector length (mm)',
     screwLength: 'Screw length (mm)',
@@ -387,8 +400,10 @@ const TEXT: Record<Language, Record<string, string>> = {
     pegboard: 'カラーペグボード',
     marine: 'カラーマリンボード',
     connector: '1番コーナーブラケット',
+    extrudedConnector: '2番押出コーナーブラケット',
     lConnector: '7番L型連結プレート',
     hiddenConnector: '5番隠しブラケット（片面1穴）',
+    teeConnector: '9番T型連結プレート',
     screw: '六角穴付きボルト',
     socketCylinderScrew: '六角穴付き円筒頭ボルト',
     buttonSocketScrew: '六角穴付きボタンボルト',
@@ -403,6 +418,8 @@ const TEXT: Record<Language, Record<string, string>> = {
     fasteningParts: '接続・締結部品',
     otherParts: 'その他',
     accessorySpec: '部品仕様',
+    accessoryProfileSize: '対応フレーム規格',
+    availableForSeries: '対応部品のみ表示',
     bracketSize: 'ブラケット辺長 (mm)',
     connectorLength: 'コネクタ長さ (mm)',
     screwLength: 'ボルト長さ (mm)',
@@ -518,6 +535,7 @@ const buildProductionData = (items: DIYSceneItem[], language: Language) => {
     widthMm: item.width,
     heightMm: item.height,
     thicknessMm: item.thickness,
+    accessoryProfileSize: item.accessoryProfileSize,
     colorId: item.colorId,
     color: item.kind === 'marine_board'
       ? getMarineBoardOrderColorName(item.colorId, language)
@@ -627,19 +645,75 @@ const naturalScrewUnitPrice = (variantId = '2020') => {
   return 1.5;
 };
 
-const ACCESSORY_PRICES_2020: Partial<Record<DIYItemKind, {
+const ACCESSORY_PROFILE_SIZES: DIYAccessoryProfileSize[] = ['1515', '2020', '3030', '4040'];
+
+interface DIYAccessoryPrice {
   natural: number;
   colored: number;
   naturalBulk: number;
   coloredBulk: number;
-}>> = {
-  connector: { natural: 1, colored: 3, naturalBulk: 0.9, coloredBulk: 2.5 },
-  hidden_connector: { natural: 1, colored: 3, naturalBulk: 0.9, coloredBulk: 2.5 },
-  l_connector: { natural: 3, colored: 3.5, naturalBulk: 2.5, coloredBulk: 3 },
+}
+
+const ACCESSORY_PRICES: Record<DIYConnectionKind, Partial<Record<DIYAccessoryProfileSize, DIYAccessoryPrice>>> = {
+  connector: {
+    '2020': { natural: 1, colored: 3, naturalBulk: 0.9, coloredBulk: 2.5 },
+    '3030': { natural: 2, colored: 4, naturalBulk: 1.5, coloredBulk: 3.1 },
+  },
+  extruded_connector: {
+    '1515': { natural: 3, colored: 3.5, naturalBulk: 2.5, coloredBulk: 3 },
+    '2020': { natural: 4, colored: 5, naturalBulk: 3.2, coloredBulk: 4 },
+    '3030': { natural: 6, colored: 8, naturalBulk: 4.5, coloredBulk: 6 },
+  },
+  hidden_connector: {
+    '2020': { natural: 1, colored: 3, naturalBulk: 0.9, coloredBulk: 2.5 },
+    '3030': { natural: 1.5, colored: 3.5, naturalBulk: 1.3, coloredBulk: 3.1 },
+  },
+  l_connector: {
+    '1515': { natural: 3, colored: 3.5, naturalBulk: 2.5, coloredBulk: 3 },
+    '2020': { natural: 3, colored: 3.5, naturalBulk: 2.5, coloredBulk: 3 },
+    '3030': { natural: 4.5, colored: 5, naturalBulk: 3.5, coloredBulk: 4 },
+    '4040': { natural: 6, colored: 8, naturalBulk: 4.5, coloredBulk: 6 },
+  },
+  tee_connector: {
+    '1515': { natural: 3, colored: 4, naturalBulk: 2.5, coloredBulk: 3 },
+    '2020': { natural: 4, colored: 5, naturalBulk: 3.5, coloredBulk: 4 },
+    '3030': { natural: 6, colored: 7, naturalBulk: 5.5, coloredBulk: 6 },
+  },
+};
+
+const isConnectionAccessoryKind = (kind: DIYItemKind): kind is DIYConnectionKind => (
+  kind === 'connector'
+  || kind === 'extruded_connector'
+  || kind === 'hidden_connector'
+  || kind === 'l_connector'
+  || kind === 'tee_connector'
+);
+
+const getAvailableAccessorySizes = (kind: DIYConnectionKind) => (
+  ACCESSORY_PROFILE_SIZES.filter((size) => Boolean(ACCESSORY_PRICES[kind][size]))
+);
+
+const getAccessoryDimensions = (kind: DIYConnectionKind, profileSeries: DIYAccessoryProfileSize) => {
+  const moduleSize = Number(profileSeries.slice(0, 2));
+  if (kind === 'connector') {
+    return { width: moduleSize, height: moduleSize, thickness: Math.max(3.2, moduleSize * 0.16) };
+  }
+  if (kind === 'extruded_connector') {
+    return { width: moduleSize * 1.4, height: moduleSize * 1.4, thickness: Math.max(3, moduleSize * 0.15) };
+  }
+  if (kind === 'hidden_connector') {
+    return { width: moduleSize * 1.25, height: moduleSize * 0.5, thickness: moduleSize * 0.25 };
+  }
+  if (kind === 'l_connector') {
+    return { width: moduleSize * 3, height: moduleSize * 3, thickness: Math.max(3, moduleSize * 0.15) };
+  }
+  return { width: moduleSize * 3, height: moduleSize * 2.2, thickness: Math.max(3, moduleSize * 0.15) };
 };
 
 const getStandardAccessoryUnitPrice = (item: DIYSceneItem) => {
-  const prices = ACCESSORY_PRICES_2020[item.kind];
+  if (!isConnectionAccessoryKind(item.kind)) return null;
+  const profileSeries = item.accessoryProfileSize || '2020';
+  const prices = ACCESSORY_PRICES[item.kind][profileSeries];
   if (!prices) return null;
   const isNatural = item.colorId === 'natural' || item.colorId === 'silver';
   const isBulk = Math.max(1, item.quantity || 1) >= 20;
@@ -683,7 +757,7 @@ const createItem = (kind: DIYItemKind, index = 0, variantId?: string): DIYSceneI
       remark: '',
     };
   }
-  const accessoryDefaults: Record<'connector' | 'l_connector' | 'hidden_connector' | 'screw' | 'foot', {
+  const accessoryDefaults: Record<'connector' | 'extruded_connector' | 'l_connector' | 'hidden_connector' | 'tee_connector' | 'screw' | 'foot', {
     name: string;
     colorId: string;
     width: number;
@@ -698,6 +772,14 @@ const createItem = (kind: DIYItemKind, index = 0, variantId?: string): DIYSceneI
       height: 20,
       thickness: 3.2,
       price: 1,
+    },
+    extruded_connector: {
+      name: 'No.2 extruded corner bracket',
+      colorId: 'silver',
+      width: 28,
+      height: 28,
+      thickness: 3,
+      price: 4,
     },
     l_connector: {
       name: 'No.7 L connecting plate',
@@ -714,6 +796,14 @@ const createItem = (kind: DIYItemKind, index = 0, variantId?: string): DIYSceneI
       height: 10,
       thickness: 5,
       price: 1,
+    },
+    tee_connector: {
+      name: 'No.9 tee connector',
+      colorId: 'silver',
+      width: 60,
+      height: 44,
+      thickness: 3,
+      price: 4,
     },
     screw: {
       name: 'Socket-head screw',
@@ -733,6 +823,20 @@ const createItem = (kind: DIYItemKind, index = 0, variantId?: string): DIYSceneI
     },
   };
   const accessory = accessoryDefaults[kind as keyof typeof accessoryDefaults] || accessoryDefaults.connector;
+  const requestedSeries = ACCESSORY_PROFILE_SIZES.includes(variantId as DIYAccessoryProfileSize)
+    ? variantId as DIYAccessoryProfileSize
+    : '2020';
+  const accessoryProfileSize = isConnectionAccessoryKind(kind)
+    ? (ACCESSORY_PRICES[kind][requestedSeries]
+      ? requestedSeries
+      : getAvailableAccessorySizes(kind)[0])
+    : undefined;
+  const accessoryDimensions = isConnectionAccessoryKind(kind) && accessoryProfileSize
+    ? getAccessoryDimensions(kind, accessoryProfileSize)
+    : { width: accessory.width, height: accessory.height, thickness: accessory.thickness };
+  const naturalPrice = isConnectionAccessoryKind(kind) && accessoryProfileSize
+    ? ACCESSORY_PRICES[kind][accessoryProfileSize]?.natural
+    : undefined;
   return {
     id: makeId(),
     kind,
@@ -740,10 +844,11 @@ const createItem = (kind: DIYItemKind, index = 0, variantId?: string): DIYSceneI
     position: [offset, kind === 'foot' ? 35 : 500, 0],
     rotation: [0, 0, 0],
     colorId: accessory.colorId,
-    width: accessory.width,
-    height: accessory.height,
-    thickness: accessory.thickness,
-    accessoryPrice: accessory.price,
+    width: accessoryDimensions.width,
+    height: accessoryDimensions.height,
+    thickness: accessoryDimensions.thickness,
+    accessoryPrice: naturalPrice ?? accessory.price,
+    accessoryProfileSize,
     quantity: 1,
     remark: '',
   };
@@ -2041,6 +2146,22 @@ const createAccessoryObject = (item: DIYSceneItem, selected: boolean) => {
       1.42,
     );
     hitboxSize.set(size + 0.14, size + 0.14, depth + 0.18);
+  } else if (item.kind === 'extruded_connector') {
+    // No.2 is cut from a continuous extruded angle: uniform orthogonal legs,
+    // no cast gusset, and one mounting hole through each leg.
+    const size = THREE.MathUtils.clamp((item.width || 28) / SCENE_SCALE, 0.2, 1.1);
+    const profileModule = Number((item.accessoryProfileSize || '2020').slice(0, 2)) / SCENE_SCALE;
+    const plateThickness = THREE.MathUtils.clamp((item.thickness || 3) / SCENE_SCALE, 0.03, 0.1);
+    const depth = THREE.MathUtils.clamp(profileModule * 0.72, 0.1, 0.32);
+    const horizontal = new THREE.Mesh(new THREE.BoxGeometry(size, plateThickness, depth), material);
+    const vertical = new THREE.Mesh(new THREE.BoxGeometry(plateThickness, size, depth), material.clone());
+    horizontal.position.set(size / 2, plateThickness / 2, 0);
+    vertical.position.set(plateThickness / 2, size / 2, 0);
+    group.add(horizontal, vertical);
+    const holeRadius = THREE.MathUtils.clamp(profileModule * 0.14, 0.02, 0.06);
+    addSurfaceHole(new THREE.Vector3(size * 0.58, plateThickness + 0.002, 0), 'y', holeRadius);
+    addSurfaceHole(new THREE.Vector3(plateThickness + 0.002, size * 0.58, 0), 'x', holeRadius);
+    hitboxSize.set(size + 0.14, size + 0.14, depth + 0.16);
   } else if (item.kind === 'l_connector') {
     const size = THREE.MathUtils.clamp((item.width || 60) / SCENE_SCALE, 0.4, 1.2);
     const armWidth = Math.max(0.16, size * 0.3);
@@ -2090,6 +2211,25 @@ const createAccessoryObject = (item: DIYSceneItem, selected: boolean) => {
     addSetScrew(horizontalHoleX, 0, depth / 2 + 0.004, holeRadius);
     addSetScrew(0, verticalHoleY, depth / 2 + 0.004, holeRadius);
     hitboxSize.set(length + 0.14, length + 0.14, depth + ridgeHeight + 0.16);
+  } else if (item.kind === 'tee_connector') {
+    // No.9 is the flat three-way/T joining plate used where three profiles meet.
+    const width = THREE.MathUtils.clamp((item.width || 60) / SCENE_SCALE, 0.4, 1.25);
+    const height = THREE.MathUtils.clamp((item.height || 44) / SCENE_SCALE, 0.3, 1);
+    const profileModule = Number((item.accessoryProfileSize || '2020').slice(0, 2)) / SCENE_SCALE;
+    const armWidth = THREE.MathUtils.clamp(profileModule * 0.82, 0.12, 0.3);
+    const plateThickness = THREE.MathUtils.clamp((item.thickness || 3) / SCENE_SCALE, 0.03, 0.1);
+    const crossbar = new THREE.Mesh(new THREE.BoxGeometry(width, armWidth, plateThickness), material);
+    const stem = new THREE.Mesh(new THREE.BoxGeometry(armWidth, height, plateThickness), material.clone());
+    crossbar.position.y = height / 2 - armWidth / 2;
+    group.add(crossbar, stem);
+    const faceZ = plateThickness / 2 + 0.008;
+    const holeRadius = THREE.MathUtils.clamp(profileModule * 0.13, 0.02, 0.055);
+    addFrontHole(-width * 0.34, crossbar.position.y, faceZ, holeRadius);
+    addFrontHole(0, crossbar.position.y, faceZ, holeRadius);
+    addFrontHole(width * 0.34, crossbar.position.y, faceZ, holeRadius);
+    addFrontHole(0, height * 0.04, faceZ, holeRadius);
+    addFrontHole(0, -height * 0.31, faceZ, holeRadius);
+    hitboxSize.set(width + 0.14, height + 0.14, plateThickness + 0.16);
   } else if (item.kind === 'screw') {
     const screwLength = THREE.MathUtils.clamp((item.height || 35) / SCENE_SCALE, 0.16, 1.2);
     const shaftRadius = THREE.MathUtils.clamp((item.width || 12) / SCENE_SCALE * 0.28, 0.025, 0.07);
@@ -3754,9 +3894,11 @@ const getItemLabel = (item: DIYSceneItem, language: Language) => {
   if (item.kind === 'plate') return `${t.plate} · ${item.width}×${item.height}`;
   if (item.kind === 'pegboard') return `${t.pegboard} · ${item.width}×${item.height}`;
   if (item.kind === 'marine_board') return `${t.marine} · ${item.width}×${item.height}`;
-  if (item.kind === 'connector') return t.connector;
-  if (item.kind === 'l_connector') return t.lConnector;
-  if (item.kind === 'hidden_connector') return t.hiddenConnector;
+  if (item.kind === 'connector') return `${t.connector} · ${item.accessoryProfileSize || '2020'}`;
+  if (item.kind === 'extruded_connector') return `${t.extrudedConnector} · ${item.accessoryProfileSize || '2020'}`;
+  if (item.kind === 'l_connector') return `${t.lConnector} · ${item.accessoryProfileSize || '2020'}`;
+  if (item.kind === 'hidden_connector') return `${t.hiddenConnector} · ${item.accessoryProfileSize || '2020'}`;
+  if (item.kind === 'tee_connector') return `${t.teeConnector} · ${item.accessoryProfileSize || '2020'}`;
   if (item.kind === 'screw') {
     const label = item.screwHead === 'socket_cylinder'
       ? t.socketCylinderScrew
@@ -3855,6 +3997,7 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({ language, user, onAddBatchToC
   const [drillMode, setDrillMode] = useState(false);
   const [drillSetupOpen, setDrillSetupOpen] = useState(false);
   const [pendingProfile, setPendingProfile] = useState<{ variantId: string; length: number } | null>(null);
+  const [selectedAccessoryProfileSize, setSelectedAccessoryProfileSize] = useState<DIYAccessoryProfileSize>('2020');
   const importRef = useRef<HTMLInputElement>(null);
 
   const selected = items.find((item) => item.id === selectedId) || null;
@@ -4034,7 +4177,13 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({ language, user, onAddBatchToC
       setPendingProfile({ variantId: variantId || '2020', length: 200 });
       return;
     }
-    const item = createItem(kind, items.length, variantId);
+    const accessorySeries = isConnectionAccessoryKind(kind)
+      ? (ACCESSORY_PROFILE_SIZES.includes(variantId as DIYAccessoryProfileSize)
+        ? variantId as DIYAccessoryProfileSize
+        : selectedAccessoryProfileSize)
+      : undefined;
+    if (isConnectionAccessoryKind(kind) && !ACCESSORY_PRICES[kind][accessorySeries!]) return;
+    const item = createItem(kind, items.length, accessorySeries || variantId);
     commit([...items, item], item.id);
   };
 
@@ -4196,15 +4345,17 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({ language, user, onAddBatchToC
       }
       const accessoryDefinition = {
         connector: { id: '1', code: 1, label: t.connector, imageKey: '1' },
+        extruded_connector: { id: '2', code: 2, label: t.extrudedConnector, imageKey: '2' },
         l_connector: { id: '7L', code: 7, label: t.lConnector, imageKey: '7L' },
         hidden_connector: { id: '5', code: 5, label: t.hiddenConnector, imageKey: '5' },
+        tee_connector: { id: '9', code: 9, label: t.teeConnector, imageKey: '9' },
         screw: item.screwHead === 'button_socket'
           ? { id: 'diy-button-socket-screw', code: 3, label: t.buttonSocketScrew, imageKey: '3' }
           : item.screwHead === 'socket_cylinder'
             ? { id: 'diy-socket-cylinder-screw', code: 3, label: t.socketCylinderScrew, imageKey: '3' }
             : { id: 'diy-socket-head-screw', code: 3, label: t.screw, imageKey: '3' },
         foot: { id: 'diy-leveling-foot', code: 8, label: t.foot, imageKey: '8' },
-      }[item.kind as 'connector' | 'l_connector' | 'hidden_connector' | 'screw' | 'foot'];
+      }[item.kind as 'connector' | 'extruded_connector' | 'l_connector' | 'hidden_connector' | 'tee_connector' | 'screw' | 'foot'];
       const accessoryId = accessoryDefinition.id;
       const unitPrice = Number((totalPrice / Math.max(1, item.quantity)).toFixed(2));
       return {
@@ -4213,7 +4364,7 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({ language, user, onAddBatchToC
         quantity: 1,
         config: {
           type: 'profile_accessory',
-          profileSize: '2020',
+          profileSize: item.accessoryProfileSize || '2020',
           colorMode: item.colorId === 'natural' || item.colorId === 'silver' ? 'natural' : 'colored',
           colorId: item.colorId,
           colorName: PROFILE_COLORS.find((color) => color.id === item.colorId)?.name[language] || item.colorId,
@@ -4228,7 +4379,7 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({ language, user, onAddBatchToC
             quantity: item.quantity,
             unitPrice,
             subtotal: totalPrice,
-            isBulk: false,
+            isBulk: item.quantity >= 20,
           }],
           diyPosition: item.position,
           diyRotation: item.rotation,
@@ -4319,10 +4470,12 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({ language, user, onAddBatchToC
       label: t.fasteningParts,
       items: [
         { kind: 'connector' as const, label: t.connector, icon: Wrench },
+        { kind: 'extruded_connector' as const, label: t.extrudedConnector, icon: Wrench },
         { kind: 'hidden_connector' as const, label: t.hiddenConnector, icon: Box },
         { kind: 'l_connector' as const, label: t.lConnector, icon: PanelTop },
+        { kind: 'tee_connector' as const, label: t.teeConnector, icon: PanelTop },
         { kind: 'screw' as const, label: t.screw, icon: CircleDot },
-      ],
+      ].filter((entry) => !isConnectionAccessoryKind(entry.kind) || Boolean(ACCESSORY_PRICES[entry.kind][selectedAccessoryProfileSize])),
     },
     // 调平脚暂时从零件库隐藏；旧设计中已有的调平脚仍可显示、编辑和下单。
   ];
@@ -4375,9 +4528,33 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({ language, user, onAddBatchToC
                   {paletteGroup.label}
                   <span className="h-px flex-1 bg-slate-100" />
                 </div>
+                {paletteGroup.id === 'fasteners' && (
+                  <div className="mb-2 rounded-2xl border border-blue-100 bg-blue-50/70 p-2.5">
+                    <div className="mb-2 flex items-center justify-between gap-2">
+                      <span className="text-[9px] font-black uppercase tracking-widest text-blue-700">{t.accessoryProfileSize}</span>
+                      <span className="text-[8px] font-bold text-blue-400">{t.availableForSeries}</span>
+                    </div>
+                    <div className="grid grid-cols-4 gap-1">
+                      {ACCESSORY_PROFILE_SIZES.map((size) => (
+                        <button
+                          key={size}
+                          type="button"
+                          data-testid={`diy-accessory-series-${size}`}
+                          onClick={() => setSelectedAccessoryProfileSize(size)}
+                          className={`rounded-lg px-1 py-1.5 text-[9px] font-black transition ${selectedAccessoryProfileSize === size ? 'bg-blue-600 text-white shadow-sm' : 'bg-white text-slate-500 hover:text-blue-600'}`}
+                        >
+                          {size}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
                 <div className="grid grid-cols-2 gap-2 xl:grid-cols-1">
                   {paletteGroup.items.map((entry) => {
                     const Icon = entry.icon;
+                    const accessoryPrice = isConnectionAccessoryKind(entry.kind)
+                      ? ACCESSORY_PRICES[entry.kind][selectedAccessoryProfileSize]
+                      : undefined;
                     return (
                       <button
                         key={`${entry.kind}-${'variantId' in entry ? entry.variantId || '' : ''}`}
@@ -4385,13 +4562,27 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({ language, user, onAddBatchToC
                         draggable
                         onDragStart={(event) => event.dataTransfer.setData('application/x-mengkaile-part', JSON.stringify({
                           kind: entry.kind,
-                          variantId: 'variantId' in entry ? entry.variantId : undefined,
+                          variantId: isConnectionAccessoryKind(entry.kind)
+                            ? selectedAccessoryProfileSize
+                            : 'variantId' in entry ? entry.variantId : undefined,
                         }))}
-                        onClick={() => addItem(entry.kind, 'variantId' in entry ? entry.variantId : undefined)}
+                        onClick={() => addItem(
+                          entry.kind,
+                          isConnectionAccessoryKind(entry.kind)
+                            ? selectedAccessoryProfileSize
+                            : 'variantId' in entry ? entry.variantId : undefined,
+                        )}
                         className="group flex items-center gap-3 rounded-2xl border border-slate-200 bg-slate-50 p-3 text-left transition hover:border-blue-400 hover:bg-blue-50"
                       >
                         <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-white text-slate-500 shadow-sm group-hover:text-blue-600"><Icon className="h-5 w-5" /></span>
-                        <span className="text-xs font-black text-slate-700">{entry.label}</span>
+                        <span className="min-w-0 flex-1">
+                          <span className="block text-xs font-black text-slate-700">{entry.label}</span>
+                          {accessoryPrice && (
+                            <span className="mt-0.5 block text-[9px] font-bold text-blue-500">
+                              {selectedAccessoryProfileSize} · {currency}{accessoryPrice.natural.toFixed(1)}
+                            </span>
+                          )}
+                        </span>
                       </button>
                     );
                   })}
@@ -4635,40 +4826,40 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({ language, user, onAddBatchToC
                 </div>
               )}
 
-              {(selected.kind === 'connector' || selected.kind === 'l_connector' || selected.kind === 'hidden_connector' || selected.kind === 'screw') && (
+              {(isConnectionAccessoryKind(selected.kind) || selected.kind === 'screw') && (
                 <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
                   <div className="mb-3 flex items-center gap-2">
                     <Wrench className="h-4 w-4 text-blue-600" />
                     <h3 className="text-xs font-black uppercase tracking-widest text-slate-700">{t.accessorySpec}</h3>
                   </div>
-                  {selected.kind === 'connector' && (
-                    <NumberField
-                      label={t.bracketSize}
-                      value={selected.width || 20}
-                      min={20}
-                      max={90}
-                      onChange={(value) => updateSelected({ width: value, height: value })}
-                    />
-                  )}
-                  {selected.kind === 'l_connector' && (
-                    <NumberField
-                      label={t.bracketSize}
-                      value={selected.width || 60}
-                      min={40}
-                      max={120}
-                      onChange={(value) => updateSelected({ width: value, height: value })}
-                    />
-                  )}
-                  {selected.kind === 'hidden_connector' && (
+                  {isConnectionAccessoryKind(selected.kind) && (
                     <>
-                      <NumberField
-                        label={t.connectorLength}
-                        value={selected.width || 25}
-                        min={20}
-                        max={60}
-                        onChange={(value) => updateSelected({ width: value })}
-                      />
-                      <p className="mt-2 rounded-xl bg-blue-50 px-3 py-2 text-[10px] font-bold leading-relaxed text-blue-700">{t.oneHoleFaceHint}</p>
+                      <label className="block">
+                        <span className="diy-field-label">{t.accessoryProfileSize}</span>
+                        <select
+                          value={selected.accessoryProfileSize || '2020'}
+                          onChange={(event) => {
+                            const profileSeries = event.target.value as DIYAccessoryProfileSize;
+                            const dimensions = getAccessoryDimensions(selected.kind as DIYConnectionKind, profileSeries);
+                            updateSelected({
+                              accessoryProfileSize: profileSeries,
+                              ...dimensions,
+                              accessoryPrice: ACCESSORY_PRICES[selected.kind as DIYConnectionKind][profileSeries]?.natural,
+                            });
+                          }}
+                          className="diy-select"
+                        >
+                          {getAvailableAccessorySizes(selected.kind as DIYConnectionKind).map((size) => (
+                            <option key={size} value={size}>{size}</option>
+                          ))}
+                        </select>
+                      </label>
+                      <div className="mt-2 rounded-xl bg-white px-3 py-2 text-[10px] font-black text-slate-500">
+                        {t.width} {Number(selected.width || 0).toFixed(0)}mm · {t.height} {Number(selected.height || 0).toFixed(0)}mm · {t.thickness} {Number(selected.thickness || 0).toFixed(1)}mm
+                      </div>
+                      {selected.kind === 'hidden_connector' && (
+                        <p className="mt-2 rounded-xl bg-blue-50 px-3 py-2 text-[10px] font-bold leading-relaxed text-blue-700">{t.oneHoleFaceHint}</p>
+                      )}
                     </>
                   )}
                   {selected.kind === 'screw' && (
