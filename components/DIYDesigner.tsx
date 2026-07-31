@@ -65,12 +65,6 @@ type Vec3 = [number, number, number];
 type RotationAxisIndex = 0 | 1 | 2;
 type DIYScrewHead = 'socket_cylinder' | 'button_socket';
 
-const PROFILE_AXIS_ROTATIONS: Record<RotationAxisIndex, Vec3> = {
-  0: [0, 0, 0],
-  1: [0, 0, 90],
-  2: [0, -90, 0],
-};
-
 interface DIYSceneItem {
   id: string;
   kind: DIYItemKind;
@@ -217,10 +211,11 @@ const TEXT: Record<Language, Record<string, string>> = {
     noParts: '还没有添加任何零件',
     remark: '备注',
     remarkPlaceholder: '为这个零件添加加工、安装或识别备注…',
-    rotateX: '朝红色方向',
-    rotateY: '朝绿色方向',
-    rotateZ: '朝蓝色方向',
-    rotateStandard: '点击后，型材长度方向会直接对齐对应颜色的箭头。',
+    rotateX: '绕红轴 90°',
+    rotateY: '绕绿轴 90°',
+    rotateZ: '绕蓝轴 90°',
+    rotateStandard: '沿对应颜色箭头看过去，每次顺时针旋转 90°；连续点击 4 次即旋转 360°回到原位。型材与某色轴同向时，点击该颜色就是型材自转，可切换槽面或封边方向。',
+    rotationStatus: '当前角度',
     rotateCollision: '旋转后型材会与其他型材相互穿透，因此本次旋转未执行。请先将型材平移出一段距离后再试。',
     snapEnd: '磁吸：端点连接',
     snapSide: '磁吸：交叉连接',
@@ -331,10 +326,11 @@ const TEXT: Record<Language, Record<string, string>> = {
     noParts: 'No parts added yet',
     remark: 'Remark',
     remarkPlaceholder: 'Add machining, installation, or identification notes for this part…',
-    rotateX: 'Point toward red',
-    rotateY: 'Point toward green',
-    rotateZ: 'Point toward blue',
-    rotateStandard: 'Click a color to align the profile length directly with that arrow.',
+    rotateX: 'Rotate 90° about red',
+    rotateY: 'Rotate 90° about green',
+    rotateZ: 'Rotate 90° about blue',
+    rotateStandard: 'Looking in the direction of the colored arrow, each click rotates 90° clockwise. Four clicks make 360° and return to the starting orientation. When the profile follows that colored axis, the same control spins the profile to change its slot or covered face.',
+    rotationStatus: 'Current angles',
     rotateCollision: 'This rotation would make profiles overlap, so it was not applied. Move the profile away and try again.',
     snapEnd: 'Magnet: end connection',
     snapSide: 'Magnet: cross connection',
@@ -445,10 +441,11 @@ const TEXT: Record<Language, Record<string, string>> = {
     noParts: 'パーツがまだありません',
     remark: '備考',
     remarkPlaceholder: '加工、取付、識別用の備考を追加…',
-    rotateX: '赤方向へ向ける',
-    rotateY: '緑方向へ向ける',
-    rotateZ: '青方向へ向ける',
-    rotateStandard: '色をクリックすると、形材の長さ方向がその矢印に直接揃います。',
+    rotateX: '赤軸まわり 90°',
+    rotateY: '緑軸まわり 90°',
+    rotateZ: '青軸まわり 90°',
+    rotateStandard: '対応する色の矢印方向へ見て、クリックするたびに時計回りへ90°回転します。4回で360°となり元の姿勢に戻ります。形材が同じ色の軸に沿う場合は自転となり、溝面やカバー面を切り替えられます。',
+    rotationStatus: '現在角度',
     rotateCollision: '回転すると形材同士が重なるため実行できません。少し移動してから再度お試しください。',
     snapEnd: 'スナップ：端点接続',
     snapSide: 'スナップ：交差接続',
@@ -810,6 +807,32 @@ const itemQuaternion = (item: DIYSceneItem) => new THREE.Quaternion().setFromEul
   THREE.MathUtils.degToRad(item.rotation[2]),
   'XYZ',
 ));
+
+const normalizeQuarterTurnDegrees = (degrees: number) => {
+  let normalized = (Math.round(degrees / 90) * 90) % 360;
+  if (normalized <= -180) normalized += 360;
+  if (normalized > 180) normalized -= 360;
+  return Object.is(normalized, -0) ? 0 : normalized;
+};
+
+const rotateItemAroundWorldAxis = (
+  item: DIYSceneItem,
+  axisIndex: RotationAxisIndex,
+): Vec3 => {
+  const axis = [
+    new THREE.Vector3(1, 0, 0),
+    new THREE.Vector3(0, 1, 0),
+    new THREE.Vector3(0, 0, 1),
+  ][axisIndex];
+  const quarterTurn = new THREE.Quaternion().setFromAxisAngle(axis, Math.PI / 2);
+  const rotated = itemQuaternion(item).premultiply(quarterTurn).normalize();
+  const euler = new THREE.Euler().setFromQuaternion(rotated, 'XYZ');
+  return [
+    normalizeQuarterTurnDegrees(THREE.MathUtils.radToDeg(euler.x)),
+    normalizeQuarterTurnDegrees(THREE.MathUtils.radToDeg(euler.y)),
+    normalizeQuarterTurnDegrees(THREE.MathUtils.radToDeg(euler.z)),
+  ];
+};
 
 const rayProfileInterval = (
   originWorldMm: THREE.Vector3,
@@ -2051,7 +2074,7 @@ const ThreeAssembly: React.FC<{
   onSelectionChange: (ids: string[]) => void;
   onTransform: (id: string, position: Vec3, rotation: Vec3) => void;
   onResizeProfile: (id: string, length: number, position: Vec3) => void;
-  onOrientAxis: (id: string, axisIndex: RotationAxisIndex) => void;
+  onRotateQuarterTurn: (id: string, axisIndex: RotationAxisIndex) => void;
   onDelete: (id: string) => void;
   onPlaceHole: (id: string, side: ProfileSide, positionMm: number, displayGrooveIndex: number, physicalGrooveIndex: number) => void;
   onCancelDrillMode: () => void;
@@ -2080,7 +2103,7 @@ const ThreeAssembly: React.FC<{
   onSelectionChange,
   onTransform,
   onResizeProfile,
-  onOrientAxis,
+  onRotateQuarterTurn,
   onDelete,
   onPlaceHole,
   onCancelDrillMode,
@@ -2135,7 +2158,7 @@ const ThreeAssembly: React.FC<{
   const onSelectionChangeRef = useRef(onSelectionChange);
   const onTransformRef = useRef(onTransform);
   const onResizeProfileRef = useRef(onResizeProfile);
-  const onOrientAxisRef = useRef(onOrientAxis);
+  const onRotateQuarterTurnRef = useRef(onRotateQuarterTurn);
   const onDeleteRef = useRef(onDelete);
   const onPlaceHoleRef = useRef(onPlaceHole);
   const onCancelDrillModeRef = useRef(onCancelDrillMode);
@@ -2183,7 +2206,7 @@ const ThreeAssembly: React.FC<{
   useEffect(() => { onSelectionChangeRef.current = onSelectionChange; }, [onSelectionChange]);
   useEffect(() => { onTransformRef.current = onTransform; }, [onTransform]);
   useEffect(() => { onResizeProfileRef.current = onResizeProfile; }, [onResizeProfile]);
-  useEffect(() => { onOrientAxisRef.current = onOrientAxis; }, [onOrientAxis]);
+  useEffect(() => { onRotateQuarterTurnRef.current = onRotateQuarterTurn; }, [onRotateQuarterTurn]);
   useEffect(() => { onDeleteRef.current = onDelete; }, [onDelete]);
   useEffect(() => { onPlaceHoleRef.current = onPlaceHole; }, [onPlaceHole]);
   useEffect(() => { onCancelDrillModeRef.current = onCancelDrillMode; }, [onCancelDrillMode]);
@@ -3448,7 +3471,7 @@ const ThreeAssembly: React.FC<{
             <button
               key={label}
               onClick={() => {
-                onOrientAxisRef.current(contextMenu.id, axisIndex as RotationAxisIndex);
+                onRotateQuarterTurnRef.current(contextMenu.id, axisIndex as RotationAxisIndex);
                 setContextMenu(null);
               }}
               className="flex w-full items-center gap-2 rounded-xl px-2.5 py-2 text-left text-[11px] font-black text-slate-700 transition hover:bg-blue-50 hover:text-blue-700"
@@ -3674,10 +3697,10 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({ language, user, onAddBatchToC
     commit(items.map((item) => item.id === selected.id ? candidate : item), selected.id);
   };
 
-  const orientItemToAxis = (itemId: string, axisIndex: RotationAxisIndex) => {
+  const rotateItemQuarterTurn = (itemId: string, axisIndex: RotationAxisIndex) => {
     const item = items.find((entry) => entry.id === itemId);
     if (!item) return;
-    const candidate = { ...item, rotation: [...PROFILE_AXIS_ROTATIONS[axisIndex]] as Vec3 };
+    const candidate = { ...item, rotation: rotateItemAroundWorldAxis(item, axisIndex) };
     if (profileItemCollides(candidate, items)) {
       setRotationWarning(true);
       return;
@@ -3685,9 +3708,9 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({ language, user, onAddBatchToC
     commit(items.map((entry) => entry.id === itemId ? candidate : entry), itemId);
   };
 
-  const orientSelectedToAxis = (axisIndex: RotationAxisIndex) => {
+  const rotateSelectedQuarterTurn = (axisIndex: RotationAxisIndex) => {
     if (!selected) return;
-    orientItemToAxis(selected.id, axisIndex);
+    rotateItemQuarterTurn(selected.id, axisIndex);
   };
 
   const deleteItem = (itemId: string) => {
@@ -3745,12 +3768,12 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({ language, user, onAddBatchToC
     setSelectedIds((current) => current.filter((id) => items.some((item) => item.id === id)));
   };
 
-  const orientSelectedItems = (axisIndex: RotationAxisIndex) => {
+  const rotateSelectedItemsQuarterTurn = (axisIndex: RotationAxisIndex) => {
     if (!selectedIds.length) return;
     const selectedSet = new Set(selectedIds);
     const next = items.map((item) => {
       if (!selectedSet.has(item.id)) return item;
-      return { ...item, rotation: [...PROFILE_AXIS_ROTATIONS[axisIndex]] as Vec3 };
+      return { ...item, rotation: rotateItemAroundWorldAxis(item, axisIndex) };
     });
     const collision = next.some((item) => selectedSet.has(item.id) && profileItemCollides(item, next));
     if (collision) {
@@ -4229,7 +4252,7 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({ language, user, onAddBatchToC
               if (profileItemCollides(candidate, items)) return;
               commit(items.map((item) => item.id === id ? candidate : item), id);
             }}
-            onOrientAxis={orientItemToAxis}
+            onRotateQuarterTurn={rotateItemQuarterTurn}
             onDelete={deleteItem}
             onPlaceHole={placeHoleFrom3D}
             onCancelDrillMode={() => {
@@ -4265,10 +4288,11 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({ language, user, onAddBatchToC
                   ]).map((axis, axisIndex) => (
                     <button
                       key={axis.label}
-                      onClick={() => orientSelectedItems(axisIndex as RotationAxisIndex)}
+                      onClick={() => rotateSelectedItemsQuarterTurn(axisIndex as RotationAxisIndex)}
                       className="flex min-h-16 flex-col items-center justify-center gap-1 rounded-xl border border-slate-200 bg-slate-50 px-2 py-2 text-[9px] font-black text-slate-700 hover:bg-blue-50"
                     >
                       <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: axis.color }} />
+                      <Rotate3D className="h-4 w-4" />
                       {axis.label}
                     </button>
                   ))}
@@ -4467,13 +4491,19 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({ language, user, onAddBatchToC
                     { label: t.rotateZ, index: 2 as const, color: '#3b82f6' },
                   ]).map((axis) => (
                     <div key={axis.index} className="overflow-hidden rounded-xl border border-slate-200 bg-slate-50">
-                      <button onClick={() => orientSelectedToAxis(axis.index)} className="flex min-h-20 w-full flex-col items-center justify-center gap-1 px-2 py-2 text-[9px] font-black text-slate-700 transition hover:bg-blue-50 hover:text-blue-700">
+                      <button onClick={() => rotateSelectedQuarterTurn(axis.index)} className="flex min-h-20 w-full flex-col items-center justify-center gap-1 px-2 py-2 text-[9px] font-black text-slate-700 transition hover:bg-blue-50 hover:text-blue-700">
                         <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: axis.color }} />
                         <Rotate3D className="h-4 w-4" />
                         <span>{axis.label}</span>
                       </button>
                     </div>
                   ))}
+                </div>
+                <div className="mt-2 flex flex-wrap items-center gap-1.5 rounded-xl bg-slate-50 px-3 py-2 text-[9px] font-black text-slate-500">
+                  <span className="mr-1 text-slate-400">{t.rotationStatus}</span>
+                  <span className="rounded-md bg-red-50 px-1.5 py-1 text-red-600">{selected.rotation[0]}°</span>
+                  <span className="rounded-md bg-green-50 px-1.5 py-1 text-green-600">{selected.rotation[1]}°</span>
+                  <span className="rounded-md bg-blue-50 px-1.5 py-1 text-blue-600">{selected.rotation[2]}°</span>
                 </div>
                 <p className="mt-2 text-[10px] font-bold leading-relaxed text-slate-400">{t.rotateStandard}</p>
               </div>
