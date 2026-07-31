@@ -739,7 +739,10 @@ const getAccessoryDimensions = (kind: DIYConnectionKind, profileSeries: DIYAcces
   if (kind === 't_connector') {
     return { width: moduleSize * 3, height: moduleSize * 3.25, thickness: Math.max(3, moduleSize * 0.15) };
   }
-  return { width: moduleSize * 1.5, height: moduleSize * 1.5, thickness: moduleSize };
+  if (kind === 'tee_connector') {
+    return { width: moduleSize, height: moduleSize, thickness: moduleSize };
+  }
+  return { width: moduleSize, height: moduleSize, thickness: moduleSize };
 };
 
 const getStandardAccessoryUnitPrice = (item: DIYSceneItem) => {
