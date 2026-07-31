@@ -746,10 +746,10 @@ const getAccessoryDimensions = (kind: DIYConnectionKind, profileSeries: DIYAcces
     return { width: moduleSize * 1.25, height: moduleSize * 0.5, thickness: moduleSize * 0.25 };
   }
   if (kind === 'l_connector') {
-    return { width: moduleSize * 3, height: moduleSize * 3, thickness: Math.max(3, moduleSize * 0.15) };
+    return { width: moduleSize * 3, height: moduleSize * 3, thickness: 2 };
   }
   if (kind === 't_connector') {
-    return { width: moduleSize * 3, height: moduleSize * 3.25, thickness: Math.max(3, moduleSize * 0.15) };
+    return { width: moduleSize * 3, height: moduleSize * 3.25, thickness: 2 };
   }
   if (kind === 'tee_connector') {
     return { width: moduleSize, height: moduleSize, thickness: moduleSize };
@@ -835,7 +835,7 @@ const createItem = (kind: DIYItemKind, index = 0, variantId?: string): DIYSceneI
       colorId: 'natural',
       width: 60,
       height: 60,
-      thickness: 4,
+      thickness: 2,
       price: 3,
     },
     t_connector: {
@@ -843,7 +843,7 @@ const createItem = (kind: DIYItemKind, index = 0, variantId?: string): DIYSceneI
       colorId: 'natural',
       width: 60,
       height: 65,
-      thickness: 3,
+      thickness: 2,
       price: 3,
     },
     hidden_connector: {
@@ -2294,7 +2294,7 @@ const createAccessoryObject = (item: DIYSceneItem, selected: boolean) => {
   } else if (item.kind === 'l_connector') {
     const size = THREE.MathUtils.clamp((item.width || 60) / SCENE_SCALE, 0.4, 1.2);
     const armWidth = Math.max(0.16, size * 0.3);
-    const plateThickness = THREE.MathUtils.clamp((item.thickness || 4) / SCENE_SCALE, 0.035, 0.1);
+    const plateThickness = THREE.MathUtils.clamp((item.thickness || 2) / SCENE_SCALE, 0.02, 0.1);
     const horizontal = new THREE.Mesh(new THREE.BoxGeometry(size, armWidth, plateThickness), material);
     const vertical = new THREE.Mesh(new THREE.BoxGeometry(armWidth, size, plateThickness), material.clone());
     horizontal.position.y = -size / 2 + armWidth / 2;
@@ -2317,7 +2317,7 @@ const createAccessoryObject = (item: DIYSceneItem, selected: boolean) => {
       item.accessoryProfileSize || '2020',
     ) / SCENE_SCALE;
     const armWidth = THREE.MathUtils.clamp(profileModule * 0.9, 0.12, 0.38);
-    const plateThickness = THREE.MathUtils.clamp((item.thickness || 3) / SCENE_SCALE, 0.03, 0.12);
+    const plateThickness = THREE.MathUtils.clamp((item.thickness || 2) / SCENE_SCALE, 0.02, 0.12);
     const crossbar = new THREE.Mesh(new THREE.BoxGeometry(width, armWidth, plateThickness), material);
     const stem = new THREE.Mesh(new THREE.BoxGeometry(armWidth, height, plateThickness), material.clone());
     crossbar.position.y = -height / 2 + armWidth / 2;
