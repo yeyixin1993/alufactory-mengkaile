@@ -1,16 +1,25 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 300" role="img" aria-labelledby="title desc">
-  <title id="title">5号隐藏角码</title>
-  <desc id="desc">单孔安装面的隐藏式连接角码示意图</desc>
+  <title id="title">5号槽内隐藏角码</title>
+  <desc id="desc">两条臂各一个螺纹孔并配顶丝的槽内L型隐藏角码</desc>
   <defs>
-    <linearGradient id="metal" x1="0" x2="1"><stop offset="0" stop-color="#f1f5f9"/><stop offset=".5" stop-color="#aeb9c4"/><stop offset="1" stop-color="#64748b"/></linearGradient>
-    <filter id="shadow"><feDropShadow dx="0" dy="8" stdDeviation="7" flood-opacity=".18"/></filter>
+    <linearGradient id="metal" x1="0" x2="1" y1="0" y2="1"><stop offset="0" stop-color="#f8fafc"/><stop offset=".5" stop-color="#c5ced7"/><stop offset="1" stop-color="#7d8997"/></linearGradient>
+    <filter id="shadow"><feDropShadow dx="0" dy="9" stdDeviation="7" flood-opacity=".2"/></filter>
   </defs>
   <rect width="400" height="300" rx="28" fill="#f8fafc"/>
   <g filter="url(#shadow)" stroke="#64748b" stroke-width="4" stroke-linejoin="round">
-    <path d="M86 188h150v-76h-54v28H86z" fill="url(#metal)"/>
-    <path d="M236 112l76 45v58l-76-27z" fill="#94a3b8"/>
-    <path d="M182 112l45-25 85 48-76 25v-48z" fill="#dbe3ea"/>
-    <g fill="#334155" stroke="#f8fafc" stroke-width="5"><circle cx="143" cy="164" r="14"/><circle cx="267" cy="172" r="14"/></g>
+    <path d="M70 178 181 76l58 19-57 54 144 45-53 51-203-67z" fill="url(#metal)"/>
+    <path d="m89 171 94-76 30 9-64 61z" fill="#eef2f6"/>
+    <path d="m180 159 33-31 93 29-31 31z" fill="#eef2f6"/>
   </g>
-  <g transform="translate(318 24)"><rect width="56" height="44" rx="14" fill="#2563eb"/><text x="28" y="30" text-anchor="middle" fill="white" font-family="Arial,sans-serif" font-size="24" font-weight="700">5</text></g>
+  <g fill="#263341" stroke="#f8fafc" stroke-width="5">
+    <ellipse cx="131" cy="157" rx="15" ry="12"/>
+    <ellipse cx="246" cy="188" rx="15" ry="12"/>
+  </g>
+  <g fill="url(#metal)" stroke="#64748b" stroke-width="4">
+    <rect x="95" y="220" width="38" height="39" rx="10"/>
+    <rect x="266" y="77" width="38" height="39" rx="10"/>
+  </g>
+  <g fill="none" stroke="#263341" stroke-width="5">
+    <path d="M103 232h22m-22 8h22m-22 8h22"/><path d="M274 89h22m-22 8h22m-22 8h22"/>
+  </g>
 </svg>

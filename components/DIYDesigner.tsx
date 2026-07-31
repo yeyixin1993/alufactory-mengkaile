@@ -694,9 +694,9 @@ const createItem = (kind: DIYItemKind, index = 0, variantId?: string): DIYSceneI
     connector: {
       name: 'No.1 corner bracket',
       colorId: 'silver',
-      width: 40,
-      height: 40,
-      thickness: 4,
+      width: 20,
+      height: 20,
+      thickness: 3.2,
       price: 1,
     },
     l_connector: {
@@ -710,9 +710,9 @@ const createItem = (kind: DIYItemKind, index = 0, variantId?: string): DIYSceneI
     hidden_connector: {
       name: 'No.5 hidden bracket',
       colorId: 'silver',
-      width: 60,
-      height: 18,
-      thickness: 12,
+      width: 25,
+      height: 10,
+      thickness: 5,
       price: 1,
     },
     screw: {
@@ -1929,6 +1929,55 @@ const createAccessoryObject = (item: DIYSceneItem, selected: boolean) => {
     group.add(hole);
   };
 
+  const addSurfaceHole = (
+    position: THREE.Vector3,
+    normalAxis: 'x' | 'y' | 'z',
+    radius: number,
+    stretch = 1,
+  ) => {
+    const recess = new THREE.Mesh(
+      new THREE.CircleGeometry(radius, 28),
+      new THREE.MeshBasicMaterial({
+        color: '#111827',
+        side: THREE.DoubleSide,
+        depthTest: false,
+        depthWrite: false,
+      }),
+    );
+    recess.position.copy(position);
+    if (normalAxis === 'x') {
+      recess.rotation.y = Math.PI / 2;
+      recess.scale.y = stretch;
+    } else if (normalAxis === 'y') {
+      recess.rotation.x = -Math.PI / 2;
+      recess.scale.y = stretch;
+    } else {
+      recess.scale.y = stretch;
+    }
+    recess.userData.accessoryDecoration = true;
+    recess.renderOrder = 106;
+    group.add(recess);
+    return recess;
+  };
+
+  const addSetScrew = (x: number, y: number, surfaceZ: number, radius: number) => {
+    const screwHeight = Math.max(0.035, radius * 0.9);
+    const screw = new THREE.Mesh(
+      new THREE.CylinderGeometry(radius * 0.72, radius * 0.72, screwHeight, 20),
+      steel,
+    );
+    screw.rotation.x = Math.PI / 2;
+    screw.position.set(x, y, surfaceZ + screwHeight / 2);
+    const socket = new THREE.Mesh(
+      new THREE.CircleGeometry(radius * 0.3, 6),
+      darkMetal,
+    );
+    socket.position.set(x, y, surfaceZ + screwHeight + 0.002);
+    socket.userData.accessoryDecoration = true;
+    socket.renderOrder = 107;
+    group.add(screw, socket);
+  };
+
   if (item.kind === 'foot') {
     const stem = new THREE.Mesh(new THREE.CylinderGeometry(0.075, 0.075, 0.5, 24), material);
     stem.position.y = 0.22;
@@ -1936,20 +1985,62 @@ const createAccessoryObject = (item: DIYSceneItem, selected: boolean) => {
     pad.position.y = -0.08;
     group.add(stem, pad);
   } else if (item.kind === 'connector') {
-    const size = THREE.MathUtils.clamp((item.width || 40) / SCENE_SCALE, 0.25, 0.9);
-    const plateThickness = THREE.MathUtils.clamp((item.thickness || 4) / SCENE_SCALE, 0.035, 0.1);
-    const depth = Math.max(0.22, size * 0.55);
+    // No.1 is a die-cast external angle bracket: two perpendicular mounting
+    // faces, a centered triangular gusset, raised side lips and one slot per face.
+    const size = THREE.MathUtils.clamp((item.width || 20) / SCENE_SCALE, 0.2, 0.9);
+    const plateThickness = THREE.MathUtils.clamp((item.thickness || 3.2) / SCENE_SCALE, 0.032, 0.1);
+    const depth = THREE.MathUtils.clamp(size * 0.78, 0.15, 0.62);
     const horizontal = new THREE.Mesh(new THREE.BoxGeometry(size, plateThickness, depth), material);
     const vertical = new THREE.Mesh(new THREE.BoxGeometry(plateThickness, size, depth), material.clone());
-    horizontal.position.x = size / 2 - plateThickness / 2;
-    vertical.position.y = size / 2 - plateThickness / 2;
-    group.add(horizontal, vertical);
-    const faceZ = depth / 2 + 0.008;
-    addFrontHole(size * 0.28, 0, faceZ);
-    addFrontHole(size * 0.7, 0, faceZ);
-    addFrontHole(0, size * 0.28, faceZ);
-    addFrontHole(0, size * 0.7, faceZ);
-    hitboxSize.set(size + 0.12, size + 0.12, depth + 0.15);
+    horizontal.position.set(size / 2, plateThickness / 2, 0);
+    vertical.position.set(plateThickness / 2, size / 2, 0);
+
+    const gussetShape = new THREE.Shape();
+    gussetShape.moveTo(plateThickness, plateThickness);
+    gussetShape.lineTo(size * 0.8, plateThickness);
+    gussetShape.lineTo(plateThickness, size * 0.8);
+    gussetShape.closePath();
+    const gussetDepth = depth * 0.34;
+    const gusset = new THREE.Mesh(
+      new THREE.ExtrudeGeometry(gussetShape, {
+        depth: gussetDepth,
+        bevelEnabled: true,
+        bevelSegments: 2,
+        bevelSize: Math.min(0.012, plateThickness * 0.28),
+        bevelThickness: Math.min(0.01, gussetDepth * 0.12),
+      }),
+      material.clone(),
+    );
+    gusset.position.z = -gussetDepth / 2;
+
+    const lipHeight = Math.max(0.014, plateThickness * 0.42);
+    const lipWidth = Math.max(0.012, depth * 0.09);
+    const horizontalLip = new THREE.Mesh(
+      new THREE.BoxGeometry(size * 0.78, lipHeight, lipWidth),
+      material.clone(),
+    );
+    horizontalLip.position.set(size * 0.56, plateThickness + lipHeight / 2, depth / 2 - lipWidth / 2);
+    const verticalLip = new THREE.Mesh(
+      new THREE.BoxGeometry(lipHeight, size * 0.78, lipWidth),
+      material.clone(),
+    );
+    verticalLip.position.set(plateThickness + lipHeight / 2, size * 0.56, depth / 2 - lipWidth / 2);
+    group.add(horizontal, vertical, gusset, horizontalLip, verticalLip);
+
+    const holeRadius = THREE.MathUtils.clamp(size * 0.115, 0.026, 0.075);
+    addSurfaceHole(
+      new THREE.Vector3(size * 0.61, plateThickness + 0.002, 0),
+      'y',
+      holeRadius,
+      1.42,
+    );
+    addSurfaceHole(
+      new THREE.Vector3(plateThickness + 0.002, size * 0.61, 0),
+      'x',
+      holeRadius,
+      1.42,
+    );
+    hitboxSize.set(size + 0.14, size + 0.14, depth + 0.18);
   } else if (item.kind === 'l_connector') {
     const size = THREE.MathUtils.clamp((item.width || 60) / SCENE_SCALE, 0.4, 1.2);
     const armWidth = Math.max(0.16, size * 0.3);
@@ -1967,30 +2058,38 @@ const createAccessoryObject = (item: DIYSceneItem, selected: boolean) => {
     addFrontHole(-size * 0.35, size * 0.28, faceZ, holeRadius);
     hitboxSize.set(size + 0.12, size + 0.12, plateThickness + 0.16);
   } else if (item.kind === 'hidden_connector') {
-    const length = THREE.MathUtils.clamp((item.width || 60) / SCENE_SCALE, 0.35, 1.2);
-    const faceHeight = THREE.MathUtils.clamp((item.height || 18) / SCENE_SCALE, 0.12, 0.35);
-    const depth = THREE.MathUtils.clamp((item.thickness || 12) / SCENE_SCALE, 0.08, 0.25);
-    const insert = new THREE.Mesh(new THREE.BoxGeometry(length, faceHeight, depth), material);
-    const guide = new THREE.Mesh(new THREE.BoxGeometry(length * 0.74, faceHeight * 0.36, depth + 0.018), steel);
-    guide.position.y = -faceHeight * 0.12;
-    group.add(insert, guide);
-    // This hidden connector intentionally has one fastening hole on each face.
-    addFrontHole(0, faceHeight * 0.12, depth / 2 + 0.012, Math.min(0.06, faceHeight * 0.28));
-    const rearHole = new THREE.Mesh(
-      new THREE.CircleGeometry(Math.min(0.06, faceHeight * 0.28), 24),
-      new THREE.MeshBasicMaterial({
-        color: '#1f2937',
-        side: THREE.DoubleSide,
-        depthTest: false,
-        depthWrite: false,
-      }),
+    // No.5 sits inside the profile grooves. It is a compact L-shaped casting,
+    // with one threaded opening and one grub/set screw on each arm.
+    const length = THREE.MathUtils.clamp((item.width || 25) / SCENE_SCALE, 0.24, 0.72);
+    const armWidth = THREE.MathUtils.clamp((item.height || 10) / SCENE_SCALE, 0.09, 0.22);
+    const depth = THREE.MathUtils.clamp((item.thickness || 5) / SCENE_SCALE, 0.045, 0.13);
+    const horizontal = new THREE.Mesh(new THREE.BoxGeometry(length, armWidth, depth), material);
+    const vertical = new THREE.Mesh(new THREE.BoxGeometry(armWidth, length, depth), material.clone());
+    horizontal.position.set(length / 2 - armWidth / 2, 0, 0);
+    vertical.position.set(0, length / 2 - armWidth / 2, 0);
+
+    const ridgeHeight = Math.max(0.018, depth * 0.26);
+    const ridgeWidth = Math.max(0.014, armWidth * 0.18);
+    const horizontalRidge = new THREE.Mesh(
+      new THREE.BoxGeometry(length * 0.8, ridgeWidth, ridgeHeight),
+      steel,
     );
-    rearHole.position.set(0, faceHeight * 0.12, -depth / 2 - 0.012);
-    rearHole.rotation.y = Math.PI;
-    rearHole.userData.accessoryDecoration = true;
-    rearHole.renderOrder = 105;
-    group.add(rearHole);
-    hitboxSize.set(length + 0.14, faceHeight + 0.16, depth + 0.16);
+    horizontalRidge.position.set(length * 0.52, armWidth * 0.34, depth / 2 + ridgeHeight / 2);
+    const verticalRidge = new THREE.Mesh(
+      new THREE.BoxGeometry(ridgeWidth, length * 0.8, ridgeHeight),
+      steel,
+    );
+    verticalRidge.position.set(armWidth * 0.34, length * 0.52, depth / 2 + ridgeHeight / 2);
+    group.add(horizontal, vertical, horizontalRidge, verticalRidge);
+
+    const holeRadius = THREE.MathUtils.clamp(armWidth * 0.24, 0.022, 0.05);
+    const horizontalHoleX = length * 0.58;
+    const verticalHoleY = length * 0.58;
+    addSurfaceHole(new THREE.Vector3(horizontalHoleX, 0, depth / 2 + 0.003), 'z', holeRadius);
+    addSurfaceHole(new THREE.Vector3(0, verticalHoleY, depth / 2 + 0.003), 'z', holeRadius);
+    addSetScrew(horizontalHoleX, 0, depth / 2 + 0.004, holeRadius);
+    addSetScrew(0, verticalHoleY, depth / 2 + 0.004, holeRadius);
+    hitboxSize.set(length + 0.14, length + 0.14, depth + ridgeHeight + 0.16);
   } else if (item.kind === 'screw') {
     const screwLength = THREE.MathUtils.clamp((item.height || 35) / SCENE_SCALE, 0.16, 1.2);
     const shaftRadius = THREE.MathUtils.clamp((item.width || 12) / SCENE_SCALE * 0.28, 0.025, 0.07);
@@ -4545,8 +4644,8 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({ language, user, onAddBatchToC
                   {selected.kind === 'connector' && (
                     <NumberField
                       label={t.bracketSize}
-                      value={selected.width || 40}
-                      min={25}
+                      value={selected.width || 20}
+                      min={20}
                       max={90}
                       onChange={(value) => updateSelected({ width: value, height: value })}
                     />
@@ -4564,9 +4663,9 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({ language, user, onAddBatchToC
                     <>
                       <NumberField
                         label={t.connectorLength}
-                        value={selected.width || 60}
-                        min={35}
-                        max={120}
+                        value={selected.width || 25}
+                        min={20}
+                        max={60}
                         onChange={(value) => updateSelected({ width: value })}
                       />
                       <p className="mt-2 rounded-xl bg-blue-50 px-3 py-2 text-[10px] font-bold leading-relaxed text-blue-700">{t.oneHoleFaceHint}</p>

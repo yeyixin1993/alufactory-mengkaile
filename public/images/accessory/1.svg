@@ -1,20 +1,23 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 300" role="img" aria-labelledby="title desc">
-  <title id="title">1号角码连接件</title>
-  <desc id="desc">带四个安装孔的直角角码示意图</desc>
+  <title id="title">1号压铸角码连接件</title>
+  <desc id="desc">带三角加强筋和两面安装槽的压铸直角角码</desc>
   <defs>
-    <linearGradient id="metal" x1="0" x2="1" y1="0" y2="1">
-      <stop offset="0" stop-color="#f8fafc"/><stop offset=".48" stop-color="#aeb9c4"/><stop offset="1" stop-color="#64748b"/>
-    </linearGradient>
-    <filter id="shadow"><feDropShadow dx="0" dy="8" stdDeviation="7" flood-opacity=".18"/></filter>
+    <linearGradient id="top" x1="0" x2="1" y1="0" y2="1"><stop offset="0" stop-color="#f8fafc"/><stop offset=".5" stop-color="#d3dbe3"/><stop offset="1" stop-color="#8b98a6"/></linearGradient>
+    <linearGradient id="side" x1="0" x2="1"><stop offset="0" stop-color="#aab6c2"/><stop offset="1" stop-color="#657384"/></linearGradient>
+    <filter id="shadow"><feDropShadow dx="0" dy="9" stdDeviation="8" flood-opacity=".2"/></filter>
   </defs>
   <rect width="400" height="300" rx="28" fill="#f8fafc"/>
   <g filter="url(#shadow)" stroke="#64748b" stroke-width="4" stroke-linejoin="round">
-    <path d="M92 214h214v-54H146V70H92z" fill="url(#metal)"/>
-    <path d="M146 70l34 24v66h126l-28-22h-98V94z" fill="#dbe3ea"/>
-    <g fill="#334155" stroke="#f8fafc" stroke-width="5">
-      <circle cx="121" cy="111" r="13"/><circle cx="121" cy="169" r="13"/>
-      <circle cx="202" cy="187" r="13"/><circle cx="263" cy="187" r="13"/>
-    </g>
+    <path d="M66 192 188 72l148 56-124 124z" fill="url(#top)"/>
+    <path d="M66 192v31l146 47v-18z" fill="url(#side)"/>
+    <path d="M212 252v18l124-122v-20z" fill="#7d8997"/>
+    <path d="m126 201 62-70 68 28-44 93z" fill="#9aa7b4"/>
   </g>
-  <g transform="translate(318 24)"><rect width="56" height="44" rx="14" fill="#2563eb"/><text x="28" y="30" text-anchor="middle" fill="white" font-family="Arial,sans-serif" font-size="24" font-weight="700">1</text></g>
+  <g fill="#263341" stroke="#eef2f6" stroke-width="5">
+    <ellipse cx="129" cy="174" rx="27" ry="14" transform="rotate(-21 129 174)"/>
+    <ellipse cx="265" cy="142" rx="26" ry="13" transform="rotate(20 265 142)"/>
+  </g>
+  <g fill="none" stroke="#eef2f6" stroke-width="5" stroke-linecap="round">
+    <path d="m80 201 112 36"/><path d="m221 239 99-96"/>
+  </g>
 </svg>
