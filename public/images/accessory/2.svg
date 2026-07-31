@@ -1,12 +1,22 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 300" role="img" aria-labelledby="title desc">
   <title id="title">2号挤压角码</title>
-  <desc id="desc">两面各一个安装孔的均匀挤压直角角码</desc>
-  <defs><linearGradient id="m" x1="0" x2="1" y1="0" y2="1"><stop offset="0" stop-color="#f8fafc"/><stop offset=".52" stop-color="#c7d0d9"/><stop offset="1" stop-color="#718096"/></linearGradient><filter id="s"><feDropShadow dx="0" dy="9" stdDeviation="8" flood-opacity=".2"/></filter></defs>
+  <desc id="desc">带连续加强肋和两面安装孔的挤压直角角码</desc>
+  <defs>
+    <linearGradient id="top" x1="0" x2="1" y1="0" y2="1"><stop offset="0" stop-color="#ffffff"/><stop offset=".5" stop-color="#d7dee6"/><stop offset="1" stop-color="#8b98a6"/></linearGradient>
+    <linearGradient id="side" x1="0" x2=".9" y1="0" y2="1"><stop offset="0" stop-color="#dfe6ed"/><stop offset="1" stop-color="#6f7d8c"/></linearGradient>
+    <filter id="shadow"><feDropShadow dx="0" dy="9" stdDeviation="8" flood-opacity=".2"/></filter>
+  </defs>
   <rect width="400" height="300" rx="28" fill="#f8fafc"/>
-  <g filter="url(#s)" stroke="#64748b" stroke-width="5" stroke-linejoin="round">
-    <path d="M82 211 197 72l58 20-90 109z" fill="url(#m)"/>
-    <path d="m165 201 90-109 76 30-116 139z" fill="#9aa7b4"/>
-    <path d="M82 211v25l133 43v-18z" fill="#758394"/>
+  <g filter="url(#shadow)" stroke="#64748b" stroke-width="4" stroke-linejoin="round">
+    <path d="M70 211 206 159l124 39-137 56z" fill="url(#top)"/>
+    <path d="M193 254 330 198v22l-137 58z" fill="#758394"/>
+    <path d="M206 159V55l124 38v105z" fill="url(#side)"/>
+    <path d="m112 196 94-37V91z" fill="#aeb9c4"/>
+    <path d="m122 202 84-33 75 23-86 35z" fill="#c8d1da"/>
+    <path d="m216 163 1-86 16 5-1 86z" fill="#eef2f6"/>
   </g>
-  <g fill="#263341" stroke="#f8fafc" stroke-width="6"><ellipse cx="144" cy="166" rx="19" ry="14"/><ellipse cx="247" cy="151" rx="19" ry="14"/></g>
+  <g fill="#263341" stroke="#f8fafc" stroke-width="6">
+    <ellipse cx="164" cy="207" rx="18" ry="12"/>
+    <ellipse cx="272" cy="129" rx="13" ry="18" transform="rotate(-15 272 129)"/>
+  </g>
 </svg>

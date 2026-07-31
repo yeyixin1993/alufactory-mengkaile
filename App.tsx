@@ -1343,7 +1343,7 @@ const Cart: React.FC<{
                           '5': '/images/accessory/5.svg',
                           '7': '/images/accessory/7.jpg',
                           '7L': '/images/accessory/7L.svg',
-                          '7T': '/images/accessory/7T.jpg',
+                          '7T': '/images/accessory/7T.svg',
                           '8': '/images/accessory/8.jpg',
                           '9': '/images/accessory/9.svg',
                           '10': '/images/accessory/10.jpg',

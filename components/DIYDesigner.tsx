@@ -66,6 +66,7 @@ type DIYItemKind =
   | 'connector'
   | 'extruded_connector'
   | 'l_connector'
+  | 't_connector'
   | 'hidden_connector'
   | 'tee_connector'
   | 'screw'
@@ -75,7 +76,7 @@ type Vec3 = [number, number, number];
 type RotationAxisIndex = 0 | 1 | 2;
 type DIYScrewHead = 'socket_cylinder' | 'button_socket';
 type DIYAccessoryProfileSize = '1515' | '2020' | '3030' | '4040';
-type DIYConnectionKind = 'connector' | 'extruded_connector' | 'hidden_connector' | 'l_connector' | 'tee_connector';
+type DIYConnectionKind = 'connector' | 'extruded_connector' | 'hidden_connector' | 'l_connector' | 't_connector' | 'tee_connector';
 
 interface DIYSceneItem {
   id: string;
@@ -162,8 +163,9 @@ const TEXT: Record<Language, Record<string, string>> = {
     connector: '1号角码连接件',
     extrudedConnector: '2号挤压角码',
     lConnector: '7号L型连接板',
+    tConnector: '7号T型连接板',
     hiddenConnector: '5号隐藏角码（单孔面）',
-    teeConnector: '9号三通连接板',
+    teeConnector: '9号三维连接件',
     screw: '内六角螺丝',
     socketCylinderScrew: '圆柱头内六角螺丝',
     buttonSocketScrew: '半圆头内六角螺丝',
@@ -282,8 +284,9 @@ const TEXT: Record<Language, Record<string, string>> = {
     connector: 'No.1 corner bracket',
     extrudedConnector: 'No.2 extruded bracket',
     lConnector: 'No.7 L connecting plate',
+    tConnector: 'No.7 T connecting plate',
     hiddenConnector: 'No.5 hidden bracket (one-hole face)',
-    teeConnector: 'No.9 tee connector',
+    teeConnector: 'No.9 three-way connector',
     screw: 'Socket-head screw',
     socketCylinderScrew: 'Socket cylinder-head screw',
     buttonSocketScrew: 'Button-head socket screw',
@@ -402,8 +405,9 @@ const TEXT: Record<Language, Record<string, string>> = {
     connector: '1番コーナーブラケット',
     extrudedConnector: '2番押出コーナーブラケット',
     lConnector: '7番L型連結プレート',
+    tConnector: '7番T型連結プレート',
     hiddenConnector: '5番隠しブラケット（片面1穴）',
-    teeConnector: '9番T型連結プレート',
+    teeConnector: '9番三方向コネクタ',
     screw: '六角穴付きボルト',
     socketCylinderScrew: '六角穴付き円筒頭ボルト',
     buttonSocketScrew: '六角穴付きボタンボルト',
@@ -674,6 +678,12 @@ const ACCESSORY_PRICES: Record<DIYConnectionKind, Partial<Record<DIYAccessoryPro
     '3030': { natural: 4.5, colored: 5, naturalBulk: 3.5, coloredBulk: 4 },
     '4040': { natural: 6, colored: 8, naturalBulk: 4.5, coloredBulk: 6 },
   },
+  t_connector: {
+    '1515': { natural: 3, colored: 3.5, naturalBulk: 2.5, coloredBulk: 3 },
+    '2020': { natural: 3, colored: 3.5, naturalBulk: 2.5, coloredBulk: 3 },
+    '3030': { natural: 4.5, colored: 5, naturalBulk: 3.5, coloredBulk: 4 },
+    '4040': { natural: 6, colored: 8, naturalBulk: 4.5, coloredBulk: 6 },
+  },
   tee_connector: {
     '1515': { natural: 3, colored: 4, naturalBulk: 2.5, coloredBulk: 3 },
     '2020': { natural: 4, colored: 5, naturalBulk: 3.5, coloredBulk: 4 },
@@ -686,6 +696,7 @@ const isConnectionAccessoryKind = (kind: DIYItemKind): kind is DIYConnectionKind
   || kind === 'extruded_connector'
   || kind === 'hidden_connector'
   || kind === 'l_connector'
+  || kind === 't_connector'
   || kind === 'tee_connector'
 );
 
@@ -699,7 +710,7 @@ const getAccessoryDimensions = (kind: DIYConnectionKind, profileSeries: DIYAcces
     return { width: moduleSize, height: moduleSize, thickness: Math.max(3.2, moduleSize * 0.16) };
   }
   if (kind === 'extruded_connector') {
-    return { width: moduleSize * 1.4, height: moduleSize * 1.4, thickness: Math.max(3, moduleSize * 0.15) };
+    return { width: moduleSize, height: moduleSize, thickness: Math.max(3, moduleSize * 0.15) };
   }
   if (kind === 'hidden_connector') {
     return { width: moduleSize * 1.25, height: moduleSize * 0.5, thickness: moduleSize * 0.25 };
@@ -707,7 +718,10 @@ const getAccessoryDimensions = (kind: DIYConnectionKind, profileSeries: DIYAcces
   if (kind === 'l_connector') {
     return { width: moduleSize * 3, height: moduleSize * 3, thickness: Math.max(3, moduleSize * 0.15) };
   }
-  return { width: moduleSize * 3, height: moduleSize * 2.2, thickness: Math.max(3, moduleSize * 0.15) };
+  if (kind === 't_connector') {
+    return { width: moduleSize * 3, height: moduleSize * 3.25, thickness: Math.max(3, moduleSize * 0.15) };
+  }
+  return { width: moduleSize * 1.5, height: moduleSize * 1.5, thickness: moduleSize };
 };
 
 const getStandardAccessoryUnitPrice = (item: DIYSceneItem) => {
@@ -757,7 +771,7 @@ const createItem = (kind: DIYItemKind, index = 0, variantId?: string): DIYSceneI
       remark: '',
     };
   }
-  const accessoryDefaults: Record<'connector' | 'extruded_connector' | 'l_connector' | 'hidden_connector' | 'tee_connector' | 'screw' | 'foot', {
+  const accessoryDefaults: Record<'connector' | 'extruded_connector' | 'l_connector' | 't_connector' | 'hidden_connector' | 'tee_connector' | 'screw' | 'foot', {
     name: string;
     colorId: string;
     width: number;
@@ -789,6 +803,14 @@ const createItem = (kind: DIYItemKind, index = 0, variantId?: string): DIYSceneI
       thickness: 4,
       price: 3,
     },
+    t_connector: {
+      name: 'No.7 T connecting plate',
+      colorId: 'silver',
+      width: 60,
+      height: 65,
+      thickness: 3,
+      price: 3,
+    },
     hidden_connector: {
       name: 'No.5 hidden bracket',
       colorId: 'silver',
@@ -798,11 +820,11 @@ const createItem = (kind: DIYItemKind, index = 0, variantId?: string): DIYSceneI
       price: 1,
     },
     tee_connector: {
-      name: 'No.9 tee connector',
+      name: 'No.9 three-way connector',
       colorId: 'silver',
-      width: 60,
-      height: 44,
-      thickness: 3,
+      width: 30,
+      height: 30,
+      thickness: 20,
       price: 4,
     },
     screw: {
@@ -2147,20 +2169,48 @@ const createAccessoryObject = (item: DIYSceneItem, selected: boolean) => {
     );
     hitboxSize.set(size + 0.14, size + 0.14, depth + 0.18);
   } else if (item.kind === 'extruded_connector') {
-    // No.2 is cut from a continuous extruded angle: uniform orthogonal legs,
-    // no cast gusset, and one mounting hole through each leg.
+    // No.2 follows the continuous A6063 extrusion: two orthogonal mounting
+    // faces, longitudinal edge ribs and the characteristic triangular web.
     const size = THREE.MathUtils.clamp((item.width || 28) / SCENE_SCALE, 0.2, 1.1);
     const profileModule = Number((item.accessoryProfileSize || '2020').slice(0, 2)) / SCENE_SCALE;
     const plateThickness = THREE.MathUtils.clamp((item.thickness || 3) / SCENE_SCALE, 0.03, 0.1);
-    const depth = THREE.MathUtils.clamp(profileModule * 0.72, 0.1, 0.32);
+    const depth = THREE.MathUtils.clamp(profileModule * 0.72, 0.1, 0.38);
     const horizontal = new THREE.Mesh(new THREE.BoxGeometry(size, plateThickness, depth), material);
     const vertical = new THREE.Mesh(new THREE.BoxGeometry(plateThickness, size, depth), material.clone());
     horizontal.position.set(size / 2, plateThickness / 2, 0);
     vertical.position.set(plateThickness / 2, size / 2, 0);
-    group.add(horizontal, vertical);
+    const webShape = new THREE.Shape();
+    webShape.moveTo(plateThickness, plateThickness);
+    webShape.lineTo(size * 0.78, plateThickness);
+    webShape.lineTo(plateThickness, size * 0.78);
+    webShape.closePath();
+    const web = new THREE.Mesh(
+      new THREE.ExtrudeGeometry(webShape, {
+        depth: Math.max(plateThickness * 0.7, 0.022),
+        bevelEnabled: true,
+        bevelSegments: 2,
+        bevelSize: Math.min(0.012, plateThickness * 0.25),
+        bevelThickness: Math.min(0.008, plateThickness * 0.2),
+      }),
+      material.clone(),
+    );
+    web.position.z = -Math.max(plateThickness * 0.7, 0.022) / 2;
+
+    const ribSize = Math.max(0.014, plateThickness * 0.42);
+    const horizontalRib = new THREE.Mesh(
+      new THREE.BoxGeometry(size * 0.88, ribSize, depth),
+      material.clone(),
+    );
+    horizontalRib.position.set(size * 0.54, plateThickness + ribSize / 2, 0);
+    const verticalRib = new THREE.Mesh(
+      new THREE.BoxGeometry(ribSize, size * 0.88, depth),
+      material.clone(),
+    );
+    verticalRib.position.set(plateThickness + ribSize / 2, size * 0.54, 0);
+    group.add(horizontal, vertical, web, horizontalRib, verticalRib);
     const holeRadius = THREE.MathUtils.clamp(profileModule * 0.14, 0.02, 0.06);
-    addSurfaceHole(new THREE.Vector3(size * 0.58, plateThickness + 0.002, 0), 'y', holeRadius);
-    addSurfaceHole(new THREE.Vector3(plateThickness + 0.002, size * 0.58, 0), 'x', holeRadius);
+    addSurfaceHole(new THREE.Vector3(size * 0.55, plateThickness + ribSize + 0.003, 0), 'y', holeRadius, 1.12);
+    addSurfaceHole(new THREE.Vector3(plateThickness + ribSize + 0.003, size * 0.55, 0), 'x', holeRadius, 1.12);
     hitboxSize.set(size + 0.14, size + 0.14, depth + 0.16);
   } else if (item.kind === 'l_connector') {
     const size = THREE.MathUtils.clamp((item.width || 60) / SCENE_SCALE, 0.4, 1.2);
@@ -2178,6 +2228,26 @@ const createAccessoryObject = (item: DIYSceneItem, selected: boolean) => {
     addFrontHole(-size * 0.35, -size * 0.02, faceZ, holeRadius);
     addFrontHole(-size * 0.35, size * 0.28, faceZ, holeRadius);
     hitboxSize.set(size + 0.12, size + 0.12, plateThickness + 0.16);
+  } else if (item.kind === 't_connector') {
+    // No.7 T plate is a flat four-hole profile joining plate. It is distinct
+    // from No.9, which is a three-dimensional internal corner connector.
+    const width = THREE.MathUtils.clamp((item.width || 60) / SCENE_SCALE, 0.4, 1.45);
+    const height = THREE.MathUtils.clamp((item.height || 65) / SCENE_SCALE, 0.42, 1.55);
+    const profileModule = Number((item.accessoryProfileSize || '2020').slice(0, 2)) / SCENE_SCALE;
+    const armWidth = THREE.MathUtils.clamp(profileModule * 0.9, 0.12, 0.38);
+    const plateThickness = THREE.MathUtils.clamp((item.thickness || 3) / SCENE_SCALE, 0.03, 0.12);
+    const crossbar = new THREE.Mesh(new THREE.BoxGeometry(width, armWidth, plateThickness), material);
+    const stem = new THREE.Mesh(new THREE.BoxGeometry(armWidth, height, plateThickness), material.clone());
+    crossbar.position.y = -height / 2 + armWidth / 2;
+    stem.position.y = 0;
+    group.add(crossbar, stem);
+    const faceZ = plateThickness / 2 + 0.008;
+    const holeRadius = THREE.MathUtils.clamp(profileModule * 0.13, 0.02, 0.065);
+    addFrontHole(-width * 0.31, crossbar.position.y, faceZ, holeRadius);
+    addFrontHole(width * 0.31, crossbar.position.y, faceZ, holeRadius);
+    addFrontHole(0, height * 0.04, faceZ, holeRadius);
+    addFrontHole(0, height * 0.34, faceZ, holeRadius);
+    hitboxSize.set(width + 0.14, height + 0.14, plateThickness + 0.16);
   } else if (item.kind === 'hidden_connector') {
     // No.5 sits inside the profile grooves. It is a compact L-shaped casting,
     // with one threaded opening and one grub/set screw on each arm.
@@ -2212,24 +2282,41 @@ const createAccessoryObject = (item: DIYSceneItem, selected: boolean) => {
     addSetScrew(0, verticalHoleY, depth / 2 + 0.004, holeRadius);
     hitboxSize.set(length + 0.14, length + 0.14, depth + ridgeHeight + 0.16);
   } else if (item.kind === 'tee_connector') {
-    // No.9 is the flat three-way/T joining plate used where three profiles meet.
-    const width = THREE.MathUtils.clamp((item.width || 60) / SCENE_SCALE, 0.4, 1.25);
-    const height = THREE.MathUtils.clamp((item.height || 44) / SCENE_SCALE, 0.3, 1);
+    // No.9 is the compact three-dimensional connector fitted into the ends of
+    // three profiles meeting on mutually perpendicular axes.
     const profileModule = Number((item.accessoryProfileSize || '2020').slice(0, 2)) / SCENE_SCALE;
-    const armWidth = THREE.MathUtils.clamp(profileModule * 0.82, 0.12, 0.3);
-    const plateThickness = THREE.MathUtils.clamp((item.thickness || 3) / SCENE_SCALE, 0.03, 0.1);
-    const crossbar = new THREE.Mesh(new THREE.BoxGeometry(width, armWidth, plateThickness), material);
-    const stem = new THREE.Mesh(new THREE.BoxGeometry(armWidth, height, plateThickness), material.clone());
-    crossbar.position.y = height / 2 - armWidth / 2;
-    group.add(crossbar, stem);
-    const faceZ = plateThickness / 2 + 0.008;
+    const coreSize = THREE.MathUtils.clamp(profileModule * 0.9, 0.13, 0.34);
+    const armLength = THREE.MathUtils.clamp(profileModule * 0.72, 0.11, 0.28);
+    const armWidth = THREE.MathUtils.clamp(profileModule * 0.46, 0.07, 0.18);
+    const armThickness = THREE.MathUtils.clamp(profileModule * 0.25, 0.04, 0.1);
+    const core = new THREE.Mesh(new THREE.BoxGeometry(coreSize, coreSize, coreSize), material);
+    const armX = new THREE.Mesh(new THREE.BoxGeometry(armLength, armWidth, armThickness), material.clone());
+    const armY = new THREE.Mesh(new THREE.BoxGeometry(armWidth, armLength, armThickness), material.clone());
+    const armZ = new THREE.Mesh(new THREE.BoxGeometry(armWidth, armThickness, armLength), material.clone());
+    armX.position.x = coreSize / 2 + armLength / 2;
+    armY.position.y = -(coreSize / 2 + armLength / 2);
+    armZ.position.z = coreSize / 2 + armLength / 2;
+    group.add(core, armX, armY, armZ);
+
+    const ridge = Math.max(0.012, armThickness * 0.26);
+    const ridgeX = new THREE.Mesh(new THREE.BoxGeometry(armLength * 0.9, ridge, ridge), steel);
+    ridgeX.position.set(armX.position.x, armWidth * 0.3, armThickness / 2 + ridge / 2);
+    const ridgeY = new THREE.Mesh(new THREE.BoxGeometry(ridge, armLength * 0.9, ridge), steel);
+    ridgeY.position.set(armWidth * 0.3, armY.position.y, armThickness / 2 + ridge / 2);
+    const ridgeZ = new THREE.Mesh(new THREE.BoxGeometry(ridge, ridge, armLength * 0.9), steel);
+    ridgeZ.position.set(armWidth * 0.3, armThickness / 2 + ridge / 2, armZ.position.z);
+    group.add(ridgeX, ridgeY, ridgeZ);
+
     const holeRadius = THREE.MathUtils.clamp(profileModule * 0.13, 0.02, 0.055);
-    addFrontHole(-width * 0.34, crossbar.position.y, faceZ, holeRadius);
-    addFrontHole(0, crossbar.position.y, faceZ, holeRadius);
-    addFrontHole(width * 0.34, crossbar.position.y, faceZ, holeRadius);
-    addFrontHole(0, height * 0.04, faceZ, holeRadius);
-    addFrontHole(0, -height * 0.31, faceZ, holeRadius);
-    hitboxSize.set(width + 0.14, height + 0.14, plateThickness + 0.16);
+    const holeOffset = armLength * 0.2;
+    addSurfaceHole(new THREE.Vector3(armX.position.x - holeOffset, 0, armThickness / 2 + 0.004), 'z', holeRadius);
+    addSurfaceHole(new THREE.Vector3(armX.position.x + holeOffset, 0, armThickness / 2 + 0.004), 'z', holeRadius);
+    addSurfaceHole(new THREE.Vector3(0, armY.position.y - holeOffset, armThickness / 2 + 0.004), 'z', holeRadius);
+    addSurfaceHole(new THREE.Vector3(0, armY.position.y + holeOffset, armThickness / 2 + 0.004), 'z', holeRadius);
+    addSurfaceHole(new THREE.Vector3(armWidth / 2 + 0.004, 0, armZ.position.z - holeOffset), 'x', holeRadius);
+    addSurfaceHole(new THREE.Vector3(armWidth / 2 + 0.004, 0, armZ.position.z + holeOffset), 'x', holeRadius);
+    const reach = coreSize + armLength;
+    hitboxSize.set(reach + 0.14, reach + 0.14, reach + 0.14);
   } else if (item.kind === 'screw') {
     const screwLength = THREE.MathUtils.clamp((item.height || 35) / SCENE_SCALE, 0.16, 1.2);
     const shaftRadius = THREE.MathUtils.clamp((item.width || 12) / SCENE_SCALE * 0.28, 0.025, 0.07);
@@ -3897,6 +3984,7 @@ const getItemLabel = (item: DIYSceneItem, language: Language) => {
   if (item.kind === 'connector') return `${t.connector} · ${item.accessoryProfileSize || '2020'}`;
   if (item.kind === 'extruded_connector') return `${t.extrudedConnector} · ${item.accessoryProfileSize || '2020'}`;
   if (item.kind === 'l_connector') return `${t.lConnector} · ${item.accessoryProfileSize || '2020'}`;
+  if (item.kind === 't_connector') return `${t.tConnector} · ${item.accessoryProfileSize || '2020'}`;
   if (item.kind === 'hidden_connector') return `${t.hiddenConnector} · ${item.accessoryProfileSize || '2020'}`;
   if (item.kind === 'tee_connector') return `${t.teeConnector} · ${item.accessoryProfileSize || '2020'}`;
   if (item.kind === 'screw') {
@@ -4347,6 +4435,7 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({ language, user, onAddBatchToC
         connector: { id: '1', code: 1, label: t.connector, imageKey: '1' },
         extruded_connector: { id: '2', code: 2, label: t.extrudedConnector, imageKey: '2' },
         l_connector: { id: '7L', code: 7, label: t.lConnector, imageKey: '7L' },
+        t_connector: { id: '7T', code: 7, label: t.tConnector, imageKey: '7T' },
         hidden_connector: { id: '5', code: 5, label: t.hiddenConnector, imageKey: '5' },
         tee_connector: { id: '9', code: 9, label: t.teeConnector, imageKey: '9' },
         screw: item.screwHead === 'button_socket'
@@ -4355,7 +4444,7 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({ language, user, onAddBatchToC
             ? { id: 'diy-socket-cylinder-screw', code: 3, label: t.socketCylinderScrew, imageKey: '3' }
             : { id: 'diy-socket-head-screw', code: 3, label: t.screw, imageKey: '3' },
         foot: { id: 'diy-leveling-foot', code: 8, label: t.foot, imageKey: '8' },
-      }[item.kind as 'connector' | 'extruded_connector' | 'l_connector' | 'hidden_connector' | 'tee_connector' | 'screw' | 'foot'];
+      }[item.kind as 'connector' | 'extruded_connector' | 'l_connector' | 't_connector' | 'hidden_connector' | 'tee_connector' | 'screw' | 'foot'];
       const accessoryId = accessoryDefinition.id;
       const unitPrice = Number((totalPrice / Math.max(1, item.quantity)).toFixed(2));
       return {
@@ -4473,11 +4562,11 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({ language, user, onAddBatchToC
         { kind: 'extruded_connector' as const, label: t.extrudedConnector, icon: Wrench },
         { kind: 'hidden_connector' as const, label: t.hiddenConnector, icon: Box },
         { kind: 'l_connector' as const, label: t.lConnector, icon: PanelTop },
+        { kind: 't_connector' as const, label: t.tConnector, icon: PanelTop },
         { kind: 'tee_connector' as const, label: t.teeConnector, icon: PanelTop },
-        { kind: 'screw' as const, label: t.screw, icon: CircleDot },
       ].filter((entry) => !isConnectionAccessoryKind(entry.kind) || Boolean(ACCESSORY_PRICES[entry.kind][selectedAccessoryProfileSize])),
     },
-    // 调平脚暂时从零件库隐藏；旧设计中已有的调平脚仍可显示、编辑和下单。
+    // 调平脚和内六角螺丝暂时从零件库隐藏；旧设计中已有的项目仍兼容。
   ];
 
   return (
@@ -4493,14 +4582,7 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({ language, user, onAddBatchToC
             <button onClick={redo} disabled={!future.length} className="diy-toolbar-button" aria-label="Redo"><Redo2 className="h-4 w-4" /></button>
             <button onClick={() => setDrillMode(false)} className={`diy-toolbar-button gap-2 ${!drillMode ? 'diy-toolbar-active' : ''}`}><Move3D className="h-4 w-4" />{t.move}</button>
             <button data-testid="diy-toolbar-drill" onClick={openDrillSetup} className={`diy-toolbar-button gap-2 ${drillMode ? 'diy-toolbar-active' : ''}`}><CircleDot className="h-4 w-4" />{t.drillMode}</button>
-            <button
-              data-testid="diy-fill-screws"
-              onClick={fillScrews}
-              title={t.fillScrewsHint}
-              className="diy-toolbar-button gap-2"
-            >
-              <Wrench className="h-4 w-4" />{t.fillScrews}
-            </button>
+            {/* 内六角螺丝及一键填充入口暂时隐藏；保留底层数据兼容旧设计。 */}
             <button onClick={save} className="diy-toolbar-button gap-2"><Save className="h-4 w-4" />{t.save}</button>
             <button onClick={load} className="diy-toolbar-button gap-2"><Upload className="h-4 w-4" />{t.load}</button>
             <button onClick={exportJson} className="diy-toolbar-button gap-2"><Download className="h-4 w-4" />{t.export}</button>
