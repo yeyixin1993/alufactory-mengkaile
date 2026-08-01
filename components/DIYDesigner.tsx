@@ -60,6 +60,7 @@ import {
   physicalGrooveToDisplay,
 } from '../utils/profileMachining';
 import { buildProductionXlsx, parseProductionXlsx, type ProductionWorkbookData } from '../utils/productionXlsx';
+import { calculateProfileInnerClearance } from '../utils/diyGeometry';
 
 type DIYItemKind =
   | 'profile'
@@ -262,7 +263,9 @@ const TEXT: Record<Language, Record<string, string>> = {
     snapEnd: '磁吸：端点连接',
     snapSide: '磁吸：交叉连接',
     snapOffset: '磁吸：边缘对齐',
-    snapClearance: '边到边净空',
+    snapClearance: '可用内净空',
+    snapLeftSpace: '左侧空余',
+    snapRightSpace: '右侧空余',
     snapMode: '磁吸对齐',
     snapAuto: '自动',
     alignStart: '前一位',
@@ -411,7 +414,9 @@ const TEXT: Record<Language, Record<string, string>> = {
     snapEnd: 'Magnet: end connection',
     snapSide: 'Magnet: cross connection',
     snapOffset: 'Magnet: edge alignment',
-    snapClearance: 'Edge-to-edge clearance',
+    snapClearance: 'Usable inner clearance',
+    snapLeftSpace: 'Left clear space',
+    snapRightSpace: 'Right clear space',
     snapMode: 'Snap alignment',
     snapAuto: 'Auto',
     alignStart: 'Previous',
@@ -560,7 +565,9 @@ const TEXT: Record<Language, Record<string, string>> = {
     snapEnd: 'スナップ：端点接続',
     snapSide: 'スナップ：交差接続',
     snapOffset: 'スナップ：端揃え',
-    snapClearance: '端から端の内法',
+    snapClearance: '有効内寸',
+    snapLeftSpace: '左側余白',
+    snapRightSpace: '右側余白',
     snapMode: 'スナップ位置',
     snapAuto: '自動',
     alignStart: '前位置',
@@ -1638,6 +1645,7 @@ const profileEdgeClearances = (
   targetBox: ProfileBox,
   movingBox: ProfileBox,
   candidatePosition: THREE.Vector3,
+  reservePerpendicularEndModule: boolean,
 ) => {
   const targetAxis = targetBox.axes[0];
   const movingHalfExtentAlongTarget = movingBox.axes.reduce(
@@ -1645,20 +1653,15 @@ const profileEdgeClearances = (
     0,
   );
   const movingCenterAlongTarget = candidatePosition.clone().sub(targetBox.center).dot(targetAxis);
-  const movingNearEdge = movingCenterAlongTarget - movingHalfExtentAlongTarget;
-  const movingFarEdge = movingCenterAlongTarget + movingHalfExtentAlongTarget;
-  const targetLength = targetBox.halfSizes[0] * 2;
+  const clearance = calculateProfileInnerClearance(
+    targetBox.halfSizes[0],
+    movingCenterAlongTarget,
+    movingHalfExtentAlongTarget,
+    reservePerpendicularEndModule,
+  );
   return {
-    left: Math.round(THREE.MathUtils.clamp(
-      movingNearEdge + targetBox.halfSizes[0],
-      0,
-      targetLength,
-    ) * SCENE_SCALE),
-    right: Math.round(THREE.MathUtils.clamp(
-      targetBox.halfSizes[0] - movingFarEdge,
-      0,
-      targetLength,
-    ) * SCENE_SCALE),
+    left: Math.round(clearance.left * SCENE_SCALE),
+    right: Math.round(clearance.right * SCENE_SCALE),
   };
 };
 
@@ -1844,7 +1847,12 @@ const findMagneticProfileSnap = (
               const hasOffset = targetSlotAnchor.lengthSq() > 0.001
                 || movingSlotAnchor.lengthSq() > 0.001
                 || Math.abs(longitudinalOffset) > 0.001;
-              const targetEndDistances = profileEdgeClearances(targetBox, movingBox, candidatePosition);
+              const targetEndDistances = profileEdgeClearances(
+                targetBox,
+                movingBox,
+                candidatePosition,
+                perpendicularProfiles,
+              );
               best = {
                 priority,
                 distance,
@@ -2772,7 +2780,14 @@ const ThreeAssembly: React.FC<{
   selectedIds: string[];
   rotationLabels: [string, string, string];
   rotationMenuTitle: string;
-  snapLabels: { end: string; side: string; offset: string; clearance: string };
+  snapLabels: {
+    end: string;
+    side: string;
+    offset: string;
+    clearance: string;
+    leftSpace: string;
+    rightSpace: string;
+  };
   alignmentLabels: {
     title: string;
     auto: string;
@@ -3161,9 +3176,8 @@ const ThreeAssembly: React.FC<{
       };
     };
     const formatSnapHint = (snap: ProfileSnap) => {
-      const distanceLabels = drillEditorLabelsRef.current;
       const alignmentLabel = alignmentLabelsRef.current[snap.alignment];
-      return `${snapLabelsRef.current[snap.label]} · ${alignmentLabel} · ${alignmentLabelsRef.current.connectedTo} ${snap.targetName} ${snap.targetPort} · ${snapLabelsRef.current.clearance}: ${distanceLabels.left} ${snap.targetEndDistances.left}mm · ${distanceLabels.right} ${snap.targetEndDistances.right}mm`;
+      return `${snapLabelsRef.current[snap.label]} · ${alignmentLabel} · ${alignmentLabelsRef.current.connectedTo} ${snap.targetName} ${snap.targetPort} · ${snapLabelsRef.current.clearance}: ${snapLabelsRef.current.leftSpace} ${snap.targetEndDistances.left}mm · ${snapLabelsRef.current.rightSpace} ${snap.targetEndDistances.right}mm`;
     };
     const showSnapVisual = (snap: ProfileSnap, object: THREE.Group, item: DIYSceneItem) => {
       if (snapVisualHideTimer !== null) {
@@ -5267,7 +5281,14 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({ language, onLanguageChange, u
             selectedIds={selectedIds}
             rotationLabels={[t.rotateX, t.rotateY, t.rotateZ]}
             rotationMenuTitle={t.rotation}
-            snapLabels={{ end: t.snapEnd, side: t.snapSide, offset: t.snapOffset, clearance: t.snapClearance }}
+            snapLabels={{
+              end: t.snapEnd,
+              side: t.snapSide,
+              offset: t.snapOffset,
+              clearance: t.snapClearance,
+              leftSpace: t.snapLeftSpace,
+              rightSpace: t.snapRightSpace,
+            }}
             alignmentLabels={{
               title: t.snapMode,
               auto: t.snapAuto,
