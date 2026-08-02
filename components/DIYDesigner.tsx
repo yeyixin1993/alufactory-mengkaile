@@ -286,7 +286,7 @@ const TEXT: Record<Language, Record<string, string>> = {
     moveDistance: '平移距离',
     currentLength: '当前长度',
     duplicateMove: 'Shift 复制 + 平移',
-    duplicateMoveHint: '复制操作：先选中型材，按住 Shift，再拖动型材本体或平移箭头；松开后原型材保留，并在新位置生成复制件。点击弹窗外可关闭。',
+    duplicateMoveHint: '复制操作：按住 Shift 拖动型材本体或平移箭头；也可输入平移距离后，按住 Shift 点击“应用”。两种方式都会保留原型材，并在指定方向和距离生成复制件。点击弹窗外可关闭。',
     language: '语言',
     undo: '撤销',
     redo: '重做',
@@ -438,7 +438,7 @@ const TEXT: Record<Language, Record<string, string>> = {
     moveDistance: 'Move distance',
     currentLength: 'Current length',
     duplicateMove: 'Shift duplicate + move',
-    duplicateMoveHint: 'To duplicate: select a profile, hold Shift, then drag the profile body or a move arrow. Release to keep the original and create a copy at the new position. Click outside to close.',
+    duplicateMoveHint: 'To duplicate, hold Shift while dragging the profile body or a move arrow. You can also enter a distance, then hold Shift while clicking Apply. Both keep the original and create a copy in the chosen direction. Click outside to close.',
     language: 'Language',
     undo: 'Undo',
     redo: 'Redo',
@@ -590,7 +590,7 @@ const TEXT: Record<Language, Record<string, string>> = {
     moveDistance: '移動距離',
     currentLength: '現在の長さ',
     duplicateMove: 'Shift 複製 + 移動',
-    duplicateMoveHint: '複製するには、形材を選択して Shift を押したまま形材本体または移動矢印をドラッグします。離すと元の形材を残したまま、新しい位置に複製されます。外側をクリックすると閉じます。',
+    duplicateMoveHint: '複製するには、Shift を押しながら形材本体または移動矢印をドラッグします。距離を入力し、Shift を押しながら「適用」をクリックすることもできます。どちらも元の形材を残し、指定方向に複製します。外側をクリックすると閉じます。',
     language: '言語',
     undo: '元に戻す',
     redo: 'やり直す',
@@ -3004,7 +3004,7 @@ const ThreeAssembly: React.FC<{
     setHoleDraft(null);
   };
 
-  const applyOperationEditor = () => {
+  const applyOperationEditor = (duplicateMove = false) => {
     if (!operationEditor) return;
     const editor = operationEditor;
     // Close first so a parent item update cannot leave the floating editor
@@ -3048,6 +3048,8 @@ const ThreeAssembly: React.FC<{
             Math.round(position.z * SCENE_SCALE),
           ],
           item.rotation,
+          undefined,
+          duplicateMove && item.kind === 'profile',
         );
       }
     }
@@ -4224,6 +4226,8 @@ const ThreeAssembly: React.FC<{
           <div className="flex items-center gap-1.5">
             <input
               type="number"
+              aria-label={operationEditor.kind === 'length' ? operationLabels.length : operationLabels.move}
+              data-testid="diy-operation-value"
               value={operationEditor.valueMm}
               min={operationEditor.kind === 'length' ? 21 : undefined}
               max={operationEditor.kind === 'length' ? 3000 : undefined}
@@ -4233,7 +4237,7 @@ const ThreeAssembly: React.FC<{
                 valueMm: Number(event.target.value) || 0,
               } : current)}
               onKeyDown={(event) => {
-                if (event.key === 'Enter') applyOperationEditor();
+                if (event.key === 'Enter') applyOperationEditor(event.shiftKey);
                 if (event.key === 'Escape') setOperationEditor(null);
               }}
               className="min-w-0 flex-1 rounded-lg border border-blue-200 bg-blue-50 px-2 py-1.5 text-right text-xs font-black text-slate-900 outline-none focus:border-blue-500"
@@ -4241,7 +4245,8 @@ const ThreeAssembly: React.FC<{
             <span className="text-[10px] font-black text-slate-400">mm</span>
             <button
               type="button"
-              onClick={applyOperationEditor}
+              data-testid="diy-operation-apply"
+              onClick={(event) => applyOperationEditor(event.shiftKey)}
               className="rounded-lg bg-blue-600 px-2 py-1.5 text-[10px] font-black text-white hover:bg-blue-500"
             >
               {operationLabels.apply}
