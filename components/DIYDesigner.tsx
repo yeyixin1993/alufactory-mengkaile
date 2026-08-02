@@ -286,6 +286,7 @@ const TEXT: Record<Language, Record<string, string>> = {
     moveDistance: '平移距离',
     currentLength: '当前长度',
     duplicateMove: 'Shift 复制 + 平移',
+    duplicateMoveHint: '复制操作：先选中型材，按住 Shift，再拖动型材本体或平移箭头；松开后原型材保留，并在新位置生成复制件。点击弹窗外可关闭。',
     language: '语言',
     undo: '撤销',
     redo: '重做',
@@ -437,6 +438,7 @@ const TEXT: Record<Language, Record<string, string>> = {
     moveDistance: 'Move distance',
     currentLength: 'Current length',
     duplicateMove: 'Shift duplicate + move',
+    duplicateMoveHint: 'To duplicate: select a profile, hold Shift, then drag the profile body or a move arrow. Release to keep the original and create a copy at the new position. Click outside to close.',
     language: 'Language',
     undo: 'Undo',
     redo: 'Redo',
@@ -588,6 +590,7 @@ const TEXT: Record<Language, Record<string, string>> = {
     moveDistance: '移動距離',
     currentLength: '現在の長さ',
     duplicateMove: 'Shift 複製 + 移動',
+    duplicateMoveHint: '複製するには、形材を選択して Shift を押したまま形材本体または移動矢印をドラッグします。離すと元の形材を残したまま、新しい位置に複製されます。外側をクリックすると閉じます。',
     language: '言語',
     undo: '元に戻す',
     redo: 'やり直す',
@@ -2814,7 +2817,7 @@ const ThreeAssembly: React.FC<{
   };
   drillMode: boolean;
   drillEditorLabels: { position: string; left: string; right: string; confirm: string; cancel: string };
-  operationLabels: { length: string; move: string; duplicateMove: string; apply: string };
+  operationLabels: { length: string; move: string; duplicateMove: string; duplicateMoveHint: string; apply: string };
   onSelect: (id: string | null, additive?: boolean) => void;
   onSelectionChange: (ids: string[]) => void;
   onTransform: (
@@ -4137,6 +4140,9 @@ const ThreeAssembly: React.FC<{
     <div
       className="relative h-[52vh] min-h-[380px] max-h-[620px] w-full bg-[#eef3f8] sm:h-[62vh] xl:h-full xl:min-h-0 xl:max-h-none"
       data-testid="diy-assembly-viewport"
+      onPointerDown={() => {
+        if (operationEditor) setOperationEditor(null);
+      }}
     >
       <div ref={mountRef} className="absolute inset-0 overflow-hidden" data-testid="diy-3d-canvas" />
       {holeDraft && (
@@ -4199,7 +4205,7 @@ const ThreeAssembly: React.FC<{
       )}
       {operationEditor && (
         <div
-          className="absolute z-40 -translate-x-1/2 rounded-2xl border border-blue-200 bg-white/95 p-2 shadow-2xl backdrop-blur"
+          className="absolute z-40 w-[300px] -translate-x-1/2 rounded-2xl border border-blue-200 bg-white/95 p-3 shadow-2xl backdrop-blur"
           style={{ left: operationEditor.x, top: operationEditor.y }}
           onPointerDown={(event) => event.stopPropagation()}
         >
@@ -4221,16 +4227,9 @@ const ThreeAssembly: React.FC<{
                 if (event.key === 'Enter') applyOperationEditor();
                 if (event.key === 'Escape') setOperationEditor(null);
               }}
-              className="w-24 rounded-lg border border-blue-200 bg-blue-50 px-2 py-1.5 text-right text-xs font-black text-slate-900 outline-none focus:border-blue-500"
+              className="min-w-0 flex-1 rounded-lg border border-blue-200 bg-blue-50 px-2 py-1.5 text-right text-xs font-black text-slate-900 outline-none focus:border-blue-500"
             />
             <span className="text-[10px] font-black text-slate-400">mm</span>
-            <button
-              type="button"
-              onClick={() => setOperationEditor(null)}
-              className="rounded-lg border border-slate-200 px-2 py-1.5 text-[10px] font-black text-slate-500 hover:bg-slate-50"
-            >
-              {drillEditorLabels.cancel}
-            </button>
             <button
               type="button"
               onClick={applyOperationEditor}
@@ -4239,6 +4238,12 @@ const ThreeAssembly: React.FC<{
               {operationLabels.apply}
             </button>
           </div>
+          {operationEditor.kind === 'move' && (
+            <div className="mt-2 rounded-xl bg-blue-50 px-3 py-2 text-[10px] font-bold leading-relaxed text-blue-700">
+              <span className="mb-0.5 block font-black">{operationLabels.duplicateMove}</span>
+              {operationLabels.duplicateMoveHint}
+            </div>
+          )}
         </div>
       )}
       {selectionRect && (
@@ -5328,7 +5333,13 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({ language, onLanguageChange, u
               confirm: t.confirmHole,
               cancel: t.cancel,
             }}
-            operationLabels={{ length: t.currentLength, move: t.moveDistance, duplicateMove: t.duplicateMove, apply: t.apply }}
+            operationLabels={{
+              length: t.currentLength,
+              move: t.moveDistance,
+              duplicateMove: t.duplicateMove,
+              duplicateMoveHint: t.duplicateMoveHint,
+              apply: t.apply,
+            }}
             onSelect={selectItem}
             onSelectionChange={setSelection}
             onTransform={(id, position, rotation, placement, duplicate) => {
