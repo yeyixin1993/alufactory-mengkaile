@@ -3218,9 +3218,10 @@ const ThreeAssembly: React.FC<{
       releaseDistance: number,
       moving: THREE.Group,
       movingItem: DIYSceneItem,
+      collisionItems: DIYSceneItem[] = itemsRef.current,
     ) => {
       if (!lock || !pointerPositionAtSnap || rawPosition.distanceTo(pointerPositionAtSnap) > releaseDistance) return null;
-      if (profileCollides(moving, movingItem, lock.position, itemsRef.current, groupsRef.current)) return null;
+      if (profileCollides(moving, movingItem, lock.position, collisionItems, groupsRef.current)) return null;
       return lock;
     };
     const onObjectChange = () => {
@@ -3660,6 +3661,13 @@ const ThreeAssembly: React.FC<{
         const nextPosition = state.startPosition.clone().add(movement);
         state.object.position.copy(nextPosition);
         if (state.item.kind === 'profile') {
+          // A Shift-drag starts the prospective copy directly on top of its
+          // source. Ignore only that source while previewing the move so the
+          // copy can leave the initial overlap; the final commit still checks
+          // the finished copy against every profile.
+          const collisionItems = state.duplicateOnCommit
+            ? itemsRef.current.filter((item) => item.id !== state.item.id)
+            : itemsRef.current;
           const tolerances = getSnapTolerances(state.object.position);
           const retainedLock = retainSnapLock(
             state.snapLock || null,
@@ -3668,6 +3676,7 @@ const ThreeAssembly: React.FC<{
             tolerances.releaseDistance,
             state.object,
             state.collisionItem,
+            collisionItems,
           );
           if (state.snapLock && !retainedLock) {
             state.snapLock = null;
@@ -3681,7 +3690,7 @@ const ThreeAssembly: React.FC<{
             : findMagneticProfileSnap(
               state.object,
               state.collisionItem,
-              itemsRef.current,
+              collisionItems,
               groupsRef.current,
               tolerances.maxDistance,
               tolerances.planeTolerance,
@@ -3694,7 +3703,7 @@ const ThreeAssembly: React.FC<{
             nextPosition.copy(snap.position);
             state.object.position.copy(nextPosition);
             showSnapVisual(snap, state.object, state.item);
-          } else if (profileCollides(state.object, state.collisionItem, nextPosition, itemsRef.current, groupsRef.current)) {
+          } else if (profileCollides(state.object, state.collisionItem, nextPosition, collisionItems, groupsRef.current)) {
             state.snapLock = null;
             state.snapPointerPosition = null;
             state.object.position.copy(state.validPosition);
