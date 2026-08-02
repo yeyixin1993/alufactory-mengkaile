@@ -140,7 +140,7 @@ const getProfileFinishByRow = (row: ProfileRow): 'oxidized' | 'electrophoretic' 
   return row.section === 'natural' ? 'electrophoretic' : 'powder';
 };
 
-const calcProfileShippingByProvince = (province: string, totalWeightKg: number, hasOverlength: boolean) => {
+const calcCheapestShippingByProvince = (province: string, totalWeightKg: number, hasOverlength: boolean) => {
   const overlengthFee = hasOverlength ? 20 : 0;
 
   const standardRate = SHIPPING_RATES[province] || { first: 18, next: 5 };
@@ -260,28 +260,9 @@ const QuickQuote: React.FC<{ language: Language; user?: User | null }> = ({ lang
 
   const profileSummary = useMemo(() => {
     const itemTotal = round1(profileRowsCalculated.reduce((sum, x) => sum + x.subtotal, 0));
-    const totalWeightKg = round1(profileRowsCalculated.reduce((sum, x) => sum + x.totalWeightKg, 0));
-    const hasOverlength = profileRows.some((r) => r.length > 1500);
-
-    if (!selectedProvince || itemTotal <= 0) {
-      return {
-        itemTotal,
-        shippingFee: 0,
-        categoryTotal: itemTotal,
-        method: null as ShippingMethod | null,
-        totalWeightKg,
-      };
-    }
-
-    const shipping = calcProfileShippingByProvince(selectedProvince, totalWeightKg, hasOverlength);
-    return {
-      itemTotal,
-      shippingFee: shipping.fee,
-      categoryTotal: round1(itemTotal + shipping.fee),
-      method: shipping.method,
-      totalWeightKg,
-    };
-  }, [profileRows, profileRowsCalculated, selectedProvince]);
+    const totalWeightKg = profileRowsCalculated.reduce((sum, x) => sum + x.totalWeightKg, 0);
+    return { itemTotal, totalWeightKg };
+  }, [profileRowsCalculated]);
 
   const calcBoardRows = (
     rows: BoardRow[],
@@ -326,13 +307,31 @@ const QuickQuote: React.FC<{ language: Language; user?: User | null }> = ({ lang
   );
 
   const marineBoardWeightKg = useMemo(() => {
-    return round1(marineBoardCalculated.reduce((sum, x) => {
+    return marineBoardCalculated.reduce((sum, x) => {
       const qty = Math.max(0, x.row.quantity || 0);
       if (qty <= 0) return sum;
       const weightPerSqm = MARINE_BOARD_WEIGHT_PER_SQM[x.row.thickness] || 0;
       return sum + (x.areaSqm * weightPerSqm * qty);
-    }, 0));
+    }, 0);
   }, [marineBoardCalculated]);
+
+  const shippingSummary = useMemo(() => {
+    const exactTotalWeightKg = profileSummary.totalWeightKg + marineBoardWeightKg;
+    const totalWeightKg = round1(exactTotalWeightKg);
+    const hasOverlength = profileRows.some((row) => row.length > 1500 && row.quantity > 0);
+    if (!selectedProvince || totalWeightKg <= 0) {
+      return {
+        method: null as ShippingMethod | null,
+        fee: 0,
+        overlengthFee: 0,
+        totalWeightKg,
+      };
+    }
+    return {
+      ...calcCheapestShippingByProvince(selectedProvince, exactTotalWeightKg, hasOverlength),
+      totalWeightKg,
+    };
+  }, [marineBoardWeightKg, profileRows, profileSummary.totalWeightKg, selectedProvince]);
 
   const frameCalculated = useMemo(() => {
     return frameRows.map((row) => {
@@ -505,55 +504,41 @@ const QuickQuote: React.FC<{ language: Language; user?: User | null }> = ({ lang
     const pegboardItemTotal = round1(pegboardCalculated.reduce((sum, x) => sum + x.subtotal, 0));
     const marineBoardItemTotal = round1(marineBoardCalculated.reduce((sum, x) => sum + x.subtotal, 0));
     const frameItemTotal = round1(frameCalculated.reduce((sum, x) => sum + x.subtotal, 0));
-    const hasOverlength = profileRows.some((r) => r.length > 1500);
-    const totalShippableWeightKg = round1(profileSummary.totalWeightKg + marineBoardWeightKg);
-    const hasShippableItems = profileSummary.itemTotal > 0 || marineBoardItemTotal > 0;
-    const combinedShipping = selectedProvince && hasShippableItems
-      ? calcProfileShippingByProvince(selectedProvince, totalShippableWeightKg, hasOverlength)
-      : null;
-    const profileShippingFee = profileSummary.itemTotal > 0 ? (combinedShipping?.fee || 0) : 0;
-    const marineBoardShippingFee = profileSummary.itemTotal > 0 ? 0 : (combinedShipping?.fee || 0);
-
     const categories = [
       {
         key: 'profile',
         name: t.qq_aluminumProfile,
         itemTotal: profileSummary.itemTotal,
-        shippingFee: profileShippingFee,
-        total: round1(profileSummary.itemTotal + profileShippingFee),
+        total: profileSummary.itemTotal,
       },
       {
         key: 'aluminum_plate',
         name: t.qq_aluminumPlate,
         itemTotal: aluminumPlateItemTotal,
-        shippingFee: 0,
         total: aluminumPlateItemTotal,
       },
       {
         key: 'pegboard',
         name: t.qq_pegboard,
         itemTotal: pegboardItemTotal,
-        shippingFee: 0,
         total: pegboardItemTotal,
       },
       {
         key: 'marine_board',
         name: t.qq_marineBoard,
         itemTotal: marineBoardItemTotal,
-        shippingFee: marineBoardShippingFee,
-        total: round1(marineBoardItemTotal + marineBoardShippingFee),
+        total: marineBoardItemTotal,
       },
       {
         key: 'frame',
         name: t.qq_frame,
         itemTotal: frameItemTotal,
-        shippingFee: 0,
         total: frameItemTotal,
       },
     ].filter((c) => c.itemTotal > 0);
 
-    const grandTotal = round1(categories.reduce((sum, c) => sum + c.total, 0));
-    return { categories, grandTotal };
+    const grandTotal = round1(categories.reduce((sum, c) => sum + c.total, 0) + shippingSummary.fee);
+    return { categories, grandTotal, shipping: shippingSummary };
   }, [
     t.qq_aluminumProfile,
     t.qq_aluminumPlate,
@@ -564,10 +549,8 @@ const QuickQuote: React.FC<{ language: Language; user?: User | null }> = ({ lang
     aluPlateCalculated,
     pegboardCalculated,
     marineBoardCalculated,
-    marineBoardWeightKg,
-    selectedProvince,
+    shippingSummary,
     frameCalculated,
-    profileRows,
   ]);
 
   const updateProfileRow = (id: string, patch: Partial<ProfileRow>) => {
@@ -988,9 +971,15 @@ const QuickQuote: React.FC<{ language: Language; user?: User | null }> = ({ lang
               <div className="text-slate-700">
                 {t.qq_cheapestCourier}:{' '}
                 <span className="font-black">
-                  {profileSummary.method ? SHIPPING_METHOD_NAMES[profileSummary.method][language] : '-'}
+                  {shippingSummary.method ? SHIPPING_METHOD_NAMES[shippingSummary.method][language] : '-'}
                 </span>
               </div>
+              {shippingSummary.totalWeightKg > 0 && (
+                <div className="text-slate-700">
+                  {t.qq_estimatedWeight}: <span className="font-black">{shippingSummary.totalWeightKg.toFixed(1)}kg</span>
+                  {shippingSummary.method && <> · {t.qq_shippingFee}: <span className="font-black">{currency}{shippingSummary.fee.toFixed(1)}</span></>}
+                </div>
+              )}
               {!selectedProvince && <div className="text-amber-700 font-bold">{t.qq_selectProvince}</div>}
             </div>
           </div>
@@ -1010,6 +999,25 @@ const QuickQuote: React.FC<{ language: Language; user?: User | null }> = ({ lang
           marineBoardMaxSizeNote,
           true,
           marineBoardColorOptions
+        )}
+
+        {selectedProduct === 'marine_board' && (
+          <div className="bg-blue-50 border border-blue-100 rounded-2xl p-4 text-sm space-y-1">
+            <div className="font-bold text-blue-700">{t.qq_profileShippingNote}</div>
+            <div className="text-slate-700">
+              {t.qq_cheapestCourier}:{' '}
+              <span className="font-black">
+                {shippingSummary.method ? SHIPPING_METHOD_NAMES[shippingSummary.method][language] : '-'}
+              </span>
+            </div>
+            {shippingSummary.totalWeightKg > 0 && (
+              <div className="text-slate-700">
+                {t.qq_estimatedWeight}: <span className="font-black">{shippingSummary.totalWeightKg.toFixed(1)}kg</span>
+                {shippingSummary.method && <> · {t.qq_shippingFee}: <span className="font-black">{currency}{shippingSummary.fee.toFixed(1)}</span></>}
+              </div>
+            )}
+            {!selectedProvince && <div className="text-amber-700 font-bold">{t.qq_selectProvince}</div>}
+          </div>
         )}
 
         {selectedProduct === 'frame' && (
@@ -1137,11 +1145,16 @@ const QuickQuote: React.FC<{ language: Language; user?: User | null }> = ({ lang
                   <div className="mt-1 text-sm text-slate-600">
                     {t.qq_itemTotal}: {currency}{cat.itemTotal.toFixed(1)}
                   </div>
-                  <div className="text-sm text-slate-600">
-                    {t.qq_shippingFee}: {currency}{cat.shippingFee.toFixed(1)}
-                  </div>
                 </div>
               ))}
+
+              {categorySummary.shipping.method && (
+                <div className="border border-blue-100 rounded-2xl p-4 bg-blue-50 text-sm text-slate-700 flex flex-wrap gap-x-5 gap-y-1">
+                  <span>{t.qq_cheapestCourier}: <strong>{SHIPPING_METHOD_NAMES[categorySummary.shipping.method][language]}</strong></span>
+                  <span>{t.qq_estimatedWeight}: <strong>{categorySummary.shipping.totalWeightKg.toFixed(1)}kg</strong></span>
+                  <span>{t.qq_shippingFee}: <strong>{currency}{categorySummary.shipping.fee.toFixed(1)}</strong></span>
+                </div>
+              )}
 
               <div className="mt-4 border-t border-slate-200 pt-4 flex items-center justify-between">
                 <div className="text-lg sm:text-xl font-black text-slate-800">{t.qq_grandTotal}</div>

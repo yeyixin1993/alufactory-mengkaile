@@ -357,7 +357,7 @@ const ProfileEditor: React.FC<ProfileEditorProps> = ({ language, product, user, 
             <span className="text-[10px] text-slate-400 font-bold">{selectedVariant.name} 截面图</span>
             {variantId === '2047' && !profileImgError && (
               <span className="rounded-full bg-red-50 px-2.5 py-1 text-[10px] font-black text-red-600">
-                {language === 'cn' ? '端面攻丝位 ×3' : language === 'jp' ? '端面タップ位置 ×3' : 'End-face tap ports ×3'}
+                {language === 'cn' ? 'B/D面端面攻丝位 ×3' : language === 'jp' ? 'B/D面の端面タップ位置 ×3' : 'B/D face end-tap ports ×3'}
               </span>
             )}
           </div>

@@ -4,7 +4,7 @@ import { PROFILE_VARIANTS } from '../constants';
 import {
   getHoleDisplayGrooveIndex,
   getProfileGrooveCount,
-  getProfileTapPortCount,
+  getProfileTapPortCountForSide,
   OPPOSITE_PROFILE_SIDE,
 } from '../utils/profileMachining';
 
@@ -123,8 +123,6 @@ const ProfileVisualizer: React.FC<ProfileVisualizerProps> = ({
   const { length, variantId, holes, tapping } = config;
   const selectedVariant = PROFILE_VARIANTS.find(v => v.id === variantId) || PROFILE_VARIANTS[0];
 
-  const tapDisabledVariants = ['2040', '3060', '3060-N1-60', '2040-N1-20', '2040-N1-40', '2047', '2060', '20100', '4080'];
-
   // Helper logic extracted from Editor
   const isRadiusProfile = selectedVariant.id.endsWith('R');
   const availableSides: ProfileSide[] = isRadiusProfile ? ['A', 'B'] : ['A', 'B', 'C', 'D'];
@@ -138,9 +136,7 @@ const ProfileVisualizer: React.FC<ProfileVisualizerProps> = ({
   const getGrooveCount = (side: ProfileSide): number => getProfileGrooveCount(selectedVariant.id, side);
 
   const grooveCount = getGrooveCount(selectedSide);
-  const tappingPortCount = selectedSide === 'B' || selectedSide === 'D'
-    ? getProfileTapPortCount(selectedVariant.id)
-    : Math.max(1, grooveCount);
+  const tappingPortCount = getProfileTapPortCountForSide(selectedVariant.id, selectedSide);
 
   // Visual groove count: how many groove lines to actually draw.
   // For sealed faces that still allow drill positioning (e.g. 2040-N1-40 D), visual = 0.
@@ -162,7 +158,7 @@ const ProfileVisualizer: React.FC<ProfileVisualizerProps> = ({
   // Helper to render tap indicator
   const renderTapIndicator = (side: 'left' | 'right', index: number, topPct: string) => {
     // Disable taps visually/click behavior for certain variants when A or C is selected
-    const disabledForSide = tapDisabledVariants.includes(selectedVariant.id) && (selectedSide === 'A' || selectedSide === 'C');
+    const disabledForSide = getProfileTapPortCountForSide(selectedVariant.id, selectedSide) === 0;
     const isTapped = tapping[side][index] && !disabledForSide;
 
     return (
