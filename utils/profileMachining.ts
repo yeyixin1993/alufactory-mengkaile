@@ -45,6 +45,27 @@ export const getProfileTapPortCount = (variantId = '2020'): number => {
   return Math.max(1, Math.round(width / moduleSize) * Math.round(height / moduleSize));
 };
 
+const WIDE_FACE_ONLY_TAPPING_VARIANTS = new Set([
+  '2040',
+  '3060',
+  '3060-N1-60',
+  '2040-N1-20',
+  '2040-N1-40',
+  '2047',
+  '2060',
+  '20100',
+  '4080',
+]);
+
+export const getProfileTapPortCountForSide = (
+  variantId = '2020',
+  side: ProfileSide,
+): number => {
+  if (WIDE_FACE_ONLY_TAPPING_VARIANTS.has(variantId) && (side === 'A' || side === 'C')) return 0;
+  if (side === 'B' || side === 'D') return getProfileTapPortCount(variantId);
+  return Math.max(1, getProfileGrooveCount(variantId, side));
+};
+
 const clampGroove = (index: number, grooveCount: number) => (
   Math.max(0, Math.min(Math.max(1, grooveCount) - 1, Math.round(index)))
 );
