@@ -69,7 +69,7 @@ const MARINE_BOARD_SPEC_PRICE_PER_SQM: Record<MarineSpecId, Record<number, numbe
   marine_bbb_plain: { 12: 136, 18: 176 },
 };
 const MARINE_BOARD_COLORED_SURCHARGE_PER_SQM = 100;
-const MARINE_BOARD_WEIGHT_PER_SQM: Record<number, number> = { 12: 24, 18: 36 };
+const MARINE_BOARD_WEIGHT_PER_SQM: Record<number, number> = { 12: 8, 18: 12 };
 const MIN_BOARD_CHARGE_AREA_SQM = 0.2;
 const MAX_PROFILE_LENGTH_MM = 3000;
 const MAX_BOARD_WIDTH_MM = 2400;

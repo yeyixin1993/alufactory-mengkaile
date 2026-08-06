@@ -85,11 +85,11 @@ const CART_CACHE_PREFIX = 'mengkaile_cart_cache_v1';
 const DRAFT_CACHE_PREFIX = 'mengkaile_profile_draft_cache_v1';
 const GUEST_CACHE_SCOPE = 'guest';
 const MARINE_BOARD_WEIGHT_PER_SQM: Record<number, number> = {
-  6: 12,
-  9: 18,
-  12: 24,
-  15: 30,
-  18: 36,
+  6: 4,
+  9: 6,
+  12: 8,
+  15: 10,
+  18: 12,
 };
 
 const ACCESSORY_PRODUCT: Product = {

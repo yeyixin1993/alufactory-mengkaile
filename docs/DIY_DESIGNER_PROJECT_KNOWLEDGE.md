@@ -202,6 +202,7 @@ Availability and price must be verified against Mengkaile's authoritative catalo
 - Every profile row includes model, length, color, quantity, transform/assembly identity as needed, remark, hole details, tapping details, and pricing inputs.
 - Machining sheets use canonical A/B/C/D faces, physical groove IDs, entry/exit descriptions, and both end distances.
 - Cart conversion and the production PDF must preserve marine-board “原色”, accessory specifications, physical-product image keys, and all customer remarks.
+- Shipping-weight baseline for marine board must use area multipliers: 12mm = 8 kg/㎡ and 18mm = 12 kg/㎡. If any legacy value differs, this baseline is authoritative.
 - Client-side prices are estimates. A production deployment needs server-side validation against the current catalog before checkout totals become authoritative.
 
 ## 14. STEP/STP interoperability direction
