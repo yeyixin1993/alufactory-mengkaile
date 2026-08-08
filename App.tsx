@@ -257,9 +257,34 @@ const UserProfile: React.FC<{
       });
   };
 
-  const deleteOrder = (orderId: string) => {
-    if (window.confirm("Delete this order record?")) {
-      ApiService.deleteOrder(orderId).then(() => setOrders(orders.filter(o => o.id !== orderId)));
+  const deleteAddress = async (address: Address) => {
+    const prompt = language === 'cn'
+      ? `确定删除收货地址“${address.recipient_name} · ${address.phone}”吗？`
+      : language === 'jp'
+        ? `配送先「${address.recipient_name} · ${address.phone}」を削除しますか？`
+        : `Delete shipping address “${address.recipient_name} · ${address.phone}”?`;
+    if (!window.confirm(prompt)) return;
+    try {
+      const updatedUser = await ApiService.deleteAddress(address.id);
+      if (updatedUser) setUser(updatedUser);
+    } catch (error) {
+      alert(String((error as Error)?.message || error));
+    }
+  };
+
+  const deleteOrder = async (order: Order) => {
+    if (order.status !== 'pending' && order.status !== 'cancelled') return;
+    const prompt = language === 'cn'
+      ? `确定永久删除订单“${order.orderNumber || order.id}”吗？此操作无法撤销。`
+      : language === 'jp'
+        ? `注文「${order.orderNumber || order.id}」を完全に削除しますか？元に戻せません。`
+        : `Permanently delete order “${order.orderNumber || order.id}”? This cannot be undone.`;
+    if (!window.confirm(prompt)) return;
+    try {
+      await ApiService.deleteOrder(order.id);
+      setOrders((current) => current.filter((entry) => entry.id !== order.id));
+    } catch (error) {
+      alert(String((error as Error)?.message || error));
     }
   };
 
@@ -348,7 +373,7 @@ const UserProfile: React.FC<{
                       <div className="text-xs text-slate-500">{a.province} {a.detail}</div>
                       <div className="flex gap-4 mt-3">
                         <button onClick={() => setIsEditingAddress(a)} className="text-blue-600 text-[10px] font-black uppercase tracking-wider">{t.edit}</button>
-                        <button onClick={() => ApiService.updateUserAddresses(user.addresses.filter(x => x.id !== a.id)).then(u => setUser(u!))} className="text-red-500 text-[10px] font-black uppercase tracking-wider">{t.remove}</button>
+                        <button onClick={() => deleteAddress(a)} className="text-red-500 text-[10px] font-black uppercase tracking-wider">{t.remove}</button>
                       </div>
                    </div>
                  ))}
@@ -409,6 +434,16 @@ const UserProfile: React.FC<{
                                </button>
                              )}
                              <button onClick={() => onEditOrder(o)} className="p-2.5 bg-slate-50 hover:bg-slate-100 text-slate-600 rounded-xl transition-colors border border-slate-200"><Edit2 className="w-4 h-4"/></button>
+                             {(o.status === 'pending' || o.status === 'cancelled') && (
+                               <button
+                                 type="button"
+                                 title={language === 'cn' ? '删除订单' : language === 'jp' ? '注文を削除' : 'Delete order'}
+                                 onClick={() => deleteOrder(o)}
+                                 className="p-2.5 bg-red-50 hover:bg-red-100 text-red-600 rounded-xl transition-colors border border-red-200"
+                               >
+                                 <Trash2 className="w-4 h-4"/>
+                               </button>
+                             )}
                           </div>
                         </div>
                         

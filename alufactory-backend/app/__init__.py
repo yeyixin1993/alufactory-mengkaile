@@ -65,6 +65,8 @@ def create_app(config_name='development'):
                 migrations = [
                     ('shipping_method', 'VARCHAR(50)'),
                     ('overlength_fee', 'FLOAT DEFAULT 0'),
+                    ('order_json', 'TEXT'),
+                    ('duplicate_fingerprint', 'VARCHAR(64)'),
                     ('address_id', 'VARCHAR(36)'),
                     ('admin_memo', 'TEXT'),
                     ('memo', 'TEXT'),
@@ -85,6 +87,22 @@ def create_app(config_name='development'):
                                 print(f'  ✅ Auto-migrated: added {col_name} to orders')
                             except Exception:
                                 pass  # Column might already exist or DB doesn't support ALTER
+
+                # Backfill old rows once so existing repeated orders are also detected.
+                try:
+                    from app.models.user import Order
+                    from app.order_snapshot import refresh_order_json
+                    missing_snapshots = Order.query.filter(
+                        (Order.order_json.is_(None)) | (Order.duplicate_fingerprint.is_(None))
+                    ).all()
+                    for order in missing_snapshots:
+                        refresh_order_json(order)
+                    if missing_snapshots:
+                        db.session.commit()
+                        print(f'  ✅ Backfilled JSON snapshots for {len(missing_snapshots)} orders')
+                except Exception as snapshot_error:
+                    db.session.rollback()
+                    print(f'  ⚠️ Order JSON backfill skipped: {snapshot_error}')
 
             if 'profiles' in inspector.get_table_names():
                 existing_profile_cols = [col['name'] for col in inspector.get_columns('profiles')]

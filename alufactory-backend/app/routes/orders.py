@@ -4,6 +4,7 @@ from datetime import datetime
 from app.models.user import db, User, Cart, CartItem, Order, OrderItem, Profile
 from app.order_utils import build_order_pdf_filename
 from app.product_order_db import sync_order_snapshot, remove_order_snapshot
+from app.order_snapshot import refresh_order_json
 from app.security import get_request_json_secure
 import uuid
 import os
@@ -105,6 +106,8 @@ def create_order():
             cart.updated_at = datetime.utcnow()
         
         db.session.add(order)
+        db.session.flush()
+        refresh_order_json(order)
         db.session.commit()
         sync_order_snapshot(current_app.instance_path, order, user=user, pdf_available=False)
         
@@ -220,6 +223,8 @@ def update_order(order_id):
                     db.session.add(order_item)
         
         order.updated_at = datetime.utcnow()
+        db.session.flush()
+        refresh_order_json(order)
         db.session.commit()
         sync_order_snapshot(current_app.instance_path, order, user=order.user, pdf_available=False)
         
@@ -235,16 +240,24 @@ def update_order(order_id):
 @order_bp.route('/<order_id>', methods=['DELETE'])
 @jwt_required()
 def delete_order(order_id):
-    """Delete order (admin only)"""
+    """Delete a pending/cancelled order owned by the customer, or as admin."""
     current_user_id = get_jwt_identity()
     current_user = User.query.get(current_user_id)
 
-    if not current_user or not current_user.is_admin:
-        return jsonify({'error': 'Admin access required'}), 403
-    
     order = Order.query.get(order_id)
     if not order:
         return jsonify({'error': 'Order not found'}), 404
+
+    is_admin = bool(current_user and current_user.is_admin)
+    is_owner = bool(current_user and str(order.user_id) == str(current_user_id))
+    if not is_admin and not is_owner:
+        return jsonify({'error': 'Unauthorized'}), 403
+
+    if order.status not in ('pending', 'cancelled'):
+        return jsonify({
+            'error': 'Only pending or cancelled orders can be deleted',
+            'status': order.status,
+        }), 409
     
     try:
         # Intentionally keep any stored PDF files and PDF fallback data untouched.

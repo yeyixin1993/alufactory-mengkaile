@@ -320,6 +320,11 @@ class ApiServiceClass {
     return await this.getCurrentUser();
   }
 
+  async deleteAddress(addressId: string) {
+    await this.request('DELETE', `/users/addresses/${addressId}`);
+    return await this.getCurrentUser();
+  }
+
   // ===== PRODUCTS (fallback to mock) =====
   async getProducts() {
     // Products are read-only, use local data
