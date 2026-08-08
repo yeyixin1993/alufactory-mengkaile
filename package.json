@@ -5,6 +5,9 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "setup:local": "python3 -m venv alufactory-backend/.venv-local && alufactory-backend/.venv-local/bin/python -m pip install -r alufactory-backend/requirements.txt",
+    "dev:local": "node scripts/dev-local.mjs",
+    "test:local": "node scripts/test-local.mjs",
     "build": "vite build",
     "preview": "vite preview"
   },

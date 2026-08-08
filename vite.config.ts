@@ -7,7 +7,14 @@ export default defineConfig(({ mode }) => {
     return {
       server: {
         port: 3000,
+        strictPort: true,
         host: '0.0.0.0',
+        proxy: {
+          '/api': {
+            target: 'http://127.0.0.1:5001',
+            changeOrigin: true,
+          },
+        },
       },
       plugins: [react()],
       define: {

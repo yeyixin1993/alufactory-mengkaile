@@ -27,6 +27,7 @@ dist-ssr
 .env
 *.pyc
 alufactory-backend/instance/alufactory.db
+alufactory-backend/.venv-local/
 *.pyc
 alufactory-backend/app/__pycache__/__init__.cpython-310.pyc
 alufactory-backend/app/models/__pycache__/user.cpython-310.pyc
