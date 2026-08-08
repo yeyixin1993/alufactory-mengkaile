@@ -73,4 +73,13 @@ const downloaded = await request(`/orders/${orderId}/pdf`, {
 const signature = Buffer.from(downloaded.body).subarray(0, 4).toString();
 if (signature !== '%PDF') throw new Error(`Downloaded file is not a PDF (signature: ${signature}).`);
 
-console.log(`Local backend smoke test passed: register -> order -> upload PDF -> download PDF (${orderId}).`);
+const localAiResponse = await fetch(`${baseUrl}/ai/import/maycad-pdf`, jsonOptions('POST', {
+  filename: 'local-smoke.pdf',
+  extractedText: 'MayCAD local isolated smoke test',
+  viewImages: ['data:image/png;base64,iVBORw0KGgo='],
+}, token));
+if (localAiResponse.status !== 503) {
+  throw new Error(`Local AI isolation check expected 503, received ${localAiResponse.status}.`);
+}
+
+console.log(`Local backend smoke test passed: register -> order -> upload/download PDF -> remote AI blocked (${orderId}).`);

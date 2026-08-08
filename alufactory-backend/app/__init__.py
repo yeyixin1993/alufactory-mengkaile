@@ -10,6 +10,7 @@ from app.routes.orders import order_bp
 from app.routes.admin import admin_bp
 from app.routes.profiles import profile_bp
 from app.routes.payments import payment_bp
+from app.routes.ai_import import ai_import_bp
 from app.product_order_db import init_product_order_db
 from app.security import init_payload_encryption
 import os
@@ -50,6 +51,7 @@ def create_app(config_name='development'):
     app.register_blueprint(admin_bp)
     app.register_blueprint(profile_bp)
     app.register_blueprint(payment_bp)
+    app.register_blueprint(ai_import_bp)
     
     # Create database tables and run auto-migrations
     with app.app_context():

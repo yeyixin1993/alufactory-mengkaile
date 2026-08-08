@@ -19,6 +19,8 @@ os.environ["SECRET_KEY"] = "alufactory-local-development-only"
 os.environ["JWT_SECRET_KEY"] = "alufactory-local-jwt-development-only"
 os.environ["VITE_API_URL"] = "http://127.0.0.1:5001/api"
 os.environ.pop("ALIPAY_PUBLIC_BASE_URL", None)
+if os.getenv("MAYCAD_ALLOW_REMOTE_AI", "0") != "1":
+    os.environ.pop("DASHSCOPE_API_KEY", None)
 
 from app import create_app  # noqa: E402
 
