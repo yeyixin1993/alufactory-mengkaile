@@ -219,6 +219,12 @@ const TEXT: Record<Language, Record<string, string>> = {
     maycadImporting: '正在解析 MayCAD 文件…',
     maycadLoaded: 'MayCAD模型已导入，可继续编辑',
     maycadImportFailed: 'MayCAD导入失败',
+    maycadTappingTitle: 'MayCAD 不包含攻丝信息',
+    maycadTappingPrompt: 'MayCAD 没有攻丝选项，因此无法判断哪些端面需要攻丝。是否一键将本次导入的所有型材两端全部设置为攻丝？',
+    maycadKeepNoTapping: '保持不攻丝',
+    maycadTapAllBothEnds: '全部型材两端攻丝',
+    maycadTappingApplied: '已将所有导入型材设置为两端攻丝',
+    maycadTappingSkipped: '已保持未攻丝，可稍后逐根修改',
     addCart: '加入购物车',
     total: '设计估价',
     length: '长度 (mm)',
@@ -378,6 +384,12 @@ const TEXT: Record<Language, Record<string, string>> = {
     maycadImporting: 'Parsing MayCAD file…',
     maycadLoaded: 'MayCAD model imported and ready to edit',
     maycadImportFailed: 'MayCAD import failed',
+    maycadTappingTitle: 'MayCAD has no tapping data',
+    maycadTappingPrompt: 'MayCAD has no tapping option, so tapped ends cannot be identified. Apply tapping to both ends of every imported profile?',
+    maycadKeepNoTapping: 'Keep untapped',
+    maycadTapAllBothEnds: 'Tap both ends of all profiles',
+    maycadTappingApplied: 'Both ends of every imported profile are now tapped',
+    maycadTappingSkipped: 'Profiles remain untapped and can be edited individually later',
     addCart: 'Add design to cart',
     total: 'Design estimate',
     length: 'Length (mm)',
@@ -537,6 +549,12 @@ const TEXT: Record<Language, Record<string, string>> = {
     maycadImporting: 'MayCADファイルを解析中…',
     maycadLoaded: 'MayCADモデルを読み込みました。編集できます',
     maycadImportFailed: 'MayCADの読み込みに失敗しました',
+    maycadTappingTitle: 'MayCADにはタップ加工情報がありません',
+    maycadTappingPrompt: 'MayCADにはタップ加工の設定がないため、加工する端面を判別できません。読み込んだ全形材の両端に一括でタップ加工を設定しますか？',
+    maycadKeepNoTapping: 'タップ加工なしのまま',
+    maycadTapAllBothEnds: '全形材の両端をタップ加工',
+    maycadTappingApplied: '読み込んだ全形材の両端にタップ加工を設定しました',
+    maycadTappingSkipped: 'タップ加工なしで保持しました。後から個別に変更できます',
     addCart: 'カートに追加',
     total: '見積金額',
     length: '長さ (mm)',
@@ -4672,6 +4690,7 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({ language, onLanguageChange, u
   const [fileMenu, setFileMenu] = useState<'json' | 'excel' | null>(null);
   const [maycadImporting, setMaycadImporting] = useState(false);
   const [maycadReview, setMaycadReview] = useState<{ source: string; confidence?: number; warnings: string[] } | null>(null);
+  const [maycadTappingPrompt, setMaycadTappingPrompt] = useState<{ profileIds: string[] } | null>(null);
   const importRef = useRef<HTMLInputElement>(null);
   const excelImportRef = useRef<HTMLInputElement>(null);
   const maycadImportRef = useRef<HTMLInputElement>(null);
@@ -5032,9 +5051,19 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({ language, onLanguageChange, u
       const result = isScene
         ? parseMaycadSceneXml(await file.text())
         : normalizeMaycadAiResult(await ApiService.importMaycadPdf(await extractMaycadPdfPayload(file)));
-      const importedItems = normalizeDesignItems(result.items as DIYSceneItem[]);
+      // MayCAD has no tapping option. Never infer tapping from the source or
+      // from a PDF reconstruction; let the customer make one explicit choice.
+      const importedItems = normalizeDesignItems(result.items as DIYSceneItem[]).map((item) => (
+        item.kind === 'profile'
+          ? { ...item, tappingLeft: false, tappingRight: false }
+          : item
+      ));
+      const importedProfileIds = importedItems
+        .filter((item) => item.kind === 'profile')
+        .map((item) => item.id);
       commit(importedItems, null);
       setMaycadReview({ source: result.sourceTitle || file.name, confidence: result.confidence, warnings: result.warnings });
+      if (importedProfileIds.length) setMaycadTappingPrompt({ profileIds: importedProfileIds });
       if (result.warnings.length) console.warn('MayCAD import review warnings:', result.warnings);
       showNotice(`${t.maycadLoaded} · ${importedItems.length}${result.warnings.length ? ` · ⚠ ${result.warnings.length}` : ''}`);
     } catch (error) {
@@ -5043,6 +5072,24 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({ language, onLanguageChange, u
     } finally {
       setMaycadImporting(false);
     }
+  };
+
+  const applyTappingToAllImportedProfiles = () => {
+    if (!maycadTappingPrompt) return;
+    const importedIds = new Set(maycadTappingPrompt.profileIds);
+    commit(items.map((item) => (
+      item.kind === 'profile' && importedIds.has(item.id)
+        ? { ...item, tappingLeft: true, tappingRight: true }
+        : item
+    )), null);
+    const updatedCount = maycadTappingPrompt.profileIds.length;
+    setMaycadTappingPrompt(null);
+    showNotice(`${t.maycadTappingApplied} · ${updatedCount}`);
+  };
+
+  const keepImportedProfilesUntapped = () => {
+    setMaycadTappingPrompt(null);
+    showNotice(t.maycadTappingSkipped);
   };
 
   const toCartItems = (): CartItem[] => {
@@ -6033,6 +6080,39 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({ language, onLanguageChange, u
           </button>
         </aside>
       </div>
+      {maycadTappingPrompt && (
+        <div className="fixed inset-0 z-[120] flex items-center justify-center bg-slate-950/55 p-4 backdrop-blur-sm">
+          <div className="w-full max-w-lg rounded-3xl border border-white/70 bg-white p-6 shadow-2xl">
+            <div className="flex items-center gap-2 text-amber-600">
+              <Wrench className="h-5 w-5" />
+              <span className="text-[10px] font-black uppercase tracking-[0.2em]">MayCAD</span>
+            </div>
+            <h2 className="mt-3 text-xl font-black text-slate-950">{t.maycadTappingTitle}</h2>
+            <p className="mt-3 text-sm font-bold leading-relaxed text-slate-600">{t.maycadTappingPrompt}</p>
+            <div className="mt-4 rounded-2xl bg-amber-50 px-4 py-3 text-xs font-black text-amber-800">
+              {maycadTappingPrompt.profileIds.length} {t.profileParts}
+            </div>
+            <div className="mt-6 grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <button
+                type="button"
+                data-testid="maycad-keep-untapped"
+                onClick={keepImportedProfilesUntapped}
+                className="rounded-2xl border border-slate-200 px-4 py-3 text-sm font-black text-slate-600 transition hover:bg-slate-50"
+              >
+                {t.maycadKeepNoTapping}
+              </button>
+              <button
+                type="button"
+                data-testid="maycad-tap-all-both-ends"
+                onClick={applyTappingToAllImportedProfiles}
+                className="rounded-2xl bg-amber-500 px-4 py-3 text-sm font-black text-white shadow-lg shadow-amber-500/20 transition hover:bg-amber-400"
+              >
+                {t.maycadTapAllBothEnds}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
       {pendingProfile && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/45 p-4 backdrop-blur-sm">
           <div className="w-full max-w-md rounded-3xl border border-white/70 bg-white p-6 shadow-2xl">
