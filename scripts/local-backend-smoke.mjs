@@ -2,7 +2,7 @@ import process from 'node:process';
 
 const baseUrl = process.env.LOCAL_API_URL || 'http://127.0.0.1:5001/api';
 const unique = `${Date.now()}${Math.floor(Math.random() * 1000)}`;
-const phone = unique.slice(-11).padStart(11, '1');
+const phone = `1${unique.slice(-10).padStart(10, '0')}`;
 
 const request = async (requestPath, options = {}) => {
   const response = await fetch(`${baseUrl}${requestPath}`, options);
