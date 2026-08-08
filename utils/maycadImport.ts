@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import type { DrillHole, HoleType, ProfileSide } from '../types';
+import { resolveMaycadProfileVariant } from './maycadProfileMapping';
 
 export interface MaycadImportedItem {
   id: string;
@@ -71,18 +72,6 @@ const MAYCAD_TO_MENGKAILE_LOCAL = new THREE.Matrix4().set(
   0, 0, 0, 1,
 );
 
-const profileVariantFromMaycad = (profileCode: string, widthCm: number, depthCm: number) => {
-  const code = profileCode.toUpperCase();
-  if (code.includes('2020-22SP')) return { variantId: '2020-N2', confidence: 0.96 };
-  if (code.includes('2020-21SP')) return { variantId: '2020-N1', confidence: 0.92 };
-  if (code.includes('2040')) return { variantId: '2040-N1-40', confidence: 0.9 };
-  if (code.includes('2020')) return { variantId: '2020', confidence: 0.9 };
-  const dimensions = [Math.round(widthCm * 10), Math.round(depthCm * 10)].sort((a, b) => a - b).join('x');
-  if (dimensions === '20x40') return { variantId: '2040', confidence: 0.65 };
-  if (dimensions === '20x20') return { variantId: '2020', confidence: 0.65 };
-  return { variantId: '2020', confidence: 0.35 };
-};
-
 const holeTypeFromMaycad = (profileCode: string): HoleType | null => {
   if (/Q11(?:\D|$)/i.test(profileCode)) return 'countersunk';
   if (/Q10(?:\D|$)/i.test(profileCode)) return 'through';
@@ -129,8 +118,8 @@ export const parseMaycadSceneXml = (xmlText: string): MaycadImportResult => {
     const center = maycadStart.clone().addScaledVector(longDirection, lengthMm / 20);
     const designerRotation = maycadRotation.clone().multiply(MAYCAD_TO_MENGKAILE_LOCAL);
     const euler = new THREE.Euler().setFromRotationMatrix(designerRotation, 'XYZ');
-    const mapped = profileVariantFromMaycad(profileCode, widthCm, depthCm);
-    if (mapped.confidence < 0.8) warnings.push(`MayCAD ${profileCode || sourceId} 暂按 ${mapped.variantId} 导入，请核对型材型号。`);
+    const mapped = resolveMaycadProfileVariant(profileCode, widthCm, depthCm);
+    if (!mapped.exact) warnings.push(`MayCAD ${profileCode || sourceId} 暂按 ${mapped.variantId} 导入，请核对型材型号。`);
 
     const item: MaycadImportedItem = {
       id: makeImportId('profile', sourceId),

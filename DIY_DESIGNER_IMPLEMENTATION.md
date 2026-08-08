@@ -55,5 +55,6 @@ Open `http://localhost:3000/#/diy-designer`.
 - The designer component passes a targeted TypeScript check.
 - Browser-tested empty state, demo assembly generation, WebGL rendering, part selection, profile length update, drilling, live repricing, and full cart conversion.
 - Browser-tested board areas and accessory quantities in the existing cart/production sheet.
+- Browser-tested `clothing_rack_2020.scene` import: 9 editable profiles, verified `2020`/`2020-N1` lengths, 12 imported Q11 countersunk holes, and a non-destructive review warning for four unsupported Q2 blind bores.
 
 The repository-wide `npx tsc --noEmit` still reports the pre-existing backend service alias error in `alufactory-backend/FRONTEND_SERVICE.ts` (`@/config` is not present in the frontend TypeScript project).

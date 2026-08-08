@@ -26,7 +26,8 @@ Known MayCAD -> Mengkaile mappings:
 - 20x20 2H corner / 22SP -> 2020-N2
 - 20x20 1 closed face / 21SP -> 2020-N1
 - ordinary 20x20 4H -> 2020
-- 20x40 6H -> 2040-N1-40 (flag for review if the covered 40mm face is uncertain)
+- ordinary PROF20-2040 / 20x40 -> 2040
+- do not map ordinary 2040 to 2040-N1-40; that is a separate Mengkaile model the customer may select manually after import
 
 Schema:
 {"sourceTitle":"string","confidence":0.0,"warnings":["string"],"items":[{"kind":"profile","variantId":"2020","lengthMm":400,"positionMm":[0,200,0],"rotationDeg":[0,0,90],"colorId":"natural","holes":[],"tappingLeft":false,"tappingRight":false,"remark":"MayCAD PDF reconstruction; review"}]}
