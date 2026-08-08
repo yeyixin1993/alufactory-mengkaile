@@ -3,7 +3,8 @@
 ## What is implemented
 
 - New `#/diy-designer` route linked from the catalog and desktop navigation.
-- Three.js scene with orbit camera, lighting, shadows, grid, selection, move handles, and rotate handles.
+- Three.js scene with orbit camera, lighting, shadows, grid, selection, move handles, and direct in-scene 90-degree rotation controls.
+- MayCAD-style non-blocking collision feedback: movement and rotation stay applied while interfering profiles and project nodes are highlighted red until separated.
 - Click-to-add and drag-to-canvas parts library for:
   - aluminum profiles (all existing profile variants),
   - aluminum plates,
@@ -35,7 +36,7 @@ Open `http://localhost:3000/#/diy-designer`.
 ## Production roadmap
 
 1. Replace the simplified box-based profiles with exact CAD cross-sections generated from the production profile catalog.
-2. Add snapping constraints: endpoint, midpoint, slot, coplanar, perpendicular, equal spacing, and collision prevention.
+2. Continue refining snapping constraints: endpoint, midpoint, slot, coplanar, perpendicular, equal spacing, and penetration-free snap candidates while preserving non-blocking manual transforms.
 3. Add joints that understand manufacturing intent and automatically create matching brackets, screws, taps, and BOM rows.
 4. Add a project API and database models so designs can be saved to user accounts and reopened across devices.
 5. Store assembly relationships and stable part UUIDs on orders instead of relying only on cart remarks.

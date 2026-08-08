@@ -1,6 +1,6 @@
 # Mengkaile 3D DIY Designer — Project Knowledge
 
-Last consolidated: 2026-08-01
+Last consolidated: 2026-08-08
 
 This document is the durable product and engineering memory for the Mengkaile 3D DIY designer. It consolidates the decisions made during the initial implementation and subsequent user-testing iterations. It is intentionally more specific than a conventional roadmap because many details affect whether customer intent can be manufactured correctly.
 
@@ -54,6 +54,7 @@ Do not copy competitor branding, source code, or assets. Competitor products are
 - Numeric movement/length controls must close after Apply or Cancel and must never follow the cursor indefinitely.
 - Profiles have black end handles at both ends for lengthening/shortening. Show the current length during the gesture and permit exact numeric entry.
 - Right-click context actions include the three 90-degree rotations and Delete.
+- Because customers may not discover the context menu, selecting an unlocked item also exposes the three colored 90-degree rotation controls directly over the scene. Keep a visible scene hint that right-click offers rotation/delete while right-drag orbits the camera.
 - `Delete` and `Backspace` delete the selected item(s) when focus is not inside an editable control.
 - Shift-click toggles individual items. Shift-drag creates a marquee selection. Every selected item needs a clear visible highlight so customers can verify batch selection.
 - Provide undo/redo and a **显示全部 / Frame all** view reset that fits every drawn element after the user gets lost while zooming or orbiting.
@@ -66,7 +67,9 @@ Do not copy competitor branding, source code, or assets. Competitor products are
 - Wording standard: “绕红轴 / green axis / blue axis 90°”. The helper text defines the viewpoint: looking in the arrow direction, rotation is clockwise.
 - Repeated rotation must work indefinitely. Four clicks around the same axis equal 360 degrees and must return the object to its original orientation, within floating-point tolerance.
 - Rotation around the profile's own longitudinal axis is required so customers can change which slot or covered face is oriented outward.
-- If a proposed rotation creates an actual profile collision, reject it and explain that rotation would cause penetration and that the customer should first move the profile away. Routine drag collision prevention should not spam notifications.
+- Movement, numeric movement, duplicate-and-move, and rotation remain available even when profiles intersect. Do not roll the transform back or show a blocking dialog.
+- While interference exists, highlight every involved profile and project-tree node in red and show a non-blocking scene warning. The warning clears automatically after the customer moves or rotates the profiles apart.
+- Magnetic snapping should still prefer valid face-to-face joints and skip snap candidates that would create solid penetration; this does not prevent a customer from manually placing an intentionally overlapping intermediate state.
 
 ## 7. Snapping and connection intent
 
@@ -269,9 +272,11 @@ Before releasing a designer change, verify at minimum:
 
 - Rotate four times around each colored axis and compare with the starting transform.
 - Self-rotate a profile and verify the visible slot/covered face changes.
+- Verify the in-scene rotation toolbar appears for a selected unlocked item and that the persistent right-click hint is visible.
 - Test snapping for parallel, perpendicular, vertical, horizontal, and camera-oblique arrangements.
 - Test 2020↔2020, 2020↔2040 on both wide-face slots, and multi-slot↔multi-slot.
-- Verify snap acquisition at Frame-all zoom, stable hold near a candidate, easy separation, and no solid penetration.
+- Verify snap acquisition at Frame-all zoom, stable hold near a candidate, easy separation, and no solid penetration in the proposed snap.
+- Intentionally move and rotate profiles into interference: the transform must remain applied, every involved profile/tree node must turn red, and the warning must clear after separation.
 
 ### Machining
 
@@ -321,5 +326,5 @@ Before releasing a designer change, verify at minimum:
 
 ### Decision log
 
+- **2026-08-08:** Reversed collision handling from blocking/reverting transforms to MayCAD-style non-blocking interference feedback. Movement and rotation now remain applied; involved profiles and project nodes are highlighted red until resolved. Added scene-level rotation controls and an explicit right-click rotate/delete hint.
 - **2026-08-01:** Consolidated the initial 3D designer implementation and all subsequent product-review decisions into this durable project document.
-

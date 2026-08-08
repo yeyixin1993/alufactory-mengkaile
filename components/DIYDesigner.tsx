@@ -247,7 +247,7 @@ const TEXT: Record<Language, Record<string, string>> = {
     saved: '设计 JSON 已下载到本机',
     loaded: '已从本地 JSON 读取设计',
     cartAdded: '设计清单已加入购物车',
-    dragHint: '选中后拖动即平移；按住 Shift 拖动型材则复制+平移。右上角可锁定 XY/XZ/YZ 工作平面，黑色端箭头可改长度。',
+    dragHint: '选中后拖动即平移；按住 Shift 拖动型材则复制+平移。右键型材可旋转或删除；右上角可锁定 XY/XZ/YZ 工作平面。',
     delete: '删除',
     duplicate: '复制',
     backToProject: '返回项目结构',
@@ -260,7 +260,10 @@ const TEXT: Record<Language, Record<string, string>> = {
     rotateZ: '绕蓝轴 90°',
     rotateStandard: '沿对应颜色箭头看过去，每次顺时针旋转 90°；连续点击 4 次即旋转 360°回到原位。型材与某色轴同向时，点击该颜色就是型材自转，可切换槽面或封边方向。',
     rotationStatus: '当前角度',
-    rotateCollision: '旋转后型材会与其他型材相互穿透，因此本次旋转未执行。请先将型材平移出一段距离后再试。',
+    sceneRotation: '场景旋转',
+    sceneContextHint: '右键零件可旋转或删除；右键拖动可旋转视角。',
+    interferenceWarning: '型材发生干涉，已标红。可继续移动或旋转，直到警告消失。',
+    interference: '干涉',
     snapEnd: '磁吸：端点连接',
     snapSide: '磁吸：交叉连接',
     snapOffset: '磁吸：边缘对齐',
@@ -399,7 +402,7 @@ const TEXT: Record<Language, Record<string, string>> = {
     saved: 'Design JSON downloaded to this device',
     loaded: 'Design loaded from local JSON',
     cartAdded: 'Design parts added to cart',
-    dragHint: 'Drag a selected part to move it; hold Shift while dragging a profile to duplicate + move. Lock the XY, XZ, or YZ work plane at the upper right, or use the black end arrows to resize.',
+    dragHint: 'Drag a selected part to move it; hold Shift while dragging a profile to duplicate + move. Right-click a profile to rotate or delete it; lock the XY, XZ, or YZ work plane at the upper right.',
     delete: 'Delete',
     duplicate: 'Duplicate',
     backToProject: 'Back to project',
@@ -412,7 +415,10 @@ const TEXT: Record<Language, Record<string, string>> = {
     rotateZ: 'Rotate 90° about blue',
     rotateStandard: 'Looking in the direction of the colored arrow, each click rotates 90° clockwise. Four clicks make 360° and return to the starting orientation. When the profile follows that colored axis, the same control spins the profile to change its slot or covered face.',
     rotationStatus: 'Current angles',
-    rotateCollision: 'This rotation would make profiles overlap, so it was not applied. Move the profile away and try again.',
+    sceneRotation: 'Rotate in scene',
+    sceneContextHint: 'Right-click a part to rotate or delete it; right-drag to orbit the view.',
+    interferenceWarning: 'Profiles interfere and are highlighted red. Keep moving or rotating until the warning clears.',
+    interference: 'Interference',
     snapEnd: 'Magnet: end connection',
     snapSide: 'Magnet: cross connection',
     snapOffset: 'Magnet: edge alignment',
@@ -551,7 +557,7 @@ const TEXT: Record<Language, Record<string, string>> = {
     saved: '設計JSONを端末に保存しました',
     loaded: 'ローカルJSONから設計を読み込みました',
     cartAdded: 'カートに追加しました',
-    dragHint: '選択パーツのドラッグで移動、Shiftを押しながら形材をドラッグすると複製+移動します。右上で XY/XZ/YZ 作業平面を固定できます。',
+    dragHint: '選択パーツのドラッグで移動、Shiftを押しながら形材をドラッグすると複製+移動します。右クリックで回転または削除できます。',
     delete: '削除',
     duplicate: '複製',
     backToProject: 'プロジェクトへ戻る',
@@ -564,7 +570,10 @@ const TEXT: Record<Language, Record<string, string>> = {
     rotateZ: '青軸まわり 90°',
     rotateStandard: '対応する色の矢印方向へ見て、クリックするたびに時計回りへ90°回転します。4回で360°となり元の姿勢に戻ります。形材が同じ色の軸に沿う場合は自転となり、溝面やカバー面を切り替えられます。',
     rotationStatus: '現在角度',
-    rotateCollision: '回転すると形材同士が重なるため実行できません。少し移動してから再度お試しください。',
+    sceneRotation: 'シーン内で回転',
+    sceneContextHint: 'パーツを右クリックすると回転または削除、右ドラッグで視点を回転できます。',
+    interferenceWarning: '形材が干渉し、赤色で表示されています。警告が消えるまで移動または回転を続けられます。',
+    interference: '干渉',
     snapEnd: 'スナップ：端点接続',
     snapSide: 'スナップ：交差接続',
     snapOffset: 'スナップ：端揃え',
@@ -1097,10 +1106,13 @@ const buildDemoWorkbench = (): DIYSceneItem[] => {
   const addProfile = (length: number, position: Vec3, rotation: Vec3 = [0, 0, 0], variantId = '2020') => {
     items.push({ ...createItem('profile', items.length, variantId), length, position, rotation, name: variantId });
   };
-  addProfile(1000, [0, 760, 250]);
-  addProfile(1000, [0, 760, -250]);
-  addProfile(500, [-500, 760, 0], [0, 90, 0]);
-  addProfile(500, [500, 760, 0], [0, 90, 0]);
+  // The side rails occupy the full 500 mm outside depth. The front/back
+  // rails stop at their inner faces so the demo begins as a valid butt-joint
+  // frame instead of four slightly interpenetrating corners.
+  addProfile(960, [0, 760, 250]);
+  addProfile(960, [0, 760, -250]);
+  addProfile(500, [-490, 760, 0], [0, 90, 0]);
+  addProfile(500, [490, 760, 0], [0, 90, 0]);
   addProfile(720, [-470, 370, 230], [0, 0, 90]);
   addProfile(720, [470, 370, 230], [0, 0, 90]);
   addProfile(720, [-470, 370, -230], [0, 0, 90]);
@@ -1142,6 +1154,7 @@ const makeMaterial = (
   selected: boolean,
   kind: DIYItemKind,
   opacity = 1,
+  interfering = false,
 ) => {
   const isMarineBoard = kind === 'marine_board';
   const isBrightSilver = colorId === 'silver' && !isMarineBoard;
@@ -1150,8 +1163,12 @@ const makeMaterial = (
     metalness: isMarineBoard ? 0.03 : isBrightSilver ? 0.92 : kind === 'foot' ? 0.45 : 0.74,
     roughness: isMarineBoard ? 0.72 : isBrightSilver ? 0.12 : 0.25,
     envMapIntensity: isBrightSilver ? 1.65 : 1,
-    emissive: selected ? new THREE.Color('#2563eb') : new THREE.Color('#000000'),
-    emissiveIntensity: selected ? 0.42 : 0,
+    emissive: interfering
+      ? new THREE.Color('#ef4444')
+      : selected
+        ? new THREE.Color('#2563eb')
+        : new THREE.Color('#000000'),
+    emissiveIntensity: interfering ? 0.68 : selected ? 0.42 : 0,
     transparent: opacity < 1,
     opacity,
     depthWrite: opacity >= 1,
@@ -1190,6 +1207,24 @@ const addSelectionOutline = (group: THREE.Group) => {
   outline.position.copy(center);
   outline.renderOrder = 91;
   outline.userData.selectionDecoration = true;
+  group.add(outline);
+};
+
+const addInterferenceOutline = (group: THREE.Group) => {
+  const bounds = new THREE.Box3().setFromObject(group);
+  if (bounds.isEmpty()) return;
+  const size = bounds.getSize(new THREE.Vector3()).addScalar(0.075);
+  const center = bounds.getCenter(new THREE.Vector3());
+  const geometry = new THREE.BoxGeometry(size.x, size.y, size.z);
+  const edgeGeometry = new THREE.EdgesGeometry(geometry);
+  geometry.dispose();
+  const outline = new THREE.LineSegments(
+    edgeGeometry,
+    new THREE.LineBasicMaterial({ color: '#dc2626', transparent: true, opacity: 1, depthTest: false }),
+  );
+  outline.position.copy(center);
+  outline.renderOrder = 92;
+  outline.userData.interferenceDecoration = true;
   group.add(outline);
 };
 
@@ -1636,6 +1671,22 @@ const profileItemCollides = (candidate: DIYSceneItem, items: DIYSceneItem[]) => 
     && item.kind === 'profile'
     && orientedBoxesOverlap(candidateBox, profileBoxFromItem(item))
   ));
+};
+
+const findCollidingProfileIds = (items: DIYSceneItem[]) => {
+  const profiles = items.filter((item) => item.kind === 'profile');
+  const collidingIds = new Set<string>();
+  for (let firstIndex = 0; firstIndex < profiles.length; firstIndex += 1) {
+    const first = profiles[firstIndex];
+    const firstBox = profileBoxFromItem(first);
+    for (let secondIndex = firstIndex + 1; secondIndex < profiles.length; secondIndex += 1) {
+      const second = profiles[secondIndex];
+      if (!orientedBoxesOverlap(firstBox, profileBoxFromItem(second))) continue;
+      collidingIds.add(first.id);
+      collidingIds.add(second.id);
+    }
+  }
+  return collidingIds;
 };
 
 const profileCollides = (
@@ -2115,6 +2166,7 @@ const createProfileObject = (
   transparentProfile = false,
   showMachiningMarks = true,
   machiningEmphasis = 0.72,
+  interfering = false,
 ) => {
   const group = new THREE.Group();
   const [sectionWidth, sectionHeight] = profileSize(item.variantId);
@@ -2164,7 +2216,7 @@ const createProfileObject = (
 
   const body = new THREE.Mesh(
     geometry,
-    makeMaterial(item.colorId, selected, item.kind, transparentProfile ? 0.24 : 1),
+    makeMaterial(item.colorId, selected, item.kind, transparentProfile ? 0.24 : 1, interfering),
   );
   body.castShadow = !transparentProfile;
   body.receiveShadow = true;
@@ -2321,6 +2373,7 @@ const createProfileObject = (
   if (showMachiningMarks && item.tappingLeft) addTappingMarkers('left');
   if (showMachiningMarks && item.tappingRight) addTappingMarkers('right');
   if (selected) addSelectionOutline(group);
+  if (interfering) addInterferenceOutline(group);
   addSelectionHitbox(group, new THREE.BoxGeometry(length + 0.012, height + 0.018, width + 0.018));
   return group;
 };
@@ -2792,6 +2845,11 @@ const ThreeAssembly: React.FC<{
   selectedIds: string[];
   rotationLabels: [string, string, string];
   rotationMenuTitle: string;
+  interactionLabels: {
+    sceneRotation: string;
+    contextHint: string;
+    interferenceWarning: string;
+  };
   snapLabels: {
     end: string;
     side: string;
@@ -2848,6 +2906,7 @@ const ThreeAssembly: React.FC<{
   selectedIds,
   rotationLabels,
   rotationMenuTitle,
+  interactionLabels,
   snapLabels,
   alignmentLabels = {
     title: 'Snap',
@@ -2910,6 +2969,8 @@ const ThreeAssembly: React.FC<{
     startPosition?: Vec3;
     direction?: Vec3;
   } | null>(null);
+  const collidingProfileIds = useMemo(() => findCollidingProfileIds(items), [items]);
+  const selectedSceneItem = selectedId ? items.find((item) => item.id === selectedId) : undefined;
   const sceneRef = useRef<THREE.Scene | null>(null);
   const cameraRef = useRef<THREE.PerspectiveCamera | null>(null);
   const rendererRef = useRef<THREE.WebGLRenderer | null>(null);
@@ -3149,7 +3210,6 @@ const ThreeAssembly: React.FC<{
     scene.add(snapPreview);
     let transformWasDragging = false;
     let transformDragActive = false;
-    let lastSafeProfilePosition: THREE.Vector3 | null = null;
     let transformSnapLock: ProfileSnap | null = null;
     let transformSnapPointerPosition: THREE.Vector3 | null = null;
     let transformSnapSuppressed = false;
@@ -3164,10 +3224,7 @@ const ThreeAssembly: React.FC<{
         transformSnapPointerPosition = null;
         transformSnapSuppressed = false;
         transformSnapRearmAt = 0;
-        const object = transform.object as THREE.Group | undefined;
-        lastSafeProfilePosition = object?.position.clone() || null;
       } else {
-        lastSafeProfilePosition = null;
         transformSnapLock = null;
         transformSnapPointerPosition = null;
         transformSnapSuppressed = false;
@@ -3281,21 +3338,11 @@ const ThreeAssembly: React.FC<{
         transformSnapLock = snap;
         object.position.copy(snap.position);
         syncProfileLengthHandles(lengthHandles, object, item);
-        if (lastSafeProfilePosition) lastSafeProfilePosition.copy(snap.position);
-        else lastSafeProfilePosition = snap.position.clone();
         showSnapVisual(snap, object, item);
         return;
       }
       transformSnapLock = null;
       transformSnapPointerPosition = null;
-      if (profileCollides(object, item, object.position, itemsRef.current, groupsRef.current)) {
-        if (lastSafeProfilePosition) object.position.copy(lastSafeProfilePosition);
-        syncProfileLengthHandles(lengthHandles, object, item);
-        hideSnapVisual();
-        setSnapHint(null);
-        return;
-      }
-      lastSafeProfilePosition = object.position.clone();
       syncProfileLengthHandles(lengthHandles, object, item);
       hideSnapVisual(260);
       setSnapHint(null);
@@ -3673,9 +3720,8 @@ const ThreeAssembly: React.FC<{
         state.object.position.copy(nextPosition);
         if (state.item.kind === 'profile') {
           // A Shift-drag starts the prospective copy directly on top of its
-          // source. Ignore only that source while previewing the move so the
-          // copy can leave the initial overlap; the final commit still checks
-          // the finished copy against every profile.
+          // source. Ignore that source while looking for a magnetic snap so
+          // the copy can leave the initial overlap naturally.
           const collisionItems = state.duplicateOnCommit
             ? itemsRef.current.filter((item) => item.id !== state.item.id)
             : itemsRef.current;
@@ -3714,14 +3760,6 @@ const ThreeAssembly: React.FC<{
             nextPosition.copy(snap.position);
             state.object.position.copy(nextPosition);
             showSnapVisual(snap, state.object, state.item);
-          } else if (profileCollides(state.object, state.collisionItem, nextPosition, collisionItems, groupsRef.current)) {
-            state.snapLock = null;
-            state.snapPointerPosition = null;
-            state.object.position.copy(state.validPosition);
-            syncProfileLengthHandles(lengthHandles, state.object, state.item);
-            hideSnapVisual(260);
-            setSnapHint(state.duplicateOnCommit ? operationLabels.duplicateMove : null);
-            return;
           } else {
             state.snapLock = null;
             state.snapPointerPosition = null;
@@ -4102,6 +4140,7 @@ const ThreeAssembly: React.FC<{
     });
     const groups = new Map<string, THREE.Group>();
     const selectedSet = new Set(selectedIds);
+    const collidingSet = findCollidingProfileIds(items);
     const showMultiSelectionOutline = selectedIds.length > 1;
     items.forEach((item) => {
       const showSelectionOutline = showMultiSelectionOutline && selectedSet.has(item.id);
@@ -4117,6 +4156,7 @@ const ThreeAssembly: React.FC<{
           transparentProfiles,
           showMachiningMarks,
           machiningEmphasis,
+          collidingSet.has(item.id),
         )
         : item.kind === 'plate' || item.kind === 'pegboard' || item.kind === 'marine_board'
           ? createBoardObject(item, showSelectionOutline)
@@ -4165,6 +4205,50 @@ const ThreeAssembly: React.FC<{
       }}
     >
       <div ref={mountRef} className="absolute inset-0 overflow-hidden" data-testid="diy-3d-canvas" />
+      {selectedSceneItem && selectedIds.length === 1 && !selectedSceneItem.lockedPosition && (
+        <div
+          className="absolute left-3 top-28 z-20 w-[190px] rounded-2xl border border-slate-200 bg-white/95 p-2.5 shadow-xl backdrop-blur"
+          data-testid="diy-scene-rotation-toolbar"
+          onPointerDown={(event) => event.stopPropagation()}
+        >
+          <div className="mb-2 flex items-center gap-1.5 text-[9px] font-black uppercase tracking-widest text-slate-500">
+            <Rotate3D className="h-3.5 w-3.5 text-blue-600" />
+            {interactionLabels.sceneRotation}
+          </div>
+          <div className="grid grid-cols-3 gap-1.5">
+            {rotationLabels.map((label, axisIndex) => (
+              <button
+                key={label}
+                type="button"
+                title={label}
+                aria-label={label}
+                data-testid={`diy-scene-rotate-${axisIndex}`}
+                onClick={() => onRotateQuarterTurnRef.current(selectedSceneItem.id, axisIndex as RotationAxisIndex)}
+                className="flex min-h-12 flex-col items-center justify-center gap-1 rounded-xl border border-slate-200 bg-slate-50 px-1 text-[9px] font-black text-slate-700 transition hover:border-blue-300 hover:bg-blue-50"
+              >
+                <span
+                  className="h-2.5 w-2.5 rounded-full"
+                  style={{ backgroundColor: ['#ef4444', '#22c55e', '#3b82f6'][axisIndex] }}
+                />
+                90°
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+      {collidingProfileIds.size > 0 && (
+        <div
+          className="pointer-events-none absolute bottom-3 right-3 z-30 max-w-[360px] rounded-2xl border border-red-300 bg-red-50/95 px-4 py-2.5 text-center text-[11px] font-black leading-relaxed text-red-700 shadow-xl backdrop-blur"
+          data-testid="diy-interference-warning"
+        >
+          {collidingProfileIds.size} × {interactionLabels.interferenceWarning}
+        </div>
+      )}
+      {collidingProfileIds.size === 0 && (
+        <div className="pointer-events-none absolute bottom-3 right-3 z-20 max-w-[270px] rounded-xl border border-white/80 bg-slate-950/78 px-3 py-2 text-[9px] font-bold leading-relaxed text-white shadow-lg backdrop-blur">
+          {interactionLabels.contextHint}
+        </div>
+      )}
       {holeDraft && (
         <div
           className="absolute z-40 w-[280px] -translate-x-1/2 rounded-2xl border border-blue-200 bg-white/95 p-3 shadow-2xl backdrop-blur"
@@ -4422,7 +4506,7 @@ const ThreeAssembly: React.FC<{
         </div>
       )}
       {snapHint && (
-        <div className="pointer-events-none absolute bottom-4 left-1/2 z-20 -translate-x-1/2 rounded-full bg-sky-500 px-4 py-2 text-[11px] font-black text-white shadow-xl shadow-sky-500/30">
+        <div className={`pointer-events-none absolute left-1/2 z-20 -translate-x-1/2 rounded-full bg-sky-500 px-4 py-2 text-[11px] font-black text-white shadow-xl shadow-sky-500/30 ${collidingProfileIds.size > 0 ? 'bottom-16' : 'bottom-4'}`}>
           {snapHint}
         </div>
       )}
@@ -4560,7 +4644,6 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({ language, onLanguageChange, u
   const [history, setHistory] = useState<DIYSceneItem[][]>([]);
   const [future, setFuture] = useState<DIYSceneItem[][]>([]);
   const [notice, setNotice] = useState('');
-  const [rotationWarning, setRotationWarning] = useState(false);
   const [holePosition, setHolePosition] = useState(100);
   const [holeSide, setHoleSide] = useState<ProfileSide>('A');
   const [previewSide, setPreviewSide] = useState<ProfileSide>('A');
@@ -4604,6 +4687,7 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({ language, onLanguageChange, u
     setSelection(selectedIds.includes(id) ? selectedIds.filter((entry) => entry !== id) : [...selectedIds, id]);
   };
   const total = useMemo(() => items.reduce((sum, item) => sum + calculatePrice(item, user), 0), [items, user]);
+  const collidingProfileIds = useMemo(() => findCollidingProfileIds(items), [items]);
   const currency = language === 'cn' ? '￥' : '$';
 
   const commit = (next: DIYSceneItem[], selection = selectedId) => {
@@ -4627,7 +4711,9 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({ language, onLanguageChange, u
       ...patch,
       ...(detachLinkedScrew ? { autoGenerated: false, linkedProfileId: undefined, linkedHoleId: undefined } : {}),
     };
-    if (profileItemCollides(candidate, items)) return;
+    const changesProfileEnvelope = selected.kind === 'profile'
+      && (patch.length !== undefined || patch.variantId !== undefined);
+    if (changesProfileEnvelope && profileItemCollides(candidate, items)) return;
     commit(items.map((item) => item.id === selected.id ? candidate : item), selected.id);
   };
 
@@ -4635,10 +4721,6 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({ language, onLanguageChange, u
     const item = items.find((entry) => entry.id === itemId);
     if (!item || item.lockedPosition) return;
     const candidate = { ...item, rotation: rotateItemAroundWorldAxis(item, axisIndex) };
-    if (profileItemCollides(candidate, items)) {
-      setRotationWarning(true);
-      return;
-    }
     commit(items.map((entry) => entry.id === itemId ? candidate : entry), itemId);
   };
 
@@ -4720,11 +4802,6 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({ language, onLanguageChange, u
       if (!selectedSet.has(item.id)) return item;
       return { ...item, rotation: rotateItemAroundWorldAxis(item, axisIndex) };
     });
-    const collision = next.some((item) => selectedSet.has(item.id) && profileItemCollides(item, next));
-    if (collision) {
-      setRotationWarning(true);
-      return;
-    }
     commit(next, selectedIds[selectedIds.length - 1]);
     setSelectedIds([...selectedIds]);
   };
@@ -5317,6 +5394,11 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({ language, onLanguageChange, u
             selectedIds={selectedIds}
             rotationLabels={[t.rotateX, t.rotateY, t.rotateZ]}
             rotationMenuTitle={t.rotation}
+            interactionLabels={{
+              sceneRotation: t.sceneRotation,
+              contextHint: t.sceneContextHint,
+              interferenceWarning: t.interferenceWarning,
+            }}
             snapLabels={{
               end: t.snapEnd,
               side: t.snapSide,
@@ -5382,7 +5464,6 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({ language, onLanguageChange, u
                   position,
                   rotation,
                 };
-                if (profileItemCollides(duplicated, items)) return;
                 commit([...items, duplicated], duplicated.id);
                 return;
               }
@@ -5407,7 +5488,6 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({ language, onLanguageChange, u
                   ? { autoGenerated: false, linkedProfileId: undefined, linkedHoleId: undefined }
                   : {}),
               };
-              if (profileItemCollides(candidate, items)) return;
               const next = items.map((item) => item.id === id ? candidate : item);
               commit(next, id);
             }}
@@ -5490,10 +5570,15 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({ language, onLanguageChange, u
                   <button
                     key={item.id}
                     onClick={() => selectItem(item.id, true)}
-                    className="flex w-full items-center gap-2 rounded-xl bg-blue-50 px-3 py-2 text-left text-xs font-bold text-blue-800"
+                    className={`flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-xs font-bold ${
+                      collidingProfileIds.has(item.id)
+                        ? 'border border-red-300 bg-red-50 text-red-800'
+                        : 'bg-blue-50 text-blue-800'
+                    }`}
                   >
                     <span>{String(index + 1).padStart(2, '0')}</span>
                     <span className="min-w-0 flex-1 truncate">{getItemLabel(item, language)}</span>
+                    {collidingProfileIds.has(item.id) && <span className="rounded bg-red-600 px-1.5 py-0.5 text-[8px] font-black text-white">{t.interference}</span>}
                     <span>×</span>
                   </button>
                 ))}
@@ -5517,7 +5602,11 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({ language, onLanguageChange, u
                   <button
                     key={item.id}
                     onClick={(event) => selectItem(item.id, event.shiftKey)}
-                    className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-slate-600 transition hover:bg-blue-50 hover:text-blue-700"
+                    className={`flex w-full items-center gap-3 rounded-xl border px-3 py-2.5 text-left transition ${
+                      collidingProfileIds.has(item.id)
+                        ? 'border-red-300 bg-red-50 text-red-800 hover:bg-red-100'
+                        : 'border-transparent text-slate-600 hover:bg-blue-50 hover:text-blue-700'
+                    }`}
                   >
                     <span className="text-[10px] font-black opacity-60">{String(index + 1).padStart(2, '0')}</span>
                     <span className="min-w-0 flex-1">
@@ -5533,6 +5622,7 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({ language, onLanguageChange, u
                         </span>
                       )}
                     </span>
+                    {collidingProfileIds.has(item.id) && <span className="rounded bg-red-600 px-1.5 py-0.5 text-[8px] font-black text-white">{t.interference}</span>}
                     <span className="text-[10px] font-black text-slate-400">×{item.quantity}</span>
                   </button>
                 ))}
@@ -5543,6 +5633,11 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({ language, onLanguageChange, u
             <>
               <button onClick={() => setSelectedId(null)} className="mb-3 text-xs font-black text-blue-600 transition hover:text-blue-500">← {t.backToProject}</button>
               <h2 className="text-sm font-black uppercase tracking-widest text-slate-500">{t.properties}</h2>
+              {collidingProfileIds.has(selected.id) && (
+                <div className="mt-3 rounded-2xl border border-red-300 bg-red-50 px-3 py-2.5 text-[10px] font-black leading-relaxed text-red-700">
+                  {t.interferenceWarning}
+                </div>
+              )}
               <div className="mt-4 space-y-5">
               <div className="flex items-center gap-2">
                 <button onClick={() => {
@@ -5862,16 +5957,6 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({ language, onLanguageChange, u
           </button>
         </aside>
       </div>
-      {rotationWarning && (
-        <div className="fixed inset-0 z-[110] flex items-center justify-center bg-slate-950/45 p-4 backdrop-blur-sm">
-          <div className="w-full max-w-md rounded-3xl border border-amber-200 bg-white p-6 shadow-2xl">
-            <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-amber-100 text-xl">!</div>
-            <h2 className="mt-4 text-lg font-black text-slate-950">{t.rotation}</h2>
-            <p className="mt-2 text-sm font-bold leading-relaxed text-slate-600">{t.rotateCollision}</p>
-            <button onClick={() => setRotationWarning(false)} className="mt-6 w-full rounded-2xl bg-slate-950 px-4 py-3 text-sm font-black text-white hover:bg-blue-600">{t.understood}</button>
-          </div>
-        </div>
-      )}
       {pendingProfile && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/45 p-4 backdrop-blur-sm">
           <div className="w-full max-w-md rounded-3xl border border-white/70 bg-white p-6 shadow-2xl">
