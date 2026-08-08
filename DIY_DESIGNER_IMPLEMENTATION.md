@@ -24,6 +24,7 @@
 - Conversion of a complete 3D assembly into the existing cart item formats, including production remarks, board area metadata, machining data, hardware quantities, and checkout compatibility.
 - Designer screws preserve customer-edited quantities and export through the legacy factory reminder as compact rows grouped by profile model/series, head, length, color, and price; they do not stack with the ordinary per-hole 304-screw add-on.
 - Lazy-loaded 3D bundle so regular catalog and checkout visitors do not download Three.js.
+- MayCAD import: deterministic, editable `.scene` XML conversion plus PDF-only reconstruction from locally extracted BOM/view pages through a server-side Qwen Vision endpoint. PDF.js is loaded only when a PDF import is requested.
 
 ## Run locally
 
@@ -46,6 +47,7 @@ Open `http://localhost:3000/#/diy-designer`.
 8. Add STEP/DXF/GLTF import/export after exact geometry and coordinate conventions are finalized.
 9. Create a proper accessory catalog mapping for every connector, fastener, foot, hinge, handle, and panel mounting system.
 10. Move Tailwind from the existing CDN setup into the Vite/PostCSS build before production deployment.
+11. Extend the constrained MayCAD scene schema into natural-language scene operations and image/sketch-assisted modeling, with human review before ordering.
 
 ## Validation completed
 
@@ -53,5 +55,6 @@ Open `http://localhost:3000/#/diy-designer`.
 - The designer component passes a targeted TypeScript check.
 - Browser-tested empty state, demo assembly generation, WebGL rendering, part selection, profile length update, drilling, live repricing, and full cart conversion.
 - Browser-tested board areas and accessory quantities in the existing cart/production sheet.
+- Browser-tested `clothing_rack_2020.scene` import: 9 editable profiles, verified `2020`/`2020-N1` lengths, 12 imported Q11 countersunk holes, and a non-destructive review warning for four unsupported Q2 blind bores.
 
 The repository-wide `npx tsc --noEmit` still reports the pre-existing backend service alias error in `alufactory-backend/FRONTEND_SERVICE.ts` (`@/config` is not present in the frontend TypeScript project).

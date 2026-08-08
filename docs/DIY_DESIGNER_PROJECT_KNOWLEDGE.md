@@ -212,6 +212,16 @@ Availability and price must be verified against Mengkaile's authoritative catalo
 - Shipping-weight baseline for marine board must use area multipliers: 12mm = 8 kg/㎡ and 18mm = 12 kg/㎡. If any legacy value differs, this baseline is authoritative.
 - Client-side prices are estimates. A production deployment needs server-side validation against the current catalog before checkout totals become authoritative.
 
+### 13.3 MayCAD interoperability
+
+- MayCAD `.scene` files are XML and contain authoritative per-profile transform matrices and machining locations. Import them deterministically in the browser; do not spend AI tokens when the source scene is available.
+- MayCAD profiles extrude along local +Y, while Mengkaile profiles use local +X. Convert the complete basis and center point, preserve one editable item per physical member, and keep source IDs in remarks for review.
+- Initial verified mappings include MayCAD `2020-22SP` → `2020-N2`, `2020-21SP` → `2020-N1`, ordinary `2020` → `2020`, and ordinary MayCAD `2040` → Mengkaile `2040`. The chair sample was changed to `2040-N1-40` manually after import; that customer edit must not alter the default source mapping. Keep the maintained table in `docs/MAYCAD_PROFILE_MAPPING.md` synchronized with the importer.
+- A MayCAD assembly PDF contains BOM, machining tables, orthographic views, and isometric/exploded images, but no embedded editable scene coordinates. PDF-only import therefore extracts text and renders only the key view pages locally, then sends those derived inputs to a server-side vision model for constrained scene reconstruction.
+- Qwen Vision is the current PDF reconstruction provider. API keys stay on the backend. DeepSeek's official API is text-only and may later validate/repair structured scene JSON, but it is not the PDF vision provider.
+- Every AI-reconstructed PDF import is editable immediately but must carry confidence and review warnings. Never silently claim manufacturing certainty for inferred face orientation, hidden members, machining, tapping, color, boards, or accessories.
+- Imported MayCAD blind bores are not equivalent to Mengkaile end tapping. Unsupported blind bores remain review warnings rather than being converted into fabricated machining intent.
+
 ## 14. STEP/STP interoperability direction
 
 The requested long-term workflow is similar to a profile-quote page:
@@ -310,6 +320,7 @@ Before releasing a designer change, verify at minimum:
 7. Generate canonical customer/factory 2D A/B/C/D drawings from the same physical machining model.
 8. Design and validate the STEP/STP quote/import pipeline before adding STEP export.
 9. Reduce the large Three.js designer bundle through deliberate code splitting after behavior stabilizes.
+10. Build an AI-native design command layer on the same editable scene schema: natural-language prompts produce constrained scene operations, the designer renders the result, and a human reviews it before cart/order conversion.
 
 ## 19. Local development and version safety
 
@@ -331,6 +342,7 @@ Before releasing a designer change, verify at minimum:
 
 ### Decision log
 
+- **2026-08-08:** Corrected MayCAD `PROF20-2040` to Mengkaile ordinary `2040`. `2040-N1-40` in the chair reference is a post-import manual replacement, not an automatic source mapping. Added a maintained verified-intersection table; unknown MayCAD profiles use dimension-only fallback with an explicit review warning.
 - **2026-08-08:** Unified legacy “配304螺丝” ordering with explicit 3D-designer screws. Explicit designer screw quantities now override the legacy per-hole add-on, always trigger the factory reminder, and export as compact specification-grouped PDF rows with no duplicate per-screw cards.
 - **2026-08-08:** Reversed collision handling from blocking/reverting transforms to MayCAD-style non-blocking interference feedback. Movement and rotation now remain applied; involved profiles and project nodes are highlighted red until resolved. Added scene-level rotation controls and an explicit right-click rotate/delete hint.
 - **2026-08-01:** Consolidated the initial 3D designer implementation and all subsequent product-review decisions into this durable project document.

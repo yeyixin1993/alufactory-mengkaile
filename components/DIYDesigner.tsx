@@ -62,6 +62,9 @@ import {
 import { buildProductionXlsx, parseProductionXlsx, type ProductionWorkbookData } from '../utils/productionXlsx';
 import { calculateProfileInnerClearance } from '../utils/diyGeometry';
 import { groupDiyScrewCartItems } from '../utils/cartAccessories';
+import { ApiService } from '../services/apiService';
+import { normalizeMaycadAiResult, parseMaycadSceneXml } from '../utils/maycadImport';
+import { extractMaycadPdfPayload } from '../utils/maycadPdf';
 
 type DIYItemKind =
   | 'profile'
@@ -212,6 +215,10 @@ const TEXT: Record<Language, Record<string, string>> = {
     loadExcel: '读取本地 Excel',
     excelLoaded: 'Excel已读取，列表与价格已更新',
     excelImportFailed: 'Excel读取失败，请选择本设计器导出的生产Excel',
+    maycadImport: '导入 MayCAD',
+    maycadImporting: '正在解析 MayCAD 文件…',
+    maycadLoaded: 'MayCAD模型已导入，可继续编辑',
+    maycadImportFailed: 'MayCAD导入失败',
     addCart: '加入购物车',
     total: '设计估价',
     length: '长度 (mm)',
@@ -367,6 +374,10 @@ const TEXT: Record<Language, Record<string, string>> = {
     loadExcel: 'Open local Excel',
     excelLoaded: 'Excel loaded; parts and pricing updated',
     excelImportFailed: 'Unable to read Excel. Choose a production workbook exported by this designer.',
+    maycadImport: 'Import MayCAD',
+    maycadImporting: 'Parsing MayCAD file…',
+    maycadLoaded: 'MayCAD model imported and ready to edit',
+    maycadImportFailed: 'MayCAD import failed',
     addCart: 'Add design to cart',
     total: 'Design estimate',
     length: 'Length (mm)',
@@ -522,6 +533,10 @@ const TEXT: Record<Language, Record<string, string>> = {
     loadExcel: 'ローカルExcel読込',
     excelLoaded: 'Excelを読み込み、部品表と価格を更新しました',
     excelImportFailed: 'Excelを読み込めません。デザイナーから出力した生産Excelを選択してください。',
+    maycadImport: 'MayCAD読込',
+    maycadImporting: 'MayCADファイルを解析中…',
+    maycadLoaded: 'MayCADモデルを読み込みました。編集できます',
+    maycadImportFailed: 'MayCADの読み込みに失敗しました',
     addCart: 'カートに追加',
     total: '見積金額',
     length: '長さ (mm)',
@@ -4655,8 +4670,11 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({ language, onLanguageChange, u
   const [pendingProfile, setPendingProfile] = useState<{ variantId: string; length: number } | null>(null);
   const [selectedAccessoryProfileSize, setSelectedAccessoryProfileSize] = useState<DIYAccessoryProfileSize>('2020');
   const [fileMenu, setFileMenu] = useState<'json' | 'excel' | null>(null);
+  const [maycadImporting, setMaycadImporting] = useState(false);
+  const [maycadReview, setMaycadReview] = useState<{ source: string; confidence?: number; warnings: string[] } | null>(null);
   const importRef = useRef<HTMLInputElement>(null);
   const excelImportRef = useRef<HTMLInputElement>(null);
+  const maycadImportRef = useRef<HTMLInputElement>(null);
 
   const selected = items.find((item) => item.id === selectedId) || null;
   const selectedTapPortCount = selected?.kind === 'profile' ? getProfileTapPortCount(selected.variantId) : 0;
@@ -5005,6 +5023,28 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({ language, onLanguageChange, u
     }
   };
 
+  const importMaycad = async (file?: File) => {
+    if (!file) return;
+    setMaycadImporting(true);
+    showNotice(t.maycadImporting);
+    try {
+      const isScene = file.name.toLowerCase().endsWith('.scene');
+      const result = isScene
+        ? parseMaycadSceneXml(await file.text())
+        : normalizeMaycadAiResult(await ApiService.importMaycadPdf(await extractMaycadPdfPayload(file)));
+      const importedItems = normalizeDesignItems(result.items as DIYSceneItem[]);
+      commit(importedItems, null);
+      setMaycadReview({ source: result.sourceTitle || file.name, confidence: result.confidence, warnings: result.warnings });
+      if (result.warnings.length) console.warn('MayCAD import review warnings:', result.warnings);
+      showNotice(`${t.maycadLoaded} · ${importedItems.length}${result.warnings.length ? ` · ⚠ ${result.warnings.length}` : ''}`);
+    } catch (error) {
+      console.warn('Unable to import MayCAD file', error);
+      showNotice(`${t.maycadImportFailed}: ${String((error as any)?.message || error)}`);
+    } finally {
+      setMaycadImporting(false);
+    }
+  };
+
   const toCartItems = (): CartItem[] => {
     const profileProduct = INITIAL_PRODUCTS.find((product) => product.type === ProductType.PROFILE)!;
     const plateProduct = INITIAL_PRODUCTS.find((product) => product.type === ProductType.ALUMINUM_PLATE)!;
@@ -5286,12 +5326,26 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({ language, onLanguageChange, u
                 </div>
               )}
             </div>
+            <button
+              type="button"
+              data-testid="diy-load-maycad"
+              disabled={maycadImporting}
+              onClick={() => maycadImportRef.current?.click()}
+              className="diy-toolbar-button gap-2 disabled:cursor-wait disabled:opacity-60"
+              title="MayCAD .scene uses deterministic local parsing; PDF uses Qwen Vision reconstruction"
+            >
+              <Upload className="h-4 w-4" />{maycadImporting ? t.maycadImporting : t.maycadImport}
+            </button>
             <input ref={importRef} type="file" accept="application/json,.json" className="hidden" onChange={(event) => {
               importJson(event.target.files?.[0]);
               event.target.value = '';
             }} />
             <input ref={excelImportRef} type="file" accept="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,.xlsx" className="hidden" onChange={(event) => {
               importExcel(event.target.files?.[0]);
+              event.target.value = '';
+            }} />
+            <input ref={maycadImportRef} type="file" accept=".scene,.pdf,application/pdf,application/xml,text/xml" className="hidden" onChange={(event) => {
+              importMaycad(event.target.files?.[0]);
               event.target.value = '';
             }} />
           </div>
@@ -5523,6 +5577,22 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({ language, onLanguageChange, u
             <div className="text-2xl font-black text-slate-900">{currency}{total.toFixed(1)}</div>
             <div className="text-[11px] font-bold text-slate-400">{items.length} {t.partsCount}</div>
           </div>
+          {maycadReview && (
+            <div className="absolute left-4 top-24 z-30 max-w-md rounded-2xl border border-amber-300 bg-amber-50/95 p-3 text-[10px] font-bold text-amber-950 shadow-xl backdrop-blur">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <div className="text-xs font-black">MayCAD · {maycadReview.source}</div>
+                  <div className="mt-1 text-amber-700">
+                    {language === 'cn' ? '已转换为可编辑模型，请在下单前核对型号、朝向和加工。' : language === 'jp' ? '編集可能なモデルに変換しました。発注前に型式・向き・加工を確認してください。' : 'Converted to an editable model. Review model, orientation, and machining before ordering.'}
+                    {maycadReview.confidence ? ` · ${Math.round(maycadReview.confidence * 100)}%` : ''}
+                  </div>
+                </div>
+                <button type="button" onClick={() => setMaycadReview(null)} className="rounded-lg px-2 py-1 text-amber-700 hover:bg-amber-100">×</button>
+              </div>
+              {maycadReview.warnings.slice(0, 3).map((warning, index) => <div key={`${warning}-${index}`} className="mt-1.5">⚠ {warning}</div>)}
+              {maycadReview.warnings.length > 3 && <div className="mt-1 text-amber-600">+{maycadReview.warnings.length - 3}</div>}
+            </div>
+          )}
           {notice && <div className="absolute bottom-5 left-1/2 -translate-x-1/2 rounded-2xl bg-slate-950 px-5 py-3 text-sm font-black text-white shadow-2xl">{notice}</div>}
         </main>
 
