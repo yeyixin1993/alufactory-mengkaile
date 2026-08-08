@@ -51,7 +51,10 @@ def create_app(config_name='development'):
     app.register_blueprint(admin_bp)
     app.register_blueprint(profile_bp)
     app.register_blueprint(payment_bp)
-    app.register_blueprint(ai_import_bp)
+    # AI reconstruction stays off unless a future deployment explicitly opts
+    # in after its provider and API keys are ready.
+    if os.getenv('ENABLE_MAYCAD_AI_IMPORT', '0') == '1':
+        app.register_blueprint(ai_import_bp)
     
     # Create database tables and run auto-migrations
     with app.app_context():

@@ -23,11 +23,16 @@ Mengkaile coordinate rules:
 - place the assembly near the origin with its lowest solid edge near Y=0.
 
 Known MayCAD -> Mengkaile mappings:
-- 20x20 2H corner / 22SP -> 2020-N2
-- 20x20 1 closed face / 21SP -> 2020-N1
-- ordinary 20x20 4H -> 2020
-- ordinary PROF20-2040 / 20x40 -> 2040
-- do not map ordinary 2040 to 2040-N1-40; that is a separate Mengkaile model the customer may select manually after import
+- PROF20-2020 and 20x20 43SP -> 2020
+- 20x20 21SP rounded profile -> 2020R
+- 20x20 22SP adjacent two closed faces -> 2020-N2
+- 20x20 23LP opposite two closed faces -> 2020-N2-OPP
+- 20x20 33SP one closed face -> 2020-N1
+- PROF20-2040 and 20x40 44SP/64SP -> 2040; MayCAD has no Mengkaile-equivalent covered-face 2040 in this verified set
+- verified MayCAD 30x30 Soft/Q variants -> 3030R
+- verified MayCAD 30x30 two-face 3002 and .22 corner variants -> 3030-N2, 3H/3003 variants -> 3030-N1, and ordinary 4H 3030L/SP variants -> 3030
+- all verified MayCAD 3060 variants -> 3060
+- all verified MayCAD 4040 variants -> 4040; all 4080 variants -> 4080
 
 Schema:
 {"sourceTitle":"string","confidence":0.0,"warnings":["string"],"items":[{"kind":"profile","variantId":"2020","lengthMm":400,"positionMm":[0,200,0],"rotationDeg":[0,0,90],"colorId":"natural","holes":[],"tappingLeft":false,"tappingRight":false,"remark":"MayCAD PDF reconstruction; review"}]}

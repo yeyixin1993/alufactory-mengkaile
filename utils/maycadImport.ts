@@ -24,8 +24,17 @@ export interface MaycadImportedItem {
 export interface MaycadImportResult {
   items: MaycadImportedItem[];
   warnings: string[];
+  profileReviews: MaycadProfileReview[];
   sourceTitle?: string;
   confidence?: number;
+}
+
+export interface MaycadProfileReview {
+  itemIds: string[];
+  sourceCode: string;
+  suggestedVariantId: string;
+  crossSectionMm?: [number, number];
+  reason: 'unverified' | 'ai-inferred';
 }
 
 export interface MaycadPdfAiPayload {
@@ -96,6 +105,7 @@ export const parseMaycadSceneXml = (xmlText: string): MaycadImportResult => {
   if (!scene || !objectsNode) throw new Error('This file is not a supported MayCAD scene');
 
   const warnings: string[] = [];
+  const profileReviewMap = new Map<string, MaycadProfileReview>();
   const objects = directChildren(objectsNode, 'object');
   const profileRecords = new Map<string, {
     item: MaycadImportedItem;
@@ -136,6 +146,22 @@ export const parseMaycadSceneXml = (xmlText: string): MaycadImportResult => {
       tappingRight: false,
       remark: `MayCAD ${profileCode || 'Profile'} · source #${sourceId}`,
     };
+    if (!mapped.exact) {
+      const crossSectionMm: [number, number] = [Math.round(widthCm * 10), Math.round(depthCm * 10)];
+      const reviewKey = `${profileCode || 'unknown'}|${crossSectionMm.join('x')}`;
+      const existingReview = profileReviewMap.get(reviewKey);
+      if (existingReview) {
+        existingReview.itemIds.push(item.id);
+      } else {
+        profileReviewMap.set(reviewKey, {
+          itemIds: [item.id],
+          sourceCode: profileCode || `source #${sourceId}`,
+          suggestedVariantId: mapped.variantId,
+          crossSectionMm,
+          reason: 'unverified',
+        });
+      }
+    }
     profileRecords.set(sourceId, { item, maycadRotation, maycadStart, longDirection });
   });
 
@@ -173,6 +199,7 @@ export const parseMaycadSceneXml = (xmlText: string): MaycadImportResult => {
   return {
     items,
     warnings: Array.from(new Set(warnings)),
+    profileReviews: Array.from(profileReviewMap.values()),
     sourceTitle: title,
     confidence: warnings.length ? 0.82 : 0.96,
   };
@@ -181,6 +208,7 @@ export const parseMaycadSceneXml = (xmlText: string): MaycadImportResult => {
 export const normalizeMaycadAiResult = (source: any): MaycadImportResult => {
   const warnings = Array.isArray(source?.warnings) ? source.warnings.map(String) : [];
   const rawItems = Array.isArray(source?.items) ? source.items : [];
+  const profileReviews: MaycadProfileReview[] = [];
   const validVariants = new Set([
     '1515', '2020', '2020-N1', '2020-N2', '2020-N2-OPP', '2020-N3',
     '2020-N4-SQ', '2020-N4-RD', '2020R', '2040', '2040-N1-20', '2040-N1-40',
@@ -209,8 +237,15 @@ export const normalizeMaycadAiResult = (source: any): MaycadImportResult => {
         physicalGrooveIndex: Math.max(0, Math.round(Number(hole?.physicalGrooveIndex || 0))),
       }];
     });
+    const itemId = makeImportId('ai', index + 1);
+    profileReviews.push({
+      itemIds: [itemId],
+      sourceCode: String(raw.maycadCode || raw.profileCode || `PDF profile #${index + 1}`),
+      suggestedVariantId: variantId,
+      reason: 'ai-inferred',
+    });
     return [{
-      id: makeImportId('ai', index + 1),
+      id: itemId,
       kind: 'profile',
       name: variantId,
       variantId,
@@ -229,6 +264,7 @@ export const normalizeMaycadAiResult = (source: any): MaycadImportResult => {
   return {
     items,
     warnings,
+    profileReviews,
     sourceTitle: source?.sourceTitle,
     confidence: Number(source?.confidence || 0.7),
   };

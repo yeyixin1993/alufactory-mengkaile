@@ -62,9 +62,7 @@ import {
 import { buildProductionXlsx, parseProductionXlsx, type ProductionWorkbookData } from '../utils/productionXlsx';
 import { calculateProfileInnerClearance } from '../utils/diyGeometry';
 import { groupDiyScrewCartItems } from '../utils/cartAccessories';
-import { ApiService } from '../services/apiService';
-import { normalizeMaycadAiResult, parseMaycadSceneXml } from '../utils/maycadImport';
-import { extractMaycadPdfPayload } from '../utils/maycadPdf';
+import { parseMaycadSceneXml, type MaycadProfileReview } from '../utils/maycadImport';
 
 type DIYItemKind =
   | 'profile'
@@ -219,6 +217,16 @@ const TEXT: Record<Language, Record<string, string>> = {
     maycadImporting: '正在解析 MayCAD 文件…',
     maycadLoaded: 'MayCAD模型已导入，可继续编辑',
     maycadImportFailed: 'MayCAD导入失败',
+    maycadSceneOnly: '请选择 MayCAD 导出的 .scene 文件。PDF、图片及其他格式暂不支持。',
+    maycadImportScope: '目前仅导入铝型材和打孔记录；连接件、螺丝等配件导入正在开发中。',
+    maycadProfileReviewTitle: '请确认未验证的型材型号',
+    maycadProfileReviewPrompt: '以下 MayCAD 型材尚未建立精确对应，系统已按截面尺寸暂选型号。请逐项确认后再继续。',
+    maycadProfileSource: 'MayCAD 型材',
+    maycadSuggestedModel: '确认萌开了型号',
+    maycadCrossSection: '截面',
+    maycadProfileQuantity: '数量',
+    maycadConfirmProfiles: '确认这些型号',
+    maycadProfileReviewApplied: '未验证型材的型号已确认',
     maycadTappingTitle: 'MayCAD 不包含攻丝信息',
     maycadTappingPrompt: 'MayCAD 没有攻丝选项，因此无法判断哪些端面需要攻丝。是否一键将本次导入的所有型材两端全部设置为攻丝？',
     maycadKeepNoTapping: '保持不攻丝',
@@ -384,6 +392,16 @@ const TEXT: Record<Language, Record<string, string>> = {
     maycadImporting: 'Parsing MayCAD file…',
     maycadLoaded: 'MayCAD model imported and ready to edit',
     maycadImportFailed: 'MayCAD import failed',
+    maycadSceneOnly: 'Choose a .scene file exported by MayCAD. PDF, images, and other formats are not currently supported.',
+    maycadImportScope: 'Currently only aluminum profiles and drilling records are imported. Accessory import is under development.',
+    maycadProfileReviewTitle: 'Confirm unverified profile models',
+    maycadProfileReviewPrompt: 'These MayCAD profiles do not yet have an exact verified mapping. Review the size-based suggestions and confirm each model before continuing.',
+    maycadProfileSource: 'MayCAD profile',
+    maycadSuggestedModel: 'Confirmed Mengkaile model',
+    maycadCrossSection: 'Cross-section',
+    maycadProfileQuantity: 'Quantity',
+    maycadConfirmProfiles: 'Confirm these models',
+    maycadProfileReviewApplied: 'Unverified profile models confirmed',
     maycadTappingTitle: 'MayCAD has no tapping data',
     maycadTappingPrompt: 'MayCAD has no tapping option, so tapped ends cannot be identified. Apply tapping to both ends of every imported profile?',
     maycadKeepNoTapping: 'Keep untapped',
@@ -549,6 +567,16 @@ const TEXT: Record<Language, Record<string, string>> = {
     maycadImporting: 'MayCADファイルを解析中…',
     maycadLoaded: 'MayCADモデルを読み込みました。編集できます',
     maycadImportFailed: 'MayCADの読み込みに失敗しました',
+    maycadSceneOnly: 'MayCADから書き出した.sceneファイルを選択してください。PDF・画像・その他の形式は現在対応していません。',
+    maycadImportScope: '現在読み込めるのはアルミ形材と穴あけ記録のみです。金具・ねじなどの部品読込は開発中です。',
+    maycadProfileReviewTitle: '未検証の形材型番を確認してください',
+    maycadProfileReviewPrompt: '以下のMayCAD形材には検証済みの完全一致がありません。断面寸法からの候補を確認し、各型番を選択してください。',
+    maycadProfileSource: 'MayCAD形材',
+    maycadSuggestedModel: '萌开了の確定型番',
+    maycadCrossSection: '断面',
+    maycadProfileQuantity: '数量',
+    maycadConfirmProfiles: '型番を確定',
+    maycadProfileReviewApplied: '未検証形材の型番を確定しました',
     maycadTappingTitle: 'MayCADにはタップ加工情報がありません',
     maycadTappingPrompt: 'MayCADにはタップ加工の設定がないため、加工する端面を判別できません。読み込んだ全形材の両端に一括でタップ加工を設定しますか？',
     maycadKeepNoTapping: 'タップ加工なしのまま',
@@ -4690,6 +4718,10 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({ language, onLanguageChange, u
   const [fileMenu, setFileMenu] = useState<'json' | 'excel' | null>(null);
   const [maycadImporting, setMaycadImporting] = useState(false);
   const [maycadReview, setMaycadReview] = useState<{ source: string; confidence?: number; warnings: string[] } | null>(null);
+  const [maycadProfileReviewPrompt, setMaycadProfileReviewPrompt] = useState<{
+    entries: Array<MaycadProfileReview & { variantId: string }>;
+    profileIds: string[];
+  } | null>(null);
   const [maycadTappingPrompt, setMaycadTappingPrompt] = useState<{ profileIds: string[] } | null>(null);
   const importRef = useRef<HTMLInputElement>(null);
   const excelImportRef = useRef<HTMLInputElement>(null);
@@ -5044,15 +5076,18 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({ language, onLanguageChange, u
 
   const importMaycad = async (file?: File) => {
     if (!file) return;
+    if (!file.name.toLowerCase().endsWith('.scene')) {
+      showNotice(t.maycadSceneOnly);
+      return;
+    }
     setMaycadImporting(true);
+    setMaycadProfileReviewPrompt(null);
+    setMaycadTappingPrompt(null);
     showNotice(t.maycadImporting);
     try {
-      const isScene = file.name.toLowerCase().endsWith('.scene');
-      const result = isScene
-        ? parseMaycadSceneXml(await file.text())
-        : normalizeMaycadAiResult(await ApiService.importMaycadPdf(await extractMaycadPdfPayload(file)));
-      // MayCAD has no tapping option. Never infer tapping from the source or
-      // from a PDF reconstruction; let the customer make one explicit choice.
+      const result = parseMaycadSceneXml(await file.text());
+      // MayCAD .scene has no tapping option. Never infer tapping from the
+      // source; let the customer make one explicit choice.
       const importedItems = normalizeDesignItems(result.items as DIYSceneItem[]).map((item) => (
         item.kind === 'profile'
           ? { ...item, tappingLeft: false, tappingRight: false }
@@ -5063,7 +5098,14 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({ language, onLanguageChange, u
         .map((item) => item.id);
       commit(importedItems, null);
       setMaycadReview({ source: result.sourceTitle || file.name, confidence: result.confidence, warnings: result.warnings });
-      if (importedProfileIds.length) setMaycadTappingPrompt({ profileIds: importedProfileIds });
+      if (result.profileReviews.length) {
+        setMaycadProfileReviewPrompt({
+          entries: result.profileReviews.map((entry) => ({ ...entry, variantId: entry.suggestedVariantId })),
+          profileIds: importedProfileIds,
+        });
+      } else if (importedProfileIds.length) {
+        setMaycadTappingPrompt({ profileIds: importedProfileIds });
+      }
       if (result.warnings.length) console.warn('MayCAD import review warnings:', result.warnings);
       showNotice(`${t.maycadLoaded} · ${importedItems.length}${result.warnings.length ? ` · ⚠ ${result.warnings.length}` : ''}`);
     } catch (error) {
@@ -5072,6 +5114,26 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({ language, onLanguageChange, u
     } finally {
       setMaycadImporting(false);
     }
+  };
+
+  const confirmMaycadProfileMappings = () => {
+    if (!maycadProfileReviewPrompt) return;
+    const confirmedVariantByItemId = new Map<string, string>();
+    maycadProfileReviewPrompt.entries.forEach((entry) => {
+      entry.itemIds.forEach((itemId) => confirmedVariantByItemId.set(itemId, entry.variantId));
+    });
+    commit(items.map((item) => {
+      const variantId = confirmedVariantByItemId.get(item.id);
+      return variantId ? { ...item, variantId, name: variantId } : item;
+    }), null);
+    const profileIds = maycadProfileReviewPrompt.profileIds;
+    setMaycadProfileReviewPrompt(null);
+    setMaycadReview((current) => current ? {
+      ...current,
+      warnings: current.warnings.filter((warning) => !warning.includes('请核对型材型号')),
+    } : current);
+    if (profileIds.length) setMaycadTappingPrompt({ profileIds });
+    showNotice(`${t.maycadProfileReviewApplied} · ${confirmedVariantByItemId.size}`);
   };
 
   const applyTappingToAllImportedProfiles = () => {
@@ -5379,7 +5441,7 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({ language, onLanguageChange, u
               disabled={maycadImporting}
               onClick={() => maycadImportRef.current?.click()}
               className="diy-toolbar-button gap-2 disabled:cursor-wait disabled:opacity-60"
-              title="MayCAD .scene uses deterministic local parsing; PDF uses Qwen Vision reconstruction"
+              title={t.maycadSceneOnly}
             >
               <Upload className="h-4 w-4" />{maycadImporting ? t.maycadImporting : t.maycadImport}
             </button>
@@ -5391,7 +5453,7 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({ language, onLanguageChange, u
               importExcel(event.target.files?.[0]);
               event.target.value = '';
             }} />
-            <input ref={maycadImportRef} type="file" accept=".scene,.pdf,application/pdf,application/xml,text/xml" className="hidden" onChange={(event) => {
+            <input ref={maycadImportRef} type="file" accept=".scene" className="hidden" onChange={(event) => {
               importMaycad(event.target.files?.[0]);
               event.target.value = '';
             }} />
@@ -5633,6 +5695,7 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({ language, onLanguageChange, u
                     {language === 'cn' ? '已转换为可编辑模型，请在下单前核对型号、朝向和加工。' : language === 'jp' ? '編集可能なモデルに変換しました。発注前に型式・向き・加工を確認してください。' : 'Converted to an editable model. Review model, orientation, and machining before ordering.'}
                     {maycadReview.confidence ? ` · ${Math.round(maycadReview.confidence * 100)}%` : ''}
                   </div>
+                  <div className="mt-1.5 font-black text-blue-700">{t.maycadImportScope}</div>
                 </div>
                 <button type="button" onClick={() => setMaycadReview(null)} className="rounded-lg px-2 py-1 text-amber-700 hover:bg-amber-100">×</button>
               </div>
@@ -6080,6 +6143,60 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({ language, onLanguageChange, u
           </button>
         </aside>
       </div>
+      {maycadProfileReviewPrompt && (
+        <div className="fixed inset-0 z-[130] flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-sm">
+          <div className="flex max-h-[88vh] w-full max-w-2xl flex-col rounded-3xl border border-white/70 bg-white p-6 shadow-2xl">
+            <div className="flex items-center gap-2 text-blue-600">
+              <ScanLine className="h-5 w-5" />
+              <span className="text-[10px] font-black uppercase tracking-[0.2em]">MayCAD</span>
+            </div>
+            <h2 className="mt-3 text-xl font-black text-slate-950">{t.maycadProfileReviewTitle}</h2>
+            <p className="mt-2 text-sm font-bold leading-relaxed text-slate-600">{t.maycadProfileReviewPrompt}</p>
+            <div className="mt-3 rounded-2xl border border-blue-100 bg-blue-50 px-4 py-3 text-xs font-black leading-relaxed text-blue-800">
+              {t.maycadImportScope}
+            </div>
+            <div className="mt-4 min-h-0 flex-1 space-y-3 overflow-y-auto pr-1">
+              {maycadProfileReviewPrompt.entries.map((entry, index) => (
+                <div key={`${entry.sourceCode}-${index}`} className="rounded-2xl border border-amber-200 bg-amber-50/70 p-4">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div>
+                      <div className="text-[9px] font-black uppercase tracking-widest text-amber-600">{t.maycadProfileSource}</div>
+                      <div className="mt-1 break-all text-sm font-black text-slate-900">{entry.sourceCode}</div>
+                    </div>
+                    <div className="text-right text-[10px] font-black text-slate-500">
+                      {entry.crossSectionMm && <div>{t.maycadCrossSection} · {entry.crossSectionMm[0]}×{entry.crossSectionMm[1]}mm</div>}
+                      <div>{t.maycadProfileQuantity} · {entry.itemIds.length}</div>
+                    </div>
+                  </div>
+                  <label className="mt-3 block">
+                    <span className="diy-field-label">{t.maycadSuggestedModel}</span>
+                    <select
+                      value={entry.variantId}
+                      onChange={(event) => setMaycadProfileReviewPrompt((current) => current ? {
+                        ...current,
+                        entries: current.entries.map((candidate, candidateIndex) => (
+                          candidateIndex === index ? { ...candidate, variantId: event.target.value } : candidate
+                        )),
+                      } : current)}
+                      className="diy-select"
+                    >
+                      {PROFILE_VARIANTS.map((variant) => <option key={variant.id} value={variant.id}>{variant.name}</option>)}
+                    </select>
+                  </label>
+                </div>
+              ))}
+            </div>
+            <button
+              type="button"
+              data-testid="maycad-confirm-profile-mappings"
+              onClick={confirmMaycadProfileMappings}
+              className="mt-5 rounded-2xl bg-blue-600 px-4 py-3.5 text-sm font-black text-white shadow-lg shadow-blue-600/20 transition hover:bg-blue-500"
+            >
+              {t.maycadConfirmProfiles}
+            </button>
+          </div>
+        </div>
+      )}
       {maycadTappingPrompt && (
         <div className="fixed inset-0 z-[120] flex items-center justify-center bg-slate-950/55 p-4 backdrop-blur-sm">
           <div className="w-full max-w-lg rounded-3xl border border-white/70 bg-white p-6 shadow-2xl">
@@ -6089,6 +6206,9 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({ language, onLanguageChange, u
             </div>
             <h2 className="mt-3 text-xl font-black text-slate-950">{t.maycadTappingTitle}</h2>
             <p className="mt-3 text-sm font-bold leading-relaxed text-slate-600">{t.maycadTappingPrompt}</p>
+            <div className="mt-3 rounded-2xl border border-blue-100 bg-blue-50 px-4 py-3 text-xs font-black leading-relaxed text-blue-800">
+              {t.maycadImportScope}
+            </div>
             <div className="mt-4 rounded-2xl bg-amber-50 px-4 py-3 text-xs font-black text-amber-800">
               {maycadTappingPrompt.profileIds.length} {t.profileParts}
             </div>

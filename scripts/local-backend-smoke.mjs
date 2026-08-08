@@ -78,8 +78,8 @@ const localAiResponse = await fetch(`${baseUrl}/ai/import/maycad-pdf`, jsonOptio
   extractedText: 'MayCAD local isolated smoke test',
   viewImages: ['data:image/png;base64,iVBORw0KGgo='],
 }, token));
-if (localAiResponse.status !== 503) {
-  throw new Error(`Local AI isolation check expected 503, received ${localAiResponse.status}.`);
+if (localAiResponse.status !== 404) {
+  throw new Error(`Disabled AI route check expected 404, received ${localAiResponse.status}.`);
 }
 
-console.log(`Local backend smoke test passed: register -> order -> upload/download PDF -> remote AI blocked (${orderId}).`);
+console.log(`Local backend smoke test passed: register -> order -> upload/download PDF -> AI route disabled (${orderId}).`);

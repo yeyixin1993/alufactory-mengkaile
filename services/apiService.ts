@@ -712,14 +712,6 @@ class ApiServiceClass {
     });
   }
 
-  async importMaycadPdf(payload: {
-    filename: string;
-    extractedText: string;
-    viewImages: string[];
-  }) {
-    return await this.request('POST', '/ai/import/maycad-pdf', payload);
-  }
-
   isAuthenticated(): boolean {
     return !!this.authToken;
   }
