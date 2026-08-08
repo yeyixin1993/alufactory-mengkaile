@@ -3,8 +3,17 @@ import { Order, User, Address, CartItem, ProductType } from '../types';
 import { normalizeMembershipLevel } from '../utils/membership';
 import { PayloadSecurity } from './payloadSecurity';
 import { INITIAL_PRODUCTS } from '../constants';
+import { isValidShippingPhone, normalizeShippingPhone } from '../utils/shippingPhone';
 
 const normalizeBaseUrl = (url: string) => url.replace(/\/+$/, '');
+
+const prepareShippingPhone = (value: string) => {
+  const phone = normalizeShippingPhone(value);
+  if (!isValidShippingPhone(phone)) {
+    throw new Error('Shipping phone must be 11 digits, optionally followed by "-" and a 4-digit virtual number');
+  }
+  return phone;
+};
 
 /** 检测 URL 是否指向 localhost */
 const isLocalhostUrl = (url: string) => {
@@ -295,11 +304,12 @@ class ApiServiceClass {
 
     // Update addresses one by one
     for (const addr of addresses) {
+      const phone = prepareShippingPhone(addr.phone);
       if (addr.id?.startsWith('temp_')) {
         // New address - POST and get response
         await this.request('POST', `/users/${user.id}/addresses`, {
           recipient_name: addr.recipient_name,
-          phone: addr.phone,
+          phone,
           province: addr.province,
           detail: addr.detail,
           is_default: addr.isDefault,
@@ -308,7 +318,7 @@ class ApiServiceClass {
         // Update existing
         await this.request('PUT', `/users/addresses/${addr.id}`, {
           recipient_name: addr.recipient_name,
-          phone: addr.phone,
+          phone,
           province: addr.province,
           detail: addr.detail,
           is_default: addr.isDefault,
@@ -449,6 +459,7 @@ class ApiServiceClass {
       console.error('Invalid address fields:', order.address);
       throw new Error('Shipping address must have name, phone, province, and detail');
     }
+    const shippingPhone = prepareShippingPhone(order.address.phone);
 
     if (!Array.isArray(order.items) || order.items.length === 0) {
       throw new Error('Order must have at least one item');
@@ -472,7 +483,7 @@ class ApiServiceClass {
     const payload = {
       items: formattedItems,
       recipient_name: order.address.recipient_name,
-      phone: order.address.phone,
+      phone: shippingPhone,
       province: order.address.province,
       address_detail: order.address.detail,
       address_id: order.address.id || '',
@@ -498,7 +509,7 @@ class ApiServiceClass {
       shippingFee: data.order.shipping_fee,
       status: 'pending' as const,
       userId: data.order.user_id,
-      address: order.address,
+      address: { ...order.address, phone: shippingPhone },
       addressId: order.address.id,
       shippingMethod: order.shippingMethod,
       labelFee: order.labelFee,
@@ -513,6 +524,7 @@ class ApiServiceClass {
     if (!Array.isArray(order.items) || order.items.length === 0) {
       throw new Error('Order must have at least one item');
     }
+    const shippingPhone = prepareShippingPhone(order.address.phone);
 
     const formattedItems = order.items.map(item => ({
       product_id: item.product.id,
@@ -527,7 +539,7 @@ class ApiServiceClass {
     const payload = {
       items: formattedItems,
       recipient_name: order.address.recipient_name,
-      phone: order.address.phone,
+      phone: shippingPhone,
       province: order.address.province,
       address_detail: order.address.detail,
       address_id: order.address.id || '',

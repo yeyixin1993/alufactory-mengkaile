@@ -6,6 +6,7 @@ from app.order_utils import build_order_pdf_filename
 from app.product_order_db import sync_order_snapshot, remove_order_snapshot
 from app.order_snapshot import refresh_order_json
 from app.security import get_request_json_secure
+from app.shipping_phone import SHIPPING_PHONE_ERROR, validate_shipping_phone
 import uuid
 import os
 import base64
@@ -64,6 +65,11 @@ def create_order():
     required_fields = ['items', 'recipient_name', 'phone', 'province', 'address_detail', 'total_amount']
     if not data or not all(k in data for k in required_fields):
         return jsonify({'error': 'Missing required fields'}), 400
+
+    try:
+        phone = validate_shipping_phone(data['phone'])
+    except ValueError:
+        return jsonify({'error': SHIPPING_PHONE_ERROR}), 400
     
     try:
         # Generate order number
@@ -74,7 +80,7 @@ def create_order():
             user_id=current_user_id,
             address_id=data.get('address_id'),
             recipient_name=data['recipient_name'],
-            phone=data['phone'],
+            phone=phone,
             province=data['province'],
             address_detail=data['address_detail'],
             subtotal=data.get('subtotal', 0),
@@ -137,7 +143,13 @@ def update_order(order_id):
     if not is_admin and not is_owner:
         return jsonify({'error': 'Unauthorized'}), 403
 
-    data = request.get_json()
+    data = request.get_json(silent=True) or {}
+
+    if not is_admin and 'phone' in data:
+        try:
+            data['phone'] = validate_shipping_phone(data['phone'])
+        except ValueError:
+            return jsonify({'error': SHIPPING_PHONE_ERROR}), 400
 
     try:
         if is_admin:

@@ -5,7 +5,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from app import create_app
-from app.models.user import Order, User, db
+from app.models.user import Address, Order, User, db
 
 
 class OrderDeletionAndDuplicateTest(unittest.TestCase):
@@ -28,7 +28,7 @@ class OrderDeletionAndDuplicateTest(unittest.TestCase):
             db.session.remove()
             db.drop_all()
 
-    def _order_payload(self):
+    def _order_payload(self, phone='13900000001'):
         return {
             'items': [{
                 'product_id': '2020',
@@ -40,7 +40,7 @@ class OrderDeletionAndDuplicateTest(unittest.TestCase):
                 'config': {'length': 500, 'color': 'natural'},
             }],
             'recipient_name': '测试客户',
-            'phone': '13900000001',
+            'phone': phone,
             'province': '上海',
             'address_detail': '测试地址1号',
             'subtotal': 20,
@@ -115,6 +115,51 @@ class OrderDeletionAndDuplicateTest(unittest.TestCase):
             headers=self.headers,
         )
         self.assertEqual(pending_delete.status_code, 200, pending_delete.get_json())
+
+    def test_optional_virtual_phone_is_validated_and_stored_canonically(self):
+        address = self.client.post(
+            f'/api/users/{self.user_id}/addresses',
+            headers=self.headers,
+            json={
+                'recipient_name': '虚拟号客户',
+                'phone': ' 13900000001－1234 ',
+                'province': '上海',
+                'detail': '测试地址2号',
+            },
+        )
+        self.assertEqual(address.status_code, 201, address.get_json())
+        self.assertEqual(address.get_json()['address']['phone'], '13900000001-1234')
+
+        with self.app.app_context():
+            saved = Address.query.get(address.get_json()['address']['id'])
+            self.assertEqual(saved.phone, '13900000001-1234')
+
+        invalid_address = self.client.post(
+            f'/api/users/{self.user_id}/addresses',
+            headers=self.headers,
+            json={
+                'recipient_name': '错误虚拟号',
+                'phone': '13900000001-123',
+                'province': '上海',
+                'detail': '测试地址3号',
+            },
+        )
+        self.assertEqual(invalid_address.status_code, 400, invalid_address.get_json())
+
+        virtual_order = self.client.post(
+            '/api/orders',
+            headers=self.headers,
+            json=self._order_payload('13900000001-5678'),
+        )
+        self.assertEqual(virtual_order.status_code, 201, virtual_order.get_json())
+        self.assertEqual(virtual_order.get_json()['order']['phone'], '13900000001-5678')
+
+        invalid_order = self.client.post(
+            '/api/orders',
+            headers=self.headers,
+            json=self._order_payload('13900000001-12'),
+        )
+        self.assertEqual(invalid_order.status_code, 400, invalid_order.get_json())
 
 
 if __name__ == '__main__':
