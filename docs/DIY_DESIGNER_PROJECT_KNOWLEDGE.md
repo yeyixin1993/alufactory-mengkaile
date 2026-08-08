@@ -98,7 +98,7 @@ These correspond to the common module-aligned connection states seen in MayCAD/J
 - Use a wider acquisition range plus hysteresis/short hold delay so the preview does not flash and disappear while dragging.
 - Once a candidate is acquired, keep it stable until the pointer clearly favors another candidate or exits a larger release threshold.
 - Separation must be frictionless: snapping helps on approach but adds no extra resistance when the user intentionally drags away.
-- Collision detection prevents two solid profiles occupying the same volume. Contact at a face or valid structural joint is allowed.
+- Magnetic candidates that would place two solid profiles in the same volume are skipped. Manual movement/rotation may temporarily create interference and uses the non-blocking red warning defined in section 6. Contact at a face or valid structural joint is allowed.
 
 ## 8. Aluminum profile geometry
 
@@ -168,6 +168,9 @@ These correspond to the common module-aligned connection states seen in MayCAD/J
 - Screw heads should not protrude outside the profile envelope. The shaft passes through the first member and extends into the matching tapping channel/port of the second member to communicate the connection intent.
 - Transparency mode should make internal screw paths readable. Normal mode should avoid excessive visual clutter.
 - Individual socket-head screws and leveling feet are currently hidden from the parts library. Existing saved designs containing them remain load-compatible.
+- The legacy cart checkbox “需要配304螺丝” remains the source for ordinary non-designer orders. A designer order with explicit screw items uses the customer-confirmed designer quantities instead; explicit designer screws take precedence and must not also incur the legacy per-hole screw fee.
+- Factory/customer PDFs always retain the prominent “螺丝配件提醒：需要配螺丝” whenever either source requests screws. Preserve the legacy per-profile quantity wording for ordinary orders; designer orders display their confirmed quantities in the same summary area.
+- Designer screw rows are compacted by source profile model/compatible series, head type, length, color, and unit price. The PDF shows one compact screw-summary section with a few specification rows, not one full accessory card per physical screw. Customer quantity edits in the designer are authoritative and survive cart/PDF/production output.
 
 ## 12. Connection accessory catalog
 
@@ -205,6 +208,7 @@ Availability and price must be verified against Mengkaile's authoritative catalo
 - Every profile row includes model, length, color, quantity, transform/assembly identity as needed, remark, hole details, tapping details, and pricing inputs.
 - Machining sheets use canonical A/B/C/D faces, physical groove IDs, entry/exit descriptions, and both end distances.
 - Cart conversion and the production PDF must preserve marine-board “原色”, accessory specifications, physical-product image keys, and all customer remarks.
+- Cart/PDF conversion must preserve designer screw length, head type, compatible profile series, source profile model, color, customer-confirmed quantity, price, and linked profile/hole references while grouping identical screw specifications.
 - Shipping-weight baseline for marine board must use area multipliers: 12mm = 8 kg/㎡ and 18mm = 12 kg/㎡. If any legacy value differs, this baseline is authoritative.
 - Client-side prices are estimates. A production deployment needs server-side validation against the current catalog before checkout totals become authoritative.
 
@@ -286,6 +290,7 @@ Before releasing a designer change, verify at minimum:
 - Verify end tapping options and every port on 2040/multi-port variants and 2047.
 - Toggle transparency and machining marks; inspect a crowded joint from multiple angles.
 - Auto-fill screws and verify type, natural color, embedded head, linked hole, and penetration direction.
+- Change auto-filled screw quantities manually, add the design to cart, and verify the PDF reminder plus compact grouped rows use the edited quantities without adding the legacy per-hole fee or repeating one card per screw.
 
 ### Persistence and commerce
 
@@ -326,5 +331,6 @@ Before releasing a designer change, verify at minimum:
 
 ### Decision log
 
+- **2026-08-08:** Unified legacy “配304螺丝” ordering with explicit 3D-designer screws. Explicit designer screw quantities now override the legacy per-hole add-on, always trigger the factory reminder, and export as compact specification-grouped PDF rows with no duplicate per-screw cards.
 - **2026-08-08:** Reversed collision handling from blocking/reverting transforms to MayCAD-style non-blocking interference feedback. Movement and rotation now remain applied; involved profiles and project nodes are highlighted red until resolved. Added scene-level rotation controls and an explicit right-click rotate/delete hint.
 - **2026-08-01:** Consolidated the initial 3D designer implementation and all subsequent product-review decisions into this durable project document.

@@ -22,6 +22,7 @@
 - Demo workbench generator for onboarding and QA.
 - Live pricing using the storefront's current profile, plate, pegboard, and marine-board rules.
 - Conversion of a complete 3D assembly into the existing cart item formats, including production remarks, board area metadata, machining data, hardware quantities, and checkout compatibility.
+- Designer screws preserve customer-edited quantities and export through the legacy factory reminder as compact rows grouped by profile model/series, head, length, color, and price; they do not stack with the ordinary per-hole 304-screw add-on.
 - Lazy-loaded 3D bundle so regular catalog and checkout visitors do not download Three.js.
 
 ## Run locally

@@ -6,7 +6,11 @@ import type { ShippingMethod } from '../constants';
 import ProfileVisualizer from './ProfileVisualizer';
 import { describeHolePassage, getHolePhysicalGrooveIndex } from '../utils/profileMachining';
 import { calculateScrewPlan } from '../utils/screwCalculator';
-import { groupDiyScrewCartItems } from '../utils/cartAccessories';
+import {
+  groupDiyScrewCartItems,
+  isDiyScrewAccessory,
+  summarizeDiyScrewCartItems,
+} from '../utils/cartAccessories';
 
 interface FactorySheetProps {
   cart: CartItem[];
@@ -219,6 +223,12 @@ const FactorySheet: React.FC<FactorySheetProps> = ({ cart, user, language, order
 
   const baseTotal = cart.reduce((acc, i) => acc + i.totalPrice, 0);
   const displayCart = React.useMemo(() => groupDiyScrewCartItems(cart), [cart]);
+  const diyScrewRows = React.useMemo(() => summarizeDiyScrewCartItems(cart), [cart]);
+  const hasDiyScrewRows = diyScrewRows.length > 0;
+  const nonScrewDisplayCart = React.useMemo(
+    () => displayCart.filter((item) => !isDiyScrewAccessory(item)),
+    [displayCart],
+  );
 
   const profileMetersSummary = React.useMemo(() => {
     const meterMap = new Map<string, number>();
@@ -270,7 +280,23 @@ const FactorySheet: React.FC<FactorySheetProps> = ({ cart, user, language, order
     );
   }, [cart]);
 
-  const screwPlan = React.useMemo(() => calculateScrewPlan(cart, include304Screws), [cart, include304Screws]);
+  // Explicit DIY screw rows already carry customer-confirmed quantities and
+  // prices. They replace (rather than stack with) the legacy per-hole add-on.
+  const effectiveInclude304Screws = include304Screws && !hasDiyScrewRows;
+  const screwPlan = React.useMemo(
+    () => calculateScrewPlan(cart, effectiveInclude304Screws),
+    [cart, effectiveInclude304Screws],
+  );
+  const diyScrewByModel = React.useMemo(() => {
+    const map = new Map<string, { socketCylinder: number; buttonSocket: number }>();
+    diyScrewRows.forEach((row) => {
+      const current = map.get(row.profileModel) || { socketCylinder: 0, buttonSocket: 0 };
+      if (row.screwHead === 'button_socket') current.buttonSocket += row.quantity;
+      else current.socketCylinder += row.quantity;
+      map.set(row.profileModel, current);
+    });
+    return map;
+  }, [diyScrewRows]);
   const screwByModel = React.useMemo(() => {
     const m = new Map<string, { countersunk: number; through: number; totalHoles: number; recommended: number }>();
     screwPlan.models.forEach((row) => {
@@ -358,7 +384,7 @@ const FactorySheet: React.FC<FactorySheetProps> = ({ cart, user, language, order
     shippingLabel = SHIPPING_METHOD_NAMES[normalizedShippingMethod as ShippingMethod][language];
   }
 
-  const finalTotal = baseTotal + shippingFee + (include304Screws ? screwPlan.totalFee : 0) + labelFee;
+  const finalTotal = baseTotal + shippingFee + screwPlan.totalFee + labelFee;
 
   //const shipRate = activeAddress ? (SHIPPING_RATES[activeAddress.province] || { first: 15, next: 0 }) : { first: 0, next: 0 };
   //const shippingFee = activeAddress ? shipRate.first : 0;
@@ -394,7 +420,7 @@ const FactorySheet: React.FC<FactorySheetProps> = ({ cart, user, language, order
         </div>
       )}
 
-      {include304Screws && screwPlan.totalFee > 0 && (
+      {(hasDiyScrewRows || screwPlan.totalRecommendedScrewCount > 0) && (
         <div data-pdf-block className="bg-cyan-50 border border-cyan-200 rounded-xl px-4 py-3 text-sm font-bold text-cyan-700">
           螺丝配件提醒：需要配螺丝
         </div>
@@ -409,8 +435,16 @@ const FactorySheet: React.FC<FactorySheetProps> = ({ cart, user, language, order
                 <span className="truncate">
                   {row.name}
                   {(() => {
-                    if (!include304Screws) return null;
                     const model = String(row.name || '').split('·')[0].trim();
+                    const diyScrews = diyScrewByModel.get(model);
+                    if (diyScrews && (diyScrews.socketCylinder > 0 || diyScrews.buttonSocket > 0)) {
+                      return (
+                        <span className="ml-2 text-[10px] text-cyan-700">
+                          ｜圆柱头内六角 {diyScrews.socketCylinder} / 半圆头内六角 {diyScrews.buttonSocket}（按3D设计器确认数量）
+                        </span>
+                      );
+                    }
+                    if (!effectiveInclude304Screws) return null;
                     const screw = screwByModel.get(model);
                     if (!screw || screw.recommended <= 0) return null;
                     return (
@@ -486,9 +520,67 @@ const FactorySheet: React.FC<FactorySheetProps> = ({ cart, user, language, order
         </div>
       </div>
 
+      {diyScrewRows.length > 0 && (
+        <div data-pdf-block className="break-inside-avoid overflow-hidden rounded-xl border-2 border-cyan-700 bg-white">
+          <div className="flex items-center justify-between bg-cyan-700 px-5 py-3 text-white">
+            <div className="font-black tracking-wide">
+              {language === 'cn' ? '3D设计器螺丝汇总' : language === 'jp' ? '3Dデザイナーねじ集計' : '3D designer screw summary'}
+            </div>
+            <div className="flex items-center gap-5 text-xs font-bold">
+              <span>{t.quantity}: {diyScrewRows.reduce((sum, row) => sum + row.quantity, 0)}</span>
+              {showPrice && <span>{currency}{diyScrewRows.reduce((sum, row) => sum + row.totalPrice, 0).toFixed(1)}</span>}
+            </div>
+          </div>
+          <div className="p-4">
+            <div className="mb-3 text-[10px] font-bold text-cyan-700">
+              {language === 'cn'
+                ? '以下数量以客户在3D设计器中最终确认的数量为准。'
+                : language === 'jp'
+                  ? '数量は3Dデザイナーでお客様が最終確認した値です。'
+                  : 'Quantities below are the customer-confirmed values from the 3D designer.'}
+            </div>
+            <table className="w-full border-collapse text-left text-[10px]">
+              <thead>
+                <tr className="bg-cyan-50 text-cyan-900">
+                  <th className="border border-cyan-100 p-2">{language === 'cn' ? '来源型材 / 规格' : language === 'jp' ? '元形材 / 規格' : 'Profile / spec'}</th>
+                  <th className="border border-cyan-100 p-2">{language === 'cn' ? '螺丝类型' : language === 'jp' ? 'ねじタイプ' : 'Screw type'}</th>
+                  <th className="border border-cyan-100 p-2">{language === 'cn' ? '长度' : language === 'jp' ? '長さ' : 'Length'}</th>
+                  <th className="border border-cyan-100 p-2">{t.color}</th>
+                  <th className="border border-cyan-100 p-2 text-right">{t.quantity}</th>
+                  {showPrice && <th className="border border-cyan-100 p-2 text-right">{language === 'cn' ? '小计' : language === 'jp' ? '小計' : 'Subtotal'}</th>}
+                </tr>
+              </thead>
+              <tbody>
+                {diyScrewRows.map((row, rowIndex) => {
+                  const screwType = row.screwHead === 'button_socket'
+                    ? (language === 'cn' ? '半圆头内六角' : language === 'jp' ? '六角穴付きボタンボルト' : 'Button-head socket')
+                    : (language === 'cn' ? '圆柱头内六角' : language === 'jp' ? '六角穴付き円筒頭ボルト' : 'Cylinder-head socket');
+                  const colorName = PROFILE_COLORS.find((color) => color.id === row.colorId)?.name?.[language]
+                    || row.colorName
+                    || '-';
+                  const profileSpec = row.profileModel === row.profileSize
+                    ? row.profileModel
+                    : `${row.profileModel} / ${row.profileSize}`;
+                  return (
+                    <tr key={`${row.profileModel}-${row.profileSize}-${row.screwHead}-${row.screwLengthMm}-${rowIndex}`}>
+                      <td className="border border-slate-100 p-2 font-black">{profileSpec}</td>
+                      <td className="border border-slate-100 p-2">{screwType}</td>
+                      <td className="border border-slate-100 p-2">{row.screwLengthMm ? `${row.screwLengthMm}mm` : '-'}</td>
+                      <td className="border border-slate-100 p-2">{colorName}</td>
+                      <td className="border border-slate-100 p-2 text-right font-black">{row.quantity}</td>
+                      {showPrice && <td className="border border-slate-100 p-2 text-right font-bold">{currency}{row.totalPrice.toFixed(1)}</td>}
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
       {/* Items */}
       <div className="space-y-10">
-        {displayCart.map((item, idx) => {
+        {nonScrewDisplayCart.map((item, idx) => {
            const isProfile = item.product.type === ProductType.PROFILE;
             const isAccessory = item.product.type === ProductType.ACCESSORY;
            const cfg = (item.config || {}) as any;
@@ -889,7 +981,7 @@ const FactorySheet: React.FC<FactorySheetProps> = ({ cart, user, language, order
                <span>{t.shippingFee}{shippingLabel ? ` (${shippingLabel})` : ''}:</span>
                <span className="font-bold text-slate-800">{currency}{shippingFee.toFixed(1)}</span>
              </div>
-             {include304Screws && screwPlan.totalRecommendedScrewCount > 0 && (
+             {effectiveInclude304Screws && screwPlan.totalRecommendedScrewCount > 0 && (
                <div className="flex justify-between text-slate-500 text-xs">
                  <span>304螺丝及弹性配件费（总孔{screwPlan.totalHoles}）:</span>
                  <span className="font-bold text-slate-800">{currency}{screwPlan.totalFee.toFixed(1)}</span>

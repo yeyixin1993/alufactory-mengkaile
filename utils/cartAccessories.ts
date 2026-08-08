@@ -5,6 +5,17 @@ interface ScrewReference {
   linkedHoleId?: string;
 }
 
+export interface DiyScrewCartSummaryRow {
+  profileModel: string;
+  profileSize: string;
+  screwHead: string;
+  screwLengthMm: number | null;
+  colorId: string;
+  colorName: string;
+  quantity: number;
+  totalPrice: number;
+}
+
 const uniqueScrewReferences = (references: ScrewReference[]) => {
   const seen = new Set<string>();
   return references.filter((reference) => {
@@ -15,12 +26,22 @@ const uniqueScrewReferences = (references: ScrewReference[]) => {
   });
 };
 
-const isDiyScrewAccessory = (item: CartItem) => {
+export const isDiyScrewAccessory = (item: CartItem) => {
   if (item.product.type !== ProductType.ACCESSORY) return false;
   const config = (item.config || {}) as any;
   const lines = Array.isArray(config.lines) ? config.lines : [];
   return Boolean(config.screwHead)
     || lines.some((line: any) => String(line?.id || '').startsWith('diy-') && String(line?.id || '').includes('screw'));
+};
+
+const screwLengthFromConfig = (config: any) => {
+  const explicit = Number(config?.screwLengthMm || config?.screwLength || 0);
+  if (explicit > 0) return explicit;
+  const lines = Array.isArray(config?.lines) ? config.lines : [];
+  const match = lines.map((line: any) => String(line?.name || ''))
+    .join(' ')
+    .match(/(\d+(?:\.\d+)?)\s*mm/i);
+  return match ? Number(match[1]) : null;
 };
 
 const screwGroupKey = (item: CartItem) => {
@@ -32,16 +53,17 @@ const screwGroupKey = (item: CartItem) => {
       imageKey: String(line?.imageKey || ''),
       name: String(line?.name || ''),
       unitPrice: Number(line?.unitPrice || 0),
-      isBulk: Boolean(line?.isBulk),
     }))
     .sort((a: any, b: any) => `${a.id}:${a.code}`.localeCompare(`${b.id}:${b.code}`));
 
   return JSON.stringify({
     productId: item.product.id,
     profileSize: config.profileSize || config.size || config.variantId || '',
+    linkedProfileVariantId: config.linkedProfileVariantId || '',
     colorMode: config.colorMode || '',
     colorId: config.colorId || '',
     screwHead: config.screwHead || '',
+    screwLengthMm: screwLengthFromConfig(config),
     lines,
   });
 };
@@ -56,8 +78,9 @@ const getScrewReferences = (config: any): ScrewReference[] => {
 
 /**
  * Consolidates automatically generated DIY screws into one accessory row per
- * series/head/color/price combination. Linked hole references are retained so
- * production data can still trace every physical screw back to the design.
+ * series/head/length/color/price combination. Linked hole references are
+ * retained so production data can still trace every physical screw back to
+ * the design. Customer-adjusted quantities remain authoritative.
  */
 export const groupDiyScrewCartItems = (cart: CartItem[]): CartItem[] => {
   const result: CartItem[] = [];
@@ -136,3 +159,26 @@ export const groupDiyScrewCartItems = (cart: CartItem[]): CartItem[] => {
 
   return result;
 };
+
+export const summarizeDiyScrewCartItems = (cart: CartItem[]): DiyScrewCartSummaryRow[] => (
+  groupDiyScrewCartItems(cart).flatMap((item) => {
+    if (!isDiyScrewAccessory(item)) return [];
+    const config = (item.config || {}) as any;
+    const lines = Array.isArray(config.lines) ? config.lines : [];
+    const quantity = lines.reduce((sum: number, line: any) => sum + Math.max(0, Number(line?.quantity || 0)), 0)
+      || Math.max(0, Number(config.totalQuantity || 0));
+    if (quantity <= 0) return [];
+    return [{
+      profileModel: String(config.linkedProfileVariantId || config.profileSize || config.size || config.variantId || '-'),
+      profileSize: String(config.profileSize || config.size || config.variantId || '-'),
+      screwHead: String(config.screwHead || ''),
+      screwLengthMm: screwLengthFromConfig(config),
+      colorId: String(config.colorId || ''),
+      colorName: String(config.colorName || ''),
+      quantity,
+      totalPrice: Number(item.totalPrice || config.unitTotal || 0),
+    }];
+  })
+);
+
+export const hasDiyScrewCartItems = (cart: CartItem[]) => summarizeDiyScrewCartItems(cart).length > 0;

@@ -20,6 +20,7 @@ import { normalizeMembershipLevel } from './utils/membership';
 import { calculateScrewPlan, inferInclude304ScrewsByTotal } from './utils/screwCalculator';
 import { preloadImages } from './utils/imagePreload';
 import { exportElementToPdf } from './utils/pdfExport';
+import { summarizeDiyScrewCartItems } from './utils/cartAccessories';
 
 const DIYDesigner = React.lazy(() => import('./components/DIYDesigner'));
 
@@ -899,7 +900,15 @@ const Cart: React.FC<{
 
   const activeCourier: ShippingMethod = selectedCourier === 'auto' ? shippingOptions.cheapest : selectedCourier;
   const activeShipping = shippingOptions[activeCourier];
-  const screwPlan = React.useMemo(() => calculateScrewPlan(cart, include304Screws), [cart, include304Screws]);
+  const diyScrewCartRows = React.useMemo(() => summarizeDiyScrewCartItems(cart), [cart]);
+  const hasDiyScrewCartRows = diyScrewCartRows.length > 0;
+  useEffect(() => {
+    if (hasDiyScrewCartRows && include304Screws) setInclude304Screws(false);
+  }, [hasDiyScrewCartRows, include304Screws]);
+  const screwPlan = React.useMemo(
+    () => calculateScrewPlan(cart, include304Screws && !hasDiyScrewCartRows),
+    [cart, include304Screws, hasDiyScrewCartRows],
+  );
   const screwFee = screwPlan.totalFee;
   const labelProfileCount = React.useMemo(
     () => cart.reduce((sum, item) => sum + (item.product.type === ProductType.PROFILE ? (Number(item.quantity) || 0) : 0), 0),
@@ -1565,13 +1574,22 @@ const Cart: React.FC<{
                 <label className="flex items-start gap-3 text-sm font-bold text-slate-200 cursor-pointer">
                   <input
                     type="checkbox"
-                    checked={include304Screws}
+                    checked={hasDiyScrewCartRows || include304Screws}
+                    disabled={hasDiyScrewCartRows}
                     onChange={(e) => setInclude304Screws(e.target.checked)}
-                    className="w-4 h-4 mt-0.5 rounded border-slate-500 text-blue-500 focus:ring-blue-500"
+                    className="w-4 h-4 mt-0.5 rounded border-slate-500 text-blue-500 focus:ring-blue-500 disabled:cursor-not-allowed"
                   />
-                  <span>需要配304螺丝（沉头孔=圆柱头；通孔=半圆头螺丝+弹性配件）</span>
+                  <span>
+                    {hasDiyScrewCartRows
+                      ? `3D设计器已配螺丝（按客户确认数量，共${diyScrewCartRows.reduce((sum, row) => sum + row.quantity, 0)}颗）`
+                      : '需要配304螺丝（沉头孔=圆柱头；通孔=半圆头螺丝+弹性配件）'}
+                  </span>
                 </label>
-                {include304Screws && (
+                {hasDiyScrewCartRows ? (
+                  <div className="text-[11px] text-slate-400 leading-relaxed">
+                    已包含在3D设计器配件价格中，不再重复收取按孔位配螺丝费用。PDF将按头型、长度、型材规格和颜色合并显示。
+                  </div>
+                ) : include304Screws && (
                   <>
                     <div className="flex justify-between text-slate-300 text-sm">
                       <span>304螺丝及弹性配件费（总孔数 × ¥0.5）</span>
