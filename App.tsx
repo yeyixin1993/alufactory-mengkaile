@@ -21,6 +21,7 @@ import { calculateScrewPlan, inferInclude304ScrewsByTotal } from './utils/screwC
 import { preloadImages } from './utils/imagePreload';
 import { exportElementToPdf } from './utils/pdfExport';
 import { summarizeDiyScrewCartItems } from './utils/cartAccessories';
+import { isValidShippingPhone, normalizeShippingPhone } from './utils/shippingPhone';
 
 const DIYDesigner = React.lazy(() => import('./components/DIYDesigner'));
 
@@ -257,9 +258,34 @@ const UserProfile: React.FC<{
       });
   };
 
-  const deleteOrder = (orderId: string) => {
-    if (window.confirm("Delete this order record?")) {
-      ApiService.deleteOrder(orderId).then(() => setOrders(orders.filter(o => o.id !== orderId)));
+  const deleteAddress = async (address: Address) => {
+    const prompt = language === 'cn'
+      ? `确定删除收货地址“${address.recipient_name} · ${address.phone}”吗？`
+      : language === 'jp'
+        ? `配送先「${address.recipient_name} · ${address.phone}」を削除しますか？`
+        : `Delete shipping address “${address.recipient_name} · ${address.phone}”?`;
+    if (!window.confirm(prompt)) return;
+    try {
+      const updatedUser = await ApiService.deleteAddress(address.id);
+      if (updatedUser) setUser(updatedUser);
+    } catch (error) {
+      alert(String((error as Error)?.message || error));
+    }
+  };
+
+  const deleteOrder = async (order: Order) => {
+    if (order.status !== 'pending' && order.status !== 'cancelled') return;
+    const prompt = language === 'cn'
+      ? `确定永久删除订单“${order.orderNumber || order.id}”吗？此操作无法撤销。`
+      : language === 'jp'
+        ? `注文「${order.orderNumber || order.id}」を完全に削除しますか？元に戻せません。`
+        : `Permanently delete order “${order.orderNumber || order.id}”? This cannot be undone.`;
+    if (!window.confirm(prompt)) return;
+    try {
+      await ApiService.deleteOrder(order.id);
+      setOrders((current) => current.filter((entry) => entry.id !== order.id));
+    } catch (error) {
+      alert(String((error as Error)?.message || error));
     }
   };
 
@@ -348,7 +374,7 @@ const UserProfile: React.FC<{
                       <div className="text-xs text-slate-500">{a.province} {a.detail}</div>
                       <div className="flex gap-4 mt-3">
                         <button onClick={() => setIsEditingAddress(a)} className="text-blue-600 text-[10px] font-black uppercase tracking-wider">{t.edit}</button>
-                        <button onClick={() => ApiService.updateUserAddresses(user.addresses.filter(x => x.id !== a.id)).then(u => setUser(u!))} className="text-red-500 text-[10px] font-black uppercase tracking-wider">{t.remove}</button>
+                        <button onClick={() => deleteAddress(a)} className="text-red-500 text-[10px] font-black uppercase tracking-wider">{t.remove}</button>
                       </div>
                    </div>
                  ))}
@@ -409,6 +435,16 @@ const UserProfile: React.FC<{
                                </button>
                              )}
                              <button onClick={() => onEditOrder(o)} className="p-2.5 bg-slate-50 hover:bg-slate-100 text-slate-600 rounded-xl transition-colors border border-slate-200"><Edit2 className="w-4 h-4"/></button>
+                             {(o.status === 'pending' || o.status === 'cancelled') && (
+                               <button
+                                 type="button"
+                                 title={language === 'cn' ? '删除订单' : language === 'jp' ? '注文を削除' : 'Delete order'}
+                                 onClick={() => deleteOrder(o)}
+                                 className="p-2.5 bg-red-50 hover:bg-red-100 text-red-600 rounded-xl transition-colors border border-red-200"
+                               >
+                                 <Trash2 className="w-4 h-4"/>
+                               </button>
+                             )}
                           </div>
                         </div>
                         
@@ -605,25 +641,24 @@ const AddressModal: React.FC<{
   );
   const [errors, setErrors] = useState<Partial<Record<keyof Omit<Address, 'id'>, string>>>({});
 
-  const validateForm = (): boolean => {
+  const validateForm = (data = formData): boolean => {
     const newErrors: Partial<Record<keyof Omit<Address, 'id'>, string>> = {};
 
-    if (!formData.recipient_name.trim()) {
+    if (!data.recipient_name.trim()) {
       newErrors.recipient_name = t.recipientNameRequired || '收件人姓名不能为空';
     }
     
-    if (!formData.phone.trim()) {
+    if (!data.phone.trim()) {
       newErrors.phone = t.phoneRequired || '手机号码不能为空';
-    } else if (!/^1\d{10}$/.test(formData.phone.trim())) {
-      // 简单的中文手机号验证
-      newErrors.phone = t.phoneInvalid || '请输入有效的手机号码';
+    } else if (!isValidShippingPhone(data.phone)) {
+      newErrors.phone = t.phoneInvalid || '请输入11位手机号，虚拟号可选（例：13800138000-1234）';
     }
     
-    if (!formData.province) {
+    if (!data.province) {
       newErrors.province = t.provinceRequired || '请选择省份/城市';
     }
     
-    if (!formData.detail.trim()) {
+    if (!data.detail.trim()) {
       newErrors.detail = t.addressRequired || '详细地址不能为空';
     }
     
@@ -632,12 +667,18 @@ const AddressModal: React.FC<{
   };
 
   const handleSave = () => {
-    if (!validateForm()) {
+    const normalizedData = {
+      ...formData,
+      phone: normalizeShippingPhone(formData.phone),
+    };
+    setFormData(normalizedData);
+
+    if (!validateForm(normalizedData)) {
       return; // 验证失败，不保存
     }
     
     onSave({ 
-      ...formData, 
+      ...normalizedData,
       id: address?.id || `temp_${Math.random().toString(36).substr(2, 9)}`
     });
   };
@@ -683,13 +724,19 @@ const AddressModal: React.FC<{
             </label>
             <input 
               type="tel" 
+              inputMode="tel"
+              autoComplete="tel"
+              maxLength={16}
+              placeholder={t.phonePlaceholder || '13800138000-1234'}
               value={formData.phone} 
               onChange={e => handleInputChange('phone', e.target.value)} 
+              onBlur={() => handleInputChange('phone', normalizeShippingPhone(formData.phone))}
               className={`w-full border rounded-2xl px-4 py-4 outline-none focus:ring-4 focus:ring-blue-100 bg-slate-50/50 font-bold text-slate-700 ${
                 errors.phone ? 'border-red-300' : 'border-slate-200'
               }`}
             />
             {errors.phone && <p className="text-red-500 text-xs mt-1">{errors.phone}</p>}
+            {!errors.phone && <p className="text-slate-400 text-xs mt-2">{t.phoneFormatHint}</p>}
           </div>
           
           {/* 省份/城市 */}

@@ -2,6 +2,7 @@ from flask import Blueprint, request, jsonify
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from datetime import datetime
 from app.models.user import db, User, Profile
+from app.shipping_phone import SHIPPING_PHONE_ERROR, validate_shipping_phone
 import uuid
 import base64
 
@@ -55,6 +56,13 @@ def create_profile():
     
     if not data or not data.get('profile_name'):
         return jsonify({'error': 'Missing profile_name'}), 400
+
+    address = data.get('address', {})
+    if address.get('phone'):
+        try:
+            address['phone'] = validate_shipping_phone(address['phone'])
+        except ValueError:
+            return jsonify({'error': SHIPPING_PHONE_ERROR}), 400
     
     try:
         # Create new profile
@@ -62,10 +70,10 @@ def create_profile():
             user_id=current_user_id,
             profile_name=data.get('profile_name'),
             profile_data=data.get('profile_data', {}),
-            address_recipient_name=data.get('address', {}).get('recipient_name'),
-            address_phone=data.get('address', {}).get('phone'),
-            address_province=data.get('address', {}).get('province'),
-            address_detail=data.get('address', {}).get('detail'),
+            address_recipient_name=address.get('recipient_name'),
+            address_phone=address.get('phone'),
+            address_province=address.get('province'),
+            address_detail=address.get('detail'),
         )
         
         # Handle PDF if provided (base64 encoded)
@@ -111,6 +119,8 @@ def update_profile(profile_id):
         # Update address
         if 'address' in data:
             addr = data['address']
+            if addr.get('phone'):
+                addr['phone'] = validate_shipping_phone(addr['phone'])
             profile.address_recipient_name = addr.get('recipient_name', profile.address_recipient_name)
             profile.address_phone = addr.get('phone', profile.address_phone)
             profile.address_province = addr.get('province', profile.address_province)
@@ -129,6 +139,9 @@ def update_profile(profile_id):
             'profile': profile.to_dict()
         }), 200
     
+    except ValueError:
+        db.session.rollback()
+        return jsonify({'error': SHIPPING_PHONE_ERROR}), 400
     except Exception as e:
         db.session.rollback()
         return jsonify({'error': str(e)}), 500

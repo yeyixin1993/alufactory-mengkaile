@@ -5,6 +5,7 @@ from app.models.user import db, User, Order, Profile
 from app.models.user import Cart
 from app.models.user import normalize_membership_level
 from app.order_utils import build_order_pdf_filename
+from app.order_snapshot import refresh_order_json
 from app.product_order_db import (
     query_order_snapshots,
     sync_order_snapshot,
@@ -278,9 +279,29 @@ def get_all_orders():
         
         orders_paginated = query.order_by(Order.created_at.desc()).paginate(page=page, per_page=per_page)
         
+        # Ensure legacy rows have the same stored JSON/fingerprint as new orders.
+        snapshot_changed = False
+        for order in orders_paginated.items:
+            if not order.order_json or not order.duplicate_fingerprint:
+                refresh_order_json(order)
+                snapshot_changed = True
+        if snapshot_changed:
+            db.session.commit()
+
+        fingerprints = {
+            order.duplicate_fingerprint for order in orders_paginated.items
+            if order.duplicate_fingerprint
+        }
+        duplicate_groups = {}
+        if fingerprints:
+            matching_orders = Order.query.filter(Order.duplicate_fingerprint.in_(fingerprints)).all()
+            for matching_order in matching_orders:
+                key = (str(matching_order.user_id), matching_order.duplicate_fingerprint)
+                duplicate_groups.setdefault(key, []).append(matching_order)
+
         orders_data = []
         for order in orders_paginated.items:
-            order_dict = order.to_dict()
+            order_dict = order.to_dict(include_order_json=True)
             user = User.query.get(order.user_id)
             profile = Profile.query.filter_by(user_id=order.user_id).first()
 
@@ -297,6 +318,14 @@ def get_all_orders():
                 'full_name': user.full_name if user else None,
             }
             order_dict['customer_phone'] = order.phone
+            duplicate_matches = duplicate_groups.get(
+                (str(order.user_id), order.duplicate_fingerprint),
+                [],
+            )
+            order_dict['duplicate_count'] = len(duplicate_matches)
+            order_dict['is_duplicate'] = len(duplicate_matches) > 1
+            order_dict['duplicate_order_ids'] = [str(match.id) for match in duplicate_matches]
+            order_dict['duplicate_order_numbers'] = [match.order_number for match in duplicate_matches]
             order_dict['pdf'] = {
                 'filename': build_order_pdf_filename(order),
                 'available': pdf_available,

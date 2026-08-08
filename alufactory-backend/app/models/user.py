@@ -177,6 +177,10 @@ class Order(db.Model):
     total_amount = db.Column(db.Float, nullable=False)
     shipping_method = db.Column(db.String(50), nullable=True)  # standard / sf / anneng
     overlength_fee = db.Column(db.Float, default=0)  # 超长费
+
+    # Canonical content snapshot for admin JSON review and accidental-duplicate detection.
+    order_json = db.Column(db.JSON, nullable=True)
+    duplicate_fingerprint = db.Column(db.String(64), nullable=True, index=True)
     
     # Status: pending, confirmed, shipped, delivered, cancelled
     status = db.Column(db.String(50), default='pending', nullable=False)
@@ -205,7 +209,7 @@ class Order(db.Model):
     # Relationships
     items = db.relationship('OrderItem', backref='order', lazy=True, cascade='all, delete-orphan')
     
-    def to_dict(self):
+    def to_dict(self, include_order_json=False):
         result = {
             'id': self.id,
             'order_number': self.order_number,
@@ -233,6 +237,9 @@ class Order(db.Model):
                 result[attr] = val
             except Exception:
                 result[attr] = None
+        if include_order_json:
+            result['order_json'] = self.order_json
+            result['duplicate_fingerprint'] = self.duplicate_fingerprint
         return result
 
 

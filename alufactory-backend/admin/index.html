@@ -223,6 +223,30 @@
             background: #fee2e2;
             color: #991b1b;
         }
+
+        .duplicate-badge {
+            display: inline-block;
+            margin-top: 5px;
+            padding: 3px 7px;
+            border-radius: 999px;
+            background: #fff7ed;
+            color: #c2410c;
+            border: 1px solid #fdba74;
+            font-size: 11px;
+            font-weight: 700;
+        }
+
+        .json-preview {
+            max-height: 60vh;
+            overflow: auto;
+            white-space: pre-wrap;
+            word-break: break-word;
+            padding: 16px;
+            border-radius: 8px;
+            background: #111827;
+            color: #e5e7eb;
+            font: 12px/1.6 ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+        }
         
         .modal {
             display: none;
@@ -428,7 +452,10 @@
             <div id="orders" class="content hidden">
                 <div class="table-wrapper">
                     <div class="table-header">
-                        <h3>订单列表</h3>
+                        <div>
+                            <h3>订单列表</h3>
+                            <div id="duplicateOrderNotice" style="display:none; margin-top:8px; color:#c2410c; font-size:13px; font-weight:700;"></div>
+                        </div>
                         <select class="search-box" id="orderFilter" onchange="filterOrders()">
                             <option value="">所有订单</option>
                             <option value="pending">待处理</option>
@@ -530,6 +557,18 @@
             <div class="form-actions">
                 <button class="btn btn-primary" onclick="saveOrder()">保存</button>
                 <button class="btn" onclick="closeModal('editOrderModal')" style="background: #e5e7eb; color: #1f2937;">取消</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Order JSON Modal -->
+    <div id="orderJsonModal" class="modal">
+        <div class="modal-content" style="max-width: 900px;">
+            <div class="modal-header">订单 JSON</div>
+            <div id="orderJsonDuplicateWarning" style="display:none; margin-bottom:12px; padding:10px 12px; border:1px solid #fdba74; border-radius:8px; background:#fff7ed; color:#9a3412; font-weight:700;"></div>
+            <pre id="orderJsonPreview" class="json-preview"></pre>
+            <div class="form-actions">
+                <button class="btn" onclick="closeModal('orderJsonModal')" style="background: #e5e7eb; color: #1f2937;">关闭</button>
             </div>
         </div>
     </div>
@@ -1064,6 +1103,14 @@
                 const data = await response.json();
                 const tbody = document.getElementById('ordersTableBody');
                 tbody.innerHTML = '';
+                const duplicateNotice = document.getElementById('duplicateOrderNotice');
+                const duplicatedOrders = (data.orders || []).filter(order => order.is_duplicate);
+                if (duplicateNotice) {
+                    duplicateNotice.style.display = duplicatedOrders.length ? 'block' : 'none';
+                    duplicateNotice.textContent = duplicatedOrders.length
+                        ? `⚠ 当前页发现 ${duplicatedOrders.length} 条疑似重复订单，请点击“查看JSON”核对。`
+                        : '';
+                }
                 
                 data.orders.forEach(order => {
                     const sourceOrderId = order.source_order_id || order.id;
@@ -1103,8 +1150,16 @@
                                                 : `<button class="btn" style="padding: 6px 8px; background:#e5e7eb; color:#9ca3af; cursor:not-allowed;" disabled>不含价未生成</button>`}`
                             : '-';
 
+                        const duplicateBadge = order.is_duplicate
+                            ? `<div class="duplicate-badge">⚠ 相同JSON × ${Number(order.duplicate_count || 0)}</div>`
+                            : '';
+                        const canDeleteOrder = order.status === 'pending' || order.status === 'cancelled';
+                        const deleteOrderButton = canDeleteOrder
+                            ? `<button class="btn btn-danger" onclick="deleteOrderRecord('${profileOrderId}')">删除</button>`
+                            : '';
+
                         row.innerHTML = `
-                            <td>${order.order_number || profileOrderId || '-'}</td>
+                            <td>${order.order_number || profileOrderId || '-'}${duplicateBadge}</td>
                             <td>${userNameProfile}</td>
                             <td>${userPhoneProfile}</td>
                             <td>${customerPhoneProfile}</td>
@@ -1117,7 +1172,11 @@
                             <td><span class="status-badge status-${order.status}">${getStatusText(order.status)}</span></td>
                             <td>${profileDate}</td>
                             <td>${pdfLinkProfile}</td>
-                            <td><button class="btn btn-primary" onclick="editOrder('${profileOrderId}')">编辑</button></td>
+                            <td>
+                                <button class="btn btn-warning" onclick="showOrderJson('${profileOrderId}')">查看JSON</button>
+                                <button class="btn btn-primary" onclick="editOrder('${profileOrderId}')">编辑</button>
+                                ${deleteOrderButton}
+                            </td>
                         `;
                         return;
                     }
@@ -1357,6 +1416,57 @@
                 
                 alert('订单已保存');
                 closeModal('editOrderModal');
+                loadOrders(1, currentOrderStatusFilter, currentOrderCategory);
+                loadDashboard();
+            } catch (error) {
+                alert('错误: ' + error.message);
+            }
+        }
+
+        function showOrderJson(orderId) {
+            const order = ordersCache[orderId];
+            if (!order) {
+                alert('订单数据尚未加载，请刷新后重试。');
+                return;
+            }
+            const duplicateWarning = document.getElementById('orderJsonDuplicateWarning');
+            if (order.is_duplicate) {
+                const numbers = (order.duplicate_order_numbers || []).filter(Boolean).join('、');
+                duplicateWarning.style.display = 'block';
+                duplicateWarning.textContent = `⚠ 发现 ${order.duplicate_count} 条内容相同的订单：${numbers || '请核对订单列表'}`;
+            } else {
+                duplicateWarning.style.display = 'none';
+                duplicateWarning.textContent = '';
+            }
+            document.getElementById('orderJsonPreview').textContent = JSON.stringify({
+                id: order.id,
+                order_number: order.order_number,
+                status: order.status,
+                created_at: order.created_at,
+                updated_at: order.updated_at,
+                duplicate_fingerprint: order.duplicate_fingerprint,
+                duplicate_order_numbers: order.duplicate_order_numbers || [],
+                order_json: order.order_json,
+            }, null, 2);
+            openModal('orderJsonModal');
+        }
+
+        async function deleteOrderRecord(orderId) {
+            const order = ordersCache[orderId];
+            if (!order || !['pending', 'cancelled'].includes(order.status)) {
+                alert('只能删除“待处理”或“已取消”的订单。');
+                return;
+            }
+            const orderRef = order.order_number || order.id;
+            if (!window.confirm(`确定永久删除订单“${orderRef}”吗？此操作无法撤销。`)) return;
+            try {
+                const response = await fetch(`${API_BASE}/orders/${orderId}`, {
+                    method: 'DELETE',
+                    headers: { 'Authorization': `Bearer ${authToken}` }
+                });
+                const result = await response.json().catch(() => ({}));
+                if (!response.ok) throw new Error(result.error || `删除失败 (${response.status})`);
+                delete ordersCache[orderId];
                 loadOrders(1, currentOrderStatusFilter, currentOrderCategory);
                 loadDashboard();
             } catch (error) {

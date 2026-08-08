@@ -3,6 +3,7 @@ from flask_jwt_extended import jwt_required, get_jwt_identity
 from datetime import datetime
 from app.models.user import db, User, Address, normalize_membership_level
 from app.security import get_request_json_secure
+from app.shipping_phone import SHIPPING_PHONE_ERROR, validate_shipping_phone
 import uuid
 
 user_bp = Blueprint('users', __name__, url_prefix='/api/users')
@@ -112,12 +113,17 @@ def add_user_address(user_id):
     
     if not data or not all(k in data for k in ['recipient_name', 'phone', 'province', 'detail']):
         return jsonify({'error': 'Missing required fields'}), 400
+
+    try:
+        phone = validate_shipping_phone(data['phone'])
+    except ValueError:
+        return jsonify({'error': SHIPPING_PHONE_ERROR}), 400
     
     try:
         address = Address(
             user_id=user_id,
             recipient_name=data['recipient_name'],
-            phone=data['phone'],
+            phone=phone,
             province=data['province'],
             detail=data['detail'],
             is_default=data.get('is_default', False)
@@ -158,6 +164,9 @@ def update_address(address_id):
         return jsonify({'error': str(e)}), 400
     
     try:
+        if 'phone' in data:
+            data['phone'] = validate_shipping_phone(data['phone'])
+
         if 'recipient_name' in data:
             address.recipient_name = data['recipient_name']
         if 'phone' in data:
@@ -178,6 +187,9 @@ def update_address(address_id):
             'message': 'Address updated successfully',
             'address': address.to_dict()
         }), 200
+    except ValueError:
+        db.session.rollback()
+        return jsonify({'error': SHIPPING_PHONE_ERROR}), 400
     except Exception as e:
         db.session.rollback()
         return jsonify({'error': str(e)}), 500
