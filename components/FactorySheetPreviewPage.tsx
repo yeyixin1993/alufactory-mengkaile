@@ -1,13 +1,13 @@
 import React, { useRef, useState } from 'react';
 import { CartItem, User, Language, Address } from '../types';
 import { TRANSLATIONS } from '../constants';
-import { FileDown, Image, FileImage, Printer, X } from 'lucide-react';
+import { FileDown, Printer, X } from 'lucide-react';
 import FactorySheet from './FactorySheet';
 import ExportOverlay from './ExportOverlay';
 import html2canvas from 'html2canvas';
-import { jsPDF } from 'jspdf';
 import { buildOrderPdfFilename, formatEast8Date } from '../utils/orderFormatting';
 import { calculateScrewPlan } from '../utils/screwCalculator';
+import { exportElementToPdf } from '../utils/pdfExport';
 
 /**
  * Standalone preview page – rendered in a new browser window.
@@ -111,38 +111,7 @@ const FactorySheetPreviewPage: React.FC = () => {
   const handleExportPDF = async () => {
     setExporting(true);
     try {
-      const canvas = await captureCanvas();
-      if (!canvas) return;
-
-      const pdf = new jsPDF('p', 'mm', 'a4');
-      const pdfWidth = pdf.internal.pageSize.getWidth();
-      const pdfHeight = pdf.internal.pageSize.getHeight();
-      const MARGIN_MM = 8;
-      const printableHeight = pdfHeight - MARGIN_MM * 2;
-      const contentWidth = pdfWidth;
-      const imgScale = contentWidth / canvas.width;
-
-      let srcY = 0;
-      let page = 0;
-      while (srcY < canvas.height) {
-        if (page > 0) pdf.addPage();
-        const sliceHeightPx = Math.min(printableHeight / imgScale, canvas.height - srcY);
-
-        const sliceCanvas = document.createElement('canvas');
-        sliceCanvas.width = canvas.width;
-        sliceCanvas.height = sliceHeightPx;
-        const ctx = sliceCanvas.getContext('2d')!;
-        ctx.drawImage(canvas, 0, srcY, canvas.width, sliceHeightPx, 0, 0, canvas.width, sliceHeightPx);
-
-        const sliceData = sliceCanvas.toDataURL('image/jpeg', 0.92);
-        const imgH = sliceHeightPx * imgScale;
-        pdf.addImage(sliceData, 'JPEG', 0, MARGIN_MM, contentWidth, imgH);
-
-        srcY += sliceHeightPx;
-        page++;
-      }
-
-      pdf.save(`${fileBaseName}.pdf`);
+      await exportElementToPdf(sheetRef.current, `${fileBaseName}.pdf`);
     } finally {
       setExporting(false);
     }
@@ -174,6 +143,14 @@ const FactorySheetPreviewPage: React.FC = () => {
           </div>
 
           <div className="flex flex-wrap gap-2">
+            <button
+              onClick={handleExportPDF}
+              disabled={exporting}
+              className="flex items-center gap-2 bg-blue-600 hover:bg-blue-500 disabled:bg-slate-500 px-4 py-2 rounded text-sm font-bold transition-all"
+            >
+              <FileDown className="w-4 h-4" />
+              {language === 'cn' ? '下载 PDF' : language === 'jp' ? 'PDFをダウンロード' : 'Download PDF'}
+            </button>
             {/* Print */}
             <button
               onClick={handlePrint}

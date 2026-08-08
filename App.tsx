@@ -15,12 +15,11 @@ import FactorySheetPreviewPage from './components/FactorySheetPreviewPage';
 import FactorySheet from './components/FactorySheet';
 import ExportOverlay from './components/ExportOverlay';
 import QuickQuote from './components/QuickQuote';
-import { jsPDF } from 'jspdf';
-import html2canvas from 'html2canvas';
 import { buildOrderPdfFilename, formatEast8Date, formatEast8DateTime } from './utils/orderFormatting';
 import { normalizeMembershipLevel } from './utils/membership';
 import { calculateScrewPlan, inferInclude304ScrewsByTotal } from './utils/screwCalculator';
 import { preloadImages } from './utils/imagePreload';
+import { exportElementToPdf } from './utils/pdfExport';
 
 const DIYDesigner = React.lazy(() => import('./components/DIYDesigner'));
 
@@ -156,73 +155,7 @@ const LanguageSwitcher: React.FC<{ current: Language, onChange: (l: Language) =>
   </select>
 );
 
-// --- PDF Export with Page Margins ---
-const exportToPDF = async (
-  element: HTMLElement | null,
-  filename: string,
-  options?: { returnBase64?: boolean; skipSave?: boolean }
-) => {
-  if (!element) return;
-
-  try {
-    const pdf = new jsPDF('p', 'mm', 'a4');
-    const pdfWidth = pdf.internal.pageSize.getWidth();
-    const pdfHeight = pdf.internal.pageSize.getHeight();
-
-    const MARGIN_MM = 8;
-    const printableHeight = pdfHeight - MARGIN_MM * 2;
-    const contentWidth = pdfWidth;
-    let pageIndex = 0;
-
-    const pageSections = Array.from(element.querySelectorAll<HTMLElement>('[data-pdf-export-page]'));
-    const sectionsToRender = pageSections.length > 0 ? pageSections : [element];
-
-    for (const section of sectionsToRender) {
-      const canvas = await html2canvas(section, {
-        scale: 2,
-        useCORS: true,
-        logging: false,
-        backgroundColor: '#ffffff'
-      });
-
-      const imgScale = contentWidth / canvas.width;
-      let srcY = 0;
-
-      while (srcY < canvas.height) {
-        const sliceHeightPx = Math.min(
-          Math.floor(printableHeight / imgScale),
-          canvas.height - srcY
-        );
-        const sliceHeightMm = sliceHeightPx * imgScale;
-
-        const pageCanvas = document.createElement('canvas');
-        pageCanvas.width = canvas.width;
-        pageCanvas.height = sliceHeightPx;
-        const ctx = pageCanvas.getContext('2d')!;
-        ctx.fillStyle = '#ffffff';
-        ctx.fillRect(0, 0, pageCanvas.width, pageCanvas.height);
-        ctx.drawImage(canvas, 0, srcY, canvas.width, sliceHeightPx, 0, 0, canvas.width, sliceHeightPx);
-
-        if (pageIndex > 0) pdf.addPage();
-        pdf.addImage(pageCanvas, 'JPEG', 0, MARGIN_MM, contentWidth, sliceHeightMm, undefined, 'FAST');
-
-        srcY += sliceHeightPx;
-        pageIndex++;
-      }
-    }
-    
-    if (!options?.skipSave) {
-      pdf.save(filename);
-    }
-
-    if (options?.returnBase64) {
-      const dataUri = pdf.output('datauristring');
-      return dataUri.split(',')[1];
-    }
-  } catch (e) {
-    console.error("PDF Export failed", e);
-  }
-};
+const exportToPDF = exportElementToPdf;
 
 
 // --- Auth Component ---
@@ -2101,6 +2034,9 @@ const ProductDetail: React.FC<{
 
 const App: React.FC = () => {
   const [language, setLanguage] = useState<Language>('cn');
+  const [showWeChatBrowserNotice, setShowWeChatBrowserNotice] = useState(() => (
+    typeof navigator !== 'undefined' && /MicroMessenger/i.test(navigator.userAgent)
+  ));
   const [cart, setCart] = useState<CartItem[]>(() => readCachedArray<CartItem>(getCacheKey(CART_CACHE_PREFIX)));
   const [draftProfiles, setDraftProfiles] = useState<CartItem[]>(() => readCachedArray<CartItem>(getCacheKey(DRAFT_CACHE_PREFIX)));
   const [user, setUser] = useState<User | null>(null);
@@ -2286,10 +2222,57 @@ const App: React.FC = () => {
 
   const isPreviewRoute = currentHash.startsWith('#/preview');
   const isDesignerRoute = currentHash.startsWith('#/diy-designer');
+  const weChatNotice = {
+    cn: {
+      title: '请使用手机浏览器打开',
+      body: '微信内置浏览器可能无法下载客户 PDF，也可能导致订单 PDF 未上传到后台。',
+      action: '请点击右上角「···」，选择「在浏览器打开」。',
+      continue: '仍在微信中继续浏览',
+    },
+    en: {
+      title: 'Please open in your browser',
+      body: 'WeChat\'s built-in browser may block customer PDF downloads and order PDF uploads.',
+      action: 'Tap “···” in the top-right corner, then choose “Open in Browser”.',
+      continue: 'Continue in WeChat',
+    },
+    jp: {
+      title: 'ブラウザで開いてください',
+      body: 'WeChat内ブラウザでは、PDFのダウンロードや注文PDFのアップロードに失敗する場合があります。',
+      action: '右上の「···」をタップし、「ブラウザで開く」を選択してください。',
+      continue: 'WeChat内で続ける',
+    },
+  }[language];
 
   return (
     <HashRouter>
       <div className={`min-h-screen font-sans text-slate-900 selection:bg-blue-100 selection:text-blue-900 ${isPreviewRoute || isDesignerRoute ? '' : 'bg-slate-50 pb-20'}`}>
+        {showWeChatBrowserNotice && (
+          <div className="fixed inset-0 z-[10000] flex items-start justify-center bg-slate-950/65 px-4 pt-16 backdrop-blur-sm" role="dialog" aria-modal="true" aria-labelledby="wechat-browser-title">
+            <div className="relative w-full max-w-md rounded-[2rem] border border-amber-200 bg-white p-6 shadow-2xl">
+              <button
+                type="button"
+                onClick={() => setShowWeChatBrowserNotice(false)}
+                className="absolute right-4 top-4 rounded-full p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-700"
+                aria-label={weChatNotice.continue}
+              >
+                <X className="h-5 w-5" />
+              </button>
+              <div className="mb-5 flex h-14 w-14 items-center justify-center rounded-2xl bg-amber-100 text-2xl font-black text-amber-700">···</div>
+              <h2 id="wechat-browser-title" className="pr-10 text-2xl font-black text-slate-900">{weChatNotice.title}</h2>
+              <p className="mt-3 text-sm font-bold leading-6 text-slate-600">{weChatNotice.body}</p>
+              <div className="mt-5 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-4 text-sm font-black leading-6 text-amber-900">
+                {weChatNotice.action}
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowWeChatBrowserNotice(false)}
+                className="mt-5 w-full rounded-2xl bg-slate-100 px-4 py-3 text-sm font-black text-slate-600 hover:bg-slate-200"
+              >
+                {weChatNotice.continue}
+              </button>
+            </div>
+          </div>
+        )}
         {!isPreviewRoute && !isDesignerRoute && <nav className="bg-white/90 backdrop-blur-xl sticky top-0 z-40 border-b border-slate-100 shadow-sm">
           <div className="max-w-7xl mx-auto px-2 sm:px-6 min-h-[72px] sm:h-24 flex items-center gap-2 sm:gap-6">
             <Link to="/" className="flex min-w-0 shrink items-center gap-2 sm:gap-5 group">

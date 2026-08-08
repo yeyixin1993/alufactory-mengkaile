@@ -6,6 +6,7 @@ import type { ShippingMethod } from '../constants';
 import ProfileVisualizer from './ProfileVisualizer';
 import { describeHolePassage, getHolePhysicalGrooveIndex } from '../utils/profileMachining';
 import { calculateScrewPlan } from '../utils/screwCalculator';
+import { groupDiyScrewCartItems } from '../utils/cartAccessories';
 
 interface FactorySheetProps {
   cart: CartItem[];
@@ -217,6 +218,7 @@ const FactorySheet: React.FC<FactorySheetProps> = ({ cart, user, language, order
   const userPhone = activeAddress?.phone || user?.id || '-';
 
   const baseTotal = cart.reduce((acc, i) => acc + i.totalPrice, 0);
+  const displayCart = React.useMemo(() => groupDiyScrewCartItems(cart), [cart]);
 
   const profileMetersSummary = React.useMemo(() => {
     const meterMap = new Map<string, number>();
@@ -365,7 +367,7 @@ const FactorySheet: React.FC<FactorySheetProps> = ({ cart, user, language, order
   return (
     <div id={id} className="bg-white p-10 font-mono text-slate-900 w-[210mm] mx-auto shadow-none box-border border border-slate-100 flex flex-col gap-6">
       {/* Header */}
-      <div className="border-b-4 border-slate-900 pb-6 flex justify-between items-end">
+      <div data-pdf-block className="border-b-4 border-slate-900 pb-6 flex justify-between items-end">
         <div className="flex-1">
           <h1 className="text-3xl font-black uppercase tracking-widest mb-3">{t.factorySheet}</h1>
           <div className="grid grid-cols-2 gap-x-8 gap-y-1 text-xs">
@@ -387,19 +389,19 @@ const FactorySheet: React.FC<FactorySheetProps> = ({ cart, user, language, order
 
       {/* Profiles Summary Spreadsheet (after header, before items) */}
       {labelProfileCount > 0 && (
-        <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 text-sm font-bold text-amber-700">
+        <div data-pdf-block className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 text-sm font-bold text-amber-700">
           标签服务提醒：需要打标签
         </div>
       )}
 
       {include304Screws && screwPlan.totalFee > 0 && (
-        <div className="bg-cyan-50 border border-cyan-200 rounded-xl px-4 py-3 text-sm font-bold text-cyan-700">
+        <div data-pdf-block className="bg-cyan-50 border border-cyan-200 rounded-xl px-4 py-3 text-sm font-bold text-cyan-700">
           螺丝配件提醒：需要配螺丝
         </div>
       )}
 
       {profileMetersSummary.length > 0 && (
-        <div className="bg-slate-50 border border-slate-200 rounded-xl p-4">
+        <div data-pdf-block className="bg-slate-50 border border-slate-200 rounded-xl p-4">
           <div className="text-xs font-black text-slate-500 uppercase tracking-widest mb-2">{t.qq_profileMetersByModelColor || '型材米数汇总'}</div>
           <ul className="space-y-1.5 text-xs text-slate-700">
             {profileMetersSummary.map((row) => (
@@ -435,7 +437,7 @@ const FactorySheet: React.FC<FactorySheetProps> = ({ cart, user, language, order
         </div>
       )}
 
-      <div className="bg-slate-50 p-4 rounded border border-slate-200">
+      <div data-pdf-block className="bg-slate-50 p-4 rounded border border-slate-200">
         <h4 className="text-xs font-black text-slate-400 uppercase tracking-widest mb-2">{t.profileSummary || 'Profiles Summary'}</h4>
         <div className="overflow-x-auto">
           <table className="w-full text-sm border-collapse">
@@ -486,7 +488,7 @@ const FactorySheet: React.FC<FactorySheetProps> = ({ cart, user, language, order
 
       {/* Items */}
       <div className="space-y-10">
-        {cart.map((item, idx) => {
+        {displayCart.map((item, idx) => {
            const isProfile = item.product.type === ProductType.PROFILE;
             const isAccessory = item.product.type === ProductType.ACCESSORY;
            const cfg = (item.config || {}) as any;
@@ -512,14 +514,14 @@ const FactorySheet: React.FC<FactorySheetProps> = ({ cart, user, language, order
            if (isProfile && itemProcessingState === 'raw') return null;
 
            return (
-           <div key={idx} className="break-inside-avoid border-2 border-slate-900 rounded-xl overflow-hidden bg-white shadow-sm">
+           <div key={idx} data-pdf-block className="break-inside-avoid border-2 border-slate-900 rounded-xl overflow-hidden bg-white shadow-sm">
              <div className="bg-slate-900 text-white px-5 py-3 flex justify-between items-center">
                 <div className="flex items-center gap-3">
                    <span className="bg-white text-slate-900 w-8 h-8 flex items-center justify-center rounded-lg font-black text-xl">{idx + 1}</span>
                    <span className="font-black text-xl tracking-tight">{item.product.name[language]}</span>
                 </div>
                 <div className="flex items-center gap-6">
-                  <div className="bg-white/20 px-3 py-1 rounded font-bold uppercase text-xs">{t.quantity}: {item.quantity}</div>
+                  <div className="bg-white/20 px-3 py-1 rounded font-bold uppercase text-xs">{t.quantity}: {isAccessory ? Number(cfg?.totalQuantity || item.quantity) : item.quantity}</div>
                   {showPrice && <div className="font-black text-xl">{currency}{item.totalPrice.toFixed(1)}</div>}
                 </div>
              </div>
@@ -878,7 +880,7 @@ const FactorySheet: React.FC<FactorySheetProps> = ({ cart, user, language, order
 
       {/* Totals */}
       {showPrice && (
-        <div className="mt-12 border-t-4 border-slate-900 pt-8 flex justify-between items-start gap-8">
+        <div data-pdf-block className="mt-12 border-t-4 border-slate-900 pt-8 pb-3 flex justify-between items-start gap-8">
            <div className="flex-1" />
 
            <div className="w-80 space-y-3 text-right">
@@ -912,7 +914,7 @@ const FactorySheet: React.FC<FactorySheetProps> = ({ cart, user, language, order
 
       {/* Payment QR Codes */}
       {showPrice && (
-        <div className="break-inside-avoid border-t-2 border-slate-200 pt-6 mt-8">
+        <div data-pdf-block data-pdf-keep-together className="break-inside-avoid border-t-2 border-slate-200 pt-6 mt-8">
           <h4 className="text-xs font-black text-slate-400 uppercase tracking-widest mb-4">付款方式</h4>
           <div className="grid grid-cols-3 gap-4">
             {/* Alipay */}
@@ -945,7 +947,7 @@ const FactorySheet: React.FC<FactorySheetProps> = ({ cart, user, language, order
         </div>
       )}
 
-      <div className="mt-auto pt-16 text-center text-[10px] text-slate-400 uppercase tracking-widest font-bold">
+      <div data-pdf-block className="mt-auto pt-16 pb-4 text-center text-[10px] text-slate-400 uppercase tracking-widest font-bold">
          {t.generatedBy} · {dateStr} · {orderRef}
       </div>
     </div>
