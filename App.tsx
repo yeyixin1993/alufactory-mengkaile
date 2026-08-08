@@ -20,8 +20,14 @@ import html2canvas from 'html2canvas';
 import { buildOrderPdfFilename, formatEast8Date, formatEast8DateTime } from './utils/orderFormatting';
 import { normalizeMembershipLevel } from './utils/membership';
 import { calculateScrewPlan, inferInclude304ScrewsByTotal } from './utils/screwCalculator';
+import { preloadImages } from './utils/imagePreload';
 
 const DIYDesigner = React.lazy(() => import('./components/DIYDesigner'));
+
+const COLOR_SWATCH_IMAGE_URLS = [
+  ...PROFILE_COLORS.map((color) => `/images/color_${color.id}.png`),
+  '/images/color_wood_natural.svg',
+];
 
 const getCurrency = (lang: Language) => lang === 'cn' ? '￥' : '$';
 
@@ -2106,6 +2112,10 @@ const App: React.FC = () => {
   const skipNextCartPersistRef = useRef(false);
   const skipNextDraftPersistRef = useRef(false);
   const skipNextServerSyncRef = useRef(false);
+
+  useEffect(() => {
+    preloadImages(COLOR_SWATCH_IMAGE_URLS);
+  }, []);
 
   useEffect(() => {
     const handleHashChange = () => setCurrentHash(window.location.hash);
