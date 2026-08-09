@@ -8,6 +8,7 @@ import { normalizeMembershipLevel } from '../utils/membership';
 import { displayGrooveToPhysical, getProfileGrooveCount, getProfileTapPortCount } from '../utils/profileMachining';
 import { Plus, Trash2, List, ShoppingCart, Pencil, X, Hammer, Settings2, Copy } from 'lucide-react';
 import ProfileVisualizer from './ProfileVisualizer';
+import ProfileSectionGuide from './ProfileSectionGuide';
 
 interface ProfileEditorProps {
   language: Language;
@@ -324,6 +325,10 @@ const ProfileEditor: React.FC<ProfileEditorProps> = ({ language, product, user, 
               <option value="powder">{t.finishPowder}</option>
             </select>
           </div>
+        </div>
+
+        <div className="mb-8">
+          <ProfileSectionGuide language={language} />
         </div>
 
         {/* Profile Cross-Section Image + Color Swatch */}

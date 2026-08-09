@@ -24,7 +24,9 @@
 - Conversion of a complete 3D assembly into the existing cart item formats, including production remarks, board area metadata, machining data, hardware quantities, and checkout compatibility.
 - Designer screws preserve customer-edited quantities and export through the legacy factory reminder as compact rows grouped by profile model/series, head, length, color, and price; they do not stack with the ordinary per-hole 304-screw add-on.
 - Lazy-loaded 3D bundle so regular catalog and checkout visitors do not download Three.js.
-- MayCAD import: deterministic, editable `.scene` XML conversion plus PDF-only reconstruction from locally extracted BOM/view pages through a server-side Qwen Vision endpoint. PDF.js is loaded only when a PDF import is requested.
+- Build-time Tailwind CSS, local catalog artwork, idle product-page color preloading, and on-demand PDF/preview chunks so the storefront does not wait for runtime CSS generation, external placeholder images, or export libraries.
+- Critical inline startup progress UI appears before the application bundle loads, reaches 100% only after React paints the first usable frame, and then fades away.
+- MayCAD import: deterministic, editable `.scene` XML conversion. Customer-facing PDF/AI reconstruction is disabled until a future AI provider configuration and review workflow are ready.
 
 ## Run locally
 
@@ -46,7 +48,7 @@ Open `http://localhost:3000/#/diy-designer`.
 7. Generate production drawings, exploded views, cut lists, and drill-coordinate sheets from the saved assembly.
 8. Add STEP/DXF/GLTF import/export after exact geometry and coordinate conventions are finalized.
 9. Create a proper accessory catalog mapping for every connector, fastener, foot, hinge, handle, and panel mounting system.
-10. Move Tailwind from the existing CDN setup into the Vite/PostCSS build before production deployment.
+10. Continue splitting route-specific storefront/editor code while preserving the completed Vite/PostCSS Tailwind build and on-demand PDF libraries.
 11. Extend the constrained MayCAD scene schema into natural-language scene operations and image/sketch-assisted modeling, with human review before ordering.
 
 ## Validation completed

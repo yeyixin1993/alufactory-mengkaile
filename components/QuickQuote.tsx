@@ -14,6 +14,7 @@ import {
 } from '../constants';
 import type { ShippingMethod } from '../constants';
 import { normalizeMembershipLevel } from '../utils/membership';
+import ProfileSectionGuide from './ProfileSectionGuide';
 
 type QuickQuoteProduct = 'profile' | 'aluminum_plate' | 'pegboard' | 'marine_board' | 'frame';
 type ProfileSection = 'natural' | 'colored';
@@ -768,6 +769,7 @@ const QuickQuote: React.FC<{ language: Language; user?: User | null }> = ({ lang
 
         {selectedProduct === 'profile' && (
           <div className="space-y-4">
+            <ProfileSectionGuide language={language} />
             {profileRows.map((row, index) => {
               const calc = profileRowsCalculated[index];
               const color = PROFILE_COLORS.find((c) => c.id === row.colorId) || PROFILE_COLORS[0];

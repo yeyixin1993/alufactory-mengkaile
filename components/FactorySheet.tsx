@@ -169,7 +169,20 @@ const FactorySheet: React.FC<FactorySheetProps> = ({ cart, user, language, order
 
       // 5. Create Key
       // This ensures a profile with tapping is stored separately from one without
-      const customRemark = String(cfg.remark || '').trim();
+      // Legacy designer cart entries appended scene coordinates to this field.
+      // Printed documents keep only customer/manufacturing remarks.
+      const customRemark = String(cfg.remark || '')
+        .split(/[；\n]+/)
+        .map((part) => part.trim())
+        .filter((part) => {
+          if (!part) return false;
+          const isSceneTransform = /^3D\s*(?:DIY|design(?:er)?)?\b/i.test(part)
+            && /\b(?:position|rotation)\b/i.test(part);
+          const isMaycadSourceReference = /^MayCAD\b/i.test(part)
+            && (/(?:source\s*#|PDF AI reconstruction)/i.test(part));
+          return !isSceneTransform && !isMaycadSourceReference;
+        })
+        .join('；');
       const key = [length, model, cfg.colorId, section, processingState, tapType, miterKey, customRemark].join('||');
 
       // 6. Create Remark
@@ -382,6 +395,14 @@ const FactorySheet: React.FC<FactorySheetProps> = ({ cart, user, language, order
   const normalizedShippingMethod = (shippingMethod || '').toLowerCase();
   if (!shippingLabel && normalizedShippingMethod in SHIPPING_METHOD_NAMES) {
     shippingLabel = SHIPPING_METHOD_NAMES[normalizedShippingMethod as ShippingMethod][language];
+  }
+
+  // Zero-fee previews and sheets without an address have not completed the
+  // prepaid shipping flow. Label them freight collect instead of ordinary
+  // prepaid courier service.
+  if (shippingFee <= 0 || !activeAddress) {
+    shippingFee = 0;
+    shippingLabel = SHIPPING_METHOD_NAMES.sf_collect[language];
   }
 
   const finalTotal = baseTotal + shippingFee + screwPlan.totalFee + labelFee;

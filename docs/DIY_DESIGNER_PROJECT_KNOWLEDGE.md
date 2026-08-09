@@ -209,6 +209,8 @@ Availability and price must be verified against Mengkaile's authoritative catalo
 - Machining sheets use canonical A/B/C/D faces, physical groove IDs, entry/exit descriptions, and both end distances.
 - Cart conversion and the production PDF must preserve marine-board “原色”, accessory specifications, physical-product image keys, and all customer remarks.
 - Cart/PDF conversion must preserve designer screw length, head type, compatible profile series, source profile model, color, customer-confirmed quantity, price, and linked profile/hole references while grouping identical screw specifications.
+- Customer/factory PDF remarks contain only customer-entered or manufacturing-relevant notes. Scene position, rotation, “3D design”, and other editable-model transport metadata stay in JSON/XLSX and must not be appended to the visible remark column.
+- A production-sheet preview with no selected shipping address or a displayed shipping fee of zero is labelled freight collect/到付/着払い. It must not imply ordinary prepaid courier service before the complete address, shipping, PDF, and payment flow has run.
 - Shipping-weight baseline for marine board must use area multipliers: 12mm = 8 kg/㎡ and 18mm = 12 kg/㎡. If any legacy value differs, this baseline is authoritative.
 - Client-side prices are estimates. A production deployment needs server-side validation against the current catalog before checkout totals become authoritative.
 
@@ -344,6 +346,8 @@ Before releasing a designer change, verify at minimum:
 
 ### Decision log
 
+- **2026-08-09:** Added a lightweight, multilingual startup progress screen in the critical HTML. It remains below 100% until React paints the usable application and then fades out, so slow connections receive immediate loading feedback.
+- **2026-08-09:** Removed automatic 3D position/rotation text from printable remarks. Production-sheet previews with no address or zero shipping fee now display freight collect rather than ordinary prepaid courier service.
 - **2026-08-08:** Corrected MayCAD `PROF20-2040` to Mengkaile ordinary `2040`. `2040-N1-40` in the chair reference is a post-import manual replacement, not an automatic source mapping. Added a maintained verified-intersection table; unknown MayCAD profiles use dimension-only fallback with an explicit review warning.
 - **2026-08-09:** Expanded the deterministic MayCAD intersection map from 4 to 37 exact source codes using `maycad_mengkaile_aluminum_profile_common.scene`. Corrected 20×20 `21SP` to `2020R`, added verified cover variants, and mapped 30×30 Soft/two-face/three-face/four-face groups to `3030R`/`3030-N2`/`3030-N1`/`3030`; approved 3060/4040/4080 variants normalize to their ordinary Mengkaile models.
 - **2026-08-09:** Standardized the Chinese brand name as “萌开了”. Added mandatory post-import model selection for unknown, unverified, and PDF-inferred MayCAD profiles. Clarified in the UI that the current importer supports profiles and recognized drilling only; accessory import remains under development.

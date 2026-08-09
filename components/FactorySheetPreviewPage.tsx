@@ -4,7 +4,6 @@ import { TRANSLATIONS } from '../constants';
 import { FileDown, Printer, X } from 'lucide-react';
 import FactorySheet from './FactorySheet';
 import ExportOverlay from './ExportOverlay';
-import html2canvas from 'html2canvas';
 import { buildOrderPdfFilename, formatEast8Date } from '../utils/orderFormatting';
 import { calculateScrewPlan } from '../utils/screwCalculator';
 import { exportElementToPdf } from '../utils/pdfExport';
@@ -77,6 +76,7 @@ const FactorySheetPreviewPage: React.FC = () => {
 
   const captureCanvas = async () => {
     if (!sheetRef.current) return null;
+    const { default: html2canvas } = await import('html2canvas');
     return html2canvas(sheetRef.current, {
       scale: 2,
       useCORS: true,

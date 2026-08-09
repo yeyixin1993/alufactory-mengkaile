@@ -1032,7 +1032,7 @@ export const INITIAL_PRODUCTS: Product[] = [
     長さ≤100mmの場合、1本あたり¥5の危険料金が発生します。`
         },
     basePrice: 0,
-    imageUrl: 'https://picsum.photos/400/300?random=2'
+    imageUrl: '/images/catalog/aluminum-profile.jpg'
   },
   {
     id: 'p1',
@@ -1040,7 +1040,7 @@ export const INITIAL_PRODUCTS: Product[] = [
     name: { en: 'Aluminum Pegboard', cn: '铝合金洞洞板', jp: 'アルミペグボード' },
     description: { en: 'Customizable pegboard for tool organization.', cn: '用于工具收纳的定制洞洞板，拼单享优惠。', jp: 'ツール整理用のカスタマイズ可能なペグボード。' },
     basePrice: 100,
-    imageUrl: 'https://picsum.photos/400/300?random=1'
+    imageUrl: '/images/catalog/pegboard.jpg'
   },
   {
     id: 'p3',
@@ -1052,7 +1052,7 @@ export const INITIAL_PRODUCTS: Product[] = [
       jp: '2mmアルミ板と同じ設定・価格です。'
     },
     basePrice: 700,
-    imageUrl: 'https://picsum.photos/400/300?random=3'
+    imageUrl: '/images/catalog/cabinet-door.jpg'
   },
   {
     id: 'p4',
@@ -1060,7 +1060,7 @@ export const INITIAL_PRODUCTS: Product[] = [
     name: { en: 'Art Frame', cn: '相框', jp: 'アートフレーム' },
     description: { en: 'Custom frames for your art.', cn: '为您的艺术品定制相框。', jp: 'アート用のカスタムフレーム。' },
     basePrice: 80,
-    imageUrl: 'https://picsum.photos/400/300?random=4'
+    imageUrl: '/images/catalog/art-frame.jpg'
   },
   {
     id: 'p5',
@@ -1072,7 +1072,7 @@ export const INITIAL_PRODUCTS: Product[] = [
       jp: 'アルミペグボードと同じ設定フローです。'
     },
     basePrice: 700,
-    imageUrl: 'https://picsum.photos/400/300?random=5'
+    imageUrl: '/images/catalog/aluminum-plate.jpg'
   },
   {
     id: 'p6',
@@ -1080,7 +1080,7 @@ export const INITIAL_PRODUCTS: Product[] = [
     name: { en: 'Russian BBB Marine Board', cn: '俄罗斯全进口BBB海洋板', jp: 'ロシア製マリンボードBBB' },
     description: { en: 'Moisture-resistant marine board for custom applications.', cn: '适用于定制场景的防潮海洋板。', jp: 'カスタム用途向け耐湿マリンボード。' },
     basePrice: 200,
-    imageUrl: 'https://picsum.photos/400/300?random=6'
+    imageUrl: '/images/catalog/marine-board.jpg'
   },
   {
     id: 'p7',
@@ -1088,7 +1088,7 @@ export const INITIAL_PRODUCTS: Product[] = [
     name: { en: 'IKEA Calligraphy Special Cabinet', cn: '宜家书法特柜子', jp: 'IKEA書道特注キャビネット' },
     description: { en: 'Special cabinet solution for calligraphy storage and display.', cn: '用于书法收纳与展示的宜家专用柜体。', jp: '書道用品の収納・展示向けIKEA特注キャビネット。' },
     basePrice: 0,
-    imageUrl: 'https://picsum.photos/400/300?random=7'
+    imageUrl: '/images/catalog/calligraphy-cabinet.jpg'
   },
   {
     id: 'p8',
@@ -1096,7 +1096,7 @@ export const INITIAL_PRODUCTS: Product[] = [
     name: { en: 'Wardrobe', cn: '衣柜', jp: 'ワードローブ' },
     description: { en: 'Custom wardrobe solutions.', cn: '支持定制的衣柜方案。', jp: 'カスタムワードローブソリューション。' },
     basePrice: 0,
-    imageUrl: 'https://picsum.photos/400/300?random=8'
+    imageUrl: '/images/catalog/wardrobe.jpg'
   }
 ];
 

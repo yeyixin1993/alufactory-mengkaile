@@ -568,6 +568,7 @@
             <div id="orderJsonDuplicateWarning" style="display:none; margin-bottom:12px; padding:10px 12px; border:1px solid #fdba74; border-radius:8px; background:#fff7ed; color:#9a3412; font-weight:700;"></div>
             <pre id="orderJsonPreview" class="json-preview"></pre>
             <div class="form-actions">
+                <button class="btn btn-primary" onclick="downloadOrderJson()">保存 JSON</button>
                 <button class="btn" onclick="closeModal('orderJsonModal')" style="background: #e5e7eb; color: #1f2937;">关闭</button>
             </div>
         </div>
@@ -1423,6 +1424,8 @@
             }
         }
 
+        let activeOrderJsonDownload = null;
+
         function showOrderJson(orderId) {
             const order = ordersCache[orderId];
             if (!order) {
@@ -1438,7 +1441,7 @@
                 duplicateWarning.style.display = 'none';
                 duplicateWarning.textContent = '';
             }
-            document.getElementById('orderJsonPreview').textContent = JSON.stringify({
+            activeOrderJsonDownload = {
                 id: order.id,
                 order_number: order.order_number,
                 status: order.status,
@@ -1447,8 +1450,27 @@
                 duplicate_fingerprint: order.duplicate_fingerprint,
                 duplicate_order_numbers: order.duplicate_order_numbers || [],
                 order_json: order.order_json,
-            }, null, 2);
+            };
+            document.getElementById('orderJsonPreview').textContent = JSON.stringify(activeOrderJsonDownload, null, 2);
             openModal('orderJsonModal');
+        }
+
+        function downloadOrderJson() {
+            if (!activeOrderJsonDownload) {
+                alert('订单 JSON 尚未加载。');
+                return;
+            }
+            const orderRef = activeOrderJsonDownload.order_number || activeOrderJsonDownload.id || 'order';
+            const safeOrderRef = String(orderRef).replace(/[^a-zA-Z0-9._-]+/g, '_');
+            const blob = new Blob([JSON.stringify(activeOrderJsonDownload, null, 2)], { type: 'application/json;charset=utf-8' });
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = `${safeOrderRef}.json`;
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+            URL.revokeObjectURL(url);
         }
 
         async function deleteOrderRecord(orderId) {

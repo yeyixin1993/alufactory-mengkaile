@@ -1,6 +1,3 @@
-import html2canvas from 'html2canvas';
-import { jsPDF } from 'jspdf';
-
 export interface PdfExportOptions {
   returnBase64?: boolean;
   skipSave?: boolean;
@@ -84,7 +81,9 @@ const findExportBlocks = (element: HTMLElement): HTMLElement[] => {
   });
 };
 
-const captureBlock = async (element: HTMLElement) => html2canvas(element, {
+type Html2Canvas = typeof import('html2canvas')['default'];
+
+const captureBlock = async (element: HTMLElement, html2canvas: Html2Canvas) => html2canvas(element, {
   // 1.5x remains sharp for A4 text/QR codes while avoiding the memory and
   // multi-minute render cost of dozens of separate 2x production cards.
   scale: 1.5,
@@ -173,6 +172,13 @@ export const exportElementToPdf = async (
 ) => {
   if (!element) throw new Error('PDF export element is unavailable.');
 
+  // These libraries are only needed after an explicit export request. Loading
+  // them here keeps the storefront's first JavaScript bundle much smaller.
+  const [{ default: html2canvas }, { jsPDF }] = await Promise.all([
+    import('html2canvas'),
+    import('jspdf'),
+  ]);
+
   const restorePosition = await makeElementCaptureable(element);
   try {
     await waitForAssets(element);
@@ -196,7 +202,7 @@ export const exportElementToPdf = async (
     };
 
     for (const block of blocks) {
-      const canvas = await captureBlock(block);
+      const canvas = await captureBlock(block, html2canvas);
       if (canvas.width <= 0 || canvas.height <= 0) continue;
       hasVisibleContent = hasVisibleContent || canvasHasVisibleContent(canvas);
 

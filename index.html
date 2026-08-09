@@ -4,40 +4,137 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Mengkaile - Factory Direct</title>
-    <script src="https://cdn.tailwindcss.com"></script>
     <style>
-      /* Custom scrollbar for better aesthetics */
-      ::-webkit-scrollbar {
-        width: 8px;
+      #app-loading-screen {
+        position: fixed;
+        inset: 0;
+        z-index: 2147483000;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: #f8fafc;
+        color: #0f172a;
+        font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        transition: opacity 220ms ease, visibility 220ms ease;
+      }
+      #app-loading-screen.app-loading-complete {
+        opacity: 0;
+        visibility: hidden;
+        pointer-events: none;
+      }
+      .app-loading-card {
+        width: min(360px, calc(100vw - 48px));
+        text-align: center;
+      }
+      .app-loading-mark {
+        display: inline-flex;
+        width: 54px;
+        height: 54px;
+        align-items: center;
+        justify-content: center;
+        border-radius: 18px;
+        background: #0f172a;
+        color: #fff;
+        font-size: 28px;
+        font-weight: 900;
+        box-shadow: 0 18px 45px rgba(15, 23, 42, 0.18);
+      }
+      .app-loading-brand {
+        margin: 18px 0 4px;
+        font-size: 20px;
+        font-weight: 900;
+        letter-spacing: -0.02em;
+      }
+      #app-loading-label {
+        margin: 0;
+        color: #64748b;
+        font-size: 13px;
+        font-weight: 700;
+      }
+      .app-loading-track {
         height: 8px;
+        margin-top: 20px;
+        overflow: hidden;
+        border-radius: 999px;
+        background: #e2e8f0;
       }
-      ::-webkit-scrollbar-track {
-        background: #f1f1f1; 
+      #app-loading-progress {
+        width: 8%;
+        height: 100%;
+        border-radius: inherit;
+        background: linear-gradient(90deg, #2563eb, #38bdf8);
+        box-shadow: 0 0 16px rgba(37, 99, 235, 0.35);
+        transition: width 180ms ease;
       }
-      ::-webkit-scrollbar-thumb {
-        background: #888; 
-        border-radius: 4px;
-      }
-      ::-webkit-scrollbar-thumb:hover {
-        background: #555; 
+      #app-loading-percent {
+        margin-top: 9px;
+        color: #2563eb;
+        font-size: 12px;
+        font-weight: 900;
+        font-variant-numeric: tabular-nums;
       }
     </style>
-  <script type="importmap">
-{
-  "imports": {
-    "react/": "https://esm.sh/react@^19.2.3/",
-    "react": "https://esm.sh/react@^19.2.3",
-    "react-router-dom": "https://esm.sh/react-router-dom@^7.10.1",
-    "react-dom/": "https://esm.sh/react-dom@^19.2.3/",
-    "lucide-react": "https://esm.sh/lucide-react@^0.561.0",
-    "jspdf": "https://esm.sh/jspdf@2.5.1",
-    "jspdf-autotable": "https://esm.sh/jspdf-autotable@3.8.2",
-    "html2canvas": "https://esm.sh/html2canvas@1.4.1"
-  }
-}
-</script>
+    <script>
+      (() => {
+        let progress = 8;
+        let timer = null;
+        const render = (value) => {
+          progress = Math.max(progress, Math.min(100, Math.round(value)));
+          const bar = document.getElementById('app-loading-progress');
+          const percent = document.getElementById('app-loading-percent');
+          const screen = document.getElementById('app-loading-screen');
+          if (bar) bar.style.width = `${progress}%`;
+          if (percent) percent.textContent = `${progress}%`;
+          if (screen) screen.setAttribute('aria-valuenow', String(progress));
+        };
+        const start = () => {
+          const label = document.getElementById('app-loading-label');
+          const browserLanguage = (navigator.language || '').toLowerCase();
+          if (label) {
+            label.textContent = browserLanguage.startsWith('ja')
+              ? 'ページを読み込んでいます…'
+              : browserLanguage.startsWith('zh')
+                ? '网页加载中…'
+                : 'Loading the website…';
+          }
+          render(12);
+          timer = window.setInterval(() => {
+            const step = progress < 48 ? 4 : progress < 72 ? 2 : 1;
+            render(Math.min(92, progress + step));
+          }, 180);
+        };
+        window.__MENGKAILE_LOADING__ = {
+          setProgress: render,
+          complete: () => {
+            if (timer) window.clearInterval(timer);
+            render(100);
+            window.setTimeout(() => {
+              const screen = document.getElementById('app-loading-screen');
+              if (!screen) return;
+              screen.classList.add('app-loading-complete');
+              window.setTimeout(() => screen.remove(), 240);
+            }, 120);
+          },
+        };
+        if (document.readyState === 'loading') {
+          document.addEventListener('DOMContentLoaded', start, { once: true });
+        } else {
+          start();
+        }
+      })();
+    </script>
 </head>
   <body>
+    <div id="app-loading-screen" role="progressbar" aria-label="Website loading progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="8">
+      <div class="app-loading-card">
+        <div class="app-loading-mark">M</div>
+        <div class="app-loading-brand">萌开了 Mengkaile</div>
+        <p id="app-loading-label">网页加载中…</p>
+        <div class="app-loading-track"><div id="app-loading-progress"></div></div>
+        <div id="app-loading-percent">8%</div>
+      </div>
+    </div>
+    <noscript>请启用 JavaScript 后访问萌开了网站。</noscript>
     <div id="root"></div>
   <script type="module" src="/index.tsx"></script>
 </body>

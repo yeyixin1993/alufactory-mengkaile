@@ -11,10 +11,8 @@ import BoardQuoteEditor from './components/BoardQuoteEditor';
 import AccessoryQuoteEditor from './components/AccessoryQuoteEditor';
 import ProfileVisualizer from './components/ProfileVisualizer';
 import { openFactorySheetPreview } from './components/FactorySheetPreview';
-import FactorySheetPreviewPage from './components/FactorySheetPreviewPage';
 import FactorySheet from './components/FactorySheet';
 import ExportOverlay from './components/ExportOverlay';
-import QuickQuote from './components/QuickQuote';
 import { buildOrderPdfFilename, formatEast8Date, formatEast8DateTime } from './utils/orderFormatting';
 import { normalizeMembershipLevel } from './utils/membership';
 import { calculateScrewPlan, inferInclude304ScrewsByTotal } from './utils/screwCalculator';
@@ -24,6 +22,8 @@ import { summarizeDiyScrewCartItems } from './utils/cartAccessories';
 import { isValidShippingPhone, normalizeShippingPhone } from './utils/shippingPhone';
 
 const DIYDesigner = React.lazy(() => import('./components/DIYDesigner'));
+const FactorySheetPreviewPage = React.lazy(() => import('./components/FactorySheetPreviewPage'));
+const QuickQuote = React.lazy(() => import('./components/QuickQuote'));
 
 const COLOR_SWATCH_IMAGE_URLS = [
   ...PROFILE_COLORS.map((color) => `/images/color_${color.id}.png`),
@@ -113,7 +113,7 @@ const ACCESSORY_PRODUCT: Product = {
     jp: 'プロファイルサイズと数量を選択し、数量割引を自動計算します。',
   },
   basePrice: 0,
-  imageUrl: 'https://picsum.photos/400/300?random=9',
+  imageUrl: '/images/accessory/accessory_codes.jpg',
 };
 
 const getCacheKey = (prefix: string, userId?: string | null) => {
@@ -564,7 +564,7 @@ const Catalog: React.FC<{ language: Language }> = ({ language }) => {
         {INITIAL_PRODUCTS.map(product => (
           <div key={product.id} className="bg-white rounded-[2.5rem] overflow-hidden shadow-xl border border-slate-100 hover:shadow-2xl transition-all duration-300 group">
             <div className="h-64 overflow-hidden relative">
-              <img src={product.imageUrl} alt={product.name[language]} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-1000" />
+              <img src={product.imageUrl} alt={product.name[language]} loading="lazy" decoding="async" className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-1000" />
               <div className="absolute inset-0 bg-gradient-to-t from-black/40 via-transparent to-transparent" />
               <div className="absolute top-6 left-6 bg-white/95 backdrop-blur px-3 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest text-slate-800 shadow-xl">{product.type}</div>
             </div>
@@ -580,7 +580,7 @@ const Catalog: React.FC<{ language: Language }> = ({ language }) => {
 
         <div className="bg-white rounded-[2.5rem] overflow-hidden shadow-xl border border-slate-100 hover:shadow-2xl transition-all duration-300 group">
           <div className="h-64 overflow-hidden relative">
-            <img src={accessoryProduct.imageUrl} alt={accessoryProduct.name[language]} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-1000" />
+            <img src={accessoryProduct.imageUrl} alt={accessoryProduct.name[language]} loading="lazy" decoding="async" className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-1000" />
             <div className="absolute inset-0 bg-gradient-to-t from-black/40 via-transparent to-transparent" />
             <div className="absolute top-6 left-6 bg-white/95 backdrop-blur px-3 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest text-slate-800 shadow-xl">ACCESSORY</div>
           </div>
@@ -2115,8 +2115,16 @@ const App: React.FC = () => {
   const skipNextServerSyncRef = useRef(false);
 
   useEffect(() => {
-    preloadImages(COLOR_SWATCH_IMAGE_URLS);
-  }, []);
+    if (!currentHash.startsWith('#/product/')) return;
+
+    const preload = () => preloadImages(COLOR_SWATCH_IMAGE_URLS);
+    if ('requestIdleCallback' in window) {
+      const idleId = window.requestIdleCallback(preload, { timeout: 1500 });
+      return () => window.cancelIdleCallback(idleId);
+    }
+    const timeoutId = window.setTimeout(preload, 250);
+    return () => window.clearTimeout(timeoutId);
+  }, [currentHash]);
 
   useEffect(() => {
     const handleHashChange = () => setCurrentHash(window.location.hash);
@@ -2246,7 +2254,7 @@ const App: React.FC = () => {
     syncCurrentUser();
 
     // Keep VIP/membership status in sync with backend changes.
-    const pollId = window.setInterval(syncCurrentUser, 5000);
+    const pollId = window.setInterval(syncCurrentUser, 60_000);
 
     // Refresh immediately when user returns to the page.
     const handleFocus = () => {
@@ -2398,13 +2406,21 @@ const App: React.FC = () => {
               <DIYDesigner language={language} onLanguageChange={setLanguage} user={user} onAddBatchToCart={(items) => setCart(mergeCartItems(cart, items))} />
             </React.Suspense>
           )} />
-          <Route path="/quick-quote" element={<QuickQuote language={language} user={user} />} />
+          <Route path="/quick-quote" element={(
+            <React.Suspense fallback={<div className="min-h-[70vh] flex items-center justify-center text-slate-400 font-black">Loading…</div>}>
+              <QuickQuote language={language} user={user} />
+            </React.Suspense>
+          )} />
           <Route path="/login" element={<Auth language={language} onLogin={(u) => { setUser(u); }} />} />
           <Route path="/history" element={user ? <UserProfile user={user} language={language} setUser={setUser} onEditOrder={onEditOrder} onGoToPayment={onGoToPayment} /> : <div className="p-40 text-center flex flex-col items-center"><UserIcon className="w-20 h-20 text-slate-100 mb-6"/><p className="font-black text-slate-300 text-2xl">Please login to view your orders</p></div>} />
           <Route path="/product/:id" element={<ProductDetail language={language} user={user} onAddToCart={(item) => setCart(mergeCartItems(cart, [item]))} onAddBatchToCart={(items) => setCart(mergeCartItems(cart, items))} onUpdateCartItem={(item) => setCart(cart.map(x => x.id === item.id ? item : x))} draftProfiles={draftProfiles} setDraftProfiles={setDraftProfiles} />} />
           <Route path="/cart" element={<Cart cart={cart} language={language} setCart={setCart} user={user} updateUser={setUser} onSaveCartSuccess={onSaveCartSuccess} />} />
           <Route path="/payment/:orderId" element={<PaymentPage language={language} user={user} />} />
-          <Route path="/preview" element={<FactorySheetPreviewPage />} />
+          <Route path="/preview" element={(
+            <React.Suspense fallback={<div className="min-h-screen flex items-center justify-center bg-slate-100 text-slate-400 font-black">Loading…</div>}>
+              <FactorySheetPreviewPage />
+            </React.Suspense>
+          )} />
         </Routes>
       </div>
     </HashRouter>

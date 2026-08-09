@@ -1,4 +1,7 @@
-/* Base stylesheet to avoid 404 when index.html references /index.css */
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
 html, body, #root {
   margin: 0;
   padding: 0;
@@ -7,6 +10,24 @@ html, body, #root {
 
 body {
   font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
+}
+
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: #f1f1f1;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #888;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #555;
 }
 
 .diy-toolbar-button {

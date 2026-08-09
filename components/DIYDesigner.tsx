@@ -5182,7 +5182,9 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({ language, onLanguageChange, u
             right: Array(tapPortCount).fill(!!item.tappingRight),
           },
           unitPrice: Number((totalPrice / Math.max(1, item.quantity)).toFixed(1)),
-          remark: [item.remark?.trim(), `3D DIY position ${item.position.join(',')}mm; rotation ${item.rotation.join(',')}deg`].filter(Boolean).join('；'),
+          // Scene transforms stay in editable designer/production data. The
+          // printable remark is reserved for the customer's intentional note.
+          remark: item.remark?.trim() || undefined,
         };
         return { id: makeId(), product: profileProduct, quantity: item.quantity, config, totalPrice };
       }
