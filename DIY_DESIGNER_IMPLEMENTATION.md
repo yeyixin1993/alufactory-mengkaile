@@ -27,6 +27,8 @@
 - Build-time Tailwind CSS, local catalog artwork, idle product-page color preloading, and on-demand PDF/preview chunks so the storefront does not wait for runtime CSS generation, external placeholder images, or export libraries.
 - Critical inline startup progress UI appears before the application bundle loads, reaches 100% only after React paints the first usable frame, and then fades away.
 - MayCAD import: deterministic, editable `.scene` XML conversion. Customer-facing PDF/AI reconstruction is disabled until a future AI provider configuration and review workflow are ready.
+- Parametric furniture entry points for the IKEA calligraphy-basket cabinet and the 12-profile wardrobe frame. They hand a fully editable scene, machining data, marine-board top, and production remarks into the same 3D designer.
+- Repository pre-push packaging: after `npm run setup:git-hooks`, each local push first rebuilds `dist` and replaces `~/Downloads/mengkaile-dist-latest.zip` with the current upload bundle.
 
 ## Run locally
 
@@ -36,6 +38,14 @@ npm run dev
 ```
 
 Open `http://localhost:3000/#/diy-designer`.
+
+Enable the one-time local Git hook for automatic release ZIP generation:
+
+```bash
+npm run setup:git-hooks
+```
+
+The hook runs `npm run package:dist` before every push. A failed build or ZIP operation stops the push so the Downloads bundle cannot silently fall behind the source being pushed.
 
 ## Production roadmap
 

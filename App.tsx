@@ -9,6 +9,7 @@ import { ApiService } from './services/apiService';
 import ProfileEditor from './components/ProfileEditor';
 import BoardQuoteEditor from './components/BoardQuoteEditor';
 import AccessoryQuoteEditor from './components/AccessoryQuoteEditor';
+import FurnitureConfigurator from './components/FurnitureConfigurator';
 import ProfileVisualizer from './components/ProfileVisualizer';
 import { openFactorySheetPreview } from './components/FactorySheetPreview';
 import FactorySheet from './components/FactorySheet';
@@ -2082,6 +2083,11 @@ const ProductDetail: React.FC<{
               returnCartPath={returnCartPath}
               onAddToCart={onAddToCart}
               onUpdateItem={onUpdateCartItem}
+            />
+          ) : product.type === ProductType.CALLIGRAPHY_CABINET || product.type === ProductType.WARDROBE ? (
+            <FurnitureConfigurator
+              language={language}
+              type={product.type}
             />
           ) : (
             <div className="p-20 text-center bg-white rounded-[3rem] border-4 border-dashed border-slate-100 flex flex-col items-center">

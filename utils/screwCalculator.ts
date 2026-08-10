@@ -1,6 +1,34 @@
-import { CartItem, ProductType, ProfileConfig } from '../types';
+import { CartItem, ProductType, ProfileConfig, ScrewHeadType, ThreadSize } from '../types';
 
 export const SCREW_304_UNIT_PRICE = 0.5;
+
+export interface DiyScrewOrderSpec {
+  threadSize: ThreadSize;
+  lengthMm: number;
+}
+
+const DIY_SCREW_ORDER_SPECS: Partial<Record<string, Partial<Record<ScrewHeadType, DiyScrewOrderSpec>>>> = {
+  // Confirmed standard order SKUs for the 20-series accessory system. These
+  // are purchasing specifications, independent of the fitted 3D shaft length.
+  '2020': {
+    socket_cylinder: { threadSize: 'M6', lengthMm: 30 },
+    button_socket: { threadSize: 'M6', lengthMm: 20 },
+    flat_socket: { threadSize: 'M6', lengthMm: 8 },
+  },
+};
+
+export const getDiyScrewOrderSpec = (
+  profileSize: string | undefined,
+  screwHead: ScrewHeadType | undefined,
+  fallbackLengthMm: number,
+): DiyScrewOrderSpec => {
+  const normalizedSize = String(profileSize || '2020');
+  const configured = screwHead ? DIY_SCREW_ORDER_SPECS[normalizedSize]?.[screwHead] : undefined;
+  if (configured) return configured;
+  const moduleSize = Number(normalizedSize.slice(0, 2));
+  const threadSize: ThreadSize = moduleSize <= 15 ? 'M4' : moduleSize <= 20 ? 'M6' : 'M8';
+  return { threadSize, lengthMm: Math.max(1, Math.round(fallbackLengthMm || 1)) };
+};
 
 export interface ScrewModelSummary {
   model: string;

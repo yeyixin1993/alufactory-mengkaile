@@ -1,0 +1,19 @@
+#!/bin/sh
+set -eu
+
+project_root=$(git rev-parse --show-toplevel)
+cd "$project_root"
+
+if command -v npm >/dev/null 2>&1; then
+  npm_command=$(command -v npm)
+elif [ -x /opt/homebrew/bin/npm ]; then
+  npm_command=/opt/homebrew/bin/npm
+elif [ -x /usr/local/bin/npm ]; then
+  npm_command=/usr/local/bin/npm
+else
+  echo "npm is required to build and package dist before push." >&2
+  exit 1
+fi
+
+echo "Building the latest Mengkaile dist upload ZIP before push..."
+"$npm_command" run package:dist

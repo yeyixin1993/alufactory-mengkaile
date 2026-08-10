@@ -44,6 +44,7 @@ export interface User {
 export type ProfileSide = 'A' | 'B' | 'C' | 'D';
 export type HoleType = 'through' | 'countersunk' | 'threaded';
 export type ThreadSize = 'M3' | 'M4' | 'M5' | 'M6' | 'M8';
+export type ScrewHeadType = 'socket_cylinder' | 'button_socket' | 'flat_socket';
 export type ProfileFinish = 'oxidized' | 'electrophoretic' | 'powder';
 
 export interface TappingConfig {
@@ -57,6 +58,10 @@ export interface DrillHole {
   positionMm: number;
   type: HoleType;
   threadSize?: ThreadSize;
+  // Optional fastener override for parametric joints. Ordinary manually added
+  // holes continue to use the default hole-type-to-screw mapping.
+  fastenerHead?: ScrewHeadType;
+  fastenerLengthMm?: number;
   // Canonical slot on the physical extrusion. C/D face drawings mirror this index.
   physicalGrooveIndex?: number;
   // Entry-face display index retained for older saved orders and human-readable exports.

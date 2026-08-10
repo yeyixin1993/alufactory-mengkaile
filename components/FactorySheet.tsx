@@ -7,7 +7,8 @@ import ProfileVisualizer from './ProfileVisualizer';
 import { describeHolePassage, getHolePhysicalGrooveIndex } from '../utils/profileMachining';
 import { calculateScrewPlan } from '../utils/screwCalculator';
 import {
-  groupDiyScrewCartItems,
+  getProfileManufacturingGroupKey,
+  groupFactoryDisplayCartItems,
   isDiyScrewAccessory,
   summarizeDiyScrewCartItems,
 } from '../utils/cartAccessories';
@@ -119,7 +120,7 @@ const FactorySheet: React.FC<FactorySheetProps> = ({ cart, user, language, order
     type Row = { length: string; model: string; color: string; section: string; tap: string; quantity: number; remark: string; key: string; miter: string };
     const map = new Map<string, Row>();
 
-    cart.forEach(item => {
+    groupFactoryDisplayCartItems(cart).forEach(item => {
       if (item.product.type !== ProductType.PROFILE) return;
 
       const cfg = item.config as ProfileConfig;
@@ -141,9 +142,7 @@ const FactorySheet: React.FC<FactorySheetProps> = ({ cart, user, language, order
       const leftTap = Array.isArray(cfg.tapping?.left) && cfg.tapping.left.some(Boolean);
       const rightTap = Array.isArray(cfg.tapping?.right) && cfg.tapping.right.some(Boolean);
       const bothSideTap = leftTap && rightTap;
-      const oneSideTap = (leftTap || rightTap) && !bothSideTap;
       const hasTap = leftTap || rightTap;
-      const tapType = bothSideTap ? 'both' : oneSideTap ? 'one' : 'none';
 
       // 2. Check for Drilling (based on DrillHole[])
       const hasDrill = Array.isArray(cfg.holes) && cfg.holes.length > 0;
@@ -161,11 +160,6 @@ const FactorySheet: React.FC<FactorySheetProps> = ({ cart, user, language, order
       // 4. Check for Miter Cut
       const hasMiterLeft = cfg.miterCut?.left?.enabled;
       const hasMiterRight = cfg.miterCut?.right?.enabled;
-      const leftMiterSide = cfg.miterCut?.left?.side || 'AC';
-      const rightMiterSide = cfg.miterCut?.right?.side || 'AC';
-      const leftMiterDir = cfg.miterCut?.left?.direction || 'up';
-      const rightMiterDir = cfg.miterCut?.right?.direction || 'up';
-      const miterKey = hasMiterLeft && hasMiterRight ? `both-${leftMiterSide}-${leftMiterDir}-${rightMiterSide}-${rightMiterDir}` : hasMiterLeft ? `left-${leftMiterSide}-${leftMiterDir}` : hasMiterRight ? `right-${rightMiterSide}-${rightMiterDir}` : 'none';
 
       // 5. Create Key
       // This ensures a profile with tapping is stored separately from one without
@@ -183,7 +177,7 @@ const FactorySheet: React.FC<FactorySheetProps> = ({ cart, user, language, order
           return !isSceneTransform && !isMaycadSourceReference;
         })
         .join('；');
-      const key = [length, model, cfg.colorId, section, processingState, tapType, miterKey, customRemark].join('||');
+      const key = getProfileManufacturingGroupKey(item);
 
       // 6. Create Remark
       const hasMiter = hasMiterLeft || hasMiterRight;
@@ -235,7 +229,7 @@ const FactorySheet: React.FC<FactorySheetProps> = ({ cart, user, language, order
   const userPhone = activeAddress?.phone || user?.id || '-';
 
   const baseTotal = cart.reduce((acc, i) => acc + i.totalPrice, 0);
-  const displayCart = React.useMemo(() => groupDiyScrewCartItems(cart), [cart]);
+  const displayCart = React.useMemo(() => groupFactoryDisplayCartItems(cart), [cart]);
   const diyScrewRows = React.useMemo(() => summarizeDiyScrewCartItems(cart), [cart]);
   const hasDiyScrewRows = diyScrewRows.length > 0;
   const nonScrewDisplayCart = React.useMemo(
@@ -301,10 +295,11 @@ const FactorySheet: React.FC<FactorySheetProps> = ({ cart, user, language, order
     [cart, effectiveInclude304Screws],
   );
   const diyScrewByModel = React.useMemo(() => {
-    const map = new Map<string, { socketCylinder: number; buttonSocket: number }>();
+    const map = new Map<string, { socketCylinder: number; buttonSocket: number; flatSocket: number }>();
     diyScrewRows.forEach((row) => {
-      const current = map.get(row.profileModel) || { socketCylinder: 0, buttonSocket: 0 };
+      const current = map.get(row.profileModel) || { socketCylinder: 0, buttonSocket: 0, flatSocket: 0 };
       if (row.screwHead === 'button_socket') current.buttonSocket += row.quantity;
+      else if (row.screwHead === 'flat_socket') current.flatSocket += row.quantity;
       else current.socketCylinder += row.quantity;
       map.set(row.profileModel, current);
     });
@@ -458,10 +453,10 @@ const FactorySheet: React.FC<FactorySheetProps> = ({ cart, user, language, order
                   {(() => {
                     const model = String(row.name || '').split('·')[0].trim();
                     const diyScrews = diyScrewByModel.get(model);
-                    if (diyScrews && (diyScrews.socketCylinder > 0 || diyScrews.buttonSocket > 0)) {
+                    if (diyScrews && (diyScrews.socketCylinder > 0 || diyScrews.buttonSocket > 0 || diyScrews.flatSocket > 0)) {
                       return (
                         <span className="ml-2 text-[10px] text-cyan-700">
-                          ｜圆柱头内六角 {diyScrews.socketCylinder} / 半圆头内六角 {diyScrews.buttonSocket}（按3D设计器确认数量）
+                          ｜圆柱头内六角 {diyScrews.socketCylinder} / 半圆头内六角 {diyScrews.buttonSocket} / 扁头内六角 {diyScrews.flatSocket}（按3D设计器确认数量）
                         </span>
                       );
                     }
@@ -575,7 +570,12 @@ const FactorySheet: React.FC<FactorySheetProps> = ({ cart, user, language, order
                 {diyScrewRows.map((row, rowIndex) => {
                   const screwType = row.screwHead === 'button_socket'
                     ? (language === 'cn' ? '半圆头内六角' : language === 'jp' ? '六角穴付きボタンボルト' : 'Button-head socket')
-                    : (language === 'cn' ? '圆柱头内六角' : language === 'jp' ? '六角穴付き円筒頭ボルト' : 'Cylinder-head socket');
+                    : row.screwHead === 'flat_socket'
+                      ? (language === 'cn' ? '扁头内六角' : language === 'jp' ? '六角穴付き低頭ボルト' : 'Flat-head socket')
+                      : (language === 'cn' ? '圆柱头内六角' : language === 'jp' ? '六角穴付き円筒頭ボルト' : 'Cylinder-head socket');
+                  const screwSpec = row.screwThreadSize && row.screwLengthMm
+                    ? `${row.screwThreadSize}×${row.screwLengthMm}`
+                    : '';
                   const colorName = PROFILE_COLORS.find((color) => color.id === row.colorId)?.name?.[language]
                     || row.colorName
                     || '-';
@@ -583,9 +583,9 @@ const FactorySheet: React.FC<FactorySheetProps> = ({ cart, user, language, order
                     ? row.profileModel
                     : `${row.profileModel} / ${row.profileSize}`;
                   return (
-                    <tr key={`${row.profileModel}-${row.profileSize}-${row.screwHead}-${row.screwLengthMm}-${rowIndex}`}>
+                    <tr key={`${row.profileModel}-${row.profileSize}-${row.screwHead}-${row.screwThreadSize}-${row.screwLengthMm}-${rowIndex}`}>
                       <td className="border border-slate-100 p-2 font-black">{profileSpec}</td>
-                      <td className="border border-slate-100 p-2">{screwType}</td>
+                      <td className="border border-slate-100 p-2">{screwSpec ? `${screwType} · ${screwSpec}` : screwType}</td>
                       <td className="border border-slate-100 p-2">{row.screwLengthMm ? `${row.screwLengthMm}mm` : '-'}</td>
                       <td className="border border-slate-100 p-2">{colorName}</td>
                       <td className="border border-slate-100 p-2 text-right font-black">{row.quantity}</td>

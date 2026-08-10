@@ -14,7 +14,7 @@ CATEGORY_LABELS = {
     'aluminum_plate': '铝板订单管理',
     'aluminum_frame_door': '铝框门订单管理',
     'marine_board': '海洋板订单管理',
-    'calligraphy_cabinet': '宜家书法特柜子订单管理',
+    'calligraphy_cabinet': '宜家舒法特柜子订单管理',
     'wardrobe': '衣柜订单管理',
     'accessory': '配件订单管理',
 }
@@ -327,7 +327,7 @@ def classify_order_item(product_type: str, product_name: str, product_id: str) -
         return 'marine_board'
     if 'cabinet_door' in ptype or '铝框门' in pname or pid == 'p3':
         return 'aluminum_frame_door'
-    if 'calligraphy_cabinet' in ptype or '书法特柜子' in pname or '宜家书法特柜子' in pname or pid == 'p7':
+    if 'calligraphy_cabinet' in ptype or '舒法特柜子' in pname or '宜家舒法特柜子' in pname or '书法特柜子' in pname or '宜家书法特柜子' in pname or pid == 'p7':
         return 'calligraphy_cabinet'
     if 'wardrobe' in ptype or '衣柜' in pname or pid == 'p8':
         return 'wardrobe'

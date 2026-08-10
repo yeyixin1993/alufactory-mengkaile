@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { TransformControls } from 'three/addons/controls/TransformControls.js';
@@ -44,6 +44,7 @@ import {
   Product,
   ProductType,
   ProfileSide,
+  ScrewHeadType,
   ThreadSize,
   User,
 } from '../types';
@@ -61,8 +62,11 @@ import {
 } from '../utils/profileMachining';
 import { buildProductionXlsx, parseProductionXlsx, type ProductionWorkbookData } from '../utils/productionXlsx';
 import { calculateProfileInnerClearance } from '../utils/diyGeometry';
-import { groupDiyScrewCartItems } from '../utils/cartAccessories';
+import { groupDiyAccessoryCartItems } from '../utils/cartAccessories';
+import { getDiyScrewOrderSpec } from '../utils/screwCalculator';
+import { getRotationallyCanonicalMachiningKey } from '../utils/profileManufacturingEquivalence';
 import { parseMaycadSceneXml, type MaycadProfileReview } from '../utils/maycadImport';
+import { DIY_TEMPLATE_STORAGE_PREFIX, type ParametricTemplatePayload } from '../utils/parametricFurniture';
 
 type DIYItemKind =
   | 'profile'
@@ -75,12 +79,13 @@ type DIYItemKind =
   | 't_connector'
   | 'hidden_connector'
   | 'tee_connector'
+  | 'shelf_support'
   | 'screw'
   | 'foot';
 
 type Vec3 = [number, number, number];
 type RotationAxisIndex = 0 | 1 | 2;
-type DIYScrewHead = 'socket_cylinder' | 'button_socket';
+type DIYScrewHead = ScrewHeadType;
 type DIYAccessoryProfileSize = '1515' | '2020' | '3030' | '4040';
 type DIYConnectionKind = 'connector' | 'extruded_connector' | 'hidden_connector' | 'l_connector' | 't_connector' | 'tee_connector';
 
@@ -179,12 +184,14 @@ const TEXT: Record<Language, Record<string, string>> = {
     screw: '内六角螺丝',
     socketCylinderScrew: '圆柱头内六角螺丝',
     buttonSocketScrew: '半圆头内六角螺丝',
+    flatSocketScrew: '扁头内六角螺丝',
     fillScrews: '一键填充螺丝',
     fillScrewsHint: '沉头孔自动配圆柱头内六角螺丝；通孔自动配半圆头内六角螺丝。默认使用银白/本色螺丝，螺纹孔不自动配螺丝。',
     screwsFilled: '已按孔位自动填充螺丝',
     screwsUpToDate: '所有可填充孔位都已配螺丝',
     linkedHole: '跟随孔位',
     foot: '调平脚',
+    shelfSupport: '层板托',
     profileParts: '铝型材',
     panelParts: '板材',
     fasteningParts: '连接与紧固',
@@ -267,6 +274,7 @@ const TEXT: Record<Language, Record<string, string>> = {
     threaded: '螺纹孔',
     saved: '设计 JSON 已下载到本机',
     loaded: '已从本地 JSON 读取设计',
+    templateLoaded: '参数化柜体已生成，可继续编辑并审核孔位',
     cartAdded: '设计清单已加入购物车',
     dragHint: '选中后拖动即平移；按住 Shift 拖动型材则复制+平移。右键型材可旋转或删除；右上角可锁定 XY/XZ/YZ 工作平面。',
     delete: '删除',
@@ -354,12 +362,14 @@ const TEXT: Record<Language, Record<string, string>> = {
     screw: 'Socket-head screw',
     socketCylinderScrew: 'Socket cylinder-head screw',
     buttonSocketScrew: 'Button-head socket screw',
+    flatSocketScrew: 'Flat-head socket screw',
     fillScrews: 'Auto-fill screws',
     fillScrewsHint: 'Countersunk holes receive cylinder-head socket screws; through holes receive button-head socket screws. Screws default to natural silver; threaded holes are skipped.',
     screwsFilled: 'Screws filled from hole positions',
     screwsUpToDate: 'All eligible holes already have screws',
     linkedHole: 'Linked to hole',
     foot: 'Leveling foot',
+    shelfSupport: 'Shelf support',
     profileParts: 'Profiles',
     panelParts: 'Panels',
     fasteningParts: 'Connections & fasteners',
@@ -442,6 +452,7 @@ const TEXT: Record<Language, Record<string, string>> = {
     threaded: 'Threaded',
     saved: 'Design JSON downloaded to this device',
     loaded: 'Design loaded from local JSON',
+    templateLoaded: 'Parametric cabinet generated; continue editing and review machining',
     cartAdded: 'Design parts added to cart',
     dragHint: 'Drag a selected part to move it; hold Shift while dragging a profile to duplicate + move. Right-click a profile to rotate or delete it; lock the XY, XZ, or YZ work plane at the upper right.',
     delete: 'Delete',
@@ -529,12 +540,14 @@ const TEXT: Record<Language, Record<string, string>> = {
     screw: '六角穴付きボルト',
     socketCylinderScrew: '六角穴付き円筒頭ボルト',
     buttonSocketScrew: '六角穴付きボタンボルト',
+    flatSocketScrew: '六角穴付き低頭ボルト',
     fillScrews: 'ボルト自動配置',
     fillScrewsHint: '皿穴には円筒頭、通し穴にはボタン頭の六角穴付きボルトを自動配置します。ボルトはナチュラルシルバーが標準で、ねじ穴は対象外です。',
     screwsFilled: '穴位置にボルトを自動配置しました',
     screwsUpToDate: '対象の穴にはすべてボルトが配置済みです',
     linkedHole: '穴位置に連動',
     foot: 'レベリングフット',
+    shelfSupport: '棚受け',
     profileParts: 'プロファイル',
     panelParts: 'パネル',
     fasteningParts: '接続・締結部品',
@@ -617,6 +630,7 @@ const TEXT: Record<Language, Record<string, string>> = {
     threaded: 'ねじ穴',
     saved: '設計JSONを端末に保存しました',
     loaded: 'ローカルJSONから設計を読み込みました',
+    templateLoaded: 'パラメトリック棚を生成しました。加工位置を確認・編集してください',
     cartAdded: 'カートに追加しました',
     dragHint: '選択パーツのドラッグで移動、Shiftを押しながら形材をドラッグすると複製+移動します。右クリックで回転または削除できます。',
     delete: '削除',
@@ -772,6 +786,8 @@ const buildProductionData = (items: DIYSceneItem[], language: Language) => {
         rightDistanceMm: Math.max(0, length - hole.positionMm),
         holeType: hole.type,
         threadSize: hole.threadSize || '',
+        fastenerHead: hole.fastenerHead,
+        fastenerLengthMm: hole.fastenerLengthMm,
         verification: describeHolePassage(hole, variantId, language),
       };
     });
@@ -986,6 +1002,23 @@ const createItem = (kind: DIYItemKind, index = 0, variantId?: string): DIYSceneI
       remark: '',
     };
   }
+  if (kind === 'shelf_support') {
+    return {
+      id: makeId(),
+      kind,
+      name: 'Shelf support',
+      position: [offset, 500, 0],
+      rotation: [0, 0, 0],
+      colorId: 'natural',
+      width: 14,
+      height: 8,
+      thickness: 400,
+      accessoryPrice: 0,
+      accessoryProfileSize: '2020',
+      quantity: 1,
+      remark: '',
+    };
+  }
   const accessoryDefaults: Record<'connector' | 'extruded_connector' | 'l_connector' | 't_connector' | 'hidden_connector' | 'tee_connector' | 'screw' | 'foot', {
     name: string;
     colorId: string;
@@ -1094,6 +1127,7 @@ const createItem = (kind: DIYItemKind, index = 0, variantId?: string): DIYSceneI
 const IMPORTABLE_ITEM_KINDS: DIYItemKind[] = [
   'profile', 'plate', 'pegboard', 'marine_board', 'connector', 'extruded_connector',
   'l_connector', 't_connector', 'hidden_connector', 'tee_connector', 'screw', 'foot',
+  'shelf_support',
 ];
 
 const workbookColorId = (part: ProductionWorkbookData['parts'][number], kind: DIYItemKind) => {
@@ -1127,6 +1161,10 @@ const itemsFromProductionWorkbook = (production: ProductionWorkbookData): DIYSce
           positionMm: hole.leftDistanceMm,
           type,
           threadSize: type === 'threaded' ? importedThreadSize || 'M6' : undefined,
+          fastenerHead: (hole.fastenerHead === 'socket_cylinder' || hole.fastenerHead === 'button_socket' || hole.fastenerHead === 'flat_socket')
+            ? hole.fastenerHead
+            : undefined,
+          fastenerLengthMm: hole.fastenerLengthMm,
           grooveIndex: physicalGrooveToDisplay(side, physicalGrooveIndex, Math.max(1, getProfileGrooveCount(variantId, side))),
           physicalGrooveIndex,
         };
@@ -1151,7 +1189,7 @@ const itemsFromProductionWorkbook = (production: ProductionWorkbookData): DIYSce
     holes,
     tappingLeft: kind === 'profile' ? part.leftTappingPorts > 0 : base.tappingLeft,
     tappingRight: kind === 'profile' ? part.rightTappingPorts > 0 : base.tappingRight,
-    screwHead: (part.screwHead === 'socket_cylinder' || part.screwHead === 'button_socket')
+    screwHead: (part.screwHead === 'socket_cylinder' || part.screwHead === 'button_socket' || part.screwHead === 'flat_socket')
       ? part.screwHead
       : base.screwHead,
     linkedProfileId: part.linkedProfileId,
@@ -1299,6 +1337,7 @@ const profileDimensions = (item: DIYSceneItem) => {
 };
 
 const screwHeadForHole = (hole: DrillHole): DIYScrewHead | null => {
+  if (hole.fastenerHead) return hole.fastenerHead;
   if (hole.type === 'countersunk') return 'socket_cylinder';
   if (hole.type === 'through') return 'button_socket';
   return null;
@@ -1458,7 +1497,7 @@ const linkedScrewTransform = (profile: DIYSceneItem, hole: DrillHole, items: DIY
       Math.round(THREE.MathUtils.radToDeg(worldEuler.y)),
       Math.round(THREE.MathUtils.radToDeg(worldEuler.z)),
     ] as Vec3,
-    lengthMm: screwLengthMm,
+    lengthMm: hole.fastenerLengthMm || screwLengthMm,
   };
 };
 
@@ -1473,7 +1512,11 @@ const createLinkedScrew = (
   return {
     ...createItem('screw'),
     id: makeId(),
-    name: screwHead === 'socket_cylinder' ? 'Socket cylinder-head screw' : 'Button-head socket screw',
+    name: screwHead === 'socket_cylinder'
+      ? 'Socket cylinder-head screw'
+      : screwHead === 'flat_socket'
+        ? 'Flat-head socket screw'
+        : 'Button-head socket screw',
     position: transform.position,
     rotation: transform.rotation,
     width: 10,
@@ -1506,6 +1549,24 @@ const syncLinkedScrews = (source: DIYSceneItem[]) => {
       screwHead: screwHeadForHole(hole) || item.screwHead,
     }];
   });
+};
+
+const withAutoFilledScrews = (source: DIYSceneItem[]) => {
+  const next = [...source];
+  const linkedKeys = new Set(next
+    .filter((item) => item.kind === 'screw' && item.linkedProfileId && item.linkedHoleId)
+    .map((item) => `${item.linkedProfileId}:${item.linkedHoleId}`));
+  source.filter((item) => item.kind === 'profile').forEach((profile) => {
+    (profile.holes || []).forEach((hole) => {
+      const key = `${profile.id}:${hole.id}`;
+      if (!screwHeadForHole(hole) || linkedKeys.has(key)) return;
+      const screw = createLinkedScrew(profile, hole, next);
+      if (!screw) return;
+      next.push(screw);
+      linkedKeys.add(key);
+    });
+  });
+  return syncLinkedScrews(next);
 };
 
 type ProfileSnap = {
@@ -1618,6 +1679,28 @@ const accessoryPlacementRotation = (firstAxis: THREE.Vector3, secondAxis?: THREE
   ];
 };
 
+const teeConnectorPlacementRotation = (
+  portDirections: [THREE.Vector3, THREE.Vector3, THREE.Vector3],
+): Vec3 => {
+  // No.9's visible ports are local +X, -Y and +Z. Try every profile-to-port
+  // assignment and keep the right-handed basis whose third port also faces
+  // the remaining profile.
+  const permutations = [
+    [0, 1, 2], [0, 2, 1],
+    [1, 0, 2], [1, 2, 0],
+    [2, 0, 1], [2, 1, 0],
+  ];
+  for (const [xIndex, negativeYIndex, zIndex] of permutations) {
+    const localX = portDirections[xIndex].clone().normalize();
+    const localY = portDirections[negativeYIndex].clone().normalize().multiplyScalar(-1);
+    const localZ = new THREE.Vector3().crossVectors(localX, localY).normalize();
+    if (localZ.dot(portDirections[zIndex]) > 0.9) {
+      return accessoryPlacementRotation(localX, localY);
+    }
+  }
+  return accessoryPlacementRotation(portDirections[0], portDirections[1]);
+};
+
 const accessoryPlacementCandidates = (
   accessory: DIYSceneItem,
   items: DIYSceneItem[],
@@ -1626,18 +1709,81 @@ const accessoryPlacementCandidates = (
   const series = accessory.accessoryProfileSize || '2020';
   const profiles = items.filter((item) => item.kind === 'profile' && profileAccessorySeries(item) === series);
   const candidates: AccessoryPlacement[] = [];
-  profiles.forEach((profile) => {
-    const box = profileBoxFromItem(profile);
-    [-1, 1].forEach((side) => {
-      candidates.push({
-        position: box.center.clone().addScaledVector(box.axes[0], side * box.halfSizes[0]),
-        rotation: accessoryPlacementRotation(box.axes[0]),
-        targetProfileIds: [profile.id],
-        key: `${profile.id}:END-${side > 0 ? 'R' : 'L'}`,
-        joint: false,
+  if (accessory.kind !== 'tee_connector') {
+    profiles.forEach((profile) => {
+      const box = profileBoxFromItem(profile);
+      [-1, 1].forEach((side) => {
+        candidates.push({
+          position: box.center.clone().addScaledVector(box.axes[0], side * box.halfSizes[0]),
+          rotation: accessoryPlacementRotation(box.axes[0]),
+          targetProfileIds: [profile.id],
+          key: `${profile.id}:END-${side > 0 ? 'R' : 'L'}`,
+          joint: false,
+        });
       });
     });
-  });
+  }
+
+  if (accessory.kind === 'tee_connector') {
+    const moduleSize = Number(series.slice(0, 2)) / SCENE_SCALE;
+    profiles.forEach((first, firstIndex) => profiles.slice(firstIndex + 1).forEach((second, secondOffset) => {
+      profiles.slice(firstIndex + secondOffset + 2).forEach((third) => {
+        const boxes = [profileBoxFromItem(first), profileBoxFromItem(second), profileBoxFromItem(third)] as const;
+        if (
+          Math.abs(boxes[0].axes[0].dot(boxes[1].axes[0])) > 0.15
+          || Math.abs(boxes[0].axes[0].dot(boxes[2].axes[0])) > 0.15
+          || Math.abs(boxes[1].axes[0].dot(boxes[2].axes[0])) > 0.15
+        ) return;
+
+        const segments = boxes.map((box) => ({
+          start: box.center.clone().addScaledVector(box.axes[0], -box.halfSizes[0]),
+          end: box.center.clone().addScaledVector(box.axes[0], box.halfSizes[0]),
+        }));
+        const pairPoints = [
+          closestSegmentPoints(segments[0].start, segments[0].end, segments[1].start, segments[1].end),
+          closestSegmentPoints(segments[0].start, segments[0].end, segments[2].start, segments[2].end),
+          closestSegmentPoints(segments[1].start, segments[1].end, segments[2].start, segments[2].end),
+        ];
+        if (pairPoints.some((pair) => pair.first.distanceTo(pair.second) > moduleSize * 1.6)) return;
+
+        const jointCenter = pairPoints.reduce((sum, pair) => (
+          sum.add(pair.first).add(pair.second)
+        ), new THREE.Vector3()).multiplyScalar(1 / 6);
+        const endpoints = boxes.map((box) => {
+          const left = box.center.clone().addScaledVector(box.axes[0], -box.halfSizes[0]);
+          const right = box.center.clone().addScaledVector(box.axes[0], box.halfSizes[0]);
+          const side = left.distanceTo(jointCenter) <= right.distanceTo(jointCenter) ? -1 : 1;
+          const point = side < 0 ? left : right;
+          return {
+            point,
+            side,
+            portDirection: box.axes[0].clone().multiplyScalar(-side).normalize(),
+            connectorCenter: point.clone().addScaledVector(box.axes[0], side * moduleSize / 2),
+          };
+        });
+        if (endpoints.some((endpoint) => endpoint.point.distanceTo(jointCenter) > moduleSize * 1.8)) return;
+
+        const faceAlignedCenter = endpoints.reduce((sum, endpoint) => (
+          sum.add(endpoint.connectorCenter)
+        ), new THREE.Vector3()).multiplyScalar(1 / 3);
+        const faceCenterSpread = Math.max(...endpoints.map((endpoint) => endpoint.connectorCenter.distanceTo(faceAlignedCenter)));
+        // Correctly spaced frame members identify the cube center from their
+        // three end faces. Legacy scenes whose center lines share one endpoint
+        // fall back to that common endpoint instead of receiving an offset.
+        const position = faceCenterSpread <= moduleSize * 0.45 ? faceAlignedCenter : jointCenter;
+        const targetProfileIds = [first.id, second.id, third.id];
+        candidates.push({
+          position,
+          rotation: teeConnectorPlacementRotation(endpoints.map((endpoint) => endpoint.portDirection) as [THREE.Vector3, THREE.Vector3, THREE.Vector3]),
+          targetProfileIds,
+          key: `${targetProfileIds.slice().sort().join(':')}:TEE-3WAY`,
+          joint: true,
+        });
+      });
+    }));
+    return candidates;
+  }
+
   profiles.forEach((first, firstIndex) => profiles.slice(firstIndex + 1).forEach((second) => {
     const firstBox = profileBoxFromItem(first);
     const secondBox = profileBoxFromItem(second);
@@ -1671,14 +1817,24 @@ const findAccessoryPlacement = (
   .map((candidate) => ({
     candidate,
     distance: candidate.position.distanceTo(referencePosition),
-    priority: candidate.joint ? 0 : 1,
+    priority: candidate.joint ? -candidate.targetProfileIds.length : 1,
   }))
   .filter((entry) => entry.distance <= maxDistance)
   .sort((first, second) => first.priority - second.priority || first.distance - second.distance)[0]?.candidate || null;
 
 const syncAttachedAccessories = (source: DIYSceneItem[]) => source.map((item) => {
   if (!isConnectionAccessoryKind(item.kind) || !item.lockedPosition || !item.attachmentKey) return item;
-  const placement = accessoryPlacementCandidates(item, source).find((candidate) => candidate.key === item.attachmentKey);
+  const candidates = accessoryPlacementCandidates(item, source);
+  const exactPlacement = candidates.find((candidate) => candidate.key === item.attachmentKey);
+  const placement = exactPlacement || (item.kind === 'tee_connector'
+    ? findAccessoryPlacement(
+      item,
+      source,
+      new THREE.Vector3(...item.position).multiplyScalar(1 / SCENE_SCALE),
+      undefined,
+      Number((item.accessoryProfileSize || '2020').slice(0, 2)) / SCENE_SCALE * 3,
+    )
+    : null);
   if (!placement) {
     return {
       ...item,
@@ -2593,7 +2749,14 @@ const createAccessoryObject = (item: DIYSceneItem, selected: boolean) => {
     group.add(screw, socket);
   };
 
-  if (item.kind === 'foot') {
+  if (item.kind === 'shelf_support') {
+    const width = Math.max(1, item.width || 14) / SCENE_SCALE;
+    const height = Math.max(1, item.height || 8) / SCENE_SCALE;
+    const depth = Math.max(1, item.thickness || 400) / SCENE_SCALE;
+    const body = new THREE.Mesh(new THREE.BoxGeometry(width, height, depth), material);
+    group.add(body);
+    hitboxSize.set(width + 0.1, height + 0.1, depth + 0.1);
+  } else if (item.kind === 'foot') {
     const stem = new THREE.Mesh(new THREE.CylinderGeometry(0.075, 0.075, 0.5, 24), material);
     stem.position.y = 0.22;
     const pad = new THREE.Mesh(new THREE.CylinderGeometry(0.23, 0.28, 0.12, 28), material.clone());
@@ -2765,8 +2928,11 @@ const createAccessoryObject = (item: DIYSceneItem, selected: boolean) => {
     // toward -Y through the source profile and into the mating tapped profile.
     shaft.position.y = -screwLength / 2;
     const headRadius = shaftRadius * 1.85;
-    const headHeight = Math.max(0.045, shaftRadius * 1.45);
     const isButtonHead = item.screwHead === 'button_socket';
+    const isFlatHead = item.screwHead === 'flat_socket';
+    const headHeight = isFlatHead
+      ? Math.max(0.022, shaftRadius * 0.62)
+      : Math.max(0.045, shaftRadius * 1.45);
     const headGeometry = isButtonHead
       ? new THREE.SphereGeometry(headRadius, 28, 14)
       : new THREE.CylinderGeometry(headRadius, headRadius, headHeight, 28);
@@ -4611,6 +4777,7 @@ const getItemLabel = (item: DIYSceneItem, language: Language) => {
   if (item.kind === 'plate') return `${t.plate} · ${item.width}×${item.height}`;
   if (item.kind === 'pegboard') return `${t.pegboard} · ${item.width}×${item.height}`;
   if (item.kind === 'marine_board') return `${t.marine} · ${item.width}×${item.height}`;
+  if (item.kind === 'shelf_support') return `${t.shelfSupport} · ${item.thickness || 0}mm`;
   if (item.kind === 'connector') return `${t.connector} · ${item.accessoryProfileSize || '2020'}`;
   if (item.kind === 'extruded_connector') return `${t.extrudedConnector} · ${item.accessoryProfileSize || '2020'}`;
   if (item.kind === 'l_connector') return `${t.lConnector} · ${item.accessoryProfileSize || '2020'}`;
@@ -4620,12 +4787,80 @@ const getItemLabel = (item: DIYSceneItem, language: Language) => {
   if (item.kind === 'screw') {
     const label = item.screwHead === 'socket_cylinder'
       ? t.socketCylinderScrew
+      : item.screwHead === 'flat_socket'
+        ? t.flatSocketScrew
       : item.screwHead === 'button_socket'
         ? t.buttonSocketScrew
         : t.screw;
     return `${label} · ${item.height || 0}mm${item.linkedHoleId ? ` · ${t.linkedHole}` : ''}`;
   }
   return t.foot;
+};
+
+interface ProjectDisplayGroup {
+  key: string;
+  items: DIYSceneItem[];
+  representative: DIYSceneItem;
+  quantity: number;
+}
+
+const isGroupableProjectAccessory = (item: DIYSceneItem) => (
+  isConnectionAccessoryKind(item.kind)
+  || item.kind === 'screw'
+  || item.kind === 'foot'
+  || item.kind === 'shelf_support'
+);
+
+const projectAccessorySpecKey = (item: DIYSceneItem) => JSON.stringify({
+  kind: item.kind,
+  name: item.name,
+  profileSize: item.accessoryProfileSize || '',
+  colorId: item.colorId || '',
+  width: Number(item.width || 0),
+  height: Number(item.height || 0),
+  thickness: Number(item.thickness || 0),
+  screwHead: item.screwHead || '',
+  accessoryPrice: Number(item.accessoryPrice || 0),
+});
+
+const projectProfileSpecKey = (item: DIYSceneItem) => JSON.stringify({
+  kind: item.kind,
+  variantId: item.variantId || '',
+  length: Number(item.length || 0),
+  colorId: item.colorId || '',
+  machining: getRotationallyCanonicalMachiningKey({
+    variantId: item.variantId,
+    holes: item.holes,
+    tappingLeft: item.tappingLeft,
+    tappingRight: item.tappingRight,
+  }),
+});
+
+const groupProjectItemsForDisplay = (sourceItems: DIYSceneItem[]): ProjectDisplayGroup[] => {
+  const groups: ProjectDisplayGroup[] = [];
+  const groupedIndex = new Map<string, number>();
+  sourceItems.forEach((item) => {
+    const isGroupable = item.kind === 'profile' || isGroupableProjectAccessory(item);
+    if (!isGroupable) {
+      groups.push({ key: item.id, items: [item], representative: item, quantity: item.quantity });
+      return;
+    }
+    // Profile scene position/rotation and generated location remarks are not
+    // manufacturing differences. The editable source items remain separate;
+    // only this project-summary surface is compacted.
+    const key = item.kind === 'profile'
+      ? projectProfileSpecKey(item)
+      : projectAccessorySpecKey(item);
+    const existingIndex = groupedIndex.get(key);
+    if (existingIndex === undefined) {
+      groups.push({ key, items: [item], representative: item, quantity: item.quantity });
+      groupedIndex.set(key, groups.length - 1);
+      return;
+    }
+    groups[existingIndex].items.push(item);
+    groups[existingIndex].quantity += item.quantity;
+  });
+  return groups;
 };
 
 const getProfileMachiningSummary = (item: DIYSceneItem, language: Language) => {
@@ -4699,6 +4934,7 @@ const NumberField: React.FC<{ label: string; value: number; min?: number; max?: 
 const DIYDesigner: React.FC<DIYDesignerProps> = ({ language, onLanguageChange, user, onAddBatchToCart }) => {
   const t = TEXT[language];
   const navigate = useNavigate();
+  const location = useLocation();
   const [items, setItems] = useState<DIYSceneItem[]>([]);
   const [selectedId, setSelectedIdState] = useState<string | null>(null);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
@@ -4726,6 +4962,7 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({ language, onLanguageChange, u
   const importRef = useRef<HTMLInputElement>(null);
   const excelImportRef = useRef<HTMLInputElement>(null);
   const maycadImportRef = useRef<HTMLInputElement>(null);
+  const loadedTemplateTokenRef = useRef<string | null>(null);
 
   const selected = items.find((item) => item.id === selectedId) || null;
   const selectedTapPortCount = selected?.kind === 'profile' ? getProfileTapPortCount(selected.variantId) : 0;
@@ -4756,6 +4993,7 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({ language, onLanguageChange, u
     setSelection(selectedIds.includes(id) ? selectedIds.filter((entry) => entry !== id) : [...selectedIds, id]);
   };
   const total = useMemo(() => items.reduce((sum, item) => sum + calculatePrice(item, user), 0), [items, user]);
+  const projectDisplayGroups = useMemo(() => groupProjectItemsForDisplay(items), [items]);
   const collidingProfileIds = useMemo(() => findCollidingProfileIds(items), [items]);
   const currency = language === 'cn' ? '￥' : '$';
 
@@ -5011,6 +5249,30 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({ language, onLanguageChange, u
     window.setTimeout(() => setNotice(''), 2600);
   };
 
+  useEffect(() => {
+    const token = new URLSearchParams(location.search).get('template');
+    if (!token || loadedTemplateTokenRef.current === token) return;
+    loadedTemplateTokenRef.current = token;
+    const storageKey = `${DIY_TEMPLATE_STORAGE_PREFIX}${token}`;
+    try {
+      const raw = window.localStorage.getItem(storageKey);
+      if (!raw) return;
+      const payload = JSON.parse(raw) as ParametricTemplatePayload;
+      if (payload.schemaVersion !== 1 || !Array.isArray(payload.items) || !payload.items.length) return;
+      const importedItems = normalizeDesignItems(payload.items as DIYSceneItem[]);
+      setItems(syncAttachedAccessories(withAutoFilledScrews(importedItems)));
+      setHistory([]);
+      setFuture([]);
+      setSelectedIdState(null);
+      setSelectedIds([]);
+      window.localStorage.removeItem(storageKey);
+      showNotice(`${t.templateLoaded} · ${importedItems.length}`);
+      navigate('/diy-designer', { replace: true });
+    } catch (error) {
+      console.warn('Unable to load parametric furniture template', error);
+    }
+  }, [location.search, navigate, t.templateLoaded]);
+
   const save = () => {
     downloadTextFile(
       JSON.stringify(buildDesignDocument(items, language), null, 2),
@@ -5231,23 +5493,36 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({ language, onLanguageChange, u
         tee_connector: { id: '9', code: 9, label: t.teeConnector, imageKey: '9' },
         screw: item.screwHead === 'button_socket'
           ? { id: 'diy-button-socket-screw', code: 3, label: t.buttonSocketScrew, imageKey: '3' }
+          : item.screwHead === 'flat_socket'
+            ? { id: 'diy-flat-socket-screw', code: 3, label: t.flatSocketScrew, imageKey: '3' }
           : item.screwHead === 'socket_cylinder'
             ? { id: 'diy-socket-cylinder-screw', code: 3, label: t.socketCylinderScrew, imageKey: '3' }
             : { id: 'diy-socket-head-screw', code: 3, label: t.screw, imageKey: '3' },
         foot: { id: 'diy-leveling-foot', code: 8, label: t.foot, imageKey: '8' },
-      }[item.kind as 'connector' | 'extruded_connector' | 'l_connector' | 't_connector' | 'hidden_connector' | 'tee_connector' | 'screw' | 'foot'];
+        shelf_support: { id: 'diy-shelf-support', code: 0, label: t.shelfSupport, imageKey: '' },
+      }[item.kind as 'connector' | 'extruded_connector' | 'l_connector' | 't_connector' | 'hidden_connector' | 'tee_connector' | 'screw' | 'foot' | 'shelf_support'];
       const accessoryId = accessoryDefinition.id;
       const unitPrice = Number((totalPrice / Math.max(1, item.quantity)).toFixed(2));
-      const screwLengthMm = item.kind === 'screw' ? Math.max(1, Math.round(item.height || 35)) : undefined;
-      const accessoryLineName = item.kind === 'screw'
-        ? `${accessoryDefinition.label} · ${screwLengthMm}mm`
-        : accessoryDefinition.label;
       const linkedProfile = item.linkedProfileId
         ? items.find((candidate) => candidate.kind === 'profile' && candidate.id === item.linkedProfileId)
         : undefined;
       const compatibleProfileSize = item.accessoryProfileSize
         || (linkedProfile ? profileAccessorySeriesFromVariant(linkedProfile.variantId) : undefined)
         || '2020';
+      const renderedScrewLengthMm = item.kind === 'screw' ? Math.max(1, Math.round(item.height || 35)) : undefined;
+      const screwOrderSpec = item.kind === 'screw'
+        ? getDiyScrewOrderSpec(compatibleProfileSize, item.screwHead, renderedScrewLengthMm || 1)
+        : undefined;
+      const screwLengthMm = screwOrderSpec?.lengthMm;
+      const screwThreadSize = screwOrderSpec?.threadSize;
+      const accessoryLengthMm = item.kind === 'shelf_support'
+        ? Math.max(1, Math.round(item.thickness || 0))
+        : undefined;
+      const accessoryLineName = item.kind === 'screw'
+        ? `${accessoryDefinition.label} · ${screwThreadSize}×${screwLengthMm}`
+        : item.kind === 'shelf_support'
+          ? `${accessoryDefinition.label} · ${accessoryLengthMm}mm`
+          : accessoryDefinition.label;
       return {
         id: makeId(),
         product: accessoryProduct,
@@ -5275,6 +5550,11 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({ language, onLanguageChange, u
           diyRotation: item.rotation,
           screwHead: item.screwHead,
           screwLengthMm,
+          screwThreadSize,
+          renderedScrewLengthMm,
+          accessoryLengthMm,
+          accessoryWidthMm: item.kind === 'shelf_support' ? item.width : undefined,
+          accessoryHeightMm: item.kind === 'shelf_support' ? item.height : undefined,
           linkedProfileId: item.linkedProfileId,
           linkedProfileVariantId: linkedProfile?.variantId,
           linkedHoleId: item.linkedHoleId,
@@ -5287,7 +5567,7 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({ language, onLanguageChange, u
         totalPrice,
       };
     });
-    return groupDiyScrewCartItems(rawCartItems);
+    return groupDiyAccessoryCartItems(rawCartItems);
   };
 
   const addDesignToCart = () => {
@@ -5786,12 +6066,15 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({ language, onLanguageChange, u
                 </div>
               </div>
               <div className="mt-4 max-h-[560px] space-y-1 overflow-auto pr-1">
-                {items.map((item, index) => (
+                {projectDisplayGroups.map((group, index) => {
+                  const item = group.representative;
+                  const groupHasInterference = group.items.some((entry) => collidingProfileIds.has(entry.id));
+                  return (
                   <button
-                    key={item.id}
+                    key={group.key}
                     onClick={(event) => selectItem(item.id, event.shiftKey)}
                     className={`flex w-full items-center gap-3 rounded-xl border px-3 py-2.5 text-left transition ${
-                      collidingProfileIds.has(item.id)
+                      groupHasInterference
                         ? 'border-red-300 bg-red-50 text-red-800 hover:bg-red-100'
                         : 'border-transparent text-slate-600 hover:bg-blue-50 hover:text-blue-700'
                     }`}
@@ -5804,16 +6087,17 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({ language, onLanguageChange, u
                           {getProfileMachiningSummary(item, language)}
                         </span>
                       )}
-                      {!!item.remark?.trim() && (
+                      {group.items.length === 1 && !!item.remark?.trim() && (
                         <span className="mt-0.5 block truncate text-[10px] font-bold text-slate-400">
                           {t.remark}：{item.remark.trim()}
                         </span>
                       )}
                     </span>
-                    {collidingProfileIds.has(item.id) && <span className="rounded bg-red-600 px-1.5 py-0.5 text-[8px] font-black text-white">{t.interference}</span>}
-                    <span className="text-[10px] font-black text-slate-400">×{item.quantity}</span>
+                    {groupHasInterference && <span className="rounded bg-red-600 px-1.5 py-0.5 text-[8px] font-black text-white">{t.interference}</span>}
+                    <span className="text-[10px] font-black text-slate-400">×{group.quantity}</span>
                   </button>
-                ))}
+                  );
+                })}
                 {!items.length && <div className="rounded-2xl border border-dashed border-slate-200 p-8 text-center text-sm font-bold text-slate-400">{t.noParts}</div>}
               </div>
             </>
@@ -5950,13 +6234,17 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({ language, onLanguageChange, u
                       <NumberField
                         label={t.screwLength}
                         value={selected.height || 35}
-                        min={16}
+                        min={8}
                         max={120}
                         onChange={(value) => updateSelected({ height: value })}
                       />
                       {selected.screwHead && (
                         <div className="mt-2 rounded-xl bg-slate-100 px-3 py-2 text-[10px] font-black text-slate-600">
-                          {selected.screwHead === 'socket_cylinder' ? t.socketCylinderScrew : t.buttonSocketScrew}
+                          {selected.screwHead === 'socket_cylinder'
+                            ? t.socketCylinderScrew
+                            : selected.screwHead === 'flat_socket'
+                              ? t.flatSocketScrew
+                              : t.buttonSocketScrew}
                           {selected.linkedHoleId ? ` · ${t.linkedHole}` : ''}
                         </div>
                       )}

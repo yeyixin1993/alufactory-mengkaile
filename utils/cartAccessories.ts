@@ -1,4 +1,6 @@
-import { CartItem, ProductType } from '../types';
+import { CartItem, ProductType, ProfileConfig } from '../types';
+import { getDiyScrewOrderSpec } from './screwCalculator';
+import { getRotationallyCanonicalMachiningKey } from './profileManufacturingEquivalence';
 
 interface ScrewReference {
   linkedProfileId?: string;
@@ -9,6 +11,7 @@ export interface DiyScrewCartSummaryRow {
   profileModel: string;
   profileSize: string;
   screwHead: string;
+  screwThreadSize: string;
   screwLengthMm: number | null;
   colorId: string;
   colorName: string;
@@ -46,12 +49,16 @@ const screwLengthFromConfig = (config: any) => {
 
 const screwGroupKey = (item: CartItem) => {
   const config = (item.config || {}) as any;
+  const orderSpec = getDiyScrewOrderSpec(
+    config.profileSize || config.size || config.variantId,
+    config.screwHead,
+    screwLengthFromConfig(config) || 1,
+  );
   const lines = (Array.isArray(config.lines) ? config.lines : [])
     .map((line: any) => ({
       id: String(line?.id || ''),
       code: String(line?.code || ''),
       imageKey: String(line?.imageKey || ''),
-      name: String(line?.name || ''),
       unitPrice: Number(line?.unitPrice || 0),
     }))
     .sort((a: any, b: any) => `${a.id}:${a.code}`.localeCompare(`${b.id}:${b.code}`));
@@ -59,13 +66,111 @@ const screwGroupKey = (item: CartItem) => {
   return JSON.stringify({
     productId: item.product.id,
     profileSize: config.profileSize || config.size || config.variantId || '',
-    linkedProfileVariantId: config.linkedProfileVariantId || '',
     colorMode: config.colorMode || '',
     colorId: config.colorId || '',
     screwHead: config.screwHead || '',
-    screwLengthMm: screwLengthFromConfig(config),
+    screwThreadSize: orderSpec.threadSize,
+    screwLengthMm: orderSpec.lengthMm,
     lines,
   });
+};
+
+const isGroupableDiyAccessory = (item: CartItem) => {
+  if (item.product.type !== ProductType.ACCESSORY || isDiyScrewAccessory(item)) return false;
+  const config = (item.config || {}) as any;
+  const lines = Array.isArray(config.lines) ? config.lines : [];
+  if (lines.length !== 1) return false;
+  return config.type === 'profile_accessory'
+    && Boolean(config.diyPosition || (Array.isArray(config.diyPositions) && config.diyPositions.length));
+};
+
+const accessoryGroupKey = (item: CartItem) => {
+  const config = (item.config || {}) as any;
+  const lines = (Array.isArray(config.lines) ? config.lines : []).map((line: any) => ({
+    id: String(line?.id || ''),
+    code: String(line?.code || ''),
+    imageKey: String(line?.imageKey || ''),
+    name: String(line?.name || ''),
+    unitPrice: Number(line?.unitPrice || 0),
+  }));
+  return JSON.stringify({
+    productId: item.product.id,
+    type: config.type || '',
+    profileSize: config.profileSize || config.size || config.variantId || '',
+    colorMode: config.colorMode || '',
+    colorId: config.colorId || '',
+    accessoryLengthMm: Number(config.accessoryLengthMm || 0),
+    accessoryWidthMm: Number(config.accessoryWidthMm || 0),
+    accessoryHeightMm: Number(config.accessoryHeightMm || 0),
+    lines,
+  });
+};
+
+const appendVectorValues = (existing: any, incoming: any, singularKey: string, pluralKey: string) => [
+  ...(Array.isArray(existing?.[pluralKey]) ? existing[pluralKey] : (existing?.[singularKey] ? [existing[singularKey]] : [])),
+  ...(Array.isArray(incoming?.[pluralKey]) ? incoming[pluralKey] : (incoming?.[singularKey] ? [incoming[singularKey]] : [])),
+];
+
+const mergeAccessoryRows = (existing: CartItem, incoming: CartItem): CartItem => {
+  const existingConfig = (existing.config || {}) as any;
+  const incomingConfig = (incoming.config || {}) as any;
+  const existingLines = Array.isArray(existingConfig.lines) ? existingConfig.lines : [];
+  const incomingLines = Array.isArray(incomingConfig.lines) ? incomingConfig.lines : [];
+  const nextLines = existingLines.map((line: any) => {
+    const addition = incomingLines.find((candidate: any) => (
+      String(candidate?.id || '') === String(line?.id || '')
+      && String(candidate?.code || '') === String(line?.code || '')
+      && String(candidate?.name || '') === String(line?.name || '')
+      && Number(candidate?.unitPrice || 0) === Number(line?.unitPrice || 0)
+    ));
+    if (!addition) return line;
+    const quantity = Number(line.quantity || 0) + Number(addition.quantity || 0);
+    return {
+      ...line,
+      quantity,
+      subtotal: Number((Number(line.subtotal || 0) + Number(addition.subtotal || 0)).toFixed(2)),
+      isBulk: quantity >= 20,
+    };
+  });
+  const nextQuantities = { ...(existingConfig.quantities || {}) };
+  Object.entries(incomingConfig.quantities || {}).forEach(([id, quantity]) => {
+    nextQuantities[id] = Number(nextQuantities[id] || 0) + Number(quantity || 0);
+  });
+  const remarks = [...new Set([
+    ...(Array.isArray(existingConfig.remarks) ? existingConfig.remarks : []),
+    existingConfig.remark,
+    ...(Array.isArray(incomingConfig.remarks) ? incomingConfig.remarks : []),
+    incomingConfig.remark,
+  ].map((value) => String(value || '').trim()).filter(Boolean))];
+
+  return {
+    ...existing,
+    totalPrice: Number((Number(existing.totalPrice || 0) + Number(incoming.totalPrice || 0)).toFixed(2)),
+    config: {
+      ...existingConfig,
+      totalQuantity: Number(existingConfig.totalQuantity || 0) + Number(incomingConfig.totalQuantity || 0),
+      unitTotal: Number((
+        Number(existingConfig.unitTotal || existing.totalPrice || 0)
+        + Number(incomingConfig.unitTotal || incoming.totalPrice || 0)
+      ).toFixed(2)),
+      lines: nextLines,
+      quantities: nextQuantities,
+      diyPositions: appendVectorValues(existingConfig, incomingConfig, 'diyPosition', 'diyPositions'),
+      diyRotations: appendVectorValues(existingConfig, incomingConfig, 'diyRotation', 'diyRotations'),
+      attachedProfileIds: [...new Set([
+        ...(existingConfig.attachedProfileIds || []),
+        ...(incomingConfig.attachedProfileIds || []),
+      ])],
+      attachmentKeys: [...new Set([
+        ...(existingConfig.attachmentKeys || []),
+        existingConfig.attachmentKey,
+        ...(incomingConfig.attachmentKeys || []),
+        incomingConfig.attachmentKey,
+      ].filter(Boolean))],
+      remarks,
+      remark: remarks.length === 1 ? remarks[0] : undefined,
+    },
+  };
 };
 
 const getScrewReferences = (config: any): ScrewReference[] => {
@@ -160,6 +265,136 @@ export const groupDiyScrewCartItems = (cart: CartItem[]): CartItem[] => {
   return result;
 };
 
+/**
+ * Compacts every identical designer accessory specification after screw
+ * grouping. Scene transforms and manufacturing remarks remain available in
+ * arrays, while customer/PDF BOM surfaces receive one row per specification.
+ */
+export const groupDiyAccessoryCartItems = (cart: CartItem[]): CartItem[] => {
+  const screwGrouped = groupDiyScrewCartItems(cart);
+  const result: CartItem[] = [];
+  const groupedIndex = new Map<string, number>();
+
+  screwGrouped.forEach((item) => {
+    if (!isGroupableDiyAccessory(item)) {
+      result.push(item);
+      return;
+    }
+    const key = accessoryGroupKey(item);
+    const existingIndex = groupedIndex.get(key);
+    const config = (item.config || {}) as any;
+    if (existingIndex === undefined) {
+      result.push({
+        ...item,
+        quantity: 1,
+        config: {
+          ...config,
+          lines: (config.lines || []).map((line: any) => ({ ...line })),
+          quantities: { ...(config.quantities || {}) },
+          diyPositions: appendVectorValues({}, config, 'diyPosition', 'diyPositions'),
+          diyRotations: appendVectorValues({}, config, 'diyRotation', 'diyRotations'),
+          remarks: [String(config.remark || '').trim()].filter(Boolean),
+        },
+      });
+      groupedIndex.set(key, result.length - 1);
+      return;
+    }
+    result[existingIndex] = mergeAccessoryRows(result[existingIndex], item);
+  });
+
+  return result;
+};
+
+/**
+ * Physical manufacturing signature used by customer/PDF display grouping.
+ * Scene location and location-only remarks intentionally do not split rows;
+ * the original cart items still retain those details for JSON/Excel exports.
+ * Confirmed cross-section symmetries may also make two machining signatures
+ * equivalent after rolling the complete profile around its length axis.
+ */
+export const getProfileManufacturingGroupKey = (item: CartItem) => {
+  if (item.product.type !== ProductType.PROFILE) return `non-profile:${item.id}`;
+  const config = (item.config || {}) as ProfileConfig;
+  return JSON.stringify({
+    productId: item.product.id,
+    variantId: config.variantId || '',
+    length: Number(config.length || 0),
+    finish: config.finish || '',
+    colorId: config.colorId || '',
+    unitPrice: Number(config.unitPrice ?? (Number(item.totalPrice || 0) / Math.max(1, Number(item.quantity || 0)))),
+    labelService: Boolean(config.labelService),
+    machining: getRotationallyCanonicalMachiningKey({
+      variantId: config.variantId,
+      holes: config.holes,
+      tapping: config.tapping,
+      miterCut: config.miterCut,
+    }),
+  });
+};
+
+const mergeProfileDisplayRows = (existing: CartItem, incoming: CartItem): CartItem => {
+  const existingConfig = (existing.config || {}) as ProfileConfig & { remarks?: string[] };
+  const incomingConfig = (incoming.config || {}) as ProfileConfig & { remarks?: string[] };
+  const remarks = [...new Set([
+    ...(Array.isArray(existingConfig.remarks) ? existingConfig.remarks : []),
+    existingConfig.remark,
+    ...(Array.isArray(incomingConfig.remarks) ? incomingConfig.remarks : []),
+    incomingConfig.remark,
+  ].map((value) => String(value || '').trim()).filter(Boolean))];
+
+  return {
+    ...existing,
+    quantity: Number(existing.quantity || 0) + Number(incoming.quantity || 0),
+    totalPrice: Number((Number(existing.totalPrice || 0) + Number(incoming.totalPrice || 0)).toFixed(2)),
+    config: {
+      ...existingConfig,
+      remarks,
+      // A shared remark remains printable. Different position-only remarks are
+      // kept in the derived row but omitted from the compact PDF card.
+      remark: remarks.length === 1 ? remarks[0] : undefined,
+    },
+  };
+};
+
+export const groupIdenticalProfileCartItems = (cart: CartItem[]): CartItem[] => {
+  const result: CartItem[] = [];
+  const groupedIndex = new Map<string, number>();
+
+  cart.forEach((item) => {
+    if (item.product.type !== ProductType.PROFILE) {
+      result.push(item);
+      return;
+    }
+    const key = getProfileManufacturingGroupKey(item);
+    const existingIndex = groupedIndex.get(key);
+    if (existingIndex === undefined) {
+      const config = (item.config || {}) as ProfileConfig;
+      result.push({
+        ...item,
+        config: {
+          ...config,
+          holes: Array.isArray(config.holes) ? config.holes.map((hole) => ({ ...hole })) : [],
+          tapping: {
+            left: Array.isArray(config.tapping?.left) ? [...config.tapping.left] : [],
+            right: Array.isArray(config.tapping?.right) ? [...config.tapping.right] : [],
+          },
+          remarks: [String(config.remark || '').trim()].filter(Boolean),
+        },
+      });
+      groupedIndex.set(key, result.length - 1);
+      return;
+    }
+    result[existingIndex] = mergeProfileDisplayRows(result[existingIndex], item);
+  });
+
+  return result;
+};
+
+/** Compact display rows for the designer-derived factory sheet/PDF only. */
+export const groupFactoryDisplayCartItems = (cart: CartItem[]): CartItem[] => (
+  groupIdenticalProfileCartItems(groupDiyAccessoryCartItems(cart))
+);
+
 export const summarizeDiyScrewCartItems = (cart: CartItem[]): DiyScrewCartSummaryRow[] => (
   groupDiyScrewCartItems(cart).flatMap((item) => {
     if (!isDiyScrewAccessory(item)) return [];
@@ -168,11 +403,17 @@ export const summarizeDiyScrewCartItems = (cart: CartItem[]): DiyScrewCartSummar
     const quantity = lines.reduce((sum: number, line: any) => sum + Math.max(0, Number(line?.quantity || 0)), 0)
       || Math.max(0, Number(config.totalQuantity || 0));
     if (quantity <= 0) return [];
+    const orderSpec = getDiyScrewOrderSpec(
+      config.profileSize || config.size || config.variantId,
+      config.screwHead,
+      screwLengthFromConfig(config) || 1,
+    );
     return [{
-      profileModel: String(config.linkedProfileVariantId || config.profileSize || config.size || config.variantId || '-'),
+      profileModel: String(config.profileSize || config.size || config.variantId || '-'),
       profileSize: String(config.profileSize || config.size || config.variantId || '-'),
       screwHead: String(config.screwHead || ''),
-      screwLengthMm: screwLengthFromConfig(config),
+      screwThreadSize: orderSpec.threadSize,
+      screwLengthMm: orderSpec.lengthMm,
       colorId: String(config.colorId || ''),
       colorName: String(config.colorName || ''),
       quantity,

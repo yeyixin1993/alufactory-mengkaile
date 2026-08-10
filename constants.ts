@@ -1085,7 +1085,7 @@ export const INITIAL_PRODUCTS: Product[] = [
   {
     id: 'p7',
     type: ProductType.CALLIGRAPHY_CABINET,
-    name: { en: 'IKEA Calligraphy Special Cabinet', cn: '宜家书法特柜子', jp: 'IKEA書道特注キャビネット' },
+    name: { en: 'IKEA TROFAST Cabinet', cn: '宜家舒法特柜子', jp: 'IKEA TROFASTキャビネット' },
     description: { en: 'Special cabinet solution for calligraphy storage and display.', cn: '用于书法收纳与展示的宜家专用柜体。', jp: '書道用品の収納・展示向けIKEA特注キャビネット。' },
     basePrice: 0,
     imageUrl: '/images/catalog/calligraphy-cabinet.jpg'

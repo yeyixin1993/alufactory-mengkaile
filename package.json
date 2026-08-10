@@ -9,6 +9,8 @@
     "dev:local": "node scripts/dev-local.mjs",
     "test:local": "node scripts/test-local.mjs",
     "build": "vite build",
+    "package:dist": "npm run build && node scripts/package-dist.mjs",
+    "setup:git-hooks": "git config core.hooksPath .githooks",
     "preview": "vite preview"
   },
   "dependencies": {

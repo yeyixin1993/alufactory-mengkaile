@@ -41,6 +41,8 @@ export interface ProductionWorkbookData {
     rightDistanceMm: number;
     holeType: string;
     threadSize: string;
+    fastenerHead?: string;
+    fastenerLengthMm?: number;
     verification: string;
   }>;
 }
@@ -244,7 +246,8 @@ export const buildProductionXlsx = (production: ProductionWorkbookData) => {
   ]);
   const holeRows = production.holes.map((hole) => [
     hole.partLine, hole.partId ?? '', hole.model, hole.holeLine, hole.holeId ?? '', hole.entryFace, hole.entryGroove, hole.exitFace, hole.exitGroove,
-    hole.physicalGrooveId, hole.leftDistanceMm, hole.rightDistanceMm, hole.holeType, hole.threadSize, hole.verification,
+    hole.physicalGrooveId, hole.leftDistanceMm, hole.rightDistanceMm, hole.holeType, hole.threadSize,
+    hole.fastenerHead ?? '', hole.fastenerLengthMm ?? '', hole.verification,
   ]);
   const sheets: SheetDefinition[] = [
     {
@@ -264,9 +267,9 @@ export const buildProductionXlsx = (production: ProductionWorkbookData) => {
     {
       name: '打孔明细',
       title: '萌开了 3D DIY 打孔明细',
-      headers: ['零件序号', '零件ID', '型号', '孔序号', '孔ID', '入口面', '入口二维槽位', '出口面', '出口二维槽位', '物理槽ID', '距左端mm', '距右端mm', '孔类型', '螺纹', '客户/工厂核对'],
+      headers: ['零件序号', '零件ID', '型号', '孔序号', '孔ID', '入口面', '入口二维槽位', '出口面', '出口二维槽位', '物理槽ID', '距左端mm', '距右端mm', '孔类型', '螺纹', '指定螺丝头型', '指定螺丝长度mm', '客户/工厂核对'],
       rows: holeRows,
-      widths: [11, 25, 14, 10, 25, 10, 15, 10, 15, 12, 13, 13, 14, 10, 42],
+      widths: [11, 25, 14, 10, 25, 10, 15, 10, 15, 12, 13, 13, 14, 10, 16, 17, 42],
     },
   ];
 
@@ -456,6 +459,8 @@ export const parseProductionXlsx = (content: ArrayBuffer): ProductionWorkbookDat
       rightDistanceMm: optionalNumber(record['距右端mm']) || 0,
       holeType: record['孔类型'] || 'through',
       threadSize: record['螺纹'] || '',
+      fastenerHead: record['指定螺丝头型'] || undefined,
+      fastenerLengthMm: optionalNumber(record['指定螺丝长度mm']),
       verification: record['客户/工厂核对'] || '',
     })),
   };

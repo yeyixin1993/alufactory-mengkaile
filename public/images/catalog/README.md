@@ -10,7 +10,7 @@
 | `art-frame.jpg` | 相框 | 正式商品图 |
 | `aluminum-plate.jpg` | 铝板 | 正式商品图 |
 | `marine-board.jpg` | 俄罗斯全进口 BBB 海洋板 | 正式商品图 |
-| `calligraphy-cabinet.jpg` | 宜家书法特柜子 | 正式商品图 |
+| `calligraphy-cabinet.jpg` | 宜家舒法特柜子 | 正式商品图 |
 | `wardrobe.jpg` | 衣柜 | 正式商品图 |
 
 型材和配件已经使用各自现有的本地实物图，不在这里重复，也不要用占位图覆盖配件实物图。

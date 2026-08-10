@@ -26,7 +26,7 @@ PLACEHOLDERS = (
     ("art-frame.jpg", "相框", (124, 58, 237)),
     ("aluminum-plate.jpg", "铝板", (71, 85, 105)),
     ("marine-board.jpg", "俄罗斯全进口BBB海洋板", (180, 83, 9)),
-    ("calligraphy-cabinet.jpg", "宜家书法特柜子", (190, 24, 93)),
+    ("calligraphy-cabinet.jpg", "宜家舒法特柜子", (190, 24, 93)),
     ("wardrobe.jpg", "衣柜", (5, 150, 105)),
 )
 
