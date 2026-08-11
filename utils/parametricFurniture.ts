@@ -1,4 +1,4 @@
-import { DrillHole, ProfileSide } from '../types';
+import { DrillHole, ProfileFinish, ProfileSide } from '../types';
 
 export type ParametricFurnitureSource = 'calligraphy_cabinet' | 'wardrobe';
 
@@ -23,6 +23,7 @@ export interface ParametricSceneItem {
   holes?: DrillHole[];
   tappingLeft?: boolean;
   tappingRight?: boolean;
+  finish?: ProfileFinish;
   accessoryPrice?: number;
   accessoryProfileSize?: '2020';
   remark?: string;
@@ -46,6 +47,16 @@ export const CALLIGRAPHY_LAYER_PITCH_MM = 130;
 export const CALLIGRAPHY_OUTER_DEPTH_MM = 460;
 export const CALLIGRAPHY_PROFILE_MM = 20;
 export const CALLIGRAPHY_MAX_LENGTH_MM = 2440;
+
+export const SHELF_SUPPORT_PRICE_PER_METER: Record<ProfileFinish, number> = {
+  oxidized: 8,
+  electrophoretic: 10,
+  powder: 12,
+};
+
+export const getShelfSupportUnitPrice = (lengthMm: number, finish: ProfileFinish) => (
+  Number(((Math.max(0, lengthMm) / 1000) * SHELF_SUPPORT_PRICE_PER_METER[finish]).toFixed(2))
+);
 
 const clampInteger = (value: number, min: number, max: number) => (
   Math.min(max, Math.max(min, Math.round(Number(value) || min)))
@@ -261,9 +272,10 @@ export const buildCalligraphyCabinetTemplate = (
           width: 12,
           height: 2,
           thickness: 400,
-          accessoryPrice: 0,
+          finish: 'oxidized',
+          accessoryPrice: getShelfSupportUnitPrice(400, 'oxidized'),
           accessoryProfileSize: '2020',
-          remark: `第${layer + 1}层第${boundary + 1}道深度梁${supportSide < 0 ? '左' : '右'}侧层板托（价格待确认）`,
+          remark: `第${layer + 1}层第${boundary + 1}道深度梁${supportSide < 0 ? '左' : '右'}侧层板托`,
         });
       });
     });

@@ -20,9 +20,9 @@ interface FurnitureConfiguratorProps {
 
 const COPY = {
   cn: {
-    gridMode: '按层数和列数', sizeMode: '按长和高', columns: '列数', layers: '层数',
-    totalLength: '整体长 (mm)', totalWidth: '整体宽/深 (mm)', totalHeight: '整体高 (mm)',
-    generatedSize: '实际生成尺寸', requestedLimit: '生成尺寸不会超过输入值；整片12mm海洋板顶板限制整体长不超过2440mm。',
+    gridMode: '按层数和列数', sizeMode: '按空间上限', columns: '列数', layers: '层数',
+    totalLength: '最长不能超过 (mm)', totalWidth: '整体宽/深 (mm)', totalHeight: '最高不能超过 (mm)',
+    generatedSize: '实际生成尺寸', requestedLimit: '这里填写柜体允许占用的最大长度和最大高度。系统会在不超过这两个上限的前提下，生成可容纳最多列、最多层篓子的完整柜体；实际尺寸通常小于输入值，并非按输入尺寸严丝合缝定做。整片12mm海洋板顶板同时限制整体长不超过2440mm。',
     calligraphyTitle: '舒法特篓子柜参数化生成', calligraphyHint: '每格按300×420×100mm篓子预留；中间承托层距130mm，柜体固定深度460mm。',
     wardrobeTitle: '12根型材衣柜框架', wardrobeHint: '上下横向使用2020，四根纵向立柱使用2040。',
     length: '长 (mm)', width: '宽/深 (mm)', height: '高 (mm)',
@@ -32,12 +32,12 @@ const COPY = {
     wardrobeProfiles: '共12根：8根横向2020 + 4根纵向2040。',
     wardrobeMachining: '2040以20面朝外、40面朝侧面；两根2020横压2040并各用沉头螺丝固定，2020之间用通孔扁头M6×8；全部型材两端攻丝并默认配螺丝。',
     generate: '生成并进入3D设计器', editable: '3D设计器将在新标签页打开；生成后可继续移动、改尺寸、改孔位并人工审核。',
-    supportPricing: '层板托目前作为设计与生产备注占位，暂不计价；下单前需人工确认规格和价格。',
+    supportPricing: '层板托按实际长度计价：氧化本色8元/米，彩色截面本色10元/米，彩色截面彩色12元/米。',
   },
   en: {
-    gridMode: 'Rows & columns', sizeMode: 'Length & height', columns: 'Columns', layers: 'Layers',
-    totalLength: 'Overall length (mm)', totalWidth: 'Fixed depth (mm)', totalHeight: 'Overall height (mm)',
-    generatedSize: 'Generated size', requestedLimit: 'The generated size will not exceed the entered bounds; the one-piece 12 mm marine-board top limits overall length to 2440 mm.',
+    gridMode: 'Rows & columns', sizeMode: 'Space limits', columns: 'Columns', layers: 'Layers',
+    totalLength: 'Maximum allowed length (mm)', totalWidth: 'Fixed depth (mm)', totalHeight: 'Maximum allowed height (mm)',
+    generatedSize: 'Generated size', requestedLimit: 'Enter the maximum length and height the cabinet may occupy. The system generates the complete cabinet with the most basket columns and layers that fit within both limits. The actual size will usually be smaller than the entered limits; it is not built to match them exactly. The one-piece 12 mm marine-board top also caps overall length at 2440 mm.',
     calligraphyTitle: 'Parametric calligraphy basket cabinet', calligraphyHint: 'Each bay fits a 300×420×100 mm basket; intermediate support pitch is 130 mm and cabinet depth is fixed at 460 mm.',
     wardrobeTitle: '12-profile wardrobe frame', wardrobeHint: 'Horizontal members use 2020; the four vertical posts use 2040.',
     length: 'Length (mm)', width: 'Width/depth (mm)', height: 'Height (mm)',
@@ -47,12 +47,12 @@ const COPY = {
     wardrobeProfiles: '12 members: eight horizontal 2020 rails and four vertical 2040 posts.',
     wardrobeMachining: 'Each 2040 shows its 20 mm face outward and 40 mm face to the side. Two perpendicular 2020 rails cap it with countersunk screws; the 2020-to-2020 joint uses a through-hole M6×8 flat-head screw. All profiles are tapped at both ends and screws are prefilled.',
     generate: 'Generate in 3D designer', editable: 'The 3D designer opens in a new tab; the generated assembly remains editable and must be reviewed before ordering.',
-    supportPricing: 'Shelf supports are currently design/production placeholders and are not priced; confirm their specification and price before ordering.',
+    supportPricing: 'Shelf supports are priced by actual length: natural anodized ¥8/m, colored with a natural section ¥10/m, and colored with a colored section ¥12/m.',
   },
   jp: {
-    gridMode: '段数・列数で指定', sizeMode: '長さ・高さで指定', columns: '列数', layers: '段数',
-    totalLength: '全長 (mm)', totalWidth: '固定奥行 (mm)', totalHeight: '全高 (mm)',
-    generatedSize: '生成寸法', requestedLimit: '生成寸法は入力上限を超えません。12mmマリンボード天板を一枚物にするため、全長上限は2440mmです。',
+    gridMode: '段数・列数で指定', sizeMode: '設置上限で指定', columns: '列数', layers: '段数',
+    totalLength: '超えられない最大全長 (mm)', totalWidth: '固定奥行 (mm)', totalHeight: '超えられない最大高さ (mm)',
+    generatedSize: '生成寸法', requestedLimit: 'キャビネットを設置できる最大全長と最大高さを入力してください。両方の上限を超えない範囲で、かごの列数・段数が最大になる完成形を生成します。実寸は通常、入力した上限より小さく、入力寸法ぴったりに製作する指定ではありません。12mmマリンボード天板を一枚物にするため、全長は2440mm以下です。',
     calligraphyTitle: '書道バスケット棚のパラメトリック生成', calligraphyHint: '各区画は300×420×100mm、中間棚受けピッチ130mm、棚奥行は460mm固定です。',
     wardrobeTitle: '12本プロファイルのワードローブ枠', wardrobeHint: '横材は2020、4本の縦柱は2040を使用します。',
     length: '長さ (mm)', width: '幅／奥行 (mm)', height: '高さ (mm)',
@@ -62,7 +62,7 @@ const COPY = {
     wardrobeProfiles: '合計12本：横材2020が8本、縦柱2040が4本。',
     wardrobeMachining: '2040は20mm面を外向き、40mm面を側面向きに配置。直交する2本の2020を皿ねじで2040端面に固定し、2020同士は通し穴のM6×8低頭ねじで接続。全形材を両端タップし、ねじを初期配置します。',
     generate: '3Dデザイナーで生成', editable: '3Dデザイナーは新しいタブで開きます。生成後も移動・寸法・穴位置を編集し、注文前に確認できます。',
-    supportPricing: '棚受けは設計・製造メモ用の仮部品で、現在は価格未計上です。注文前に仕様と価格を確認してください。',
+    supportPricing: '棚受けは実長で計算します：ナチュラルアルマイト8元/m、カラー・ナチュラル断面10元/m、カラー・カラー断面12元/m。',
   },
 } as const;
 

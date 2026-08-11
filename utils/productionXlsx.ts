@@ -13,6 +13,7 @@ export interface ProductionWorkbookData {
     widthMm?: number;
     heightMm?: number;
     thicknessMm?: number;
+    finish?: string;
     colorId?: string;
     color: string;
     pegHolePattern?: string;
@@ -241,7 +242,7 @@ export const buildProductionXlsx = (production: ProductionWorkbookData) => {
   ];
   const partRows = production.parts.map((part) => [
     part.line, part.id, part.type, part.model, part.accessoryProfileSize ?? '', part.lengthMm ?? '', part.widthMm ?? '', part.heightMm ?? '',
-    part.thicknessMm ?? '', part.color, part.colorId ?? '', part.quantity, part.pegHolePattern ?? '', part.positionMm.join(', '), part.rotationDeg.join(', '),
+    part.thicknessMm ?? '', part.finish ?? '', part.color, part.colorId ?? '', part.quantity, part.pegHolePattern ?? '', part.positionMm.join(', '), part.rotationDeg.join(', '),
     part.leftTappingPorts, part.rightTappingPorts, part.screwHead ?? '', part.linkedProfileId ?? '', part.linkedHoleId ?? '', part.remark,
   ]);
   const holeRows = production.holes.map((hole) => [
@@ -260,9 +261,9 @@ export const buildProductionXlsx = (production: ProductionWorkbookData) => {
     {
       name: '零件明细',
       title: '萌开了 3D DIY 零件明细',
-      headers: ['序号', '零件ID', '类型', '型号', '适配型材规格', '长度mm', '宽度mm', '高度mm', '厚度mm', '颜色', '颜色ID', '数量', '洞洞板孔型', '位置XYZ(mm)', '旋转XYZ(°)', '左端攻丝孔数', '右端攻丝孔数', '螺丝头型', '关联型材ID', '关联孔ID', '备注'],
+      headers: ['序号', '零件ID', '类型', '型号', '适配型材规格', '长度mm', '宽度mm', '高度mm', '厚度mm', '截面/表面档位', '颜色', '颜色ID', '数量', '洞洞板孔型', '位置XYZ(mm)', '旋转XYZ(°)', '左端攻丝孔数', '右端攻丝孔数', '螺丝头型', '关联型材ID', '关联孔ID', '备注'],
       rows: partRows,
-      widths: [8, 25, 14, 14, 16, 12, 12, 12, 12, 15, 14, 9, 14, 20, 20, 15, 15, 14, 25, 25, 38],
+      widths: [8, 25, 14, 14, 16, 12, 12, 12, 12, 18, 15, 14, 9, 14, 20, 20, 15, 15, 14, 25, 25, 38],
     },
     {
       name: '打孔明细',
@@ -431,6 +432,7 @@ export const parseProductionXlsx = (content: ArrayBuffer): ProductionWorkbookDat
       widthMm: optionalNumber(record['宽度mm']),
       heightMm: optionalNumber(record['高度mm']),
       thicknessMm: optionalNumber(record['厚度mm']),
+      finish: record['截面/表面档位'] || undefined,
       color: record['颜色'] || '',
       colorId: record['颜色ID'] || undefined,
       quantity: optionalNumber(record['数量']) || 1,

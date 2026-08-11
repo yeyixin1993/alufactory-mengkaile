@@ -43,6 +43,7 @@ import {
   Language,
   Product,
   ProductType,
+  ProfileFinish,
   ProfileSide,
   ScrewHeadType,
   ThreadSize,
@@ -66,7 +67,11 @@ import { groupDiyAccessoryCartItems } from '../utils/cartAccessories';
 import { getDiyScrewOrderSpec } from '../utils/screwCalculator';
 import { getRotationallyCanonicalMachiningKey } from '../utils/profileManufacturingEquivalence';
 import { parseMaycadSceneXml, type MaycadProfileReview } from '../utils/maycadImport';
-import { DIY_TEMPLATE_STORAGE_PREFIX, type ParametricTemplatePayload } from '../utils/parametricFurniture';
+import {
+  DIY_TEMPLATE_STORAGE_PREFIX,
+  getShelfSupportUnitPrice,
+  type ParametricTemplatePayload,
+} from '../utils/parametricFurniture';
 
 type DIYItemKind =
   | 'profile'
@@ -105,6 +110,7 @@ interface DIYSceneItem {
   holes?: DrillHole[];
   tappingLeft?: boolean;
   tappingRight?: boolean;
+  finish?: ProfileFinish;
   accessoryPrice?: number;
   accessoryProfileSize?: DIYAccessoryProfileSize;
   remark?: string;
@@ -192,6 +198,10 @@ const TEXT: Record<Language, Record<string, string>> = {
     linkedHole: '跟随孔位',
     foot: '调平脚',
     shelfSupport: '层板托',
+    shelfSupportFinish: '层板托截面/颜色',
+    shelfSupportOxidized: '氧化本色 · 8元/米',
+    shelfSupportElectrophoretic: '彩色截面本色 · 10元/米',
+    shelfSupportPowder: '彩色截面彩色 · 12元/米',
     profileParts: '铝型材',
     panelParts: '板材',
     fasteningParts: '连接与紧固',
@@ -201,7 +211,8 @@ const TEXT: Record<Language, Record<string, string>> = {
     availableForSeries: '仅显示当前规格可用配件',
     bracketSize: '角码边长 (mm)',
     connectorLength: '连接件长度 (mm)',
-    screwLength: '螺丝长度 (mm)',
+    screwOrderSpec: '订货规格',
+    screwRenderLengthHint: '3D装配长度会按连接位置自动适配，仅用于模型显示，不作为订货长度。',
     oneHoleFaceHint: '隐藏连接件每个安装面仅设 1 个紧固孔。',
     connectionPlacementHint: '一键安装会吸附到最近的同规格接点并锁定；需要手动微调时先解锁。',
     addDemo: '生成示例工作台',
@@ -370,6 +381,10 @@ const TEXT: Record<Language, Record<string, string>> = {
     linkedHole: 'Linked to hole',
     foot: 'Leveling foot',
     shelfSupport: 'Shelf support',
+    shelfSupportFinish: 'Shelf-support finish',
+    shelfSupportOxidized: 'Natural anodized · ¥8/m',
+    shelfSupportElectrophoretic: 'Colored, natural section · ¥10/m',
+    shelfSupportPowder: 'Colored, colored section · ¥12/m',
     profileParts: 'Profiles',
     panelParts: 'Panels',
     fasteningParts: 'Connections & fasteners',
@@ -379,7 +394,8 @@ const TEXT: Record<Language, Record<string, string>> = {
     availableForSeries: 'Only compatible parts are shown',
     bracketSize: 'Bracket side (mm)',
     connectorLength: 'Connector length (mm)',
-    screwLength: 'Screw length (mm)',
+    screwOrderSpec: 'Order specification',
+    screwRenderLengthHint: 'The 3D fitted length adapts to the joint for visualization only and is not the ordering length.',
     oneHoleFaceHint: 'The hidden connector uses one fastening hole on each mounting face.',
     connectionPlacementHint: 'One-click install snaps to the nearest compatible joint and locks the location. Unlock it before manual adjustment.',
     addDemo: 'Build demo workbench',
@@ -548,6 +564,10 @@ const TEXT: Record<Language, Record<string, string>> = {
     linkedHole: '穴位置に連動',
     foot: 'レベリングフット',
     shelfSupport: '棚受け',
+    shelfSupportFinish: '棚受けの断面・色',
+    shelfSupportOxidized: 'ナチュラルアルマイト · 8元/m',
+    shelfSupportElectrophoretic: 'カラー・ナチュラル断面 · 10元/m',
+    shelfSupportPowder: 'カラー・カラー断面 · 12元/m',
     profileParts: 'プロファイル',
     panelParts: 'パネル',
     fasteningParts: '接続・締結部品',
@@ -557,7 +577,8 @@ const TEXT: Record<Language, Record<string, string>> = {
     availableForSeries: '対応部品のみ表示',
     bracketSize: 'ブラケット辺長 (mm)',
     connectorLength: 'コネクタ長さ (mm)',
-    screwLength: 'ボルト長さ (mm)',
+    screwOrderSpec: '発注仕様',
+    screwRenderLengthHint: '3D組立長さは接続位置に合わせた表示専用値で、発注長さではありません。',
     oneHoleFaceHint: '隠しコネクタは各取付面に締結穴を1つだけ使用します。',
     connectionPlacementHint: 'ワンクリック取付で最寄りの対応接続点にスナップし、位置をロックします。手動調整前にロックを解除してください。',
     addDemo: '作業台サンプルを作成',
@@ -721,15 +742,23 @@ const duplicateSceneItem = (item: DIYSceneItem): DIYSceneItem => {
   };
 };
 
-const normalizeDesignItems = (source: DIYSceneItem[]) => source.map((item) => ({
-  ...item,
-  holes: item.kind === 'profile'
-    ? (item.holes || []).map((hole) => ({
-      ...hole,
-      physicalGrooveIndex: getHolePhysicalGrooveIndex(hole, item.variantId),
-    }))
-    : item.holes,
-}));
+const normalizeDesignItems = (source: DIYSceneItem[]) => source.map((item) => {
+  const shelfSupportFinish: ProfileFinish = item.finish
+    || (item.colorId === 'natural' ? 'oxidized' : 'powder');
+  return {
+    ...item,
+    ...(item.kind === 'shelf_support' ? {
+      finish: shelfSupportFinish,
+      accessoryPrice: getShelfSupportUnitPrice(item.thickness || 0, shelfSupportFinish),
+    } : {}),
+    holes: item.kind === 'profile'
+      ? (item.holes || []).map((hole) => ({
+        ...hole,
+        physicalGrooveIndex: getHolePhysicalGrooveIndex(hole, item.variantId),
+      }))
+      : item.holes,
+  };
+});
 
 const buildProductionData = (items: DIYSceneItem[], language: Language) => {
   const normalizedItems = normalizeDesignItems(items);
@@ -742,6 +771,7 @@ const buildProductionData = (items: DIYSceneItem[], language: Language) => {
     widthMm: item.width,
     heightMm: item.height,
     thicknessMm: item.thickness,
+    finish: item.finish,
     accessoryProfileSize: item.accessoryProfileSize,
     colorId: item.colorId,
     color: item.kind === 'marine_board'
@@ -1013,7 +1043,8 @@ const createItem = (kind: DIYItemKind, index = 0, variantId?: string): DIYSceneI
       width: 14,
       height: 8,
       thickness: 400,
-      accessoryPrice: 0,
+      finish: 'oxidized',
+      accessoryPrice: getShelfSupportUnitPrice(400, 'oxidized'),
       accessoryProfileSize: '2020',
       quantity: 1,
       remark: '',
@@ -1182,6 +1213,9 @@ const itemsFromProductionWorkbook = (production: ProductionWorkbookData): DIYSce
     width: part.widthMm ?? base.width,
     height: part.heightMm ?? base.height,
     thickness: part.thicknessMm ?? base.thickness,
+    finish: (part.finish === 'oxidized' || part.finish === 'electrophoretic' || part.finish === 'powder')
+      ? part.finish
+      : base.finish,
     colorId: workbookColorId(part, kind),
     quantity: Math.max(1, Math.round(part.quantity || 1)),
     position,
@@ -4771,13 +4805,21 @@ const ThreeAssembly: React.FC<{
   );
 };
 
+const getShelfSupportFinishLabel = (item: DIYSceneItem, t: Record<string, string>) => (
+  item.finish === 'electrophoretic'
+    ? t.shelfSupportElectrophoretic
+    : item.finish === 'powder'
+      ? t.shelfSupportPowder
+      : t.shelfSupportOxidized
+);
+
 const getItemLabel = (item: DIYSceneItem, language: Language) => {
   const t = TEXT[language];
   if (item.kind === 'profile') return `${item.variantId || '2020'} · ${item.length || 0}mm`;
   if (item.kind === 'plate') return `${t.plate} · ${item.width}×${item.height}`;
   if (item.kind === 'pegboard') return `${t.pegboard} · ${item.width}×${item.height}`;
   if (item.kind === 'marine_board') return `${t.marine} · ${item.width}×${item.height}`;
-  if (item.kind === 'shelf_support') return `${t.shelfSupport} · ${item.thickness || 0}mm`;
+  if (item.kind === 'shelf_support') return `${t.shelfSupport} · ${item.thickness || 0}mm · ${getShelfSupportFinishLabel(item, t)}`;
   if (item.kind === 'connector') return `${t.connector} · ${item.accessoryProfileSize || '2020'}`;
   if (item.kind === 'extruded_connector') return `${t.extrudedConnector} · ${item.accessoryProfileSize || '2020'}`;
   if (item.kind === 'l_connector') return `${t.lConnector} · ${item.accessoryProfileSize || '2020'}`;
@@ -4792,7 +4834,12 @@ const getItemLabel = (item: DIYSceneItem, language: Language) => {
       : item.screwHead === 'button_socket'
         ? t.buttonSocketScrew
         : t.screw;
-    return `${label} · ${item.height || 0}mm${item.linkedHoleId ? ` · ${t.linkedHole}` : ''}`;
+    const orderSpec = getDiyScrewOrderSpec(
+      item.accessoryProfileSize,
+      item.screwHead,
+      Math.max(1, Math.round(item.height || 35)),
+    );
+    return `${label} · ${orderSpec.threadSize}×${orderSpec.lengthMm}${item.linkedHoleId ? ` · ${t.linkedHole}` : ''}`;
   }
   return t.foot;
 };
@@ -4816,6 +4863,7 @@ const projectAccessorySpecKey = (item: DIYSceneItem) => JSON.stringify({
   name: item.name,
   profileSize: item.accessoryProfileSize || '',
   colorId: item.colorId || '',
+  finish: item.finish || '',
   width: Number(item.width || 0),
   height: Number(item.height || 0),
   thickness: Number(item.thickness || 0),
@@ -4911,6 +4959,9 @@ const calculatePrice = (item: DIYSceneItem, user?: User | null) => {
         ? (PEGBOARD_PRICE[thickness] || 0)
         : (MARINE_BOARD_PRICE[thickness] || 0) + (isMarineNaturalColor(item.colorId) ? 0 : MARINE_COLOR_SURCHARGE);
     return Number((area * rate * quantity).toFixed(1));
+  }
+  if (item.kind === 'shelf_support') {
+    return Number((getShelfSupportUnitPrice(item.thickness || 0, item.finish || 'oxidized') * quantity).toFixed(2));
   }
   const standardAccessoryPrice = getStandardAccessoryUnitPrice(item);
   return Number((((standardAccessoryPrice ?? item.accessoryPrice) || 0) * quantity).toFixed(1));
@@ -5521,7 +5572,7 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({ language, onLanguageChange, u
       const accessoryLineName = item.kind === 'screw'
         ? `${accessoryDefinition.label} · ${screwThreadSize}×${screwLengthMm}`
         : item.kind === 'shelf_support'
-          ? `${accessoryDefinition.label} · ${accessoryLengthMm}mm`
+          ? `${accessoryDefinition.label} · ${getShelfSupportFinishLabel(item, t)} · ${accessoryLengthMm}mm`
           : accessoryDefinition.label;
       return {
         id: makeId(),
@@ -5533,6 +5584,7 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({ language, onLanguageChange, u
           colorMode: item.colorId === 'natural' ? 'natural' : 'colored',
           colorId: item.colorId,
           colorName: PROFILE_COLORS.find((color) => color.id === item.colorId)?.name[language] || item.colorId,
+          finish: item.kind === 'shelf_support' ? (item.finish || 'oxidized') : undefined,
           quantities: { [accessoryId]: item.quantity },
           totalQuantity: item.quantity,
           unitTotal: totalPrice,
@@ -6147,6 +6199,40 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({ language, onLanguageChange, u
                 </div>
               )}
 
+              {selected.kind === 'shelf_support' && (
+                <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                  <NumberField
+                    label={t.length}
+                    value={selected.thickness || 400}
+                    min={1}
+                    max={3000}
+                    onChange={(lengthMm) => updateSelected({
+                      thickness: lengthMm,
+                      accessoryPrice: getShelfSupportUnitPrice(lengthMm, selected.finish || 'oxidized'),
+                    })}
+                  />
+                  <label className="mt-3 block">
+                    <span className="diy-field-label">{t.shelfSupportFinish}</span>
+                    <select
+                      value={selected.finish || 'oxidized'}
+                      onChange={(event) => {
+                        const finish = event.target.value as ProfileFinish;
+                        updateSelected({
+                          finish,
+                          colorId: finish === 'oxidized' ? 'natural' : (selected.colorId === 'natural' ? 'silver' : selected.colorId),
+                          accessoryPrice: getShelfSupportUnitPrice(selected.thickness || 0, finish),
+                        });
+                      }}
+                      className="diy-select"
+                    >
+                      <option value="oxidized">{t.shelfSupportOxidized}</option>
+                      <option value="electrophoretic">{t.shelfSupportElectrophoretic}</option>
+                      <option value="powder">{t.shelfSupportPowder}</option>
+                    </select>
+                  </label>
+                </div>
+              )}
+
               {(isConnectionAccessoryKind(selected.kind) || selected.kind === 'screw') && (
                 <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
                   <div className="mb-3 flex items-center gap-2">
@@ -6230,14 +6316,18 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({ language, onLanguageChange, u
                     </>
                   )}
                   {selected.kind === 'screw' && (
-                    <>
-                      <NumberField
-                        label={t.screwLength}
-                        value={selected.height || 35}
-                        min={8}
-                        max={120}
-                        onChange={(value) => updateSelected({ height: value })}
-                      />
+                    (() => {
+                      const orderSpec = getDiyScrewOrderSpec(
+                        selected.accessoryProfileSize,
+                        selected.screwHead,
+                        Math.max(1, Math.round(selected.height || 35)),
+                      );
+                      return <>
+                      <div className="rounded-xl border border-blue-100 bg-white px-3 py-3">
+                        <div className="text-[10px] font-black uppercase tracking-widest text-slate-400">{t.screwOrderSpec}</div>
+                        <div className="mt-1 text-xl font-black text-slate-900">{orderSpec.threadSize}×{orderSpec.lengthMm}</div>
+                        <div className="mt-1 text-[10px] font-bold text-slate-500">{t.accessoryProfileSize} · {selected.accessoryProfileSize || '2020'}</div>
+                      </div>
                       {selected.screwHead && (
                         <div className="mt-2 rounded-xl bg-slate-100 px-3 py-2 text-[10px] font-black text-slate-600">
                           {selected.screwHead === 'socket_cylinder'
@@ -6248,7 +6338,9 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({ language, onLanguageChange, u
                           {selected.linkedHoleId ? ` · ${t.linkedHole}` : ''}
                         </div>
                       )}
-                    </>
+                      <p className="mt-2 text-[10px] font-bold leading-relaxed text-slate-400">{t.screwRenderLengthHint}</p>
+                    </>;
+                    })()
                   )}
                   <p className="mt-2 text-[10px] font-bold leading-relaxed text-slate-400">{t.connectionPlacementHint}</p>
                 </div>
@@ -6261,7 +6353,20 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({ language, onLanguageChange, u
                     <button
                       key={color.id}
                       title={color.name[language]}
-                      onClick={() => updateSelected({ colorId: color.id })}
+                      onClick={() => updateSelected({
+                        colorId: color.id,
+                        ...(selected.kind === 'shelf_support' ? {
+                          finish: color.id === 'natural'
+                            ? 'oxidized'
+                            : (selected.finish === 'powder' ? 'powder' : 'electrophoretic'),
+                          accessoryPrice: getShelfSupportUnitPrice(
+                            selected.thickness || 0,
+                            color.id === 'natural'
+                              ? 'oxidized'
+                              : (selected.finish === 'powder' ? 'powder' : 'electrophoretic'),
+                          ),
+                        } : {}),
+                      })}
                       className={`flex min-w-0 items-center gap-2 rounded-xl border p-2 text-left transition ${selected.colorId === color.id ? 'border-blue-600 bg-blue-50 ring-2 ring-blue-100' : 'border-slate-200 bg-slate-50 hover:border-blue-300'}`}
                     >
                       <span className="h-7 w-7 shrink-0 rounded-lg border border-black/10 shadow-inner" style={{ backgroundColor: COLOR_HEX[color.id] || '#ccc' }} />

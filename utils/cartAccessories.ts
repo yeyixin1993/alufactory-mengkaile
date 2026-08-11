@@ -99,6 +99,7 @@ const accessoryGroupKey = (item: CartItem) => {
     profileSize: config.profileSize || config.size || config.variantId || '',
     colorMode: config.colorMode || '',
     colorId: config.colorId || '',
+    finish: config.finish || '',
     accessoryLengthMm: Number(config.accessoryLengthMm || 0),
     accessoryWidthMm: Number(config.accessoryWidthMm || 0),
     accessoryHeightMm: Number(config.accessoryHeightMm || 0),
