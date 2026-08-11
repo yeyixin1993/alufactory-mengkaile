@@ -1,7 +1,7 @@
 
 import React from 'react';
 import { CartItem, User, ProductType, ProfileConfig, Language, ProfileSide, Address } from '../types';
-import { TRANSLATIONS, PROFILE_COLORS, getMarineBoardOrderColorName, SHIPPING_RATES, SHIPPING_RATES_SF, SHIPPING_RATES_AN, PROFILE_WEIGHTS, SHIPPING_METHOD_NAMES } from '../constants';
+import { TRANSLATIONS, PROFILE_COLORS, getMarineBoardOrderColorName, getProfileColorPhotoSrc, SHIPPING_RATES, SHIPPING_RATES_SF, SHIPPING_RATES_AN, PROFILE_WEIGHTS, SHIPPING_METHOD_NAMES } from '../constants';
 import type { ShippingMethod } from '../constants';
 import ProfileVisualizer from './ProfileVisualizer';
 import { describeHolePassage, getHolePhysicalGrooveIndex } from '../utils/profileMachining';
@@ -780,7 +780,7 @@ const FactorySheet: React.FC<FactorySheetProps> = ({ cart, user, language, order
                         : (cfg?.colorMode || '-');
                     const totalQty = Number(cfg?.totalQuantity || 0);
                     const showAccessorySwatch = rawColorMode === 'colored' && !!cfg?.colorId;
-                    const accessorySwatchSrc = showAccessorySwatch ? `/images/color_${cfg.colorId}.png` : '';
+                    const accessorySwatchSrc = showAccessorySwatch ? getProfileColorPhotoSrc(String(cfg.colorId)) : '';
 
                     return (
                       <>
@@ -802,7 +802,7 @@ const FactorySheet: React.FC<FactorySheetProps> = ({ cart, user, language, order
                             <div className="text-xs text-slate-500">-</div>
                           ) : (
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                              {showAccessorySwatch && (
+                              {showAccessorySwatch && accessorySwatchSrc && (
                                 <div className="border border-slate-200 rounded-xl bg-white p-3 flex gap-3 items-center">
                                   <div className="w-20 h-16 rounded-lg border border-slate-200 bg-slate-50 overflow-hidden relative shrink-0">
                                     <img
@@ -895,9 +895,9 @@ const FactorySheet: React.FC<FactorySheetProps> = ({ cart, user, language, order
                       const swatchSrc = showSwatch
                         ? (String(cfg.colorId) === 'wood_natural' || (item.product.type === ProductType.MARINE_BOARD && String(cfg.colorId) === 'natural')
                           ? '/images/color_wood_natural.svg'
-                          : `/images/color_${cfg.colorId}.png`)
+                          : getProfileColorPhotoSrc(String(cfg.colorId)))
                         : '';
-                      return showSwatch ? (
+                      return showSwatch && swatchSrc ? (
                         <div className="mt-3">
                           <div className="w-36 h-24 rounded-lg border border-slate-200 bg-white overflow-hidden relative">
                             <img

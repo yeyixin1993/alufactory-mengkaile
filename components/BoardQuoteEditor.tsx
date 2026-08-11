@@ -6,6 +6,7 @@ import {
   PROFILE_COLORS,
   MARINE_BOARD_COLORS,
   MARINE_BOARD_ORIGINAL_ORDER_NAME,
+  getProfileColorPhotoSrc,
 } from '../constants';
 import { normalizeMembershipLevel } from '../utils/membership';
 
@@ -218,6 +219,9 @@ const BoardQuoteEditor: React.FC<BoardQuoteEditorProps> = ({ language, product, 
     const hit = source.find((c) => c.id === colorId);
     return hit?.name?.[language] || colorId;
   }, [isMarineBoard, marineColorOptions, colorId, language]);
+  const swatchPhotoSrc = colorId === 'wood_natural'
+    ? '/images/color_wood_natural.svg'
+    : getProfileColorPhotoSrc(colorId);
   const defaultWidth = (isPegboard || isDoor) ? 500 : 0;
   const defaultHeight = (isPegboard || isDoor) ? 2000 : 0;
   const [width, setWidth] = useState<number>(initialCfg.width || defaultWidth);
@@ -471,12 +475,14 @@ const BoardQuoteEditor: React.FC<BoardQuoteEditorProps> = ({ language, product, 
       {(colorId !== 'natural' || colorId === 'wood_natural') && (
         <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4">
           <div className="text-xs font-black text-slate-500 mb-2">{language === 'cn' ? '色板图' : language === 'jp' ? 'カラースウォッチ' : 'Color Swatch'}</div>
-          {!swatchImgError ? (
+          {swatchPhotoSrc && !swatchImgError ? (
             <div className="w-full max-w-md h-40 rounded-xl border border-slate-200 bg-white overflow-hidden">
               <img
-                src={colorId === 'wood_natural' ? '/images/color_wood_natural.svg' : `/images/color_${colorId}.png`}
+                src={swatchPhotoSrc}
                 alt={selectedColorName}
                 className="w-full h-full object-contain"
+                loading="lazy"
+                decoding="async"
                 onError={() => setSwatchImgError(true)}
               />
             </div>

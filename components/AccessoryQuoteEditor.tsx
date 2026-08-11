@@ -1,7 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Language, CartItem, Product, User } from '../types';
-import { PROFILE_COLORS } from '../constants';
+import { PROFILE_COLORS, getProfileColorPhotoSrc } from '../constants';
 
 type AccessoryProfileSize = '1515' | '2020' | '3030' | '4040';
 type AccessoryColorMode = 'natural' | 'colored';
@@ -275,6 +275,7 @@ const AccessoryQuoteEditor: React.FC<{
   });
   const [imgError, setImgError] = useState(false);
   const [colorImgError, setColorImgError] = useState(false);
+  const colorPhotoSrc = getProfileColorPhotoSrc(colorId);
   const [zoomPreview, setZoomPreview] = useState<{ src: string; alt: string } | null>(null);
 
   const ui = useMemo(() => {
@@ -456,11 +457,13 @@ const AccessoryQuoteEditor: React.FC<{
 
           {colorMode === 'colored' && (
             <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4 flex flex-col items-center justify-center">
-              {!colorImgError ? (
+              {colorPhotoSrc && !colorImgError ? (
                 <img
-                  src={`/images/color_${colorId}.png`}
+                  src={colorPhotoSrc}
                   alt={colorId}
                   className="w-full max-h-[460px] object-contain rounded-xl"
+                  loading="lazy"
+                  decoding="async"
                   onError={() => setColorImgError(true)}
                 />
               ) : (

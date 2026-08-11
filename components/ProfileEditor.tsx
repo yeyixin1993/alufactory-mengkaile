@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { DrillHole, ProfileConfig, ProfileSide, TappingConfig, Language, HoleType, ProfileFinish, CartItem, Product, MiterCutConfig, MiterCutDirection, MiterCutSide, User, ThreadSize } from '../types';
-import { TRANSLATIONS, PROFILE_VARIANTS, PROFILE_COLORS, COLOR_ONLY_COLORED_SECTION_IDS } from '../constants';
+import { TRANSLATIONS, PROFILE_VARIANTS, PROFILE_COLORS, COLOR_ONLY_COLORED_SECTION_IDS, getProfileColorPhotoSrc } from '../constants';
 import { normalizeMembershipLevel } from '../utils/membership';
 import { displayGrooveToPhysical, getProfileGrooveCount, getProfileTapPortCount } from '../utils/profileMachining';
 import { Plus, Trash2, List, ShoppingCart, Pencil, X, Hammer, Settings2, Copy } from 'lucide-react';
@@ -82,9 +82,11 @@ const ProfileEditor: React.FC<ProfileEditorProps> = ({ language, product, user, 
   const [editingId, setEditingId] = useState<string | null>(null);
   const [profileImgError, setProfileImgError] = useState(false);
   const [colorImgError, setColorImgError] = useState(false);
+  const [hasChosenColor, setHasChosenColor] = useState(Boolean(initialConfig?.colorId && initialConfig.colorId !== 'natural'));
 
   const selectedVariant = PROFILE_VARIANTS.find(v => v.id === variantId) || PROFILE_VARIANTS[0];
   const selectedColor = PROFILE_COLORS.find(c => c.id === colorId) || PROFILE_COLORS[0];
+  const selectedColorPhotoSrc = getProfileColorPhotoSrc(colorId);
   const colorOnlyColoredSection = COLOR_ONLY_COLORED_SECTION_IDS.includes(colorId as any);
   const isTooShort = length <= MIN_PROFILE_LENGTH_MM;
   const isDangerous = length > MIN_PROFILE_LENGTH_MM && length <= DANGER_FEE_THRESHOLD_MM;
@@ -328,7 +330,7 @@ const ProfileEditor: React.FC<ProfileEditorProps> = ({ language, product, user, 
         </div>
 
         <div className="mb-8">
-          <ProfileSectionGuide language={language} />
+          <ProfileSectionGuide language={language} showPalette={!hasChosenColor} />
         </div>
 
         {/* Profile Cross-Section Image + Color Swatch */}
@@ -369,18 +371,20 @@ const ProfileEditor: React.FC<ProfileEditorProps> = ({ language, product, user, 
           {/* Color swatch */}
           {finish !== 'oxidized' && (
             <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4 inline-flex flex-col items-center gap-2">
-              {!colorImgError && (
+              {selectedColorPhotoSrc && !colorImgError && (
                 <img
-                  src={`/images/color_${colorId}.png`}
+                  src={selectedColorPhotoSrc}
                   alt={`${selectedColor.name[language]}`}
                   className="max-h-32 md:max-h-48 object-contain"
+                  loading="lazy"
+                  decoding="async"
                   onError={() => setColorImgError(true)}
                 />
               )}
-              {colorImgError && (
+              {(!selectedColorPhotoSrc || colorImgError) && (
                 <div className="text-slate-400 text-xs font-bold text-center p-4">
                   🎨 {selectedColor.name[language]}<br/>
-                  <span className="text-[10px] text-slate-300">(images/color_{colorId}.png)</span>
+                  <span className="text-[10px] text-slate-300">({language === 'cn' ? '暂无新色板照片' : language === 'jp' ? '新しい色見本画像は未登録' : 'No new swatch photo'})</span>
                 </div>
               )}
               <span className="text-[10px] text-slate-400 font-bold">{selectedColor.name[language]}</span>
@@ -395,7 +399,10 @@ const ProfileEditor: React.FC<ProfileEditorProps> = ({ language, product, user, 
               {PROFILE_COLORS.filter(c => c.id !== 'natural').map(color => (
                 <button
                   key={color.id}
-                  onClick={() => setColorId(color.id)}
+                  onClick={() => {
+                    setColorId(color.id);
+                    setHasChosenColor(true);
+                  }}
                   className={`px-3 py-3 rounded-xl border-2 text-[10px] font-black transition-all uppercase tracking-tighter text-center flex flex-col items-center justify-center gap-1 ${
                     colorId === color.id 
                       ? 'border-blue-500 bg-blue-50 text-blue-700 shadow-md' 

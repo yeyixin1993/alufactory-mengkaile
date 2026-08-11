@@ -188,6 +188,7 @@ const QuickQuote: React.FC<{ language: Language; user?: User | null }> = ({ lang
   const [selectedProduct, setSelectedProduct] = useState<QuickQuoteProduct>('profile');
 
   const [profileRows, setProfileRows] = useState<ProfileRow[]>([createProfileRow()]);
+  const [hasChosenProfileColor, setHasChosenProfileColor] = useState(false);
   const [aluPlateRows, setAluPlateRows] = useState<BoardRow[]>([createBoardRow(2)]);
   const [pegboardRows, setPegboardRows] = useState<BoardRow[]>([createBoardRow(2)]);
   const [marineBoardRows, setMarineBoardRows] = useState<BoardRow[]>([
@@ -199,6 +200,7 @@ const QuickQuote: React.FC<{ language: Language; user?: User | null }> = ({ lang
   const clearCategory = (key: QuickQuoteProduct) => {
     if (key === 'profile') {
       setProfileRows([createProfileRow()]);
+      setHasChosenProfileColor(false);
       return;
     }
     if (key === 'aluminum_plate') {
@@ -769,7 +771,7 @@ const QuickQuote: React.FC<{ language: Language; user?: User | null }> = ({ lang
 
         {selectedProduct === 'profile' && (
           <div className="space-y-4">
-            <ProfileSectionGuide language={language} />
+            <ProfileSectionGuide language={language} showPalette={!hasChosenProfileColor} />
             {profileRows.map((row, index) => {
               const calc = profileRowsCalculated[index];
               const color = PROFILE_COLORS.find((c) => c.id === row.colorId) || PROFILE_COLORS[0];
@@ -812,6 +814,7 @@ const QuickQuote: React.FC<{ language: Language; user?: User | null }> = ({ lang
                         value={row.colorId}
                         onChange={(e) => {
                           const nextColorId = e.target.value;
+                          if (nextColorId !== 'natural') setHasChosenProfileColor(true);
                           const restricted = COLOR_ONLY_COLORED_SECTION_IDS.includes(nextColorId as any);
                           updateProfileRow(row.id, {
                             colorId: nextColorId,
