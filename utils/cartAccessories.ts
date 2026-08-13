@@ -13,6 +13,7 @@ export interface DiyScrewCartSummaryRow {
   screwHead: string;
   screwThreadSize: string;
   screwLengthMm: number | null;
+  includesElasticFastener: boolean;
   colorId: string;
   colorName: string;
   quantity: number;
@@ -103,6 +104,8 @@ const accessoryGroupKey = (item: CartItem) => {
     accessoryLengthMm: Number(config.accessoryLengthMm || 0),
     accessoryWidthMm: Number(config.accessoryWidthMm || 0),
     accessoryHeightMm: Number(config.accessoryHeightMm || 0),
+    accessoryThreadSize: String(config.accessoryThreadSize || ''),
+    hasBrake: Boolean(config.hasBrake),
     lines,
   });
 };
@@ -415,6 +418,7 @@ export const summarizeDiyScrewCartItems = (cart: CartItem[]): DiyScrewCartSummar
       screwHead: String(config.screwHead || ''),
       screwThreadSize: orderSpec.threadSize,
       screwLengthMm: orderSpec.lengthMm,
+      includesElasticFastener: Boolean(orderSpec.includesElasticFastener),
       colorId: String(config.colorId || ''),
       colorName: String(config.colorName || ''),
       quantity,

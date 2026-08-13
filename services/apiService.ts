@@ -193,6 +193,15 @@ class ApiServiceClass {
     return responsePayload ?? {};
   }
 
+  async getProfileInventory(): Promise<Array<{ variantId: string; colorId: string; totalMeters: number }>> {
+    const data = await this.request('GET', '/profiles/inventory');
+    return Array.isArray(data?.inventory) ? data.inventory.map((row: any) => ({
+      variantId: String(row.variant_id || ''),
+      colorId: String(row.color_id || ''),
+      totalMeters: Number(row.total_meters || 0),
+    })) : [];
+  }
+
   // ===== AUTH =====
   async register(phone: string, password: string, username: string) {
     const data = await this.request('POST', '/auth/register', {

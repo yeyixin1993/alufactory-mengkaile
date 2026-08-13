@@ -54,6 +54,9 @@ export interface TappingConfig {
 
 export interface DrillHole {
   id: string;
+  // Stable generated-joint identity. It makes one-click connection generation
+  // idempotent while keeping the hole editable like an ordinary manual hole.
+  jointKey?: string;
   side: ProfileSide;
   positionMm: number;
   type: HoleType;
@@ -62,6 +65,10 @@ export interface DrillHole {
   // holes continue to use the default hole-type-to-screw mapping.
   fastenerHead?: ScrewHeadType;
   fastenerLengthMm?: number;
+  // Ordinary screws enter the source profile from the marked face. A value
+  // of "outward" is used when the marked through-hole is the exit side and
+  // the screw must travel from that face into an adjacent tapped profile.
+  fastenerDirection?: 'inward' | 'outward';
   // Canonical slot on the physical extrusion. C/D face drawings mirror this index.
   physicalGrooveIndex?: number;
   // Entry-face display index retained for older saved orders and human-readable exports.

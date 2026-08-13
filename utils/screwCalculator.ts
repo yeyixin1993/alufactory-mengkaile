@@ -5,6 +5,7 @@ export const SCREW_304_UNIT_PRICE = 0.5;
 export interface DiyScrewOrderSpec {
   threadSize: ThreadSize;
   lengthMm: number;
+  includesElasticFastener?: boolean;
 }
 
 const DIY_SCREW_ORDER_SPECS: Partial<Record<string, Partial<Record<ScrewHeadType, DiyScrewOrderSpec>>>> = {
@@ -14,6 +15,10 @@ const DIY_SCREW_ORDER_SPECS: Partial<Record<string, Partial<Record<ScrewHeadType
     socket_cylinder: { threadSize: 'M6', lengthMm: 30 },
     button_socket: { threadSize: 'M6', lengthMm: 20 },
     flat_socket: { threadSize: 'M6', lengthMm: 8 },
+  },
+  '3030': {
+    socket_cylinder: { threadSize: 'M8', lengthMm: 45 },
+    button_socket: { threadSize: 'M8', lengthMm: 20, includesElasticFastener: true },
   },
 };
 

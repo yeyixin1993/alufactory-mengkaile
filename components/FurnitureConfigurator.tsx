@@ -4,11 +4,13 @@ import { Language, ProductType } from '../types';
 import {
   buildCalligraphyCabinetTemplate,
   buildWardrobeTemplate,
+  CALLIGRAPHY_MAX_HEIGHT_MM,
   CALLIGRAPHY_MAX_LENGTH_MM,
   CALLIGRAPHY_OUTER_DEPTH_MM,
   DIY_TEMPLATE_STORAGE_PREFIX,
   getCalligraphyCabinetDimensions,
   getCalligraphyGridForBounds,
+  getWardrobeStorageLayerLimit,
   MAX_FURNITURE_PROFILE_MM,
   ParametricTemplatePayload,
 } from '../utils/parametricFurniture';
@@ -22,45 +24,48 @@ const COPY = {
   cn: {
     gridMode: '按层数和列数', sizeMode: '按空间上限', columns: '列数', layers: '层数',
     totalLength: '最长不能超过 (mm)', totalWidth: '整体宽/深 (mm)', totalHeight: '最高不能超过 (mm)',
-    generatedSize: '实际生成尺寸', requestedLimit: '这里填写柜体允许占用的最大长度和最大高度。系统会在不超过这两个上限的前提下，生成可容纳最多列、最多层篓子的完整柜体；实际尺寸通常小于输入值，并非按输入尺寸严丝合缝定做。整片12mm海洋板顶板同时限制整体长不超过2440mm。',
+    generatedSize: '实际生成尺寸', requestedLimit: '这里填写柜体允许占用的最大长度和最大高度。系统会在不超过这两个上限的前提下，生成可容纳最多列、最多层篓子的完整柜体；实际尺寸通常小于输入值，并非按输入尺寸严丝合缝定做。舒法特柜最长不超过3000mm、最高不超过1600mm。',
     calligraphyTitle: '舒法特篓子柜参数化生成', calligraphyHint: '每格按300×420×100mm篓子预留；中间承托层距130mm，柜体固定深度460mm。',
-    wardrobeTitle: '12根型材衣柜框架', wardrobeHint: '上下横向使用2020，四根纵向立柱使用2040。',
+    wardrobeTitle: '参数化衣柜框架', wardrobeHint: '先生成12根型材外框，再为每个收纳层增加四根2020横杆和八个1号角码；任一型材最长不超过3000mm。进入设计器后会自动启用柜门。',
     length: '长 (mm)', width: '宽/深 (mm)', height: '高 (mm)',
+    wardrobeLayers: '收纳层数', wardrobeGenerated: '实际型材数量',
     profileSummary: '型材配置', machiningSummary: '加工配置',
-    calligraphyProfiles: '全部2020；最底和最顶各有一层与横梁同高的框架深度梁且不装层板托；中间每层每道分隔线共用一根420mm承托梁并安装层板托；顶部12mm海洋板。',
+    calligraphyProfiles: '全部2020；最底和最顶各有一层与横梁同高的框架深度梁且不装层板托；中间每层每道分隔线共用一根420mm承托梁并安装层板托；顶部为12mm海洋板，超过2440mm时在型材分隔线上自动分成两片。',
     calligraphyMachining: '5层柜共有底框+5层篮筐承托+顶框共7层深度梁；孔位从底端130mm起按130mm递增，最后一孔距立柱顶端65mm；全部型材两端攻丝并默认配螺丝。',
-    wardrobeProfiles: '共12根：8根横向2020 + 4根纵向2040。',
-    wardrobeMachining: '2040以20面朝外、40面朝侧面；两根2020横压2040并各用沉头螺丝固定，2020之间用通孔扁头M6×8；全部型材两端攻丝并默认配螺丝。',
+    wardrobeProfiles: '基础外框12根：8根横向2020 + 4根纵向2040；每个中间收纳层由前、后、左、右共4根2020横杆组成完整四边框。',
+    wardrobeMachining: '收纳层在上下框之间均匀分布；前后2020横杆均接在2040宽面靠柜体内部的槽位，前后镜像保持同一规则。四根横杆与四根立柱形成8个接点，每处使用1个1号角码，角码两条90°贴边分别紧贴横杆和立柱。层框不做打孔攻丝连接，2040立柱也不增加对应层孔。设计器会识别正面框架，可自动添加四周留2mm的柜门。',
     generate: '生成并进入3D设计器', editable: '3D设计器将在新标签页打开；生成后可继续移动、改尺寸、改孔位并人工审核。',
     supportPricing: '层板托按实际长度计价：氧化本色8元/米，彩色截面本色10元/米，彩色截面彩色12元/米。',
   },
   en: {
     gridMode: 'Rows & columns', sizeMode: 'Space limits', columns: 'Columns', layers: 'Layers',
     totalLength: 'Maximum allowed length (mm)', totalWidth: 'Fixed depth (mm)', totalHeight: 'Maximum allowed height (mm)',
-    generatedSize: 'Generated size', requestedLimit: 'Enter the maximum length and height the cabinet may occupy. The system generates the complete cabinet with the most basket columns and layers that fit within both limits. The actual size will usually be smaller than the entered limits; it is not built to match them exactly. The one-piece 12 mm marine-board top also caps overall length at 2440 mm.',
+    generatedSize: 'Generated size', requestedLimit: 'Enter the maximum length and height the cabinet may occupy. The system generates the complete cabinet with the most basket columns and layers that fit within both limits. The actual size will usually be smaller than the entered limits; it is not built to match them exactly. The cabinet is capped at 3000 mm long and 1600 mm high.',
     calligraphyTitle: 'Parametric calligraphy basket cabinet', calligraphyHint: 'Each bay fits a 300×420×100 mm basket; intermediate support pitch is 130 mm and cabinet depth is fixed at 460 mm.',
-    wardrobeTitle: '12-profile wardrobe frame', wardrobeHint: 'Horizontal members use 2020; the four vertical posts use 2040.',
+    wardrobeTitle: 'Parametric wardrobe frame', wardrobeHint: 'Start with the 12-profile outer frame, then add four 2020 rails and eight No.1 brackets per storage level. No profile may exceed 3000 mm. Cabinet doors are enabled automatically in the designer.',
     length: 'Length (mm)', width: 'Width/depth (mm)', height: 'Height (mm)',
+    wardrobeLayers: 'Storage levels', wardrobeGenerated: 'Total profiles',
     profileSummary: 'Profile configuration', machiningSummary: 'Machining',
-    calligraphyProfiles: 'All 2020. Frame-only depth rails sit level with the bottom and top cross rails and receive no shelf supports. Every intermediate basket level has one shared 420 mm support rail per divider, plus a 12 mm marine-board top.',
+    calligraphyProfiles: 'All 2020. Frame-only depth rails sit level with the bottom and top cross rails and receive no shelf supports. Every intermediate basket level has one shared 420 mm support rail per divider. The 12 mm marine-board top is split on a supported profile divider when the cabinet exceeds 2440 mm.',
     calligraphyMachining: 'A five-layer cabinet has seven depth levels. Upright holes start 130 mm from the bottom, repeat every 130 mm, and the final hole is 65 mm from the upright top. All profiles are tapped at both ends with screws prefilled.',
-    wardrobeProfiles: '12 members: eight horizontal 2020 rails and four vertical 2040 posts.',
-    wardrobeMachining: 'Each 2040 shows its 20 mm face outward and 40 mm face to the side. Two perpendicular 2020 rails cap it with countersunk screws; the 2020-to-2020 joint uses a through-hole M6×8 flat-head screw. All profiles are tapped at both ends and screws are prefilled.',
+    wardrobeProfiles: 'The outer frame has 12 members: eight horizontal 2020 rails and four vertical 2040 posts. Every internal storage level is a complete rectangle made from four 2020 rails.',
+    wardrobeMachining: 'Storage levels are evenly spaced between the top and bottom frames. Both front and rear 2020 rails use the inward-facing groove of each 2040 wide face, mirrored consistently front-to-back. The four rails make eight rail-to-post contacts, each with one No.1 bracket whose perpendicular seating edges are flush to the rail and post. Shelf-frame drill-and-tap machining and matching post holes are omitted. The designer detects the front frame and can add a door with a 2mm perimeter margin.',
     generate: 'Generate in 3D designer', editable: 'The 3D designer opens in a new tab; the generated assembly remains editable and must be reviewed before ordering.',
     supportPricing: 'Shelf supports are priced by actual length: natural anodized ¥8/m, colored with a natural section ¥10/m, and colored with a colored section ¥12/m.',
   },
   jp: {
     gridMode: '段数・列数で指定', sizeMode: '設置上限で指定', columns: '列数', layers: '段数',
     totalLength: '超えられない最大全長 (mm)', totalWidth: '固定奥行 (mm)', totalHeight: '超えられない最大高さ (mm)',
-    generatedSize: '生成寸法', requestedLimit: 'キャビネットを設置できる最大全長と最大高さを入力してください。両方の上限を超えない範囲で、かごの列数・段数が最大になる完成形を生成します。実寸は通常、入力した上限より小さく、入力寸法ぴったりに製作する指定ではありません。12mmマリンボード天板を一枚物にするため、全長は2440mm以下です。',
+    generatedSize: '生成寸法', requestedLimit: 'キャビネットを設置できる最大全長と最大高さを入力してください。両方の上限を超えない範囲で、かごの列数・段数が最大になる完成形を生成します。実寸は通常、入力した上限より小さく、入力寸法ぴったりに製作する指定ではありません。最大長さは3000mm、最大高さは1600mmです。',
     calligraphyTitle: '書道バスケット棚のパラメトリック生成', calligraphyHint: '各区画は300×420×100mm、中間棚受けピッチ130mm、棚奥行は460mm固定です。',
-    wardrobeTitle: '12本プロファイルのワードローブ枠', wardrobeHint: '横材は2020、4本の縦柱は2040を使用します。',
+    wardrobeTitle: 'パラメトリックワードローブ枠', wardrobeHint: '12本の外枠に加え、収納段ごとに2020横材4本と1号ブラケット8個を追加します。形材は最長3000mmです。デザイナーでは扉機能が自動で有効になります。',
     length: '長さ (mm)', width: '幅／奥行 (mm)', height: '高さ (mm)',
+    wardrobeLayers: '収納段数', wardrobeGenerated: '形材の合計本数',
     profileSummary: 'プロファイル構成', machiningSummary: '加工構成',
-    calligraphyProfiles: '全て2020。最下部と最上部は横材と同じ高さの枠用奥行材で棚受けなし。中間の各かご段は仕切り線ごとに420mm棚受け材を1本共有し、天板は12mmマリンボード。',
+    calligraphyProfiles: '全て2020。最下部と最上部は横材と同じ高さの枠用奥行材で棚受けなし。中間の各かご段は仕切り線ごとに420mm棚受け材を1本共有。12mmマリンボード天板は2440mmを超える場合、形材仕切り上で2枚に分割します。',
     calligraphyMachining: '5段棚は下枠＋かご5段＋上枠の計7段。縦柱の穴は下端130mmから130mm間隔で、最後の穴から上端までは65mm。全形材を両端タップし、ねじを初期配置します。',
-    wardrobeProfiles: '合計12本：横材2020が8本、縦柱2040が4本。',
-    wardrobeMachining: '2040は20mm面を外向き、40mm面を側面向きに配置。直交する2本の2020を皿ねじで2040端面に固定し、2020同士は通し穴のM6×8低頭ねじで接続。全形材を両端タップし、ねじを初期配置します。',
+    wardrobeProfiles: '外枠は12本（横材2020が8本、縦柱2040が4本）。各中間収納段は前後左右4本の2020横材で完全な四辺枠を構成します。',
+    wardrobeMachining: '収納段は上下枠の間に等間隔で配置。前後の2020横材はどちらも2040幅広面の庫内側の溝へ、前後対称の同一規則で接続します。4本の横材と4本の柱の8接点に1号ブラケットを置き、直角の2辺を横材と柱へ密着させます。棚枠の穴あけ・タップ接続と2040柱の対応穴は追加しません。正面枠を検出すると四周2mm余白の扉を自動追加できます。',
     generate: '3Dデザイナーで生成', editable: '3Dデザイナーは新しいタブで開きます。生成後も移動・寸法・穴位置を編集し、注文前に確認できます。',
     supportPricing: '棚受けは実長で計算します：ナチュラルアルマイト8元/m、カラー・ナチュラル断面10元/m、カラー・カラー断面12元/m。',
   },
@@ -108,6 +113,9 @@ const FurnitureConfigurator: React.FC<FurnitureConfiguratorProps> = ({ language,
   const [wardrobeLength, setWardrobeLength] = useState(1200);
   const [wardrobeWidth, setWardrobeWidth] = useState(600);
   const [wardrobeHeight, setWardrobeHeight] = useState(2200);
+  const [wardrobeLayers, setWardrobeLayers] = useState(5);
+  const wardrobeLayerLimit = getWardrobeStorageLayerLimit(wardrobeHeight);
+  const effectiveWardrobeLayers = Math.min(wardrobeLayers, wardrobeLayerLimit);
 
   const calligraphyDimensions = useMemo(() => (
     mode === 'grid'
@@ -118,7 +126,7 @@ const FurnitureConfigurator: React.FC<FurnitureConfiguratorProps> = ({ language,
   const generate = () => {
     const payload = isCalligraphy
       ? buildCalligraphyCabinetTemplate(calligraphyDimensions.columns, calligraphyDimensions.layers)
-      : buildWardrobeTemplate(wardrobeLength, wardrobeWidth, wardrobeHeight);
+      : buildWardrobeTemplate(wardrobeLength, wardrobeWidth, wardrobeHeight, effectiveWardrobeLayers);
     openTemplateInDesigner(payload);
   };
 
@@ -142,13 +150,13 @@ const FurnitureConfigurator: React.FC<FurnitureConfiguratorProps> = ({ language,
           </div>
           {mode === 'grid' ? (
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-              <NumericInput label={copy.columns} value={columns} min={1} max={7} onChange={setColumns} />
-              <NumericInput label={copy.layers} value={layers} min={1} max={22} onChange={setLayers} />
+              <NumericInput label={copy.columns} value={columns} min={1} max={9} onChange={setColumns} />
+              <NumericInput label={copy.layers} value={layers} min={1} max={11} onChange={setLayers} />
             </div>
           ) : (
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <NumericInput label={copy.totalLength} value={targetLength} min={340} max={CALLIGRAPHY_MAX_LENGTH_MM} onChange={setTargetLength} />
-              <NumericInput label={copy.totalHeight} value={targetHeight} min={235} max={MAX_FURNITURE_PROFILE_MM} onChange={setTargetHeight} />
+              <NumericInput label={copy.totalHeight} value={targetHeight} min={235} max={CALLIGRAPHY_MAX_HEIGHT_MM} onChange={setTargetHeight} />
             </div>
           )}
           <div className="grid grid-cols-1 gap-3 rounded-2xl border border-blue-100 bg-blue-50/70 p-4 sm:grid-cols-3">
@@ -159,10 +167,17 @@ const FurnitureConfigurator: React.FC<FurnitureConfiguratorProps> = ({ language,
           {mode === 'size' && <p className="text-xs font-bold text-amber-700">{copy.requestedLimit}</p>}
         </>
       ) : (
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+        <div className="space-y-3">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
           <NumericInput label={copy.length} value={wardrobeLength} min={400} max={MAX_FURNITURE_PROFILE_MM} onChange={setWardrobeLength} />
           <NumericInput label={copy.width} value={wardrobeWidth} min={300} max={MAX_FURNITURE_PROFILE_MM} onChange={setWardrobeWidth} />
           <NumericInput label={copy.height} value={wardrobeHeight} min={500} max={MAX_FURNITURE_PROFILE_MM} onChange={setWardrobeHeight} />
+          <NumericInput label={copy.wardrobeLayers} value={effectiveWardrobeLayers} min={1} max={wardrobeLayerLimit} onChange={setWardrobeLayers} />
+          </div>
+          <div className="grid grid-cols-2 gap-3 rounded-2xl border border-blue-100 bg-blue-50/70 p-4">
+            <div><div className="text-[10px] font-black uppercase text-blue-400">{copy.wardrobeLayers}</div><div className="mt-1 font-black text-blue-950">{effectiveWardrobeLayers}</div></div>
+            <div><div className="text-[10px] font-black uppercase text-blue-400">{copy.wardrobeGenerated}</div><div className="mt-1 font-black text-blue-950">{12 + effectiveWardrobeLayers * 4}</div></div>
+          </div>
         </div>
       )}
 

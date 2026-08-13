@@ -3,10 +3,18 @@ from flask_jwt_extended import jwt_required, get_jwt_identity
 from datetime import datetime
 from app.models.user import db, User, Profile
 from app.shipping_phone import SHIPPING_PHONE_ERROR, validate_shipping_phone
+from app.profile_inventory import aggregate_public_stock, seed_profile_inventory
 import uuid
 import base64
 
 profile_bp = Blueprint('profiles', __name__, url_prefix='/api/profiles')
+
+
+@profile_bp.route('/inventory', methods=['GET'])
+def get_profile_inventory():
+    """Public stock availability expressed only as total remaining meters."""
+    seed_profile_inventory()
+    return jsonify({'inventory': aggregate_public_stock()}), 200
 
 
 @profile_bp.route('', methods=['GET'])

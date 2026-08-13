@@ -1,7 +1,7 @@
 from flask import Blueprint, request, jsonify, Response, current_app, send_file
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from datetime import datetime
-from app.models.user import db, User, Order, Profile
+from app.models.user import db, User, Order, Profile, ProfileInventory
 from app.models.user import Cart
 from app.models.user import normalize_membership_level
 from app.order_utils import build_order_pdf_filename
@@ -16,8 +16,62 @@ from app.product_order_db import (
 import uuid
 import base64
 import os
+from collections import defaultdict
+from app.profile_inventory import (
+    ALLOWED_BAR_LENGTHS,
+    INVENTORY_COLORS,
+    PROFILE_COLORS,
+    aggregate_public_stock,
+    apply_inventory_records,
+    build_inventory_xlsx,
+    parse_inventory_xlsx,
+    seed_profile_inventory,
+)
 
 admin_bp = Blueprint('admin', __name__, url_prefix='/api/admin')
+
+PAID_ORDER_STATUSES = ('confirmed', 'shipped', 'delivered')
+
+
+def _profile_usage_from_order(order):
+    totals = defaultdict(float)
+    for item in list(order.items or []):
+        if str(item.product_type or '').upper() != 'PROFILE':
+            continue
+        config = item.config if isinstance(item.config, dict) else {}
+        variant_id = str(config.get('variantId') or config.get('variant_id') or item.product_id or 'unknown')
+        color_id = str(config.get('colorId') or config.get('color_id') or 'natural')
+        try:
+            length_m = max(0.0, float(config.get('length') or 0) / 1000.0)
+            quantity = max(0, int(item.quantity or 0))
+        except (TypeError, ValueError):
+            continue
+        totals[(variant_id, color_id)] += length_m * quantity
+    return totals
+
+
+def _monthly_revenue_and_color_usage(orders):
+    monthly_revenue = defaultdict(float)
+    color_usage = defaultdict(float)
+    for order in orders:
+        if order.status not in PAID_ORDER_STATUSES:
+            continue
+        month = (order.paid_at or order.created_at or datetime.utcnow()).strftime('%Y-%m')
+        monthly_revenue[month] += float(order.total_amount or 0)
+        for (_, color_id), meters in _profile_usage_from_order(order).items():
+            if color_id != 'natural':
+                color_usage[color_id] += meters
+    return (
+        [{'month': month, 'revenue': round(value, 2)} for month, value in sorted(monthly_revenue.items())],
+        [
+            {
+                'color_id': color_id,
+                'color_name': PROFILE_COLORS.get(color_id, color_id),
+                'meters': round(meters, 3),
+            }
+            for color_id, meters in sorted(color_usage.items(), key=lambda item: (-item[1], item[0]))[:5]
+        ],
+    )
 
 def admin_required(f):
     """Decorator to check if user is admin"""
@@ -622,8 +676,9 @@ def get_statistics():
         delivered_orders = Order.query.filter_by(status='delivered').count()
         
         total_revenue = db.session.query(db.func.sum(Order.total_amount)).filter(
-            Order.status.in_(['confirmed', 'shipped', 'delivered'])
+            Order.status.in_(PAID_ORDER_STATUSES)
         ).scalar() or 0
+        monthly_revenue, top_profile_colors = _monthly_revenue_and_color_usage(Order.query.all())
         
         return jsonify({
             'total_users': total_users,
@@ -633,12 +688,93 @@ def get_statistics():
             'paid_orders': paid_orders,
             'shipped_orders': shipped_orders,
             'delivered_orders': delivered_orders,
-            'total_revenue': float(total_revenue)
+            'total_revenue': float(total_revenue),
+            'monthly_revenue': monthly_revenue,
+            'top_profile_colors': top_profile_colors,
         }), 200
     except Exception as e:
         import traceback
         current_app.logger.error(f'Statistics error: {traceback.format_exc()}')
         return jsonify({'error': f'Failed to load statistics: {str(e)}'}), 500
+
+
+@admin_bp.route('/profile-inventory', methods=['GET'])
+@admin_required
+def get_profile_inventory_admin():
+    seed_profile_inventory()
+    rows = ProfileInventory.query.filter(
+        ProfileInventory.color_id.in_(INVENTORY_COLORS),
+        ProfileInventory.bar_length_m.in_(ALLOWED_BAR_LENGTHS),
+    ).order_by(
+        ProfileInventory.variant_id.asc(),
+        ProfileInventory.color_id.asc(),
+        ProfileInventory.bar_length_m.asc(),
+    ).all()
+    return jsonify({
+        'inventory': [row.to_dict() for row in rows],
+        'public_totals': aggregate_public_stock(),
+        'color_names': INVENTORY_COLORS,
+    }), 200
+
+
+@admin_bp.route('/profile-inventory/<int:inventory_id>', methods=['PUT'])
+@admin_required
+def update_profile_inventory(inventory_id):
+    row = ProfileInventory.query.filter(
+        ProfileInventory.id == inventory_id,
+        ProfileInventory.color_id.in_(INVENTORY_COLORS),
+        ProfileInventory.bar_length_m.in_(ALLOWED_BAR_LENGTHS),
+    ).first()
+    if not row:
+        return jsonify({'error': 'Inventory row not found'}), 404
+    data = request.get_json(silent=True) or {}
+    try:
+        bar_count = int(data.get('bar_count'))
+    except (TypeError, ValueError):
+        return jsonify({'error': 'bar_count must be an integer'}), 400
+    if bar_count < 0:
+        return jsonify({'error': 'bar_count cannot be negative'}), 400
+    row.bar_count = bar_count
+    row.updated_at = datetime.utcnow()
+    db.session.commit()
+    return jsonify({'inventory': row.to_dict()}), 200
+
+
+@admin_bp.route('/profile-inventory/export', methods=['GET'])
+@admin_required
+def export_profile_inventory():
+    seed_profile_inventory()
+    rows = ProfileInventory.query.filter(
+        ProfileInventory.color_id.in_(INVENTORY_COLORS),
+        ProfileInventory.bar_length_m.in_(ALLOWED_BAR_LENGTHS),
+    ).order_by(
+        ProfileInventory.variant_id.asc(),
+        ProfileInventory.color_id.asc(),
+        ProfileInventory.bar_length_m.asc(),
+    ).all()
+    return send_file(
+        build_inventory_xlsx(rows),
+        as_attachment=True,
+        download_name=f'型材库存-{datetime.utcnow().strftime("%Y%m%d")}.xlsx',
+        mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    )
+
+
+@admin_bp.route('/profile-inventory/import', methods=['POST'])
+@admin_required
+def import_profile_inventory():
+    upload = request.files.get('file')
+    if upload is None or not upload.filename:
+        return jsonify({'error': '请选择要上传的Excel文件'}), 400
+    if not upload.filename.lower().endswith('.xlsx'):
+        return jsonify({'error': '仅支持.xlsx格式'}), 400
+    try:
+        records = parse_inventory_xlsx(upload.stream)
+        updated = apply_inventory_records(records)
+        return jsonify({'message': '库存导入成功', 'updated': updated}), 200
+    except (ValueError, KeyError, OSError) as error:
+        db.session.rollback()
+        return jsonify({'error': str(error)}), 400
 
 
 @admin_bp.route('/profiles', methods=['GET'])

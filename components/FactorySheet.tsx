@@ -569,7 +569,11 @@ const FactorySheet: React.FC<FactorySheetProps> = ({ cart, user, language, order
               <tbody>
                 {diyScrewRows.map((row, rowIndex) => {
                   const screwType = row.screwHead === 'button_socket'
-                    ? (language === 'cn' ? '半圆头内六角' : language === 'jp' ? '六角穴付きボタンボルト' : 'Button-head socket')
+                    ? (language === 'cn'
+                      ? `半圆头内六角${row.includesElasticFastener ? '+弹性扣件' : ''}`
+                      : language === 'jp'
+                        ? `六角穴付きボタンボルト${row.includesElasticFastener ? '+ばね金具' : ''}`
+                        : `Button-head socket${row.includesElasticFastener ? ' + spring fastener' : ''}`)
                     : row.screwHead === 'flat_socket'
                       ? (language === 'cn' ? '扁头内六角' : language === 'jp' ? '六角穴付き低頭ボルト' : 'Flat-head socket')
                       : (language === 'cn' ? '圆柱头内六角' : language === 'jp' ? '六角穴付き円筒頭ボルト' : 'Cylinder-head socket');
@@ -871,6 +875,13 @@ const FactorySheet: React.FC<FactorySheetProps> = ({ cart, user, language, order
                       <div><span className="text-slate-400">{language === 'cn' ? '宽' : language === 'jp' ? '幅' : 'Width'}:</span> <span className="font-black">{cfg.width ?? '-'}mm</span></div>
                       <div><span className="text-slate-400">{language === 'cn' ? '高' : language === 'jp' ? '高さ' : 'Height'}:</span> <span className="font-black">{cfg.height ?? '-'}mm</span></div>
                       <div><span className="text-slate-400">{language === 'cn' ? '颜色' : language === 'jp' ? '色' : 'Color'}:</span> <span className="font-black">{resolveBoardColorLabel(cfg, language, item.product.type)}</span></div>
+                      {cfg.cabinetDoor && (
+                        <>
+                          <div><span className="text-slate-400">{language === 'cn' ? '柜门材料' : language === 'jp' ? '扉材質' : 'Door Material'}:</span> <span className="font-black">{cfg.doorMaterial === 'marine' ? (language === 'cn' ? '海洋板门' : language === 'jp' ? 'マリンボード扉' : 'Marine-board door') : cfg.doorMaterial === 'pegboard' ? (language === 'cn' ? '铝洞洞板门' : language === 'jp' ? 'アルミペグボード扉' : 'Aluminum pegboard door') : (language === 'cn' ? '铝柜门' : language === 'jp' ? 'アルミ扉' : 'Aluminum door')}</span></div>
+                          <div><span className="text-slate-400">{language === 'cn' ? '覆盖方式' : language === 'jp' ? 'かぶせ方式' : 'Overlay'}:</span> <span className="font-black">{cfg.doorOverlay === 'half' ? (language === 'cn' ? '半盖' : language === 'jp' ? '半かぶせ' : 'Half overlay') : cfg.doorOverlay === 'inset' ? (language === 'cn' ? '大弯（不盖型材）' : language === 'jp' ? 'インセット' : 'Inset') : (language === 'cn' ? '全盖' : language === 'jp' ? '全かぶせ' : 'Full overlay')}</span></div>
+                          <div><span className="text-slate-400">{language === 'cn' ? '开门方向' : language === 'jp' ? '開き方向' : 'Opening'}:</span> <span className="font-black">{cfg.openingSide === 'right' ? (language === 'cn' ? '右开' : language === 'jp' ? '右開き' : 'Right') : (language === 'cn' ? '左开' : language === 'jp' ? '左開き' : 'Left')}</span></div>
+                        </>
+                      )}
                       {item.product.type === ProductType.PEGBOARD && (
                         <div><span className="text-slate-400">{language === 'cn' ? '孔型' : language === 'jp' ? '穴形状' : 'Hole Pattern'}:</span> <span className="font-black">{cfg.pegHolePatternName || (language === 'cn' ? '宜家孔（竖向长圆孔）' : language === 'jp' ? 'IKEA穴（縦長穴）' : 'IKEA holes (vertical slots)')}</span></div>
                       )}
@@ -938,8 +949,8 @@ const FactorySheet: React.FC<FactorySheetProps> = ({ cart, user, language, order
                         const rx = areaX + (areaW - rw) / 2;
                         const ry = areaY + (areaH - rh) / 2;
 
-                        const isPegboard = item.product.id === 'p1';
-                        const isDoor = item.product.id === 'p3';
+                        const isPegboard = item.product.id === 'p1' || cfg.doorMaterial === 'pegboard';
+                        const isDoor = item.product.id === 'p3' || cfg.cabinetDoor === true;
 
                         return (
                           <>

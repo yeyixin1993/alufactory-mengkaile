@@ -275,6 +275,36 @@ class OrderItem(db.Model):
             'created_at': self.created_at.isoformat(),
         }
 
+
+class ProfileInventory(db.Model):
+    """Raw profile stock, tracked as full bars by model, color and bar length."""
+    __tablename__ = 'profile_inventory'
+    __table_args__ = (
+        db.UniqueConstraint('variant_id', 'color_id', 'bar_length_m', name='uq_profile_inventory_sku'),
+    )
+
+    id = db.Column(db.Integer, primary_key=True, autoincrement=True)
+    variant_id = db.Column(db.String(50), nullable=False, index=True)
+    color_id = db.Column(db.String(50), nullable=False, index=True)
+    bar_length_m = db.Column(db.Float, nullable=False)
+    bar_count = db.Column(db.Integer, nullable=False, default=0)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    @property
+    def total_meters(self):
+        return round(float(self.bar_length_m or 0) * int(self.bar_count or 0), 3)
+
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'variant_id': self.variant_id,
+            'color_id': self.color_id,
+            'bar_length_m': float(self.bar_length_m or 0),
+            'bar_count': int(self.bar_count or 0),
+            'total_meters': self.total_meters,
+            'updated_at': self.updated_at.isoformat() if self.updated_at else None,
+        }
+
 class Profile(db.Model):
     """Store user profile data with PDF uploads"""
     __tablename__ = 'profiles'

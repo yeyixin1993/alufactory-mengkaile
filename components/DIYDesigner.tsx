@@ -7,6 +7,8 @@ import {
   Box,
   CircleDot,
   ChevronDown,
+  ChevronLeft,
+  ChevronRight,
   Copy,
   Download,
   Eye,
@@ -14,7 +16,9 @@ import {
   FileSpreadsheet,
   Grid3X3,
   Hammer,
+  Home,
   Maximize2,
+  MousePointer2,
   Move3D,
   Paintbrush,
   PanelTop,
@@ -86,13 +90,20 @@ type DIYItemKind =
   | 'tee_connector'
   | 'shelf_support'
   | 'screw'
-  | 'foot';
+  | 'foot'
+  | 'caster'
+  | 'end_cap'
+  | 'cabinet_door';
 
 type Vec3 = [number, number, number];
 type RotationAxisIndex = 0 | 1 | 2;
 type DIYScrewHead = ScrewHeadType;
 type DIYAccessoryProfileSize = '1515' | '2020' | '3030' | '4040';
+type DIYAccessoryThreadSize = 'M6' | 'M8' | 'M10' | 'M12';
 type DIYConnectionKind = 'connector' | 'extruded_connector' | 'hidden_connector' | 'l_connector' | 't_connector' | 'tee_connector';
+type DIYAutoConnectionMode = 'corner_bracket' | 'slot_connector' | 'drill_tap';
+type DIYDoorMaterial = 'aluminum' | 'marine' | 'pegboard';
+type DIYDoorOverlay = 'full' | 'half' | 'inset';
 
 interface DIYSceneItem {
   id: string;
@@ -113,6 +124,13 @@ interface DIYSceneItem {
   finish?: ProfileFinish;
   accessoryPrice?: number;
   accessoryProfileSize?: DIYAccessoryProfileSize;
+  accessoryThreadSize?: DIYAccessoryThreadSize;
+  hasBrake?: boolean;
+  attachedEnd?: 'left' | 'right';
+  autoAddedTapping?: boolean;
+  doorMaterial?: DIYDoorMaterial;
+  doorOverlay?: DIYDoorOverlay;
+  openingSide?: 'left' | 'right';
   remark?: string;
   screwHead?: DIYScrewHead;
   linkedProfileId?: string;
@@ -137,6 +155,14 @@ const ALUMINUM_PLATE_PRICE: Record<number, number> = { 1: 500, 2: 700, 3: 1000, 
 const PEGBOARD_PRICE: Record<number, number> = { 1: 780, 2: 1080, 3: 1380, 4: 1680, 5: 1980 };
 const MARINE_BOARD_PRICE: Record<number, number> = { 12: 155, 18: 200 };
 const MARINE_COLOR_SURCHARGE = 100;
+const CASTER_ESTIMATED_BASE_PRICE = 18;
+const CASTER_BRAKE_SURCHARGE = 4;
+const CASTER_THREAD_SURCHARGE: Record<DIYAccessoryThreadSize, number> = { M6: 0, M8: 0, M10: 2, M12: 4 };
+const FOOT_ESTIMATED_PRICE = 12;
+const END_CAP_ESTIMATED_PRICE = { natural: 6, colored: 8 };
+const DOOR_HINGE_UNIT_PRICE = 10;
+const VIP_PLUS_ALUMINUM_DOOR_PRICE = 420;
+const VIP_PLUS_PEGBOARD_DOOR_PRICE = 520;
 
 const COLOR_HEX: Record<string, string> = {
   natural: '#edf2f5',
@@ -166,10 +192,19 @@ const COLOR_HEX: Record<string, string> = {
 const isMarineNaturalColor = (colorId: string) => colorId === 'wood_natural' || colorId === 'natural';
 
 const getDesignerColorName = (colorId: string, language: Language, kind?: DIYItemKind) => {
+  if (kind === 'foot' && colorId === 'apple_gold') {
+    return { cn: '金色', en: 'Gold', jp: 'ゴールド' }[language];
+  }
   const source = kind === 'marine_board' ? MARINE_BOARD_COLORS : PROFILE_COLORS;
   const normalizedColorId = kind === 'marine_board' && colorId === 'natural' ? 'wood_natural' : colorId;
   return source.find((color) => color.id === normalizedColorId)?.name[language] || colorId;
 };
+
+const getSceneItemColorName = (item: DIYSceneItem, language: Language) => (
+  item.kind === 'marine_board' || (item.kind === 'cabinet_door' && item.doorMaterial === 'marine')
+    ? getMarineBoardOrderColorName(item.colorId, language)
+    : getDesignerColorName(item.colorId, language, item.kind)
+);
 
 const TEXT: Record<Language, Record<string, string>> = {
   cn: {
@@ -177,6 +212,8 @@ const TEXT: Record<Language, Record<string, string>> = {
     subtitle: '拖入型材、板材和配件，调整尺寸、颜色、孔位后直接加入购物车。',
     library: '零件库',
     project: '项目结构',
+    collapseProjectPanel: '收起项目结构，扩大设计区',
+    expandProjectPanel: '展开项目结构',
     properties: '参数与加工',
     empty: '选择一个零件以编辑参数',
     profile: '铝型材',
@@ -193,12 +230,69 @@ const TEXT: Record<Language, Record<string, string>> = {
     socketCylinderScrew: '圆柱头内六角螺丝',
     buttonSocketScrew: '半圆头内六角螺丝',
     flatSocketScrew: '扁头内六角螺丝',
+    elasticFastener: '弹性扣件',
     fillScrews: '一键填充螺丝',
     fillScrewsHint: '沉头孔自动配圆柱头内六角螺丝；通孔自动配半圆头内六角螺丝。默认使用银白/本色螺丝，螺纹孔不自动配螺丝。',
+    generateConnections: '编辑配件',
+    generateConnectionsHint: '先选择要编辑的配件类型。点击接点可单独添加、删除或替换，也可一键全添加或全删除当前类型。',
+    chooseConnectionType: '选择要编辑的配件类型',
+    applyAllConnections: '一键全添加',
+    deleteAllConnections: '一键全删除',
+    exitConnectionEdit: '退出编辑配件',
+    connectionAddable: '可添加',
+    connectionReplaceable: '可替换',
+    connectionInstalled: '已安装，点击删除',
+    cornerBracketConnection: '1号角码连接',
+    slotConnectorConnection: '5号角槽连接',
+    drillTapConnection: '打孔攻丝连接',
+    connectionsGenerated: '已生成连接',
+    connectionsDeleted: '已删除连接',
+    connectionsUpToDate: '所有符合条件的接点都已有该连接',
+    noConnectionsToDelete: '没有可删除的当前类型连接',
+    noCompatibleConnections: '没有找到接触到位的 2020/3030 垂直接点',
     screwsFilled: '已按孔位自动填充螺丝',
     screwsUpToDate: '所有可填充孔位都已配螺丝',
     linkedHole: '跟随孔位',
-    foot: '调平脚',
+    foot: '调整脚',
+    caster: '丝杆轮',
+    endCap: '铝型材端盖',
+    endCapTarget: '安装端面',
+    endCapSelectProfile: '请先选中要安装端盖的型材',
+    endCapBothOccupied: '这根型材两端都已安装端盖',
+    endCapInstalled: '两端端盖已补齐，并自动补齐需要的攻丝',
+    leftEnd: '左端',
+    rightEnd: '右端',
+    estimatedPrice: '预估价',
+    casterThread: '丝杆规格',
+    casterBrake: '刹车类型',
+    casterWithBrake: '带刹车',
+    casterWithoutBrake: '不带刹车',
+    adjustableHeight: '可调高度 (mm)',
+    footReferenceSpec: 'MayCAD 杯脚 · M8 螺杆 · 锁紧螺母 · 防滑底垫',
+    pricePending: '当前使用预估价，待正式目录价确认后更新',
+    fixedBlack: '固定暗夜黑 · 无彩色选项',
+    fixedGold: '金属本色 / 黑色底垫 · 无彩色选项',
+    cabinetDoor: '自动柜门',
+    doorNeedFrame: '检测到完整的正面型材框架后即可添加柜门',
+    doorFrameReady: '已检测到可安装柜门的正面框架',
+    doorAlreadyAdded: '这个框架已经安装了柜门',
+    doorSizeUnsupported: '单扇柜门最大1500×3000mm；当前开口需要拆分为多扇门',
+    doorMaterial: '柜门材料',
+    doorAluminum: '铝柜门',
+    doorMarine: '海洋板门',
+    doorPegboard: '铝洞洞板门',
+    doorOverlay: '铰链覆盖方式',
+    doorFullOverlay: '全盖（覆盖全部型材）',
+    doorHalfOverlay: '半盖（覆盖一半型材）',
+    doorHalfUnavailable: '暂未开放',
+    doorInsetOverlay: '大弯（内嵌，不盖型材）',
+    doorOpeningSide: '开门方向',
+    doorHinge: '铰链',
+    doorLeftOpen: '左开',
+    doorRightOpen: '右开',
+    doorAutoSize: '自动门尺寸',
+    doorMarginHint: '尺寸按框架覆盖范围自动计算，四周各留2mm。铰链和拉手位置会随开门方向显示。',
+    doorAdded: '柜门已按框架尺寸自动生成',
     shelfSupport: '层板托',
     shelfSupportFinish: '层板托截面/颜色',
     shelfSupportOxidized: '氧化本色 · 8元/米',
@@ -214,7 +308,7 @@ const TEXT: Record<Language, Record<string, string>> = {
     bracketSize: '角码边长 (mm)',
     connectorLength: '连接件长度 (mm)',
     screwOrderSpec: '订货规格',
-    screwRenderLengthHint: '3D装配长度会按连接位置自动适配，仅用于模型显示，不作为订货长度。',
+    screwRenderLengthHint: '3D螺丝长度与订货规格一致；3030半圆头套装同时包含弹性扣件。',
     oneHoleFaceHint: '隐藏连接件每个安装面仅设 1 个紧固孔。',
     connectionPlacementHint: '一键安装会吸附到最近的同规格接点并锁定；需要手动微调时先解锁。',
     addDemo: '生成示例工作台',
@@ -289,7 +383,7 @@ const TEXT: Record<Language, Record<string, string>> = {
     loaded: '已从本地 JSON 读取设计',
     templateLoaded: '参数化柜体已生成，可继续编辑并审核孔位',
     cartAdded: '设计清单已加入购物车',
-    dragHint: '选中后拖动即平移；按住 Shift 拖动型材则复制+平移。右键型材可旋转或删除；右上角可锁定 XY/XZ/YZ 工作平面。',
+    dragHint: '左键拖动画布旋转视角；右键拖动画布上下左右平移，滚轮前后缩放。选中零件后，左键拖动坐标箭头移动；仅选中型材时可拖动黑色箭头改变长度。右键短按零件打开操作菜单。',
     delete: '删除',
     duplicate: '复制',
     backToProject: '返回项目结构',
@@ -303,7 +397,11 @@ const TEXT: Record<Language, Record<string, string>> = {
     rotateStandard: '沿对应颜色箭头看过去，每次顺时针旋转 90°；连续点击 4 次即旋转 360°回到原位。型材与某色轴同向时，点击该颜色就是型材自转，可切换槽面或封边方向。',
     rotationStatus: '当前角度',
     sceneRotation: '场景旋转',
-    sceneContextHint: '右键零件可旋转或删除；右键拖动可旋转视角。',
+    sceneContextHint: '左键拖动旋转视角 · 右键拖动上下左右平移 · 滚轮前后缩放；选中零件后左键拖动六向坐标箭头移动，右键短按零件可旋转或删除。',
+    sceneOrbitControl: '左键拖动 · 旋转视角',
+    scenePanControl: '右键拖动 · 平移视角',
+    sceneZoomControl: '滚轮 · 前后缩放',
+    scenePartControl: '选中后：拖彩色轴移动；Shift+拖轴复制；Shift+空白拖动框选',
     interferenceWarning: '型材发生干涉，已标红。可继续移动或旋转，直到警告消失。',
     interference: '干涉',
     snapEnd: '磁吸：端点连接',
@@ -319,47 +417,54 @@ const TEXT: Record<Language, Record<string, string>> = {
     alignEnd: '后一位',
     connectedTo: '已连接到',
     frameAll: '显示全部',
+    resetView: '重置视图',
     transparentProfiles: '型材半透明',
     machiningMarks: '加工标注',
     machiningLegend: '加工符号',
     multiSelected: '批量选择',
-    shiftHint: 'Shift 点击可增减选择；从空白处 Shift 拖动可框选；从已选型材 Shift 拖动可复制并平移。',
+    shiftHint: 'Shift+单击可追加或取消选择；从空白处 Shift+拖动可框选；选中型材后 Shift+拖彩色轴可复制并平移。',
     newProfileLength: '选择型材规格与长度',
     addProfile: '添加型材',
+    freeDrawProfile: '自由绘制',
+    selectProfileModel: '选择型材型号',
+    freeDrawSelectProfile: '先选中一根型材，再进入自由绘制',
+    freeDrawHint: '短型材会跟随鼠标；左键点现有型材的端面、侧面或交汇点作为起点，移动鼠标可在 X / Y / Z 三轴之间转向，再次左键完成。会自动吸附端点并排除重叠方向。',
+    freeDrawOverlap: '该方向会与现有型材重叠，请移动鼠标切换到其他轴向',
+    restoreCursor: '恢复鼠标 (Esc)',
     cancel: '取消',
     apply: '应用',
     understood: '知道了',
     moveDistance: '平移距离',
     currentLength: '当前长度',
-    duplicateMove: 'Shift 复制 + 平移',
-    duplicateMoveHint: '复制操作：按住 Shift 拖动型材本体或平移箭头；也可输入平移距离后，按住 Shift 点击“应用”。两种方式都会保留原型材，并在指定方向和距离生成复制件。点击弹窗外可关闭。',
+    sceneLength: '长度',
+    connectionReady: '连接到位',
     language: '语言',
     undo: '撤销',
     redo: '重做',
     partsCount: '个零件',
     threadLabel: '螺纹规格',
     renderUnavailable: '当前设备无法启动 3D 渲染，请开启 WebGL 或更换较新的浏览器。',
-    workPlane: '拖动工作平面',
-    workPlaneAuto: '自动识别',
-    workPlaneXY: 'XY 正视平面',
-    workPlaneXZ: 'XZ 俯视平面',
-    workPlaneYZ: 'YZ 侧视平面',
-    workPlaneHint: '自由拖动只在选定平面内移动，隐藏轴不会意外跑远；红绿蓝箭头仍可单轴精确移动。',
     accessorySnap: '配件磁吸',
     oneClickInstall: '一键安装到接点',
     accessorySnapped: '配件已吸附并锁定',
     noCompatibleJoint: '未找到可用的同规格型材接点',
+    accessoryPlacementHint: '紫色位置可安装；移入可预览，左键点击完成。Esc 恢复鼠标。',
+    accessoryPlacementInvalid: '当前位置无法安装此配件',
+    accessoryPlacementSuccess: '配件添加成功，可继续选择紫色位置安装',
     replaceAccessory: '手动更换配件',
     lockLocation: '锁定位置',
     unlockLocation: '解锁位置',
     lockedLocation: '位置已锁定',
     attachedTo: '吸附型材',
+    attachedParts: '连接部件',
   },
   en: {
     title: 'Aluminum Profile 3D DIY Designer',
     subtitle: 'Drag profiles, panels and hardware into one assembly, then customize sizes, colors and machining.',
     library: 'Parts library',
     project: 'Project structure',
+    collapseProjectPanel: 'Collapse project panel and enlarge canvas',
+    expandProjectPanel: 'Expand project panel',
     properties: 'Properties & machining',
     empty: 'Select a part to edit it',
     profile: 'Aluminum profile',
@@ -376,12 +481,69 @@ const TEXT: Record<Language, Record<string, string>> = {
     socketCylinderScrew: 'Socket cylinder-head screw',
     buttonSocketScrew: 'Button-head socket screw',
     flatSocketScrew: 'Flat-head socket screw',
+    elasticFastener: 'spring fastener',
     fillScrews: 'Auto-fill screws',
     fillScrewsHint: 'Countersunk holes receive cylinder-head socket screws; through holes receive button-head socket screws. Screws default to natural silver; threaded holes are skipped.',
+    generateConnections: 'Edit accessories',
+    generateConnectionsHint: 'Choose an accessory type first. Click a joint to add, delete, or replace it, or add/delete the current type across all joints.',
+    chooseConnectionType: 'Choose accessory type',
+    applyAllConnections: 'Add all',
+    deleteAllConnections: 'Delete all',
+    exitConnectionEdit: 'Exit accessory editing',
+    connectionAddable: 'Add here',
+    connectionReplaceable: 'Replace here',
+    connectionInstalled: 'Installed · click to delete',
+    cornerBracketConnection: 'No.1 corner bracket',
+    slotConnectorConnection: 'No.5 slot connector',
+    drillTapConnection: 'Drill-and-tap joint',
+    connectionsGenerated: 'Connections generated',
+    connectionsDeleted: 'Connections deleted',
+    connectionsUpToDate: 'Every compatible joint already has this connection',
+    noConnectionsToDelete: 'No connection of this type can be deleted',
+    noCompatibleConnections: 'No aligned 2020/3030 perpendicular profile joint was found',
     screwsFilled: 'Screws filled from hole positions',
     screwsUpToDate: 'All eligible holes already have screws',
     linkedHole: 'Linked to hole',
     foot: 'Leveling foot',
+    caster: 'Threaded-stem caster',
+    endCap: 'Aluminum profile end cap',
+    endCapTarget: 'Installed end',
+    endCapSelectProfile: 'Select the profile that should receive the end cap first',
+    endCapBothOccupied: 'Both ends of this profile already have end caps',
+    endCapInstalled: 'Both end caps are complete; tapping was added automatically where required',
+    leftEnd: 'Left end',
+    rightEnd: 'Right end',
+    estimatedPrice: 'Estimated price',
+    casterThread: 'Stem thread',
+    casterBrake: 'Brake type',
+    casterWithBrake: 'With brake',
+    casterWithoutBrake: 'Without brake',
+    adjustableHeight: 'Adjustable height (mm)',
+    footReferenceSpec: 'MayCAD cup foot · M8 stem · lock nut · nonslip sole',
+    pricePending: 'Uses a provisional estimate until the official catalog price is confirmed',
+    fixedBlack: 'Fixed Midnight Black · no color options',
+    fixedGold: 'Natural metal / black sole · no color options',
+    cabinetDoor: 'Auto-fit cabinet door',
+    doorNeedFrame: 'Add a complete front profile frame to enable a cabinet door',
+    doorFrameReady: 'A compatible front frame is ready for a cabinet door',
+    doorAlreadyAdded: 'This frame already has a cabinet door',
+    doorSizeUnsupported: 'A single door is limited to 1500×3000mm; split this opening into multiple leaves',
+    doorMaterial: 'Door material',
+    doorAluminum: 'Aluminum cabinet door',
+    doorMarine: 'Marine-board door',
+    doorPegboard: 'Aluminum pegboard door',
+    doorOverlay: 'Hinge overlay',
+    doorFullOverlay: 'Full overlay (covers profiles)',
+    doorHalfOverlay: 'Half overlay (covers half)',
+    doorHalfUnavailable: 'Temporarily unavailable',
+    doorInsetOverlay: 'Large bend (inset)',
+    doorOpeningSide: 'Opening side',
+    doorHinge: 'Hinge',
+    doorLeftOpen: 'Left opening',
+    doorRightOpen: 'Right opening',
+    doorAutoSize: 'Automatic door size',
+    doorMarginHint: 'The door follows the detected frame coverage with a 2mm margin on every side. Hinges and handle follow the opening side.',
+    doorAdded: 'Cabinet door auto-sized to the frame',
     shelfSupport: 'Shelf support',
     shelfSupportFinish: 'Shelf-support finish',
     shelfSupportOxidized: 'Natural anodized · ¥8/m',
@@ -397,7 +559,7 @@ const TEXT: Record<Language, Record<string, string>> = {
     bracketSize: 'Bracket side (mm)',
     connectorLength: 'Connector length (mm)',
     screwOrderSpec: 'Order specification',
-    screwRenderLengthHint: 'The 3D fitted length adapts to the joint for visualization only and is not the ordering length.',
+    screwRenderLengthHint: 'The 3D screw uses the same catalog length as the order; the 3030 button-head kit also includes a spring fastener.',
     oneHoleFaceHint: 'The hidden connector uses one fastening hole on each mounting face.',
     connectionPlacementHint: 'One-click install snaps to the nearest compatible joint and locks the location. Unlock it before manual adjustment.',
     addDemo: 'Build demo workbench',
@@ -472,7 +634,7 @@ const TEXT: Record<Language, Record<string, string>> = {
     loaded: 'Design loaded from local JSON',
     templateLoaded: 'Parametric cabinet generated; continue editing and review machining',
     cartAdded: 'Design parts added to cart',
-    dragHint: 'Drag a selected part to move it; hold Shift while dragging a profile to duplicate + move. Right-click a profile to rotate or delete it; lock the XY, XZ, or YZ work plane at the upper right.',
+    dragHint: 'Left-drag to orbit, right-drag to pan up/down/left/right, and use the wheel to zoom in/out. After selecting a part, left-drag an axis arrow to move it; black resize arrows appear for profiles only. Short right-click a part for its action menu.',
     delete: 'Delete',
     duplicate: 'Duplicate',
     backToProject: 'Back to project',
@@ -486,7 +648,11 @@ const TEXT: Record<Language, Record<string, string>> = {
     rotateStandard: 'Looking in the direction of the colored arrow, each click rotates 90° clockwise. Four clicks make 360° and return to the starting orientation. When the profile follows that colored axis, the same control spins the profile to change its slot or covered face.',
     rotationStatus: 'Current angles',
     sceneRotation: 'Rotate in scene',
-    sceneContextHint: 'Right-click a part to rotate or delete it; right-drag to orbit the view.',
+    sceneContextHint: 'Left-drag to orbit · right-drag to pan · wheel to zoom; after selecting a part, left-drag a six-way axis arrow to move it. Short right-click a part to rotate or delete it.',
+    sceneOrbitControl: 'Left-drag · orbit',
+    scenePanControl: 'Right-drag · pan',
+    sceneZoomControl: 'Wheel · zoom',
+    scenePartControl: 'Selected: drag an axis to move; Shift-drag an axis to copy; Shift-drag empty space to marquee-select',
     interferenceWarning: 'Profiles interfere and are highlighted red. Keep moving or rotating until the warning clears.',
     interference: 'Interference',
     snapEnd: 'Magnet: end connection',
@@ -502,47 +668,54 @@ const TEXT: Record<Language, Record<string, string>> = {
     alignEnd: 'Next',
     connectedTo: 'Connected to',
     frameAll: 'Frame all',
+    resetView: 'Reset view',
     transparentProfiles: 'Transparent profiles',
     machiningMarks: 'Machining marks',
     machiningLegend: 'Machining symbols',
     multiSelected: 'Batch selection',
-    shiftHint: 'Shift-click toggles items; Shift-drag from empty space selects a group; Shift-drag a selected profile to duplicate and move it.',
+    shiftHint: 'Shift-click toggles items; Shift-drag empty space marquee-selects; Shift-drag a colored axis to duplicate and move a selected profile.',
     newProfileLength: 'Choose profile and length',
     addProfile: 'Add profile',
+    freeDrawProfile: 'Free draw',
+    selectProfileModel: 'Select profile model',
+    freeDrawSelectProfile: 'Select a profile before starting free draw',
+    freeDrawHint: 'A short profile follows the pointer. Left-click an existing end, side, or joint, move across X / Y / Z to turn, then left-click again. Endpoints snap exactly and overlapping directions are rejected.',
+    freeDrawOverlap: 'This direction overlaps an existing profile. Move the pointer to choose another axis.',
+    restoreCursor: 'Restore cursor (Esc)',
     cancel: 'Cancel',
     apply: 'Apply',
     understood: 'Got it',
     moveDistance: 'Move distance',
     currentLength: 'Current length',
-    duplicateMove: 'Shift duplicate + move',
-    duplicateMoveHint: 'To duplicate, hold Shift while dragging the profile body or a move arrow. You can also enter a distance, then hold Shift while clicking Apply. Both keep the original and create a copy in the chosen direction. Click outside to close.',
+    sceneLength: 'Length',
+    connectionReady: 'Connection aligned',
     language: 'Language',
     undo: 'Undo',
     redo: 'Redo',
     partsCount: 'parts',
     threadLabel: 'Thread size',
     renderUnavailable: '3D rendering is unavailable on this device. Enable WebGL or try a newer browser.',
-    workPlane: 'Drag work plane',
-    workPlaneAuto: 'Auto detect',
-    workPlaneXY: 'XY front plane',
-    workPlaneXZ: 'XZ top plane',
-    workPlaneYZ: 'YZ side plane',
-    workPlaneHint: 'Free dragging stays on the selected plane, so the hidden axis cannot drift. Use the red, green, and blue arrows for precise single-axis moves.',
     accessorySnap: 'Accessory magnet',
     oneClickInstall: 'Install at joint',
     accessorySnapped: 'Accessory snapped and locked',
     noCompatibleJoint: 'No compatible profile joint was found',
+    accessoryPlacementHint: 'Purple locations are installable. Hover to preview and left-click to place. Press Esc to restore the pointer.',
+    accessoryPlacementInvalid: 'This accessory cannot be installed at the current position',
+    accessoryPlacementSuccess: 'Accessory added. Choose another purple location to continue',
     replaceAccessory: 'Replace accessory manually',
     lockLocation: 'Lock location',
     unlockLocation: 'Unlock location',
     lockedLocation: 'Location locked',
     attachedTo: 'Attached profiles',
+    attachedParts: 'Connected parts',
   },
   jp: {
     title: 'アルミプロファイル 3D DIY デザイナー',
     subtitle: 'プロファイル、パネル、金具を配置し、寸法・色・加工をカスタマイズできます。',
     library: 'パーツライブラリ',
     project: 'プロジェクト構成',
+    collapseProjectPanel: 'プロジェクト構成を閉じて設計画面を拡大',
+    expandProjectPanel: 'プロジェクト構成を開く',
     properties: '設定と加工',
     empty: '編集するパーツを選択してください',
     profile: 'アルミ形材',
@@ -559,12 +732,69 @@ const TEXT: Record<Language, Record<string, string>> = {
     socketCylinderScrew: '六角穴付き円筒頭ボルト',
     buttonSocketScrew: '六角穴付きボタンボルト',
     flatSocketScrew: '六角穴付き低頭ボルト',
+    elasticFastener: 'ばね金具',
     fillScrews: 'ボルト自動配置',
     fillScrewsHint: '皿穴には円筒頭、通し穴にはボタン頭の六角穴付きボルトを自動配置します。ボルトはナチュラルシルバーが標準で、ねじ穴は対象外です。',
+    generateConnections: '部品を編集',
+    generateConnectionsHint: '先に部品タイプを選択します。接点をクリックして追加・削除・交換でき、現在のタイプを一括追加または一括削除できます。',
+    chooseConnectionType: '編集する部品タイプを選択',
+    applyAllConnections: 'すべて追加',
+    deleteAllConnections: 'すべて削除',
+    exitConnectionEdit: '部品編集を終了',
+    connectionAddable: '追加可能',
+    connectionReplaceable: '交換可能',
+    connectionInstalled: '取付済み・クリックで削除',
+    cornerBracketConnection: '1番コーナーブラケット接続',
+    slotConnectorConnection: '5番溝内コネクタ接続',
+    drillTapConnection: '穴あけ・タップ接続',
+    connectionsGenerated: '接続を生成しました',
+    connectionsDeleted: '接続を削除しました',
+    connectionsUpToDate: '対応するすべての接点に接続済みです',
+    noConnectionsToDelete: '削除できる現在のタイプの接続がありません',
+    noCompatibleConnections: '位置合わせ済みの2020/3030直交接点が見つかりません',
     screwsFilled: '穴位置にボルトを自動配置しました',
     screwsUpToDate: '対象の穴にはすべてボルトが配置済みです',
     linkedHole: '穴位置に連動',
     foot: 'レベリングフット',
+    caster: 'ねじ込みキャスター',
+    endCap: 'アルミフレームエンドキャップ',
+    endCapTarget: '取付端面',
+    endCapSelectProfile: 'エンドキャップを取り付けるフレームを先に選択してください',
+    endCapBothOccupied: 'このフレームの両端にはすでにキャップがあります',
+    endCapInstalled: '両端のキャップを補い、必要な端面タップを自動追加しました',
+    leftEnd: '左端',
+    rightEnd: '右端',
+    estimatedPrice: '概算価格',
+    casterThread: 'ねじ規格',
+    casterBrake: 'ブレーキ',
+    casterWithBrake: 'ブレーキ付き',
+    casterWithoutBrake: 'ブレーキなし',
+    adjustableHeight: '調整高さ (mm)',
+    footReferenceSpec: 'MayCAD カップ脚 · M8ねじ · ロックナット · 滑り止め底面',
+    pricePending: '正式なカタログ価格確定まで概算価格を使用します',
+    fixedBlack: 'ミッドナイトブラック固定・色選択なし',
+    fixedGold: '金属素地 / 黒底・色選択なし',
+    cabinetDoor: '自動キャビネット扉',
+    doorNeedFrame: '正面の形材枠を完成すると扉を追加できます',
+    doorFrameReady: '扉を取り付け可能な正面枠を検出しました',
+    doorAlreadyAdded: 'この枠にはすでに扉があります',
+    doorSizeUnsupported: '扉1枚の上限は1500×3000mmです。複数枚に分割してください',
+    doorMaterial: '扉材質',
+    doorAluminum: 'アルミ扉',
+    doorMarine: 'マリンボード扉',
+    doorPegboard: 'アルミペグボード扉',
+    doorOverlay: 'ヒンジかぶせ方式',
+    doorFullOverlay: '全かぶせ（形材全体を覆う）',
+    doorHalfOverlay: '半かぶせ（形材半分を覆う）',
+    doorHalfUnavailable: '一時利用不可',
+    doorInsetOverlay: '大曲げ（インセット）',
+    doorOpeningSide: '開き方向',
+    doorHinge: 'ヒンジ',
+    doorLeftOpen: '左開き',
+    doorRightOpen: '右開き',
+    doorAutoSize: '自動扉寸法',
+    doorMarginHint: '検出した枠の範囲から四周2mmの余白で自動計算します。ヒンジと取っ手も開き方向に追従します。',
+    doorAdded: '枠寸法に合わせて扉を自動生成しました',
     shelfSupport: '棚受け',
     shelfSupportFinish: '棚受けの断面・色',
     shelfSupportOxidized: 'ナチュラルアルマイト · 8元/m',
@@ -580,7 +810,7 @@ const TEXT: Record<Language, Record<string, string>> = {
     bracketSize: 'ブラケット辺長 (mm)',
     connectorLength: 'コネクタ長さ (mm)',
     screwOrderSpec: '発注仕様',
-    screwRenderLengthHint: '3D組立長さは接続位置に合わせた表示専用値で、発注長さではありません。',
+    screwRenderLengthHint: '3Dボルトは発注仕様と同じカタログ長さを使用し、3030ボタンボルトセットにはばね金具も含まれます。',
     oneHoleFaceHint: '隠しコネクタは各取付面に締結穴を1つだけ使用します。',
     connectionPlacementHint: 'ワンクリック取付で最寄りの対応接続点にスナップし、位置をロックします。手動調整前にロックを解除してください。',
     addDemo: '作業台サンプルを作成',
@@ -655,7 +885,7 @@ const TEXT: Record<Language, Record<string, string>> = {
     loaded: 'ローカルJSONから設計を読み込みました',
     templateLoaded: 'パラメトリック棚を生成しました。加工位置を確認・編集してください',
     cartAdded: 'カートに追加しました',
-    dragHint: '選択パーツのドラッグで移動、Shiftを押しながら形材をドラッグすると複製+移動します。右クリックで回転または削除できます。',
+    dragHint: '左ドラッグで視点回転、右ドラッグで上下左右へ平行移動、ホイールで前後ズームします。パーツ選択後は軸矢印を左ドラッグして移動します。黒い長さ変更矢印は形材を選択した場合だけ表示され、短い右クリックで操作メニューを開きます。',
     delete: '削除',
     duplicate: '複製',
     backToProject: 'プロジェクトへ戻る',
@@ -669,7 +899,11 @@ const TEXT: Record<Language, Record<string, string>> = {
     rotateStandard: '対応する色の矢印方向へ見て、クリックするたびに時計回りへ90°回転します。4回で360°となり元の姿勢に戻ります。形材が同じ色の軸に沿う場合は自転となり、溝面やカバー面を切り替えられます。',
     rotationStatus: '現在角度',
     sceneRotation: 'シーン内で回転',
-    sceneContextHint: 'パーツを右クリックすると回転または削除、右ドラッグで視点を回転できます。',
+    sceneContextHint: '左ドラッグ：視点回転 · 右ドラッグ：上下左右へ平行移動 · ホイール：前後ズーム。選択後は6方向矢印を左ドラッグして移動し、短い右クリックで回転または削除できます。',
+    sceneOrbitControl: '左ドラッグ · 視点回転',
+    scenePanControl: '右ドラッグ · 平行移動',
+    sceneZoomControl: 'ホイール · ズーム',
+    scenePartControl: '選択後：色軸で移動、Shift+軸ドラッグで複製、Shift+空白部ドラッグで範囲選択',
     interferenceWarning: '形材が干渉し、赤色で表示されています。警告が消えるまで移動または回転を続けられます。',
     interference: '干渉',
     snapEnd: 'スナップ：端点接続',
@@ -685,41 +919,46 @@ const TEXT: Record<Language, Record<string, string>> = {
     alignEnd: '後位置',
     connectedTo: '接続先',
     frameAll: '全体表示',
+    resetView: 'ビューをリセット',
     transparentProfiles: '形材を半透明',
     machiningMarks: '加工マーク',
     machiningLegend: '加工記号',
     multiSelected: '一括選択',
-    shiftHint: 'Shiftクリックで選択を追加・解除。空白部からShiftドラッグで範囲選択、選択中の形材からShiftドラッグで複製・移動します。',
+    shiftHint: 'Shift+クリックで選択を追加・解除。空白部からShift+ドラッグで範囲選択、選択中の形材はShift+色軸ドラッグで複製・移動できます。',
     newProfileLength: '形材規格と長さを選択',
     addProfile: '形材を追加',
+    freeDrawProfile: '自由描画',
+    selectProfileModel: '形材型式を選択',
+    freeDrawSelectProfile: '先に形材を選択してください',
+    freeDrawHint: '短い形材がポインタに追従します。既存形材の端面・側面・交点を左クリックし、ポインタを動かして X / Y / Z 軸を切り替え、もう一度左クリックします。端点に正確に吸着し、重なる方向は除外されます。',
+    freeDrawOverlap: 'この方向は既存の形材と重なります。ポインタを動かして別の軸を選択してください。',
+    restoreCursor: 'マウスに戻す (Esc)',
     cancel: 'キャンセル',
     apply: '適用',
     understood: '確認',
     moveDistance: '移動距離',
     currentLength: '現在の長さ',
-    duplicateMove: 'Shift 複製 + 移動',
-    duplicateMoveHint: '複製するには、Shift を押しながら形材本体または移動矢印をドラッグします。距離を入力し、Shift を押しながら「適用」をクリックすることもできます。どちらも元の形材を残し、指定方向に複製します。外側をクリックすると閉じます。',
+    sceneLength: '長さ',
+    connectionReady: '接続位置合わせ済み',
     language: '言語',
     undo: '元に戻す',
     redo: 'やり直す',
     partsCount: '個のパーツ',
     threadLabel: 'ねじ規格',
     renderUnavailable: 'この端末で 3D レンダリングを開始できません。WebGL を有効にするか、新しいブラウザをお試しください。',
-    workPlane: 'ドラッグ作業平面',
-    workPlaneAuto: '自動判定',
-    workPlaneXY: 'XY 正面',
-    workPlaneXZ: 'XZ 上面',
-    workPlaneYZ: 'YZ 側面',
-    workPlaneHint: 'フリードラッグは選択面内だけを移動するため、奥行き軸がずれません。単軸の精密移動には赤・緑・青の矢印を使います。',
     accessorySnap: '金具スナップ',
     oneClickInstall: '接続点へワンクリック取付',
     accessorySnapped: '金具をスナップしてロックしました',
     noCompatibleJoint: '対応する同規格の形材接続点が見つかりません',
+    accessoryPlacementHint: '紫色の位置に取付できます。カーソルを合わせて確認し、左クリックで確定します。Escで通常のマウスに戻ります。',
+    accessoryPlacementInvalid: '現在の位置にはこの金具を取り付けできません',
+    accessoryPlacementSuccess: '金具を追加しました。別の紫色位置にも続けて取り付けできます',
     replaceAccessory: '金具を手動交換',
     lockLocation: '位置をロック',
     unlockLocation: '位置ロック解除',
     lockedLocation: '位置ロック中',
     attachedTo: '取付先形材',
+    attachedParts: '接続部品',
   },
 };
 
@@ -727,13 +966,35 @@ const makeId = () => `diy_${Date.now().toString(36)}_${Math.random().toString(36
 
 const cloneItems = (items: DIYSceneItem[]) => JSON.parse(JSON.stringify(items)) as DIYSceneItem[];
 
+function getCasterEstimatedUnitPrice(item: Pick<DIYSceneItem, 'accessoryThreadSize' | 'hasBrake'>) {
+  return CASTER_ESTIMATED_BASE_PRICE
+    + CASTER_THREAD_SURCHARGE[item.accessoryThreadSize || 'M8']
+    + (item.hasBrake ? CASTER_BRAKE_SURCHARGE : 0);
+}
+
+function getEndCapEstimatedUnitPrice(item: Pick<DIYSceneItem, 'colorId' | 'quantity'>) {
+  return item.colorId === 'natural' ? END_CAP_ESTIMATED_PRICE.natural : END_CAP_ESTIMATED_PRICE.colored;
+}
+
+const getDoorHingePositions = (heightMm: number) => {
+  const height = Math.max(0, Math.min(3000, Number(heightMm) || 0));
+  if (height <= 0) return [] as number[];
+  if (height <= 1500) return [100, height - 100];
+  if (height <= 2000) return [100, height / 2, height - 100];
+  if (height <= 2500) {
+    const step = (height - 200) / 3;
+    return [100, 100 + step, 100 + step * 2, height - 100];
+  }
+  return [100, (height - 200) * 0.25 + 100, height / 2, (height - 200) * 0.75 + 100, height - 100];
+};
+
 const duplicateSceneItem = (item: DIYSceneItem): DIYSceneItem => {
   const duplicate = cloneItems([item])[0];
   return {
     ...duplicate,
     id: makeId(),
     holes: duplicate.kind === 'profile'
-      ? (duplicate.holes || []).map((hole) => ({ ...hole, id: makeId() }))
+      ? (duplicate.holes || []).map((hole) => ({ ...hole, id: makeId(), jointKey: undefined }))
       : duplicate.holes,
     lockedPosition: false,
     attachedProfileIds: undefined,
@@ -747,8 +1008,40 @@ const duplicateSceneItem = (item: DIYSceneItem): DIYSceneItem => {
 const normalizeDesignItems = (source: DIYSceneItem[]) => source.map((item) => {
   const shelfSupportFinish: ProfileFinish = item.finish
     || (item.colorId === 'natural' ? 'oxidized' : 'powder');
+  const connectionDimensions = isConnectionAccessoryKind(item.kind)
+    ? getAccessoryDimensions(item.kind, item.accessoryProfileSize || '2020')
+    : null;
   return {
     ...item,
+    // Connection hardware is catalog geometry. Normalize saved/imported
+    // dimensions so legacy No.9 records (including the former 30×30×20
+    // default) cannot render a rectangular body for a cubic series part.
+    ...(connectionDimensions || {}),
+    ...(item.kind === 'caster' ? {
+      accessoryThreadSize: item.accessoryThreadSize || 'M8',
+      hasBrake: Boolean(item.hasBrake),
+      colorId: 'black',
+      accessoryPrice: getCasterEstimatedUnitPrice(item),
+    } : {}),
+    ...(item.kind === 'foot' ? {
+      width: 40,
+      height: THREE.MathUtils.clamp(item.height || 45, 35, 60),
+      thickness: 40,
+      accessoryThreadSize: 'M8' as DIYAccessoryThreadSize,
+      colorId: 'natural',
+      accessoryPrice: FOOT_ESTIMATED_PRICE,
+    } : {}),
+    ...(item.kind === 'end_cap' ? {
+      thickness: 3,
+      accessoryPrice: getEndCapEstimatedUnitPrice(item),
+    } : {}),
+    ...(item.kind === 'cabinet_door' ? {
+      doorMaterial: item.doorMaterial || 'aluminum',
+      doorOverlay: item.doorOverlay || 'full',
+      openingSide: item.openingSide || 'left',
+      thickness: item.doorMaterial === 'marine' ? (item.thickness || 18) : 2,
+      quantity: 1,
+    } : {}),
     ...(item.kind === 'shelf_support' ? {
       finish: shelfSupportFinish,
       accessoryPrice: getShelfSupportUnitPrice(item.thickness || 0, shelfSupportFinish),
@@ -775,12 +1068,17 @@ const buildProductionData = (items: DIYSceneItem[], language: Language) => {
     thicknessMm: item.thickness,
     finish: item.finish,
     accessoryProfileSize: item.accessoryProfileSize,
+    accessoryThreadSize: item.accessoryThreadSize,
+    hasBrake: item.hasBrake,
+    attachedEnd: item.attachedEnd,
+    autoAddedTapping: item.autoAddedTapping,
+    doorMaterial: item.doorMaterial,
+    doorOverlay: item.doorOverlay,
+    openingSide: item.openingSide,
     colorId: item.colorId,
-    color: item.kind === 'marine_board'
-      ? getMarineBoardOrderColorName(item.colorId, language)
-      : getDesignerColorName(item.colorId, language, item.kind),
-    pegHolePattern: item.kind === 'pegboard' ? 'ikea' : undefined,
-    pegHolePatternName: item.kind === 'pegboard'
+    color: getSceneItemColorName(item, language),
+    pegHolePattern: item.kind === 'pegboard' || (item.kind === 'cabinet_door' && item.doorMaterial === 'pegboard') ? 'ikea' : undefined,
+    pegHolePatternName: item.kind === 'pegboard' || (item.kind === 'cabinet_door' && item.doorMaterial === 'pegboard')
       ? (language === 'cn' ? '宜家孔（竖向长圆孔）' : language === 'jp' ? 'IKEA穴（縦長穴）' : 'IKEA holes (vertical slots)')
       : undefined,
     quantity: item.quantity,
@@ -791,6 +1089,10 @@ const buildProductionData = (items: DIYSceneItem[], language: Language) => {
     screwHead: item.screwHead,
     linkedProfileId: item.linkedProfileId,
     linkedHoleId: item.linkedHoleId,
+    autoGenerated: item.autoGenerated,
+    lockedPosition: item.lockedPosition,
+    attachedProfileIds: item.attachedProfileIds,
+    attachmentKey: item.attachmentKey,
     remark: item.remark || '',
   }));
   const holes = normalizedItems.flatMap((item, index) => {
@@ -809,6 +1111,7 @@ const buildProductionData = (items: DIYSceneItem[], language: Language) => {
         model: variantId,
         holeLine: holeIndex + 1,
         holeId: hole.id,
+        jointKey: hole.jointKey,
         entryFace: hole.side,
         entryGroove: entryCount >= 2 ? grooveOrdinal(entryDisplay, language) : '-',
         exitFace: exitSide,
@@ -820,6 +1123,7 @@ const buildProductionData = (items: DIYSceneItem[], language: Language) => {
         threadSize: hole.threadSize || '',
         fastenerHead: hole.fastenerHead,
         fastenerLengthMm: hole.fastenerLengthMm,
+        fastenerDirection: hole.fastenerDirection,
         verification: describeHolePassage(hole, variantId, language),
       };
     });
@@ -946,6 +1250,14 @@ const isConnectionAccessoryKind = (kind: DIYItemKind): kind is DIYConnectionKind
   || kind === 'tee_connector'
 );
 
+const isMovableAccessoryKind = (kind: DIYItemKind) => (
+  kind !== 'profile'
+  && kind !== 'plate'
+  && kind !== 'pegboard'
+  && kind !== 'marine_board'
+  && kind !== 'cabinet_door'
+);
+
 const getAvailableAccessorySizes = (kind: DIYConnectionKind) => (
   ACCESSORY_PROFILE_SIZES.filter((size) => Boolean(ACCESSORY_PRICES[kind][size]))
 );
@@ -965,13 +1277,23 @@ const getAccessoryGeometryModuleSize = (
 const getAccessoryDimensions = (kind: DIYConnectionKind, profileSeries: DIYAccessoryProfileSize) => {
   const moduleSize = getAccessoryGeometryModuleSize(kind, profileSeries);
   if (kind === 'connector') {
-    return { width: moduleSize, height: moduleSize, thickness: Math.max(3.2, moduleSize * 0.16) };
+    // No.1 is a full-width die-cast corner seat, not a thin flat gusset. The
+    // two perpendicular seating lengths are catalog-specific; its third axis
+    // always spans the complete matched profile width.
+    if (profileSeries === '2020') return { width: 20, height: 28, thickness: 20 };
+    if (profileSeries === '3030') return { width: 30, height: 30, thickness: 30 };
+    return { width: moduleSize, height: moduleSize, thickness: moduleSize };
   }
   if (kind === 'extruded_connector') {
-    return { width: moduleSize, height: moduleSize, thickness: Math.max(3, moduleSize * 0.15) };
+    // No.2 is the 5020-style extruded bracket shown in the supplied physical
+    // reference. Both perpendicular legs are always 50 mm long; only the
+    // extrusion depth changes so the bracket fills the target profile width.
+    return { width: 50, height: 50, thickness: moduleSize };
   }
   if (kind === 'hidden_connector') {
-    return { width: moduleSize * 1.25, height: moduleSize * 0.5, thickness: moduleSize * 0.25 };
+    // No.5 is a shallow single-hole-per-arm casting that sits inside two
+    // open T-slots rather than on the outside of the profile corner.
+    return { width: moduleSize * 1.4, height: moduleSize * 0.42, thickness: Math.max(2.5, moduleSize * 0.14) };
   }
   if (kind === 'l_connector') {
     return { width: moduleSize * 3, height: moduleSize * 3, thickness: 2 };
@@ -1018,6 +1340,24 @@ const createItem = (kind: DIYItemKind, index = 0, variantId?: string): DIYSceneI
       remark: '',
     };
   }
+  if (kind === 'cabinet_door') {
+    return {
+      id: makeId(),
+      kind,
+      name: 'Auto-fit cabinet door',
+      position: [0, 1000, 0],
+      rotation: [0, 0, 0],
+      colorId: 'natural',
+      width: 496,
+      height: 1996,
+      thickness: 2,
+      doorMaterial: 'aluminum',
+      doorOverlay: 'full',
+      openingSide: 'left',
+      quantity: 1,
+      remark: '',
+    };
+  }
   if (kind === 'plate' || kind === 'pegboard' || kind === 'marine_board') {
     return {
       id: makeId(),
@@ -1052,7 +1392,7 @@ const createItem = (kind: DIYItemKind, index = 0, variantId?: string): DIYSceneI
       remark: '',
     };
   }
-  const accessoryDefaults: Record<'connector' | 'extruded_connector' | 'l_connector' | 't_connector' | 'hidden_connector' | 'tee_connector' | 'screw' | 'foot', {
+  const accessoryDefaults: Record<'connector' | 'extruded_connector' | 'l_connector' | 't_connector' | 'hidden_connector' | 'tee_connector' | 'screw' | 'foot' | 'caster' | 'end_cap', {
     name: string;
     colorId: string;
     width: number;
@@ -1064,16 +1404,16 @@ const createItem = (kind: DIYItemKind, index = 0, variantId?: string): DIYSceneI
       name: 'No.1 corner bracket',
       colorId: 'natural',
       width: 20,
-      height: 20,
-      thickness: 3.2,
+      height: 28,
+      thickness: 20,
       price: 1,
     },
     extruded_connector: {
       name: 'No.2 extruded corner bracket',
       colorId: 'natural',
-      width: 28,
-      height: 28,
-      thickness: 3,
+      width: 50,
+      height: 50,
+      thickness: 20,
       price: 4,
     },
     l_connector: {
@@ -1095,9 +1435,9 @@ const createItem = (kind: DIYItemKind, index = 0, variantId?: string): DIYSceneI
     hidden_connector: {
       name: 'No.5 hidden bracket',
       colorId: 'natural',
-      width: 25,
-      height: 10,
-      thickness: 5,
+      width: 28,
+      height: 8.4,
+      thickness: 2.8,
       price: 1,
     },
     tee_connector: {
@@ -1117,12 +1457,28 @@ const createItem = (kind: DIYItemKind, index = 0, variantId?: string): DIYSceneI
       price: naturalScrewUnitPrice(),
     },
     foot: {
-      name: 'Leveling foot',
+      name: 'Cup-style leveling foot',
+      colorId: 'natural',
+      width: 40,
+      height: 45,
+      thickness: 40,
+      price: FOOT_ESTIMATED_PRICE,
+    },
+    caster: {
+      name: 'Threaded-stem caster',
       colorId: 'black',
-      width: 45,
-      height: 70,
-      thickness: 35,
-      price: 12,
+      width: 50,
+      height: 75,
+      thickness: 45,
+      price: CASTER_ESTIMATED_BASE_PRICE,
+    },
+    end_cap: {
+      name: 'Aluminum profile end cap',
+      colorId: 'natural',
+      width: 20,
+      height: 20,
+      thickness: 3,
+      price: END_CAP_ESTIMATED_PRICE.natural,
     },
   };
   const accessory = accessoryDefaults[kind as keyof typeof accessoryDefaults] || accessoryDefaults.connector;
@@ -1133,7 +1489,7 @@ const createItem = (kind: DIYItemKind, index = 0, variantId?: string): DIYSceneI
     ? (ACCESSORY_PRICES[kind][requestedSeries]
       ? requestedSeries
       : getAvailableAccessorySizes(kind)[0])
-    : undefined;
+    : kind === 'end_cap' ? requestedSeries : undefined;
   const accessoryDimensions = isConnectionAccessoryKind(kind) && accessoryProfileSize
     ? getAccessoryDimensions(kind, accessoryProfileSize)
     : { width: accessory.width, height: accessory.height, thickness: accessory.thickness };
@@ -1144,7 +1500,7 @@ const createItem = (kind: DIYItemKind, index = 0, variantId?: string): DIYSceneI
     id: makeId(),
     kind,
     name: accessory.name,
-    position: [offset, kind === 'foot' ? 35 : 500, 0],
+    position: [offset, kind === 'foot' || kind === 'caster' ? 0 : 500, 0],
     rotation: [0, 0, 0],
     colorId: accessory.colorId,
     width: accessoryDimensions.width,
@@ -1152,6 +1508,9 @@ const createItem = (kind: DIYItemKind, index = 0, variantId?: string): DIYSceneI
     thickness: accessoryDimensions.thickness,
     accessoryPrice: naturalPrice ?? accessory.price,
     accessoryProfileSize,
+    variantId: kind === 'end_cap' ? variantId || requestedSeries : undefined,
+    accessoryThreadSize: kind === 'caster' || kind === 'foot' ? 'M8' : undefined,
+    hasBrake: kind === 'caster' ? false : undefined,
     quantity: 1,
     remark: '',
   };
@@ -1160,14 +1519,16 @@ const createItem = (kind: DIYItemKind, index = 0, variantId?: string): DIYSceneI
 const IMPORTABLE_ITEM_KINDS: DIYItemKind[] = [
   'profile', 'plate', 'pegboard', 'marine_board', 'connector', 'extruded_connector',
   'l_connector', 't_connector', 'hidden_connector', 'tee_connector', 'screw', 'foot',
-  'shelf_support',
+  'caster', 'end_cap', 'shelf_support', 'cabinet_door',
 ];
 
 const workbookColorId = (part: ProductionWorkbookData['parts'][number], kind: DIYItemKind) => {
   if (part.colorId) return part.colorId;
-  const colors = kind === 'marine_board' ? MARINE_BOARD_COLORS : PROFILE_COLORS;
+  const colors = kind === 'marine_board' || (kind === 'cabinet_door' && part.doorMaterial === 'marine')
+    ? MARINE_BOARD_COLORS
+    : PROFILE_COLORS;
   return colors.find((color) => Object.values(color.name).some((name) => name === part.color))?.id
-    || (kind === 'marine_board' ? 'wood_natural' : 'natural');
+    || (kind === 'marine_board' || (kind === 'cabinet_door' && part.doorMaterial === 'marine') ? 'wood_natural' : 'natural');
 };
 
 const itemsFromProductionWorkbook = (production: ProductionWorkbookData): DIYSceneItem[] => production.parts.flatMap((part, index) => {
@@ -1176,8 +1537,8 @@ const itemsFromProductionWorkbook = (production: ProductionWorkbookData): DIYSce
   const requestedSeries = ACCESSORY_PROFILE_SIZES.includes(part.accessoryProfileSize as DIYAccessoryProfileSize)
     ? part.accessoryProfileSize as DIYAccessoryProfileSize
     : undefined;
-  const base = createItem(kind, index, kind === 'profile' ? part.model : requestedSeries);
-  const variantId = kind === 'profile' ? (part.model || '2020') : base.variantId;
+  const base = createItem(kind, index, kind === 'profile' || kind === 'end_cap' ? part.model : requestedSeries);
+  const variantId = kind === 'profile' || kind === 'end_cap' ? (part.model || '2020') : base.variantId;
   const holes = kind === 'profile'
     ? production.holes
       .filter((hole) => hole.partId ? hole.partId === part.id : hole.partLine === part.line)
@@ -1188,16 +1549,21 @@ const itemsFromProductionWorkbook = (production: ProductionWorkbookData): DIYSce
         const importedThreadSize = (['M3', 'M4', 'M5', 'M6', 'M8'].includes(hole.threadSize)
           ? hole.threadSize
           : undefined) as ThreadSize | undefined;
+        const fastenerHead: DIYScrewHead | undefined = (
+          hole.fastenerHead === 'socket_cylinder'
+          || hole.fastenerHead === 'button_socket'
+          || hole.fastenerHead === 'flat_socket'
+        ) ? hole.fastenerHead : undefined;
         return {
           id: hole.holeId || makeId(),
+          jointKey: hole.jointKey,
           side,
           positionMm: hole.leftDistanceMm,
           type,
-          threadSize: type === 'threaded' ? importedThreadSize || 'M6' : undefined,
-          fastenerHead: (hole.fastenerHead === 'socket_cylinder' || hole.fastenerHead === 'button_socket' || hole.fastenerHead === 'flat_socket')
-            ? hole.fastenerHead
-            : undefined,
+          threadSize: importedThreadSize || (type === 'threaded' ? 'M6' : undefined),
+          fastenerHead,
           fastenerLengthMm: hole.fastenerLengthMm,
+          fastenerDirection: hole.fastenerDirection === 'outward' ? 'outward' : undefined,
           grooveIndex: physicalGrooveToDisplay(side, physicalGrooveIndex, Math.max(1, getProfileGrooveCount(variantId, side))),
           physicalGrooveIndex,
         };
@@ -1211,6 +1577,19 @@ const itemsFromProductionWorkbook = (production: ProductionWorkbookData): DIYSce
     name: kind === 'profile' ? variantId : base.name,
     variantId,
     accessoryProfileSize: requestedSeries || base.accessoryProfileSize,
+    accessoryThreadSize: (['M6', 'M8', 'M10', 'M12'].includes(part.accessoryThreadSize || '')
+      ? part.accessoryThreadSize
+      : base.accessoryThreadSize) as DIYAccessoryThreadSize | undefined,
+    hasBrake: part.hasBrake ?? base.hasBrake,
+    attachedEnd: part.attachedEnd === 'left' || part.attachedEnd === 'right' ? part.attachedEnd : undefined,
+    autoAddedTapping: part.autoAddedTapping,
+    doorMaterial: (part.doorMaterial === 'marine' || part.doorMaterial === 'pegboard' || part.doorMaterial === 'aluminum')
+      ? part.doorMaterial
+      : base.doorMaterial,
+    doorOverlay: (part.doorOverlay === 'half' || part.doorOverlay === 'inset' || part.doorOverlay === 'full')
+      ? part.doorOverlay
+      : base.doorOverlay,
+    openingSide: part.openingSide === 'right' || part.openingSide === 'left' ? part.openingSide : base.openingSide,
     length: part.lengthMm ?? base.length,
     width: part.widthMm ?? base.width,
     height: part.heightMm ?? base.height,
@@ -1230,8 +1609,11 @@ const itemsFromProductionWorkbook = (production: ProductionWorkbookData): DIYSce
       : base.screwHead,
     linkedProfileId: part.linkedProfileId,
     linkedHoleId: part.linkedHoleId,
-    autoGenerated: kind === 'screw' && !!part.linkedProfileId && !!part.linkedHoleId,
-    pegHolePattern: kind === 'pegboard' ? 'ikea' : base.pegHolePattern,
+    autoGenerated: part.autoGenerated || (kind === 'screw' && !!part.linkedProfileId && !!part.linkedHoleId),
+    lockedPosition: part.lockedPosition,
+    attachedProfileIds: part.attachedProfileIds,
+    attachmentKey: part.attachmentKey,
+    pegHolePattern: kind === 'pegboard' || (kind === 'cabinet_door' && part.doorMaterial === 'pegboard') ? 'ikea' : base.pegHolePattern,
     remark: part.remark || '',
   }];
 });
@@ -1239,38 +1621,123 @@ const itemsFromProductionWorkbook = (production: ProductionWorkbookData): DIYSce
 const buildDemoWorkbench = (): DIYSceneItem[] => {
   const items: DIYSceneItem[] = [];
   const addProfile = (length: number, position: Vec3, rotation: Vec3 = [0, 0, 0], variantId = '2020') => {
-    items.push({ ...createItem('profile', items.length, variantId), length, position, rotation, name: variantId });
+    const profile = { ...createItem('profile', items.length, variantId), length, position, rotation, name: variantId };
+    items.push(profile);
+    return profile;
   };
   // The side rails occupy the full 500 mm outside depth. The front/back
   // rails stop at their inner faces so the demo begins as a valid butt-joint
   // frame instead of four slightly interpenetrating corners.
-  addProfile(960, [0, 760, 250]);
-  addProfile(960, [0, 760, -250]);
-  addProfile(500, [-490, 760, 0], [0, 90, 0]);
-  addProfile(500, [490, 760, 0], [0, 90, 0]);
-  addProfile(720, [-470, 370, 230], [0, 0, 90]);
-  addProfile(720, [470, 370, 230], [0, 0, 90]);
-  addProfile(720, [-470, 370, -230], [0, 0, 90]);
-  addProfile(720, [470, 370, -230], [0, 0, 90]);
-  items.push({ ...createItem('pegboard'), position: [0, 1050, -270], width: 850, height: 420, colorId: 'natural', pegHolePattern: 'ikea' });
-  items.push({ ...createItem('marine_board'), position: [0, 790, 0], width: 1000, height: 520, thickness: 18, rotation: [90, 0, 0], colorId: 'wood_natural' });
-  [-470, 470].forEach((x) => [-230, 230].forEach((z) => {
-    items.push({
-      ...createItem('connector', items.length),
-      position: [x, 760, z],
-      rotation: [0, z < 0 ? 180 : 0, x < 0 ? 0 : 180],
-    });
-    items.push({
-      ...createItem('screw', items.length),
-      position: [x + (x < 0 ? 24 : -24), 780, z + (z < 0 ? 22 : -22)],
-      rotation: [90, 0, 0],
-    });
-  }));
-  items.push({
-    ...createItem('hidden_connector', items.length),
-    position: [0, 760, 258],
+  const frontRail = addProfile(960, [0, 760, 250]);
+  const rearRail = addProfile(960, [0, 760, -250]);
+  const leftRail = addProfile(500, [-490, 760, 0], [0, 90, 0]);
+  const rightRail = addProfile(500, [490, 760, 0], [0, 90, 0]);
+  // The 60mm-tall adjustable feet end exactly where each leg begins, and the
+  // leg tops end exactly at the underside of the 20mm top frame.
+  const legs = [
+    addProfile(690, [-470, 405, 230], [0, 0, 90]),
+    addProfile(690, [470, 405, 230], [0, 0, 90]),
+    addProfile(690, [-470, 405, -230], [0, 0, 90]),
+    addProfile(690, [470, 405, -230], [0, 0, 90]),
+  ];
+  // Two connected rear uprights carry the pegboard instead of leaving it
+  // suspended behind the table.
+  const pegboardPosts = [
+    addProfile(500, [-400, 1020, -250], [0, 0, 90]),
+    addProfile(500, [400, 1020, -250], [0, 0, 90]),
+  ];
+  const topBoard: DIYSceneItem = {
+    ...createItem('marine_board'),
+    position: [0, 779, 0],
+    width: 1000,
+    height: 520,
+    thickness: 18,
+    rotation: [90, 0, 0],
+    colorId: 'wood_natural',
+    lockedPosition: true,
+    attachedProfileIds: [frontRail.id, rearRail.id, leftRail.id, rightRail.id],
+    attachmentKey: 'PANEL:DEMO:WORKTOP',
+    remark: '示例工作台台面：通过7号L型连接板固定到顶部型材框架',
+  };
+  const pegboard: DIYSceneItem = {
+    ...createItem('pegboard'),
+    position: [0, 1030, -239],
+    width: 850,
+    height: 420,
+    colorId: 'natural',
+    pegHolePattern: 'ikea',
+    lockedPosition: true,
+    attachedProfileIds: pegboardPosts.map((profile) => profile.id),
+    attachmentKey: 'PANEL:DEMO:PEGBOARD',
+    remark: '示例工作台洞洞板：通过7号L型连接板固定到后立柱',
+  };
+  items.push(topBoard, pegboard);
+
+  // Generate a real, locked No.1 bracket at every valid profile-to-profile
+  // contact. The attachment keys let later profile edits keep the hardware on
+  // the same physical joint instead of treating it as loose scene geometry.
+  const bracketProbe = createItem('connector', items.length, '2020');
+  const generatedBracketJoints = new Set<string>();
+  accessoryPlacementCandidates(bracketProbe, items)
+    .filter((placement) => {
+      const jointKey = placement.targetProfileIds.slice().sort().join(':JOINT:');
+      if (!placement.joint || generatedBracketJoints.has(jointKey)) return false;
+      generatedBracketJoints.add(jointKey);
+      return true;
+    })
+    .forEach((placement) => items.push({
+      ...createItem('connector', items.length, '2020'),
+      position: [
+        Math.round(placement.position.x * SCENE_SCALE),
+        Math.round(placement.position.y * SCENE_SCALE),
+        Math.round(placement.position.z * SCENE_SCALE),
+      ],
+      rotation: placement.rotation,
+      lockedPosition: true,
+      autoGenerated: true,
+      attachedProfileIds: placement.targetProfileIds,
+      attachmentKey: placement.key,
+      remark: '示例工作台型材接点',
+    }));
+
+  const addPanelConnector = (
+    panel: DIYSceneItem,
+    profile: DIYSceneItem,
+    position: Vec3,
+    rotation: Vec3,
+    key: string,
+  ) => items.push({
+    ...createItem('l_connector', items.length, '2020'),
+    position,
+    rotation,
+    lockedPosition: true,
+    autoGenerated: true,
+    attachedProfileIds: [panel.id, profile.id],
+    attachmentKey: `PANEL:${key}`,
+    remark: panel.kind === 'pegboard' ? '洞洞板安装连接板' : '台面板安装连接板',
   });
-  [-470, 470].forEach((x) => [-230, 230].forEach((z) => items.push({ ...createItem('foot'), position: [x, 20, z] })));
+
+  // Four underside plates secure the worktop to the frame. Four face plates
+  // secure the pegboard to its two supporting uprights.
+  addPanelConnector(topBoard, frontRail, [-350, 769, 240], [90, 0, 0], 'WORKTOP:FRONT:L');
+  addPanelConnector(topBoard, frontRail, [350, 769, 240], [90, 0, 180], 'WORKTOP:FRONT:R');
+  addPanelConnector(topBoard, rearRail, [-350, 769, -240], [90, 0, 0], 'WORKTOP:REAR:L');
+  addPanelConnector(topBoard, rearRail, [350, 769, -240], [90, 0, 180], 'WORKTOP:REAR:R');
+  pegboardPosts.forEach((post, postIndex) => {
+    const x = postIndex === 0 ? -400 : 400;
+    addPanelConnector(pegboard, post, [x, 875, -237], [0, 0, postIndex === 0 ? 0 : 180], `PEGBOARD:${postIndex}:LOWER`);
+    addPanelConnector(pegboard, post, [x, 1185, -237], [0, 0, postIndex === 0 ? 0 : 180], `PEGBOARD:${postIndex}:UPPER`);
+  });
+
+  legs.forEach((leg) => items.push({
+    ...createItem('foot', items.length),
+    position: [leg.position[0], 0, leg.position[2]],
+    lockedPosition: true,
+    autoGenerated: true,
+    attachedProfileIds: [leg.id],
+    attachmentKey: `FOOT:${leg.id}`,
+    remark: '调整脚与工作台立柱底面连接',
+  }));
   return items;
 };
 
@@ -1464,7 +1931,23 @@ const linkedScrewTransform = (profile: DIYSceneItem, hole: DrillHole, items: DIY
   const grooveCoordinateMm = grooveSpanMm / 2
     - ((physicalGrooveIndex + 0.5) * grooveSpanMm) / grooveCount;
   const penetrationMm = hole.side === 'A' || hole.side === 'C' ? heightMm : widthMm;
-  const headEmbedMm = hole.type === 'countersunk' ? 5 : 4.5;
+  // Countersunk heads sit inside the profile face. A catalog button-head
+  // through connection is different: the visible surface opening is only a
+  // wrench/access hole, while the button head seats at the inner slot beside
+  // the mating profile. Flat-head through screws keep their explicit surface
+  // seat because they are used by the short wardrobe connection variant.
+  // The physical counterbore leaves the socket head visible at the groove
+  // surface. The rendered cylinder head is 4.5mm tall, so a 4mm recess keeps
+  // only its top lip/socket exposed in opaque mode while the shaft remains
+  // inside the extrusion.
+  const internalButtonHead = hole.type === 'through'
+    && screwHeadForHole(hole) === 'button_socket'
+    && hole.fastenerDirection !== 'outward';
+  const headEmbedMm = hole.type === 'countersunk'
+    ? 4
+    : internalButtonHead
+      ? Math.max(0, penetrationMm - 5)
+      : 0;
   const localPosition = new THREE.Vector3(
     -lengthMm / 2 + hole.positionMm,
     0,
@@ -1491,6 +1974,11 @@ const linkedScrewTransform = (profile: DIYSceneItem, hole: DrillHole, items: DIY
     localRotation.setFromEuler(new THREE.Euler(-Math.PI / 2, 0, 0, 'XYZ'));
   }
   if (hole.side === 'A' || hole.side === 'C') localPosition.z = grooveCoordinateMm;
+  const screwOutward = hole.fastenerDirection === 'outward';
+  if (screwOutward) {
+    localOutward.multiplyScalar(-1);
+    localRotation.multiply(new THREE.Quaternion().setFromEuler(new THREE.Euler(Math.PI, 0, 0, 'XYZ')));
+  }
   // The screw model's head occupies local +Y. Move its seat into the
   // extrusion by exactly the head depth so the top is flush with the surface.
   localPosition.addScaledVector(localOutward, -headEmbedMm);
@@ -1545,6 +2033,8 @@ const createLinkedScrew = (
   const screwHead = screwHeadForHole(hole);
   if (!screwHead) return null;
   const transform = linkedScrewTransform(profile, hole, items);
+  const accessoryProfileSize = profileAccessorySeriesFromVariant(profile.variantId);
+  const orderSpec = getDiyScrewOrderSpec(accessoryProfileSize, screwHead, transform.lengthMm);
   return {
     ...createItem('screw'),
     id: makeId(),
@@ -1556,10 +2046,10 @@ const createLinkedScrew = (
     position: transform.position,
     rotation: transform.rotation,
     width: 10,
-    height: transform.lengthMm,
+    height: orderSpec.lengthMm,
     colorId: 'natural',
     accessoryPrice: naturalScrewUnitPrice(profile.variantId),
-    accessoryProfileSize: profileAccessorySeriesFromVariant(profile.variantId),
+    accessoryProfileSize,
     screwHead,
     linkedProfileId: profile.id,
     linkedHoleId: hole.id,
@@ -1576,12 +2066,14 @@ const syncLinkedScrews = (source: DIYSceneItem[]) => {
     const hole = profile?.holes?.find((entry) => entry.id === item.linkedHoleId);
     if (!profile || !hole || !screwHeadForHole(hole)) return [];
     const transform = linkedScrewTransform(profile, hole, source);
+    const accessoryProfileSize = profileAccessorySeriesFromVariant(profile.variantId);
+    const orderSpec = getDiyScrewOrderSpec(accessoryProfileSize, screwHeadForHole(hole) || item.screwHead, transform.lengthMm);
     return [{
       ...item,
       position: transform.position,
       rotation: transform.rotation,
-      height: transform.lengthMm,
-      accessoryProfileSize: profileAccessorySeriesFromVariant(profile.variantId),
+      height: orderSpec.lengthMm,
+      accessoryProfileSize,
       screwHead: screwHeadForHole(hole) || item.screwHead,
     }];
   });
@@ -1616,6 +2108,10 @@ type ProfileSnap = {
   targetPort: string;
   movingPort: string;
   targetEndDistances: { left: number; right: number };
+  flushFaces?: Array<{
+    center: THREE.Vector3;
+    size: THREE.Vector3;
+  }>;
 };
 
 type SnapAlignment = 'auto' | ProfileSnap['alignment'];
@@ -1626,6 +2122,11 @@ type AccessoryPlacement = {
   targetProfileIds: string[];
   key: string;
   joint: boolean;
+  profileAdjustments?: Array<{
+    id: string;
+    length: number;
+    position: Vec3;
+  }>;
 };
 
 type ProfileBox = {
@@ -1666,6 +2167,162 @@ const profileBoxFromItem = (item: DIYSceneItem): ProfileBox => {
       new THREE.Vector3(0, 0, 1).applyQuaternion(quaternion).normalize(),
     ],
     halfSizes: [dimensions.length / 2, dimensions.height / 2, dimensions.width / 2],
+  };
+};
+
+type CabinetDoorOpening = {
+  profileIds: string[];
+  outer: { left: number; right: number; bottom: number; top: number };
+  inner: { left: number; right: number; bottom: number; top: number };
+  frontZ: number;
+  key: string;
+};
+
+const projectedBoxExtent = (box: ProfileBox, axis: THREE.Vector3) => box.axes.reduce((sum, boxAxis, index) => (
+  sum + box.halfSizes[index] * Math.abs(boxAxis.dot(axis))
+), 0);
+
+const detectCabinetDoorOpening = (
+  source: DIYSceneItem[],
+  preferredProfileIds?: Set<string>,
+): CabinetDoorOpening | null => {
+  const detect = (profiles: DIYSceneItem[]) => {
+    if (profiles.length < 4) return null;
+    const worldX = new THREE.Vector3(1, 0, 0);
+    const worldY = new THREE.Vector3(0, 1, 0);
+    const worldZ = new THREE.Vector3(0, 0, 1);
+    const entries = profiles.map((profile) => {
+      const box = profileBoxFromItem(profile);
+      const longAxis = box.axes[0];
+      const xExtent = projectedBoxExtent(box, worldX);
+      const yExtent = projectedBoxExtent(box, worldY);
+      const zExtent = projectedBoxExtent(box, worldZ);
+      return {
+        profile,
+        box,
+        xExtent,
+        yExtent,
+        frontSurface: box.center.z + zExtent,
+        horizontal: Math.abs(longAxis.dot(worldX)) >= 0.82,
+        vertical: Math.abs(longAxis.dot(worldY)) >= 0.82,
+      };
+    });
+    const frontMost = Math.max(...entries.map((entry) => entry.frontSurface));
+    const front = entries.filter((entry) => frontMost - entry.frontSurface <= 0.26);
+    const horizontal = front.filter((entry) => entry.horizontal).sort((a, b) => a.box.center.y - b.box.center.y);
+    const vertical = front.filter((entry) => entry.vertical).sort((a, b) => a.box.center.x - b.box.center.x);
+    if (horizontal.length < 2 || vertical.length < 2) return null;
+    const bottom = horizontal[0];
+    const top = horizontal[horizontal.length - 1];
+    const left = vertical[0];
+    const right = vertical[vertical.length - 1];
+    const frameTolerance = 0.6;
+    const cornerAligned = (
+      Math.abs((bottom.box.center.x - bottom.xExtent) - (left.box.center.x - left.xExtent)) <= frameTolerance
+      && Math.abs((top.box.center.x - top.xExtent) - (left.box.center.x - left.xExtent)) <= frameTolerance
+      && Math.abs((bottom.box.center.x + bottom.xExtent) - (right.box.center.x + right.xExtent)) <= frameTolerance
+      && Math.abs((top.box.center.x + top.xExtent) - (right.box.center.x + right.xExtent)) <= frameTolerance
+      && Math.abs((left.box.center.y - left.yExtent) - (bottom.box.center.y - bottom.yExtent)) <= frameTolerance
+      && Math.abs((right.box.center.y - right.yExtent) - (bottom.box.center.y - bottom.yExtent)) <= frameTolerance
+      && Math.abs((left.box.center.y + left.yExtent) - (top.box.center.y + top.yExtent)) <= frameTolerance
+      && Math.abs((right.box.center.y + right.yExtent) - (top.box.center.y + top.yExtent)) <= frameTolerance
+    );
+    if (!cornerAligned) return null;
+    const outer = {
+      left: (left.box.center.x - left.xExtent) * SCENE_SCALE,
+      right: (right.box.center.x + right.xExtent) * SCENE_SCALE,
+      bottom: (bottom.box.center.y - bottom.yExtent) * SCENE_SCALE,
+      top: (top.box.center.y + top.yExtent) * SCENE_SCALE,
+    };
+    const inner = {
+      left: (left.box.center.x + left.xExtent) * SCENE_SCALE,
+      right: (right.box.center.x - right.xExtent) * SCENE_SCALE,
+      bottom: (bottom.box.center.y + bottom.yExtent) * SCENE_SCALE,
+      top: (top.box.center.y - top.yExtent) * SCENE_SCALE,
+    };
+    if (inner.right - inner.left < 20 || inner.top - inner.bottom < 20) return null;
+    const profileIds = [left.profile.id, right.profile.id, bottom.profile.id, top.profile.id];
+    return {
+      profileIds,
+      outer,
+      inner,
+      frontZ: Math.max(left.frontSurface, right.frontSurface, bottom.frontSurface, top.frontSurface) * SCENE_SCALE,
+      key: `${profileIds.slice().sort().join(':')}:CABINET-DOOR`,
+    } satisfies CabinetDoorOpening;
+  };
+
+  const allProfiles = source.filter((item) => item.kind === 'profile');
+  if (preferredProfileIds && preferredProfileIds.size >= 4) {
+    const preferred = detect(allProfiles.filter((item) => preferredProfileIds.has(item.id)));
+    if (preferred) return preferred;
+  }
+  return detect(allProfiles);
+};
+
+const cabinetDoorRenderedThickness = (item: DIYSceneItem) => (
+  item.doorMaterial === 'aluminum' ? 18 : item.doorMaterial === 'marine' ? Math.max(12, item.thickness || 18) : 2
+);
+
+const cabinetDoorBounds = (opening: CabinetDoorOpening, overlay: DIYDoorOverlay) => {
+  const base = overlay === 'full'
+    ? opening.outer
+    : overlay === 'half'
+      ? {
+        left: (opening.outer.left + opening.inner.left) / 2,
+        right: (opening.outer.right + opening.inner.right) / 2,
+        bottom: (opening.outer.bottom + opening.inner.bottom) / 2,
+        top: (opening.outer.top + opening.inner.top) / 2,
+      }
+      : opening.inner;
+  return {
+    left: base.left + 2,
+    right: base.right - 2,
+    bottom: base.bottom + 2,
+    top: base.top - 2,
+  };
+};
+
+const fitCabinetDoorToOpening = (item: DIYSceneItem, opening: CabinetDoorOpening): DIYSceneItem => {
+  const overlay = item.doorOverlay || 'full';
+  const bounds = cabinetDoorBounds(opening, overlay);
+  const renderedThickness = cabinetDoorRenderedThickness(item);
+  const frontOffset = overlay === 'inset'
+    ? -(renderedThickness / 2 + 2)
+    : renderedThickness / 2 + 2;
+  return {
+    ...item,
+    width: Math.max(1, Math.round(bounds.right - bounds.left)),
+    height: Math.max(1, Math.round(bounds.top - bounds.bottom)),
+    position: [
+      Math.round((bounds.left + bounds.right) / 2),
+      Math.round((bounds.bottom + bounds.top) / 2),
+      Math.round(opening.frontZ + frontOffset),
+    ],
+    rotation: [0, 0, 0],
+    lockedPosition: true,
+    autoGenerated: true,
+    attachedProfileIds: opening.profileIds,
+    attachmentKey: opening.key,
+    quantity: 1,
+  };
+};
+
+const endCapPlacementForProfile = (profile: DIYSceneItem, end: 'left' | 'right') => {
+  const box = profileBoxFromItem(profile);
+  const direction = end === 'left' ? -1 : 1;
+  const capThickness = 3 / SCENE_SCALE;
+  const position = box.center.clone().addScaledVector(
+    box.axes[0],
+    direction * (box.halfSizes[0] + capThickness / 2 + 0.002),
+  );
+  return {
+    position: [
+      Math.round(position.x * SCENE_SCALE),
+      Math.round(position.y * SCENE_SCALE),
+      Math.round(position.z * SCENE_SCALE),
+    ] as Vec3,
+    rotation: profile.rotation,
+    key: `${profile.id}:END:${end}`,
   };
 };
 
@@ -1718,9 +2375,10 @@ const accessoryPlacementRotation = (firstAxis: THREE.Vector3, secondAxis?: THREE
 const teeConnectorPlacementRotation = (
   portDirections: [THREE.Vector3, THREE.Vector3, THREE.Vector3],
 ): Vec3 => {
-  // No.9's visible ports are local +X, -Y and +Z. Try every profile-to-port
-  // assignment and keep the right-handed basis whose third port also faces
-  // the remaining profile.
+  // No.9's three profile-mating faces are local +X, -Y and +Z. Try every
+  // profile-to-face assignment and keep the right-handed basis whose third
+  // face also points toward the remaining profile. The circular installation
+  // openings belong on the opposite, externally visible faces.
   const permutations = [
     [0, 1, 2], [0, 2, 1],
     [1, 0, 2], [1, 2, 0],
@@ -1745,20 +2403,60 @@ const accessoryPlacementCandidates = (
   const series = accessory.accessoryProfileSize || '2020';
   const profiles = items.filter((item) => item.kind === 'profile' && profileAccessorySeries(item) === series);
   const candidates: AccessoryPlacement[] = [];
-  if (accessory.kind !== 'tee_connector') {
-    profiles.forEach((profile) => {
-      const box = profileBoxFromItem(profile);
-      [-1, 1].forEach((side) => {
-        candidates.push({
-          position: box.center.clone().addScaledVector(box.axes[0], side * box.halfSizes[0]),
-          rotation: accessoryPlacementRotation(box.axes[0]),
-          targetProfileIds: [profile.id],
-          key: `${profile.id}:END-${side > 0 ? 'R' : 'L'}`,
-          joint: false,
-        });
-      });
-    });
-  }
+  const singleProfileCandidates: AccessoryPlacement[] = [];
+
+  const accessoryOutsideBothProfiles = (
+    position: THREE.Vector3,
+    rotation: Vec3,
+    firstBox: ProfileBox,
+    secondBox: ProfileBox,
+    targetProfileIds: string[],
+  ) => {
+    // The plate/bracket local X/Y footprint is intentionally modeled from
+    // its two seating directions. Treat its physical thickness as an OBB and
+    // reject any candidate whose body enters either profile. Touching the
+    // profile face is allowed; positive volume overlap is not.
+    const dimensions = getAccessoryDimensions(accessory.kind, series);
+    const quaternion = new THREE.Quaternion().setFromEuler(new THREE.Euler(
+      THREE.MathUtils.degToRad(rotation[0]),
+      THREE.MathUtils.degToRad(rotation[1]),
+      THREE.MathUtils.degToRad(rotation[2]),
+      'XYZ',
+    ));
+    const axes = [
+      new THREE.Vector3(1, 0, 0).applyQuaternion(quaternion).normalize(),
+      new THREE.Vector3(0, 1, 0).applyQuaternion(quaternion).normalize(),
+      new THREE.Vector3(0, 0, 1).applyQuaternion(quaternion).normalize(),
+    ] as [THREE.Vector3, THREE.Vector3, THREE.Vector3];
+    // This helper is used by the centered flat No.7 plates. Full-width cast
+    // No.1/No.2 seats use their dedicated two-arm collision boxes below.
+    const center = position.clone();
+    const accessoryBox: ProfileBox = {
+      center,
+      axes,
+      halfSizes: [
+        Math.max(1, dimensions.width) / SCENE_SCALE / 2,
+        Math.max(1, dimensions.height) / SCENE_SCALE / 2,
+        Math.max(1, dimensions.thickness) / SCENE_SCALE / 2,
+      ],
+    };
+    if (
+      orientedBoxesOverlap(accessoryBox, firstBox, 0.001)
+      || orientedBoxesOverlap(accessoryBox, secondBox, 0.001)
+    ) return false;
+
+    if (accessory.kind === 'l_connector') {
+      // Reject a face whose complete body enters a third profile; the opposite
+      // clear face remains available and its rotation is automatically flipped.
+      const targetIds = new Set(targetProfileIds);
+      const blockedByAnotherProfile = profiles.some((profile) => (
+        !targetIds.has(profile.id)
+        && orientedBoxesOverlap(accessoryBox, profileBoxFromItem(profile), 0.001)
+      ));
+      if (blockedByAnotherProfile) return false;
+    }
+    return true;
+  };
 
   if (accessory.kind === 'tee_connector') {
     const moduleSize = Number(series.slice(0, 2)) / SCENE_SCALE;
@@ -1807,38 +2505,415 @@ const accessoryPlacementCandidates = (
         // three end faces. Legacy scenes whose center lines share one endpoint
         // fall back to that common endpoint instead of receiving an offset.
         const position = faceCenterSpread <= moduleSize * 0.45 ? faceAlignedCenter : jointCenter;
-        const targetProfileIds = [first.id, second.id, third.id];
-        candidates.push({
+        const targetProfiles = [first, second, third];
+        const targetProfileIds = targetProfiles.map((profile) => profile.id);
+        const profileAdjustments = targetProfiles.flatMap((profile, profileIndex) => {
+          const endpoint = endpoints[profileIndex];
+          const desiredFace = position.clone().addScaledVector(endpoint.portDirection, moduleSize / 2);
+          const cutDistance = desiredFace.clone().sub(endpoint.point).dot(endpoint.portDirection);
+          if (cutDistance <= 0.012 || cutDistance > moduleSize * 1.15) return [];
+          const nextLength = Math.round((profileBoxFromItem(profile).halfSizes[0] * 2 - cutDistance) * SCENE_SCALE);
+          if (nextLength < 21) return [];
+          const nextPosition = profileBoxFromItem(profile).center
+            .clone()
+            .addScaledVector(endpoint.portDirection, cutDistance / 2);
+          return [{
+            id: profile.id,
+            length: nextLength,
+            position: [
+              Math.round(nextPosition.x * SCENE_SCALE),
+              Math.round(nextPosition.y * SCENE_SCALE),
+              Math.round(nextPosition.z * SCENE_SCALE),
+            ] as Vec3,
+          }];
+        });
+        singleProfileCandidates.push({
           position,
           rotation: teeConnectorPlacementRotation(endpoints.map((endpoint) => endpoint.portDirection) as [THREE.Vector3, THREE.Vector3, THREE.Vector3]),
           targetProfileIds,
           key: `${targetProfileIds.slice().sort().join(':')}:TEE-3WAY`,
           joint: true,
+          profileAdjustments,
         });
       });
     }));
-    return candidates;
+    // No.9 candidates are assembled from profile triples above rather than
+    // the two-profile candidate list used by the other connectors.
+    return singleProfileCandidates;
   }
 
   profiles.forEach((first, firstIndex) => profiles.slice(firstIndex + 1).forEach((second) => {
     const firstBox = profileBoxFromItem(first);
     const secondBox = profileBoxFromItem(second);
     if (Math.abs(firstBox.axes[0].dot(secondBox.axes[0])) > 0.15) return;
-    const firstStart = firstBox.center.clone().addScaledVector(firstBox.axes[0], -firstBox.halfSizes[0]);
-    const firstEnd = firstBox.center.clone().addScaledVector(firstBox.axes[0], firstBox.halfSizes[0]);
-    const secondStart = secondBox.center.clone().addScaledVector(secondBox.axes[0], -secondBox.halfSizes[0]);
-    const secondEnd = secondBox.center.clone().addScaledVector(secondBox.axes[0], secondBox.halfSizes[0]);
-    const closest = closestSegmentPoints(firstStart, firstEnd, secondStart, secondEnd);
+    const contact = profileContact(firstBox, secondBox);
+    if (!contact) return;
     const moduleSize = Number(series.slice(0, 2)) / SCENE_SCALE;
-    if (closest.first.distanceTo(closest.second) > moduleSize * 1.6) return;
-    candidates.push({
-      position: closest.first.clone().add(closest.second).multiplyScalar(0.5),
-      rotation: accessoryPlacementRotation(firstBox.axes[0], secondBox.axes[0]),
-      targetProfileIds: [first.id, second.id],
-      key: [first.id, second.id].sort().join(':JOINT:'),
-      joint: true,
-    });
+    const availableAlong = (box: ProfileBox, direction: THREE.Vector3) => {
+      const localDirection = Math.sign(direction.dot(box.axes[0])) || 1;
+      const contactCoordinate = contact.point.clone().sub(box.center).dot(box.axes[0]);
+      return localDirection > 0
+        ? box.halfSizes[0] - contactCoordinate
+        : box.halfSizes[0] + contactCoordinate;
+    };
+    const availableBothWays = (box: ProfileBox) => {
+      const contactCoordinate = contact.point.clone().sub(box.center).dot(box.axes[0]);
+      return {
+        negative: box.halfSizes[0] + contactCoordinate,
+        positive: box.halfSizes[0] - contactCoordinate,
+      };
+    };
+    const armDirection = (box: ProfileBox) => {
+      const inward = box.center.clone().sub(contact.point).dot(box.axes[0]);
+      if (Math.abs(inward) > moduleSize * 0.2) {
+        return box.axes[0].clone().multiplyScalar(Math.sign(inward));
+      }
+      const contactAlongAxis = contact.point.clone().sub(box.center).dot(box.axes[0]);
+      const positiveRemaining = box.halfSizes[0] - contactAlongAxis;
+      const negativeRemaining = box.halfSizes[0] + contactAlongAxis;
+      return box.axes[0].clone().multiplyScalar(positiveRemaining >= negativeRemaining ? 1 : -1);
+    };
+    const firstArm = armDirection(firstBox);
+    const secondArm = armDirection(secondBox);
+    const targetProfileIds = [first.id, second.id];
+    const baseKey = targetProfileIds.slice().sort().join(':JOINT:');
+    const addFaceCandidates = (
+      localX: THREE.Vector3,
+      localY: THREE.Vector3,
+      centerOffset: THREE.Vector3,
+      keySuffix: string,
+    ) => {
+      const baseFaceNormal = new THREE.Vector3().crossVectors(localX, localY).normalize();
+      [-1, 1].forEach((faceSide) => {
+        const faceNormal = baseFaceNormal.clone().multiplyScalar(faceSide);
+        const projectedRadius = (box: ProfileBox) => box.axes.reduce(
+          (sum, axis, index) => sum + box.halfSizes[index] * Math.abs(axis.dot(faceNormal)),
+          0,
+        );
+        // A flat bracket/plate can touch both profiles only when the chosen
+        // exterior faces are actually coplanar. Using the larger half-section
+        // as one shared offset made mixed 2020/2040 joints hover by 10 mm (or
+        // put the opposite candidate inside one profile) because their center
+        // planes are intentionally offset even though one exterior face is
+        // flush. Resolve each real surface plane independently instead.
+        const firstSurfaceCoordinate = firstBox.center.dot(faceNormal) + projectedRadius(firstBox);
+        const secondSurfaceCoordinate = secondBox.center.dot(faceNormal) + projectedRadius(secondBox);
+        if (Math.abs(firstSurfaceCoordinate - secondSurfaceCoordinate) > 0.012) return;
+        const surfaceCoordinate = (firstSurfaceCoordinate + secondSurfaceCoordinate) / 2;
+        const connectorDepth = accessory.kind === 'connector'
+          ? Math.max(1, accessory.thickness || 2) / SCENE_SCALE
+          : Math.max(1, accessory.thickness || moduleSize * SCENE_SCALE * 0.25) / SCENE_SCALE;
+        const position = contact.point.clone().add(centerOffset);
+        // Keep the whole accessory outside the extrusion. The 0.1 mm stand-off
+        // prevents bevelled/selected geometry from z-fighting or clipping into
+        // the profile while remaining visually flush.
+        const desiredCenterCoordinate = surfaceCoordinate + connectorDepth / 2 + 0.001;
+        position.addScaledVector(
+          faceNormal,
+          desiredCenterCoordinate - position.dot(faceNormal),
+        );
+        const rotation = faceSide > 0
+            ? accessoryPlacementRotation(localX, localY)
+            : accessory.kind === 't_connector'
+              // A T plate is symmetric across its crossbar: reverse local X
+              // to put the same footprint on the opposite profile face.
+              ? accessoryPlacementRotation(localX.clone().multiplyScalar(-1), localY)
+              // No.1 and the L plate are symmetric when their two seating
+              // arms are exchanged, which flips the face without pointing an
+              // arm away from either profile.
+              : accessoryPlacementRotation(localY, localX);
+        if (accessory.kind === 'l_connector' || accessory.kind === 't_connector') {
+          // No.7 L/T plates are not centred in their rectangular bounding
+          // boxes. Both use the real profile-to-profile contact as the origin:
+          // an L starts both arms there, while a T centres its crossbar there
+          // and starts only its stem there. Verify every seating corner of the
+          // actual arms, then test those arms (not the empty bounding rectangle)
+          // against third-profile obstructions.
+          const plateKind = accessory.kind;
+          const dimensions = getAccessoryDimensions(plateKind, series);
+          const armLengthX = Math.max(1, dimensions.width) / SCENE_SCALE;
+          const armLengthY = Math.max(1, dimensions.height) / SCENE_SCALE;
+          const armWidth = getAccessoryGeometryModuleSize(plateKind, series) / SCENE_SCALE;
+          const plateThickness = Math.max(1, dimensions.thickness) / SCENE_SCALE;
+          const quaternion = new THREE.Quaternion().setFromEuler(new THREE.Euler(
+            THREE.MathUtils.degToRad(rotation[0]),
+            THREE.MathUtils.degToRad(rotation[1]),
+            THREE.MathUtils.degToRad(rotation[2]),
+            'XYZ',
+          ));
+          const plateX = new THREE.Vector3(1, 0, 0).applyQuaternion(quaternion).normalize();
+          const plateY = new THREE.Vector3(0, 1, 0).applyQuaternion(quaternion).normalize();
+          const plateZ = new THREE.Vector3(0, 0, 1).applyQuaternion(quaternion).normalize();
+          const xTarget = Math.abs(plateX.dot(firstBox.axes[0])) > 0.9 ? firstBox : secondBox;
+          const yTarget = xTarget === firstBox ? secondBox : firstBox;
+          const seatingOrigin = position.clone().addScaledVector(faceNormal, -plateThickness / 2 - 0.001);
+          const pointIsOnProfile = (point: THREE.Vector3, box: ProfileBox) => {
+            const relative = point.clone().sub(box.center);
+            return box.axes.every((axis, axisIndex) => (
+              Math.abs(relative.dot(axis)) <= box.halfSizes[axisIndex] + 0.014
+            ));
+          };
+          // Test support just behind the exterior face. The plate itself sits
+          // 0.1mm above the aluminium to avoid z-fighting, so checking the
+          // literal seating plane against a closed OBB is susceptible to
+          // floating-point noise after 90-degree rotations. Moving the probe
+          // 0.2mm into the profile makes this a true footprint/support test:
+          // unsupported overhang still fails, while a flush plate does not.
+          const supportProbe = (point: THREE.Vector3) => (
+            point.clone().addScaledVector(faceNormal, -0.002)
+          );
+          const xArmExtents = plateKind === 't_connector'
+            ? [-armLengthX / 2, armLengthX / 2]
+            : [0, armLengthX];
+          const xArmCorners = xArmExtents.flatMap((along) => [-armWidth / 2, armWidth / 2].map((across) => (
+            seatingOrigin.clone().addScaledVector(plateX, along).addScaledVector(plateY, across)
+          )));
+          const yArmCorners = [0, armLengthY].flatMap((along) => [-armWidth / 2, armWidth / 2].map((across) => (
+            seatingOrigin.clone().addScaledVector(plateY, along).addScaledVector(plateX, across)
+          )));
+          const pointIsSupported = (point: THREE.Vector3) => (
+            pointIsOnProfile(supportProbe(point), firstBox) || pointIsOnProfile(supportProbe(point), secondBox)
+          );
+          if (
+            xArmCorners.some((corner) => !pointIsOnProfile(supportProbe(corner), xTarget))
+            || yArmCorners.some((corner) => (
+              plateKind === 't_connector'
+                // The bottom module of a physical T stem overlaps the
+                // crossbar profile before continuing onto the perpendicular
+                // profile; support may therefore transfer between the two,
+                // but no corner may extend beyond their combined surfaces.
+                ? !pointIsSupported(corner)
+                : !pointIsOnProfile(supportProbe(corner), yTarget)
+            ))
+          ) return;
+
+          const plateAxes = [plateX, plateY, plateZ] as [THREE.Vector3, THREE.Vector3, THREE.Vector3];
+          const xArm: ProfileBox = {
+            center: plateKind === 't_connector'
+              ? position.clone()
+              : position.clone().addScaledVector(plateX, armLengthX / 2),
+            axes: plateAxes,
+            halfSizes: [armLengthX / 2, armWidth / 2, plateThickness / 2],
+          };
+          const yArm: ProfileBox = {
+            center: position.clone().addScaledVector(plateY, armLengthY / 2),
+            axes: plateAxes,
+            halfSizes: [armWidth / 2, armLengthY / 2, plateThickness / 2],
+          };
+          const targetIds = new Set(targetProfileIds);
+          if (profiles.some((profile) => (
+            !targetIds.has(profile.id)
+            && (
+              orientedBoxesOverlap(xArm, profileBoxFromItem(profile), 0.001)
+              || orientedBoxesOverlap(yArm, profileBoxFromItem(profile), 0.001)
+            )
+          ))) return;
+        } else if (!accessoryOutsideBothProfiles(position, rotation, firstBox, secondBox, targetProfileIds)) return;
+        candidates.push({
+          position,
+          rotation,
+          targetProfileIds,
+          key: `${baseKey}:${keySuffix}:FACE-${faceSide > 0 ? 'A' : 'B'}`,
+          joint: true,
+        });
+      });
+    };
+
+    if (accessory.kind === 'connector') {
+      const horizontalLength = Math.max(1, accessory.width || moduleSize * SCENE_SCALE) / SCENE_SCALE;
+      const verticalLength = Math.max(1, accessory.height || moduleSize * SCENE_SCALE) / SCENE_SCALE;
+      if (availableAlong(firstBox, firstArm) + 1e-6 < horizontalLength) return;
+      if (availableAlong(secondBox, secondArm) + 1e-6 < verticalLength) return;
+
+      const localZ = new THREE.Vector3().crossVectors(firstArm, secondArm).normalize();
+      const bracketDepth = moduleSize;
+      const wallThickness = THREE.MathUtils.clamp(moduleSize * 0.18, 0.026, 0.06);
+      const axes = [firstArm, secondArm, localZ] as [THREE.Vector3, THREE.Vector3, THREE.Vector3];
+      const halfModule = moduleSize / 2;
+      const cornerOffsets = [-halfModule, 0, halfModule];
+      const placementRotation = accessoryPlacementRotation(firstArm, secondArm);
+      cornerOffsets.forEach((firstOffset) => {
+        cornerOffsets.forEach((secondOffset) => {
+          const origin = contact.point.clone()
+            .addScaledVector(firstArm, firstOffset)
+            .addScaledVector(secondArm, secondOffset);
+          const horizontalSeat: ProfileBox = {
+            center: origin.clone()
+              .addScaledVector(firstArm, horizontalLength / 2)
+              .addScaledVector(secondArm, wallThickness / 2),
+            axes,
+            halfSizes: [horizontalLength / 2, wallThickness / 2, bracketDepth / 2],
+          };
+          const verticalSeat: ProfileBox = {
+            center: origin.clone()
+              .addScaledVector(firstArm, wallThickness / 2)
+              .addScaledVector(secondArm, verticalLength / 2),
+            axes,
+            halfSizes: [wallThickness / 2, verticalLength / 2, bracketDepth / 2],
+          };
+          const installationInterferes = [horizontalSeat, verticalSeat].some((seat) => (
+            orientedBoxesOverlap(seat, firstBox, 0.001)
+            || orientedBoxesOverlap(seat, secondBox, 0.001)
+          ));
+          if (installationInterferes) return;
+          if (
+            orientedBoxesGap(horizontalSeat, firstBox) > 0.002
+            || orientedBoxesGap(verticalSeat, secondBox) > 0.002
+          ) return;
+          const targetIds = new Set(targetProfileIds);
+          const blockedByAnotherProfile = profiles.some((profile) => (
+            !targetIds.has(profile.id)
+            && (
+              orientedBoxesOverlap(horizontalSeat, profileBoxFromItem(profile), 0.001)
+              || orientedBoxesOverlap(verticalSeat, profileBoxFromItem(profile), 0.001)
+            )
+          ));
+          if (blockedByAnotherProfile) return;
+          candidates.push({
+            position: origin,
+            rotation: placementRotation,
+            targetProfileIds,
+            key: `${baseKey}:CAST-1:${firstOffset.toFixed(3)}:${secondOffset.toFixed(3)}`,
+            joint: true,
+          });
+        });
+      });
+      return;
+    }
+
+    if (accessory.kind === 'extruded_connector') {
+      const armLength = 50 / SCENE_SCALE;
+      if (availableAlong(firstBox, firstArm) + 1e-6 < armLength) return;
+      if (availableAlong(secondBox, secondArm) + 1e-6 < armLength) return;
+
+      const localZ = new THREE.Vector3().crossVectors(firstArm, secondArm).normalize();
+      const bracketDepth = moduleSize;
+      const wallThickness = THREE.MathUtils.clamp(moduleSize * 0.22, 0.032, 0.07);
+      const axes = [firstArm, secondArm, localZ] as [THREE.Vector3, THREE.Vector3, THREE.Vector3];
+      // `profileContact` returns the centre of the touching region. For a butt
+      // joint that is not the bracket's physical origin: a full-width 5020
+      // casting starts at the free inside corner shared by the two profile
+      // surfaces. Probe the neighbouring half-module offsets and keep only a
+      // position where each 50 mm leg surface-touches its intended profile
+      // without entering either aluminum body. This works for 1515/2020/3030
+      // and for either ordering/orientation of the two profiles.
+      const halfModule = moduleSize / 2;
+      const cornerOffsets = [-halfModule, 0, halfModule];
+      const placementRotation = accessoryPlacementRotation(firstArm, secondArm);
+      cornerOffsets.forEach((firstOffset) => {
+        cornerOffsets.forEach((secondOffset) => {
+          const origin = contact.point.clone()
+            .addScaledVector(firstArm, firstOffset)
+            .addScaledVector(secondArm, secondOffset);
+          const horizontalArm: ProfileBox = {
+            center: origin.clone()
+              .addScaledVector(firstArm, armLength / 2)
+              .addScaledVector(secondArm, wallThickness / 2),
+            axes,
+            halfSizes: [armLength / 2, wallThickness / 2, bracketDepth / 2],
+          };
+          const verticalArm: ProfileBox = {
+            center: origin.clone()
+              .addScaledVector(firstArm, wallThickness / 2)
+              .addScaledVector(secondArm, armLength / 2),
+            axes,
+            halfSizes: [wallThickness / 2, armLength / 2, bracketDepth / 2],
+          };
+          const installationInterferes = [horizontalArm, verticalArm].some((arm) => (
+            orientedBoxesOverlap(arm, firstBox, 0.001)
+            || orientedBoxesOverlap(arm, secondBox, 0.001)
+          ));
+          if (installationInterferes) return;
+          const firstLegSeated = orientedBoxesGap(horizontalArm, firstBox) <= 0.002;
+          const secondLegSeated = orientedBoxesGap(verticalArm, secondBox) <= 0.002;
+          if (!firstLegSeated || !secondLegSeated) return;
+          candidates.push({
+            position: origin,
+            rotation: placementRotation,
+            targetProfileIds,
+            key: `${baseKey}:EXTRUDED-2:${firstOffset.toFixed(3)}:${secondOffset.toFixed(3)}`,
+            joint: true,
+          });
+        });
+      });
+      return;
+    }
+
+    if (accessory.kind === 'hidden_connector') {
+      const armReach = Math.max(moduleSize, (accessory.width || moduleSize * 1.4 * SCENE_SCALE) / SCENE_SCALE);
+      if (availableAlong(firstBox, firstArm) + 1e-6 < armReach) return;
+      if (availableAlong(secondBox, secondArm) + 1e-6 < armReach) return;
+      const baseFaceNormal = new THREE.Vector3().crossVectors(firstArm, secondArm).normalize();
+      const connectorDepth = Math.max(1, accessory.thickness || moduleSize * 0.14 * SCENE_SCALE) / SCENE_SCALE;
+      [-1, 1].forEach((faceSide) => {
+        const faceNormal = baseFaceNormal.clone().multiplyScalar(faceSide);
+        const projectedRadius = (box: ProfileBox) => box.axes.reduce(
+          (sum, axis, index) => sum + box.halfSizes[index] * Math.abs(axis.dot(faceNormal)),
+          0,
+        );
+        const firstSurfaceCoordinate = firstBox.center.dot(faceNormal) + projectedRadius(firstBox);
+        const secondSurfaceCoordinate = secondBox.center.dot(faceNormal) + projectedRadius(secondBox);
+        // Both arms share the same exposed slot plane. A staggered/non-
+        // coplanar face cannot physically accept this single casting.
+        if (Math.abs(firstSurfaceCoordinate - secondSurfaceCoordinate) > 0.012) return;
+        const surfaceCoordinate = (firstSurfaceCoordinate + secondSurfaceCoordinate) / 2;
+        const position = contact.point.clone();
+        // Recess the casting below the profile surface so its strip and socket
+        // remain visible through the slot without protruding outside.
+        const desiredCenterCoordinate = surfaceCoordinate - connectorDepth / 2 + 0.002;
+        position.addScaledVector(faceNormal, desiredCenterCoordinate - position.dot(faceNormal));
+        const rotation = faceSide > 0
+          ? accessoryPlacementRotation(firstArm, secondArm)
+          : accessoryPlacementRotation(secondArm, firstArm);
+        candidates.push({
+          position,
+          rotation,
+          targetProfileIds,
+          key: `${baseKey}:SLOT-5:FACE-${faceSide > 0 ? 'A' : 'B'}`,
+          joint: true,
+        });
+      });
+      return;
+    }
+
+    if (accessory.kind === 'l_connector') {
+      const size = Math.max(1, accessory.width || 60) / SCENE_SCALE;
+      if (availableAlong(firstBox, firstArm) + 1e-6 < size) return;
+      if (availableAlong(secondBox, secondArm) + 1e-6 < size) return;
+      addFaceCandidates(
+        firstArm,
+        secondArm,
+        new THREE.Vector3(),
+        'L-PLATE',
+      );
+      return;
+    }
+
+    if (accessory.kind === 't_connector') {
+      const width = Math.max(1, accessory.width || 60) / SCENE_SCALE;
+      const height = Math.max(1, accessory.height || 65) / SCENE_SCALE;
+      const possibilities = [
+        { crossbarBox: firstBox, stemBox: secondBox, crossbarAxis: firstBox.axes[0], stemDirection: secondArm, suffix: 'T-A' },
+        { crossbarBox: secondBox, stemBox: firstBox, crossbarAxis: secondBox.axes[0], stemDirection: firstArm, suffix: 'T-B' },
+      ];
+      possibilities.forEach((possibility) => {
+        const crossbarSpace = availableBothWays(possibility.crossbarBox);
+        if (crossbarSpace.negative + 1e-6 < width / 2 || crossbarSpace.positive + 1e-6 < width / 2) return;
+        if (availableAlong(possibility.stemBox, possibility.stemDirection) + 1e-6 < height) return;
+        addFaceCandidates(
+          possibility.crossbarAxis,
+          possibility.stemDirection,
+          // `profileContact` lies on the perpendicular member's butt face.
+          // The visible T intersection is one half-module back at the centre
+          // line of the continuous crossbar profile.
+          possibility.stemDirection.clone().multiplyScalar(-moduleSize / 2),
+          possibility.suffix,
+        );
+      });
+    }
   }));
+  // Keep completed two-profile joint candidates first so dense assemblies do
+  // not lose their most useful hotspots when the visual marker pool is capped.
   return candidates;
 };
 
@@ -1859,9 +2934,65 @@ const findAccessoryPlacement = (
   .sort((first, second) => first.priority - second.priority || first.distance - second.distance)[0]?.candidate || null;
 
 const syncAttachedAccessories = (source: DIYSceneItem[]) => source.map((item) => {
+  if (item.lockedPosition && item.attachmentKey?.startsWith('PANEL:')) {
+    const survivingAttachmentIds = (item.attachedProfileIds || []).filter((id) => source.some((candidate) => candidate.id === id));
+    if (survivingAttachmentIds.length === 0) {
+      return {
+        ...item,
+        lockedPosition: false,
+        attachedProfileIds: undefined,
+        attachmentKey: undefined,
+      };
+    }
+    return survivingAttachmentIds.length === (item.attachedProfileIds || []).length
+      ? item
+      : { ...item, attachedProfileIds: survivingAttachmentIds };
+  }
+  if (item.kind === 'cabinet_door' && item.lockedPosition) {
+    const preferredIds = new Set(item.attachedProfileIds || []);
+    const opening = detectCabinetDoorOpening(source, preferredIds);
+    if (!opening || (item.attachmentKey && opening.key !== item.attachmentKey && preferredIds.size >= 4)) {
+      return {
+        ...item,
+        lockedPosition: false,
+        attachedProfileIds: undefined,
+        attachmentKey: undefined,
+      };
+    }
+    return fitCabinetDoorToOpening(item, opening);
+  }
+  if (item.kind === 'end_cap' && item.lockedPosition && item.attachedEnd) {
+    const profileId = item.attachedProfileIds?.[0];
+    const profile = source.find((candidate) => candidate.kind === 'profile' && candidate.id === profileId);
+    if (!profile) {
+      return {
+        ...item,
+        lockedPosition: false,
+        attachedProfileIds: undefined,
+        attachmentKey: undefined,
+      };
+    }
+    const placement = endCapPlacementForProfile(profile, item.attachedEnd);
+    const [width, height] = profileSize(profile.variantId);
+    return {
+      ...item,
+      variantId: profile.variantId,
+      accessoryProfileSize: profileAccessorySeriesFromVariant(profile.variantId),
+      width,
+      height,
+      thickness: 3,
+      position: placement.position,
+      rotation: placement.rotation,
+      attachmentKey: placement.key,
+    };
+  }
   if (!isConnectionAccessoryKind(item.kind) || !item.lockedPosition || !item.attachmentKey) return item;
   const candidates = accessoryPlacementCandidates(item, source);
-  const exactPlacement = candidates.find((candidate) => candidate.key === item.attachmentKey);
+  const exactPlacement = candidates.find((candidate) => candidate.key === item.attachmentKey)
+    // Keep generated/legacy No.1 and No.7 locks whose joint key predates the
+    // explicit face/orientation suffix. They resolve to the first compatible
+    // face instead of becoming loose on the next unrelated edit.
+    || candidates.find((candidate) => candidate.key.startsWith(`${item.attachmentKey}:`));
   const placement = exactPlacement || (item.kind === 'tee_connector'
     ? findAccessoryPlacement(
       item,
@@ -1888,6 +3019,7 @@ const syncAttachedAccessories = (source: DIYSceneItem[]) => source.map((item) =>
     ] as Vec3,
     rotation: placement.rotation,
     attachedProfileIds: placement.targetProfileIds,
+    attachmentKey: placement.key,
   };
 });
 
@@ -1914,6 +3046,34 @@ const orientedBoxesOverlap = (first: ProfileBox, second: ProfileBox, tolerance =
     );
     return centerDistance < firstRadius + secondRadius - tolerance;
   });
+};
+
+// Separating-axis distance between two oriented boxes. Zero means their
+// surfaces touch (or overlap); callers pair this with `orientedBoxesOverlap`
+// when they need flush contact without penetration.
+const orientedBoxesGap = (first: ProfileBox, second: ProfileBox) => {
+  const axes = [
+    ...first.axes,
+    ...second.axes,
+    ...first.axes.flatMap((firstAxis) => second.axes.map((secondAxis) => (
+      new THREE.Vector3().crossVectors(firstAxis, secondAxis)
+    ))),
+  ];
+  const centerDelta = second.center.clone().sub(first.center);
+  return axes.reduce((largestGap, candidateAxis) => {
+    if (candidateAxis.lengthSq() < 1e-8) return largestGap;
+    const axis = candidateAxis.normalize();
+    const centerDistance = Math.abs(centerDelta.dot(axis));
+    const firstRadius = first.axes.reduce(
+      (sum, boxAxis, index) => sum + first.halfSizes[index] * Math.abs(boxAxis.dot(axis)),
+      0,
+    );
+    const secondRadius = second.axes.reduce(
+      (sum, boxAxis, index) => sum + second.halfSizes[index] * Math.abs(boxAxis.dot(axis)),
+      0,
+    );
+    return Math.max(largestGap, centerDistance - firstRadius - secondRadius);
+  }, 0);
 };
 
 const profileItemCollides = (candidate: DIYSceneItem, items: DIYSceneItem[]) => {
@@ -1979,6 +3139,270 @@ const profileEdgeClearances = (
     left: Math.round(clearance.left * SCENE_SCALE),
     right: Math.round(clearance.right * SCENE_SCALE),
   };
+};
+
+type ProfileWorldInterval = { min: number; max: number };
+type ProfileContact = {
+  point: THREE.Vector3;
+  size: THREE.Vector3;
+};
+type ProfileAxisGap = {
+  axisIndex: 0 | 1 | 2;
+  distance: number;
+  start: THREE.Vector3;
+  end: THREE.Vector3;
+};
+
+const WORLD_DIMENSION_AXES = [
+  new THREE.Vector3(1, 0, 0),
+  new THREE.Vector3(0, 1, 0),
+  new THREE.Vector3(0, 0, 1),
+] as const;
+
+const profileWorldIntervals = (box: ProfileBox): [ProfileWorldInterval, ProfileWorldInterval, ProfileWorldInterval] => (
+  WORLD_DIMENSION_AXES.map((worldAxis) => {
+    const radius = box.axes.reduce(
+      (sum, boxAxis, axisIndex) => sum + box.halfSizes[axisIndex] * Math.abs(boxAxis.dot(worldAxis)),
+      0,
+    );
+    const center = box.center.dot(worldAxis);
+    return { min: center - radius, max: center + radius };
+  }) as [ProfileWorldInterval, ProfileWorldInterval, ProfileWorldInterval]
+);
+
+const intervalGap = (first: ProfileWorldInterval, second: ProfileWorldInterval) => (
+  first.max < second.min
+    ? second.min - first.max
+    : second.max < first.min
+      ? first.min - second.max
+      : 0
+);
+
+const profileContact = (first: ProfileBox, second: ProfileBox): ProfileContact | null => {
+  if (orientedBoxesOverlap(first, second)) return null;
+  const firstIntervals = profileWorldIntervals(first);
+  const secondIntervals = profileWorldIntervals(second);
+  const gaps = firstIntervals.map((interval, axisIndex) => intervalGap(interval, secondIntervals[axisIndex]));
+  if (Math.max(...gaps) > 0.015) return null;
+
+  const point = new THREE.Vector3();
+  const size = new THREE.Vector3();
+  firstIntervals.forEach((firstInterval, axisIndex) => {
+    const secondInterval = secondIntervals[axisIndex];
+    const overlapStart = Math.max(firstInterval.min, secondInterval.min);
+    const overlapEnd = Math.min(firstInterval.max, secondInterval.max);
+    const worldAxis = WORLD_DIMENSION_AXES[axisIndex];
+    const coordinate = overlapEnd >= overlapStart
+      ? (overlapStart + overlapEnd) / 2
+      : firstInterval.max < secondInterval.min
+        ? (firstInterval.max + secondInterval.min) / 2
+        : (secondInterval.max + firstInterval.min) / 2;
+    const highlightSize = overlapEnd >= overlapStart
+      ? THREE.MathUtils.clamp(overlapEnd - overlapStart, 0.1, 0.42)
+      : 0.1;
+    point.addScaledVector(worldAxis, coordinate);
+    size.addScaledVector(worldAxis, highlightSize);
+  });
+  return { point, size };
+};
+
+type AutoConnectionJoint = {
+  key: string;
+  series: '2020' | '3030';
+  first: DIYSceneItem;
+  second: DIYSceneItem;
+  firstBox: ProfileBox;
+  secondBox: ProfileBox;
+  contact: ProfileContact;
+};
+
+const profileEndpointSideAt = (
+  box: ProfileBox,
+  point: THREE.Vector3,
+  moduleSize: number,
+): -1 | 1 | null => {
+  const coordinate = point.clone().sub(box.center).dot(box.axes[0]);
+  if (Math.abs(box.halfSizes[0] - Math.abs(coordinate)) > moduleSize * 0.7) return null;
+  return coordinate >= 0 ? 1 : -1;
+};
+
+const autoConnectionJoints = (source: DIYSceneItem[]): AutoConnectionJoint[] => {
+  const profiles = source.filter((item) => {
+    if (item.kind !== 'profile') return false;
+    const series = profileAccessorySeries(item);
+    return series === '2020' || series === '3030';
+  });
+  const joints: AutoConnectionJoint[] = [];
+  profiles.forEach((first, firstIndex) => profiles.slice(firstIndex + 1).forEach((second) => {
+    const firstSeries = profileAccessorySeries(first);
+    const secondSeries = profileAccessorySeries(second);
+    if (firstSeries !== secondSeries || (firstSeries !== '2020' && firstSeries !== '3030')) return;
+    const firstBox = profileBoxFromItem(first);
+    const secondBox = profileBoxFromItem(second);
+    if (Math.abs(firstBox.axes[0].dot(secondBox.axes[0])) > 0.15) return;
+    const contact = profileContact(firstBox, secondBox);
+    if (!contact) return;
+    const moduleSize = Number(firstSeries.slice(0, 2)) / SCENE_SCALE;
+    const firstEnd = profileEndpointSideAt(firstBox, contact.point, moduleSize);
+    const secondEnd = profileEndpointSideAt(secondBox, contact.point, moduleSize);
+    if (firstEnd === null && secondEnd === null) return;
+    joints.push({
+      key: [first.id, second.id].sort().join(':JOINT:'),
+      series: firstSeries,
+      first,
+      second,
+      firstBox,
+      secondBox,
+      contact,
+    });
+  }));
+  return joints;
+};
+
+type AccessoryEditJointStatus = 'add' | 'replace' | 'installed';
+
+const installedConnectionModesAtJoint = (
+  source: DIYSceneItem[],
+  joint: AutoConnectionJoint,
+): Set<DIYAutoConnectionMode> => {
+  const modes = new Set<DIYAutoConnectionMode>();
+  source.forEach((item) => {
+    if (item.attachmentKey !== joint.key && !item.attachmentKey?.startsWith(`${joint.key}:`)) return;
+    if (item.kind === 'connector') modes.add('corner_bracket');
+    if (item.kind === 'hidden_connector') modes.add('slot_connector');
+  });
+  const drillTapKey = `${joint.key}:DRILL-TAP`;
+  if (source.some((item) => (
+    item.kind === 'profile' && (item.holes || []).some((hole) => hole.jointKey === drillTapKey)
+  ))) modes.add('drill_tap');
+  return modes;
+};
+
+const accessoryEditJointStatus = (
+  source: DIYSceneItem[],
+  joint: AutoConnectionJoint,
+  mode: DIYAutoConnectionMode,
+): AccessoryEditJointStatus => {
+  const modes = installedConnectionModesAtJoint(source, joint);
+  if (modes.has(mode)) return 'installed';
+  return modes.size > 0 ? 'replace' : 'add';
+};
+
+type DrillTapJointPlan = {
+  jointKey: string;
+  drilledProfile: DIYSceneItem;
+  tappedProfile: DIYSceneItem;
+  tappedEnd: -1 | 1;
+  hole: DrillHole;
+};
+
+const drillTapJointPlan = (joint: AutoConnectionJoint): DrillTapJointPlan | null => {
+  const moduleSize = Number(joint.series.slice(0, 2)) / SCENE_SCALE;
+  const firstEnd = profileEndpointSideAt(joint.firstBox, joint.contact.point, moduleSize);
+  const secondEnd = profileEndpointSideAt(joint.secondBox, joint.contact.point, moduleSize);
+  let tappedProfile: DIYSceneItem;
+  let tappedBox: ProfileBox;
+  let tappedEnd: -1 | 1;
+  let drilledProfile: DIYSceneItem;
+  let drilledBox: ProfileBox;
+
+  if (firstEnd !== null && secondEnd === null) {
+    tappedProfile = joint.first;
+    tappedBox = joint.firstBox;
+    tappedEnd = firstEnd;
+    drilledProfile = joint.second;
+    drilledBox = joint.secondBox;
+  } else if (secondEnd !== null && firstEnd === null) {
+    tappedProfile = joint.second;
+    tappedBox = joint.secondBox;
+    tappedEnd = secondEnd;
+    drilledProfile = joint.first;
+    drilledBox = joint.firstBox;
+  } else {
+    // At an end-to-end corner, prefer tapping the upright member so the screw
+    // enters through the horizontal member like the physical reference. Fall
+    // back to a stable ID order when both axes are equally vertical.
+    const firstVertical = Math.abs(joint.firstBox.axes[0].y);
+    const secondVertical = Math.abs(joint.secondBox.axes[0].y);
+    const chooseFirst = firstVertical > secondVertical + 0.1
+      || (Math.abs(firstVertical - secondVertical) <= 0.1 && joint.first.id < joint.second.id);
+    tappedProfile = chooseFirst ? joint.first : joint.second;
+    tappedBox = chooseFirst ? joint.firstBox : joint.secondBox;
+    tappedEnd = (chooseFirst ? firstEnd : secondEnd) || 1;
+    drilledProfile = chooseFirst ? joint.second : joint.first;
+    drilledBox = chooseFirst ? joint.secondBox : joint.firstBox;
+  }
+
+  const crossAxisIndex = ([1, 2] as const)
+    .map((axisIndex) => ({ axisIndex, alignment: Math.abs(drilledBox.axes[axisIndex].dot(tappedBox.axes[0])) }))
+    .sort((first, second) => second.alignment - first.alignment)[0].axisIndex;
+  const contactCoordinate = joint.contact.point.clone().sub(drilledBox.center).dot(drilledBox.axes[crossAxisIndex]);
+  const entryDirection = contactCoordinate >= 0 ? -1 : 1;
+  const side = boxFaceSide(crossAxisIndex, entryDirection);
+  if (!side) return null;
+  const profileLengthMm = Math.max(20, drilledProfile.length || 1000);
+  const positionMm = THREE.MathUtils.clamp(
+    Math.round(joint.contact.point.clone().sub(drilledBox.center).dot(drilledBox.axes[0]) * SCENE_SCALE + profileLengthMm / 2),
+    5,
+    profileLengthMm - 5,
+  );
+  const grooveCount = Math.max(1, getProfileGrooveCount(drilledProfile.variantId, side));
+  const orderSpec = getDiyScrewOrderSpec(joint.series, 'socket_cylinder', joint.series === '3030' ? 45 : 30);
+  const jointKey = `${joint.key}:DRILL-TAP`;
+  return {
+    jointKey,
+    drilledProfile,
+    tappedProfile,
+    tappedEnd,
+    hole: {
+      id: makeId(),
+      jointKey,
+      side,
+      positionMm,
+      type: 'countersunk',
+      threadSize: orderSpec.threadSize,
+      fastenerHead: 'socket_cylinder',
+      fastenerLengthMm: orderSpec.lengthMm,
+      physicalGrooveIndex: Math.floor((grooveCount - 1) / 2),
+      grooveIndex: Math.floor((grooveCount - 1) / 2),
+    },
+  };
+};
+
+const profileAxisGap = (first: ProfileBox, second: ProfileBox): ProfileAxisGap | null => {
+  const firstIntervals = profileWorldIntervals(first);
+  const secondIntervals = profileWorldIntervals(second);
+  const gaps = firstIntervals.map((interval, axisIndex) => intervalGap(interval, secondIntervals[axisIndex]));
+  const separatedAxes = gaps
+    .map((gap, axisIndex) => ({ gap, axisIndex: axisIndex as 0 | 1 | 2 }))
+    .filter((entry) => entry.gap > 0.015);
+  if (separatedAxes.length !== 1) return null;
+  const { gap: distance, axisIndex } = separatedAxes[0];
+  if (distance > 12) return null;
+
+  const start = new THREE.Vector3();
+  const end = new THREE.Vector3();
+  firstIntervals.forEach((firstInterval, currentAxisIndex) => {
+    const secondInterval = secondIntervals[currentAxisIndex];
+    const worldAxis = WORLD_DIMENSION_AXES[currentAxisIndex];
+    if (currentAxisIndex === axisIndex) {
+      if (firstInterval.max < secondInterval.min) {
+        start.addScaledVector(worldAxis, firstInterval.max);
+        end.addScaledVector(worldAxis, secondInterval.min);
+      } else {
+        start.addScaledVector(worldAxis, firstInterval.min);
+        end.addScaledVector(worldAxis, secondInterval.max);
+      }
+      return;
+    }
+    const overlapStart = Math.max(firstInterval.min, secondInterval.min);
+    const overlapEnd = Math.min(firstInterval.max, secondInterval.max);
+    if (overlapEnd < overlapStart) return;
+    const midpoint = (overlapStart + overlapEnd) / 2;
+    start.addScaledVector(worldAxis, midpoint);
+    end.addScaledVector(worldAxis, midpoint);
+  });
+  return { axisIndex, distance, start, end };
 };
 
 const boxFaceSide = (axisIndex: number, direction: number): ProfileSide | null => {
@@ -2216,6 +3640,83 @@ const findMagneticProfileSnap = (
   return best?.snap || null;
 };
 
+const findAxisFlushSnap = (
+  moving: THREE.Group,
+  movingItem: DIYSceneItem,
+  items: DIYSceneItem[],
+  groups: Map<string, THREE.Group>,
+  axis: THREE.Vector3,
+  maxDistance: number,
+): ProfileSnap | null => {
+  if (movingItem.kind !== 'profile') return null;
+  const axisIndex = Math.abs(axis.x) > 0.5 ? 0 : Math.abs(axis.y) > 0.5 ? 1 : 2;
+  const movingBox = profileBox(movingItem, moving);
+  const movingIntervals = profileWorldIntervals(movingBox);
+  const movingCrossSection = Math.max(profileDimensions(movingItem).width, profileDimensions(movingItem).height);
+  let best: { distance: number; snap: ProfileSnap } | null = null;
+
+  const face = (box: ProfileBox, intervals: ReturnType<typeof profileWorldIntervals>, edge: 'min' | 'max') => {
+    const center = box.center.clone();
+    center.setComponent(axisIndex, intervals[axisIndex][edge]);
+    const size = new THREE.Vector3(
+      Math.max(0.025, intervals[0].max - intervals[0].min),
+      Math.max(0.025, intervals[1].max - intervals[1].min),
+      Math.max(0.025, intervals[2].max - intervals[2].min),
+    );
+    size.setComponent(axisIndex, 0.025);
+    return { center, size };
+  };
+
+  items.forEach((targetItem) => {
+    if (targetItem.id === movingItem.id || targetItem.kind !== 'profile') return;
+    const target = groups.get(targetItem.id);
+    if (!target) return;
+    const targetBox = profileBox(targetItem, target);
+    const targetIntervals = profileWorldIntervals(targetBox);
+    const targetCrossSection = Math.max(profileDimensions(targetItem).width, profileDimensions(targetItem).height);
+    const neighborDistance = Math.max(movingCrossSection, targetCrossSection) * 2.05;
+    const isNearby = ([0, 1, 2] as const)
+      .filter((index) => index !== axisIndex)
+      .every((index) => intervalGap(movingIntervals[index], targetIntervals[index]) <= neighborDistance);
+    if (!isNearby) return;
+
+    const pairs: Array<{ movingEdge: 'min' | 'max'; targetEdge: 'min' | 'max' }> = [
+      { movingEdge: 'min', targetEdge: 'min' },
+      { movingEdge: 'max', targetEdge: 'max' },
+      { movingEdge: 'max', targetEdge: 'min' },
+      { movingEdge: 'min', targetEdge: 'max' },
+    ];
+    pairs.forEach(({ movingEdge, targetEdge }) => {
+      const delta = targetIntervals[axisIndex][targetEdge] - movingIntervals[axisIndex][movingEdge];
+      const distance = Math.abs(delta);
+      if (distance > maxDistance || (best && distance >= best.distance)) return;
+      const candidatePosition = moving.position.clone();
+      candidatePosition.setComponent(axisIndex, candidatePosition.getComponent(axisIndex) + delta);
+      if (profileCollides(moving, movingItem, candidatePosition, items, groups)) return;
+      const movingFace = face(movingBox, movingIntervals, movingEdge);
+      movingFace.center.setComponent(axisIndex, targetIntervals[axisIndex][targetEdge]);
+      const targetFace = face(targetBox, targetIntervals, targetEdge);
+      best = {
+        distance,
+        snap: {
+          position: candidatePosition,
+          point: movingFace.center.clone(),
+          label: 'offset',
+          alignment: movingEdge === 'min' ? 'start' : 'end',
+          key: `flush:${movingItem.id}:${targetItem.id}:${axisIndex}:${movingEdge}:${targetEdge}`,
+          targetItemId: targetItem.id,
+          targetName: targetItem.variantId || targetItem.name,
+          targetPort: `FLUSH-${targetEdge.toUpperCase()}`,
+          movingPort: `FLUSH-${movingEdge.toUpperCase()}`,
+          targetEndDistances: { left: 0, right: 0 },
+          flushFaces: [movingFace, targetFace],
+        },
+      };
+    });
+  });
+  return best?.snap || null;
+};
+
 type ProfileFace = 'top' | 'right' | 'bottom' | 'left';
 
 const getActiveProfileFaces = (variantId = '2020'): Set<ProfileFace> => {
@@ -2420,6 +3921,7 @@ const createProfileObject = (
   showMachiningMarks = true,
   machiningEmphasis = 0.72,
   interfering = false,
+  linkedScrewHoleIds: ReadonlySet<string> = new Set(),
 ) => {
   const group = new THREE.Group();
   const [sectionWidth, sectionHeight] = profileSize(item.variantId);
@@ -2505,6 +4007,9 @@ const createProfileObject = (
         new THREE.MeshBasicMaterial({
           color: '#0b1017',
           side: THREE.DoubleSide,
+          // Machining removes the profile surface. Keep normal occlusion so
+          // an opaque profile shows only the opening on the camera-facing
+          // wall rather than painting the opposite wall through the body.
           depthTest: true,
           depthWrite: false,
           transparent: machiningEmphasis < 1,
@@ -2563,12 +4068,18 @@ const createProfileObject = (
       }
       marker.traverse((child) => {
         child.userData.holeDecoration = true;
-        child.renderOrder = transparentProfile ? 45 : 15;
+        child.renderOrder = 125;
       });
       group.add(marker);
     };
-    addHoleMarker(hole.side, true);
-    addHoleMarker(OPPOSITE_PROFILE_SIDE[hole.side], false);
+    // Once a countersunk hole has its real linked screw, the visible socket
+    // head is the manufacturing truth. Do not paint the former amber/black
+    // machining helper over it. Empty countersunk holes keep their marker.
+    const hasLinkedCountersunkScrew = hole.type === 'countersunk' && linkedScrewHoleIds.has(hole.id);
+    if (!hasLinkedCountersunkScrew) {
+      addHoleMarker(hole.side, true);
+      addHoleMarker(OPPOSITE_PROFILE_SIDE[hole.side], false);
+    }
   });
 
   const addTappingMarkers = (end: 'left' | 'right') => {
@@ -2687,7 +4198,80 @@ const createBoardObject = (item: DIYSceneItem, selected: boolean) => {
   return group;
 };
 
-const createAccessoryObject = (item: DIYSceneItem, selected: boolean) => {
+const createCabinetDoorObject = (item: DIYSceneItem, selected: boolean) => {
+  const group = new THREE.Group();
+  const width = Math.max(1, item.width || 496) / SCENE_SCALE;
+  const height = Math.max(1, item.height || 1996) / SCENE_SCALE;
+  const materialKind: DIYItemKind = item.doorMaterial === 'marine'
+    ? 'marine_board'
+    : item.doorMaterial === 'pegboard' ? 'pegboard' : 'plate';
+  const panelThicknessMm = item.doorMaterial === 'marine' ? Math.max(12, item.thickness || 18) : 2;
+  const panel = createBoardObject({
+    ...item,
+    kind: materialKind,
+    thickness: panelThicknessMm,
+    pegHolePattern: item.doorMaterial === 'pegboard' ? 'ikea' : undefined,
+  }, false);
+  group.add(panel);
+
+  if (item.doorMaterial === 'aluminum') {
+    const frameWidth = Math.min(0.55, Math.max(0.16, Math.min(width, height) * 0.07));
+    const frameDepth = 18 / SCENE_SCALE;
+    const frameMaterial = makeMaterial(item.colorId, selected, 'profile');
+    const addFrameBar = (barWidth: number, barHeight: number, x: number, y: number) => {
+      const bar = new THREE.Mesh(new THREE.BoxGeometry(barWidth, barHeight, frameDepth), frameMaterial);
+      bar.position.set(x, y, 0);
+      bar.castShadow = true;
+      addEdges(bar, '#475569');
+      group.add(bar);
+    };
+    addFrameBar(frameWidth, height, -width / 2 + frameWidth / 2, 0);
+    addFrameBar(frameWidth, height, width / 2 - frameWidth / 2, 0);
+    addFrameBar(Math.max(0.01, width - frameWidth * 2), frameWidth, 0, -height / 2 + frameWidth / 2);
+    addFrameBar(Math.max(0.01, width - frameWidth * 2), frameWidth, 0, height / 2 - frameWidth / 2);
+  }
+
+  const renderedThickness = cabinetDoorRenderedThickness(item) / SCENE_SCALE;
+  const hingeOnLeft = (item.openingSide || 'left') === 'left';
+  const hingeX = (hingeOnLeft ? -1 : 1) * (width / 2 - 0.035);
+  const handleX = (hingeOnLeft ? 1 : -1) * Math.max(0, width / 2 - 0.24);
+  const hardwareZ = renderedThickness / 2 + 0.035;
+  const overlayColor = item.doorOverlay === 'inset' ? '#8b5cf6' : item.doorOverlay === 'half' ? '#f59e0b' : '#2563eb';
+  const hardwareMaterial = new THREE.MeshStandardMaterial({
+    color: overlayColor,
+    metalness: 0.76,
+    roughness: 0.22,
+    emissive: new THREE.Color(selected ? '#0ea5e9' : '#000000'),
+    emissiveIntensity: selected ? 0.24 : 0,
+  });
+  getDoorHingePositions(item.height || 1996).forEach((positionMm) => {
+    const y = -height / 2 + positionMm / SCENE_SCALE;
+    const cup = new THREE.Mesh(new THREE.CylinderGeometry(0.065, 0.065, 0.05, 24), hardwareMaterial);
+    cup.rotation.x = Math.PI / 2;
+    cup.position.set(hingeX, y, hardwareZ);
+    const armLength = item.doorOverlay === 'full' ? 0.2 : item.doorOverlay === 'half' ? 0.14 : 0.08;
+    const arm = new THREE.Mesh(new THREE.BoxGeometry(armLength, 0.055, 0.045), hardwareMaterial);
+    arm.position.set(hingeX + (hingeOnLeft ? 1 : -1) * armLength / 2, y, hardwareZ);
+    group.add(cup, arm);
+  });
+  const handle = new THREE.Mesh(
+    new THREE.CapsuleGeometry(0.035, Math.min(1.4, Math.max(0.35, height * 0.12)), 6, 14),
+    new THREE.MeshStandardMaterial({ color: '#334155', metalness: 0.84, roughness: 0.2 }),
+  );
+  handle.position.set(handleX, 0, hardwareZ + 0.055);
+  group.add(handle);
+
+  if (selected) addSelectionOutline(group);
+  addSelectionHitbox(group, new THREE.BoxGeometry(width, height, Math.max(renderedThickness + 0.18, 0.22)));
+  return group;
+};
+
+const createAccessoryObject = (
+  item: DIYSceneItem,
+  selected: boolean,
+  showInternalHardware = false,
+  linkedHoleType?: HoleType,
+) => {
   const group = new THREE.Group();
   const material = makeMaterial(item.colorId, selected, item.kind);
   const darkMetal = new THREE.MeshStandardMaterial({
@@ -2700,32 +4284,36 @@ const createAccessoryObject = (item: DIYSceneItem, selected: boolean) => {
     metalness: 0.9,
     roughness: 0.2,
   });
-  const screwBlue = new THREE.MeshStandardMaterial({
-    color: '#2563eb',
-    metalness: 0.72,
-    roughness: 0.22,
-    emissive: new THREE.Color(selected ? '#38bdf8' : '#0c4a6e'),
-    emissiveIntensity: selected ? 0.36 : 0.12,
-    transparent: true,
-    opacity: 0.9,
+  const screwHeadMaterial = new THREE.MeshStandardMaterial({
+    // Keep the exposed socket ring visibly silver even without an HDR
+    // environment map; very high metalness made it read as a black helper dot.
+    color: '#eef2f6',
+    metalness: 0.55,
+    roughness: 0.24,
+    emissive: new THREE.Color(selected ? '#64748b' : '#000000'),
+    emissiveIntensity: selected ? 0.16 : 0,
+    depthTest: !showInternalHardware,
+    depthWrite: !showInternalHardware,
   });
-  const screwCyan = new THREE.MeshStandardMaterial({
-    color: '#38bdf8',
-    metalness: 0.68,
-    roughness: 0.2,
-    emissive: new THREE.Color('#075985'),
-    emissiveIntensity: 0.12,
-    transparent: true,
-    opacity: 0.82,
+  const screwShaftMaterial = new THREE.MeshStandardMaterial({
+    color: '#aeb7c2',
+    metalness: 0.9,
+    roughness: 0.22,
+    emissive: new THREE.Color(selected ? '#475569' : '#000000'),
+    emissiveIntensity: selected ? 0.12 : 0,
+    depthTest: !showInternalHardware,
+    depthWrite: !showInternalHardware,
   });
   let hitboxSize = new THREE.Vector3(0.65, 0.65, 0.65);
 
-  const addFrontHole = (x: number, y: number, z: number, radius = 0.055, color = '#1f2937') => {
+  const addFrontHole = (x: number, y: number, z: number, radius = 0.055, color = '#64748b') => {
     const hole = new THREE.Mesh(
-      new THREE.CircleGeometry(radius, 24),
+      new THREE.TorusGeometry(radius, Math.max(0.004, radius * 0.16), 8, 28),
       new THREE.MeshBasicMaterial({
         color,
         side: THREE.DoubleSide,
+        transparent: true,
+        opacity: 0.82,
         depthTest: false,
         depthWrite: false,
       }),
@@ -2743,10 +4331,12 @@ const createAccessoryObject = (item: DIYSceneItem, selected: boolean) => {
     stretch = 1,
   ) => {
     const recess = new THREE.Mesh(
-      new THREE.CircleGeometry(radius, 28),
+      new THREE.TorusGeometry(radius, Math.max(0.004, radius * 0.16), 8, 30),
       new THREE.MeshBasicMaterial({
-        color: '#111827',
+        color: '#64748b',
         side: THREE.DoubleSide,
+        transparent: true,
+        opacity: 0.82,
         depthTest: false,
         depthWrite: false,
       }),
@@ -2776,8 +4366,14 @@ const createAccessoryObject = (item: DIYSceneItem, selected: boolean) => {
     screw.rotation.x = Math.PI / 2;
     screw.position.set(x, y, surfaceZ + screwHeight / 2);
     const socket = new THREE.Mesh(
-      new THREE.CircleGeometry(radius * 0.3, 6),
-      darkMetal,
+      new THREE.TorusGeometry(radius * 0.3, Math.max(0.003, radius * 0.07), 6, 6),
+      new THREE.MeshBasicMaterial({
+        color: '#64748b',
+        transparent: true,
+        opacity: 0.84,
+        depthTest: false,
+        depthWrite: false,
+      }),
     );
     socket.position.set(x, y, surfaceZ + screwHeight + 0.002);
     socket.userData.accessoryDecoration = true;
@@ -2785,7 +4381,57 @@ const createAccessoryObject = (item: DIYSceneItem, selected: boolean) => {
     group.add(screw, socket);
   };
 
-  if (item.kind === 'shelf_support') {
+  if (item.kind === 'end_cap') {
+    const [profileWidthMm, profileHeightMm] = profileSize(item.variantId || item.accessoryProfileSize || '2020');
+    const capThickness = Math.max(2, item.thickness || 3) / SCENE_SCALE;
+    const profileWidth = profileWidthMm / SCENE_SCALE;
+    const profileHeight = profileHeightMm / SCENE_SCALE;
+    const cap = new THREE.Mesh(
+      new THREE.BoxGeometry(capThickness, profileHeight, profileWidth, 1, 1, 1),
+      material,
+    );
+    // CAP20SQ2020-style caps have a visible face plate plus a smaller locating
+    // plug that enters the profile end. The plug direction depends on which
+    // end is capped, while the outside face keeps the same profile rotation.
+    const outwardSign = item.attachedEnd === 'left' ? -1 : 1;
+    const plugDepth = THREE.MathUtils.clamp(Math.min(profileWidth, profileHeight) * 0.28, 0.04, 0.12);
+    const plug = new THREE.Mesh(
+      new THREE.BoxGeometry(
+        plugDepth,
+        Math.max(0.05, profileHeight * 0.58),
+        Math.max(0.05, profileWidth * 0.58),
+      ),
+      material.clone(),
+    );
+    plug.position.x = -outwardSign * (capThickness / 2 + plugDepth / 2);
+    const locatorRing = new THREE.Mesh(
+      new THREE.TorusGeometry(Math.min(profileWidth, profileHeight) * 0.18, 0.012, 8, 28),
+      steel,
+    );
+    locatorRing.rotation.y = Math.PI / 2;
+    locatorRing.position.x = plug.position.x - outwardSign * (plugDepth / 2 + 0.004);
+    group.add(cap, plug, locatorRing);
+    const { columns, rows } = getProfileTapGrid(item.variantId || item.accessoryProfileSize || '2020');
+    const moduleWidth = profileWidth / columns;
+    const moduleHeight = profileHeight / rows;
+    for (let column = 0; column < columns; column += 1) {
+      for (let row = 0; row < rows; row += 1) {
+        const y = (row - (rows - 1) / 2) * moduleHeight;
+        const z = (column - (columns - 1) / 2) * moduleWidth;
+        const radius = Math.min(moduleWidth, moduleHeight) * 0.16;
+        addSurfaceHole(new THREE.Vector3(outwardSign * (capThickness / 2 + 0.002), y, z), 'x', radius);
+        const countersink = new THREE.Mesh(
+          new THREE.TorusGeometry(radius * 1.25, Math.max(0.006, radius * 0.18), 8, 28),
+          steel,
+        );
+        countersink.rotation.y = Math.PI / 2;
+        countersink.position.set(outwardSign * (capThickness / 2 + 0.004), y, z);
+        countersink.userData.accessoryDecoration = true;
+        group.add(countersink);
+      }
+    }
+    hitboxSize.set(capThickness + plugDepth + 0.12, profileHeight + 0.1, profileWidth + 0.1);
+  } else if (item.kind === 'shelf_support') {
     const width = Math.max(1, item.width || 14) / SCENE_SCALE;
     const height = Math.max(1, item.height || 8) / SCENE_SCALE;
     const depth = Math.max(1, item.thickness || 400) / SCENE_SCALE;
@@ -2793,101 +4439,290 @@ const createAccessoryObject = (item: DIYSceneItem, selected: boolean) => {
     group.add(body);
     hitboxSize.set(width + 0.1, height + 0.1, depth + 0.1);
   } else if (item.kind === 'foot') {
-    const stem = new THREE.Mesh(new THREE.CylinderGeometry(0.075, 0.075, 0.5, 24), material);
-    stem.position.y = 0.22;
-    const pad = new THREE.Mesh(new THREE.CylinderGeometry(0.23, 0.28, 0.12, 28), material.clone());
-    pad.position.y = -0.08;
-    group.add(stem, pad);
+    // MayCAD LVL_FOOT_1.44.002403: compact threaded stem, lock nut and a
+    // shallow cup-shaped load-spreading foot. This replaces the unrelated
+    // 70x70 cabinet-leg placeholder that was previously shown here.
+    const threadDiameter = Number((item.accessoryThreadSize || 'M8').slice(1)) / SCENE_SCALE;
+    const overallHeight = THREE.MathUtils.clamp((item.height || 45) / SCENE_SCALE, 0.34, 0.72);
+    const cupRadius = THREE.MathUtils.clamp((item.width || 40) / SCENE_SCALE / 2, 0.16, 0.3);
+    const cupHeight = THREE.MathUtils.clamp(cupRadius * 0.42, 0.06, 0.11);
+    const stemHeight = Math.max(0.18, overallHeight - cupHeight * 0.75);
+    const rubber = new THREE.MeshStandardMaterial({ color: '#20242a', metalness: 0.05, roughness: 0.78 });
+    const cup = new THREE.Mesh(
+      new THREE.CylinderGeometry(cupRadius * 0.82, cupRadius, cupHeight, 40),
+      steel.clone(),
+    );
+    cup.position.y = cupHeight / 2;
+    const sole = new THREE.Mesh(
+      new THREE.CylinderGeometry(cupRadius * 0.94, cupRadius * 0.94, 0.025, 40),
+      rubber,
+    );
+    sole.position.y = 0.0125;
+    const stem = new THREE.Mesh(
+      new THREE.CylinderGeometry(threadDiameter / 2, threadDiameter / 2, stemHeight, 28),
+      steel.clone(),
+    );
+    stem.position.y = cupHeight * 0.65 + stemHeight / 2;
+    const nutRadius = Math.max(threadDiameter * 0.92, 0.06);
+    const lockNut = new THREE.Mesh(
+      new THREE.CylinderGeometry(nutRadius, nutRadius, 0.055, 6),
+      steel.clone(),
+    );
+    lockNut.position.y = cupHeight + 0.028;
+    group.add(cup, sole, stem, lockNut);
+    for (let ringIndex = 0; ringIndex < 7; ringIndex += 1) {
+      const ring = new THREE.Mesh(
+        new THREE.TorusGeometry(threadDiameter / 2 + 0.003, 0.0035, 6, 20),
+        steel,
+      );
+      ring.rotation.x = Math.PI / 2;
+      ring.position.y = cupHeight + 0.08 + ringIndex * Math.max(0.025, threadDiameter * 0.42);
+      group.add(ring);
+    }
+    hitboxSize.set(cupRadius * 2 + 0.1, overallHeight + 0.1, cupRadius * 2 + 0.1);
+  } else if (item.kind === 'caster') {
+    // Twin-wheel threaded-stem caster. The supplied reference confirms the
+    // M6/M8/M10/M12 variants and optional brake but not the wheel dimensions,
+    // so the body remains a clear proportional representation rather than an
+    // unverified manufacturing drawing.
+    const threadDiameter = Number((item.accessoryThreadSize || 'M8').slice(1)) / SCENE_SCALE;
+    const bodyColor = item.colorId === 'beige' ? '#d9d1bf' : '#171717';
+    const plastic = new THREE.MeshStandardMaterial({ color: bodyColor, metalness: 0.04, roughness: 0.68 });
+    const tire = new THREE.MeshStandardMaterial({ color: item.colorId === 'beige' ? '#9ca3af' : '#111827', metalness: 0.05, roughness: 0.78 });
+    const wheelRadius = 0.24;
+    const wheelThickness = 0.105;
+    [-1, 1].forEach((zDirection) => {
+      const wheel = new THREE.Mesh(
+        new THREE.CylinderGeometry(wheelRadius, wheelRadius, wheelThickness, 36),
+        tire,
+      );
+      wheel.rotation.x = Math.PI / 2;
+      wheel.position.set(0, wheelRadius, zDirection * 0.12);
+      const hub = new THREE.Mesh(
+        new THREE.CylinderGeometry(wheelRadius * 0.42, wheelRadius * 0.42, wheelThickness + 0.008, 30),
+        plastic,
+      );
+      hub.rotation.x = Math.PI / 2;
+      hub.position.copy(wheel.position);
+      group.add(wheel, hub);
+    });
+    const housing = new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.22, 0.34), plastic.clone());
+    housing.position.y = wheelRadius * 1.62;
+    const swivel = new THREE.Mesh(new THREE.CylinderGeometry(0.14, 0.14, 0.08, 28), steel);
+    swivel.position.y = 0.54;
+    const studHeight = 0.26;
+    const stud = new THREE.Mesh(
+      new THREE.CylinderGeometry(threadDiameter / 2, threadDiameter / 2, studHeight, 24),
+      steel,
+    );
+    stud.position.y = 0.71;
+    const nut = new THREE.Mesh(
+      new THREE.CylinderGeometry(Math.max(0.065, threadDiameter * 0.92), Math.max(0.065, threadDiameter * 0.92), 0.055, 6),
+      steel.clone(),
+    );
+    nut.position.y = 0.59;
+    group.add(housing, swivel, stud, nut);
+    for (let ringIndex = 0; ringIndex < 6; ringIndex += 1) {
+      const threadRing = new THREE.Mesh(
+        new THREE.TorusGeometry(threadDiameter / 2 + 0.004, 0.004, 6, 20),
+        steel,
+      );
+      threadRing.rotation.x = Math.PI / 2;
+      threadRing.position.y = 0.61 + ringIndex * 0.035;
+      group.add(threadRing);
+    }
+    if (item.hasBrake) {
+      const brake = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.055, 0.16), plastic.clone());
+      brake.rotation.z = -0.24;
+      brake.position.set(-0.21, 0.41, 0);
+      group.add(brake);
+    }
+    hitboxSize.set(0.62, 0.92, 0.55);
   } else if (item.kind === 'connector') {
-    // No.1 is the compact triangular corner insert. Its two outer ends finish
-    // flush with the triangle instead of extending as L-shaped rails like No.2.
-    const size = THREE.MathUtils.clamp((item.width || 20) / SCENE_SCALE, 0.2, 0.9);
-    const plateThickness = THREE.MathUtils.clamp((item.thickness || 3.2) / SCENE_SCALE, 0.032, 0.1);
-    const depth = THREE.MathUtils.clamp(size * 0.78, 0.15, 0.62);
-    const triangleShape = new THREE.Shape();
-    triangleShape.moveTo(0, 0);
-    triangleShape.lineTo(size, 0);
-    triangleShape.lineTo(0, size);
-    triangleShape.closePath();
-    const triangle = new THREE.Mesh(
-      new THREE.ExtrudeGeometry(triangleShape, {
-        depth,
-        bevelEnabled: true,
-        bevelSegments: 2,
-        bevelSize: Math.min(0.014, plateThickness * 0.32),
-        bevelThickness: Math.min(0.01, depth * 0.06),
-      }),
+    // No.1 follows the supplied die-cast corner-seat reference. Its base and
+    // upright span the full profile width; 2020 uses 20/28 mm seating lengths
+    // and 3030 uses 30/30 mm. This is intentionally a substantial cast seat,
+    // not the previous paper-thin triangular plate.
+    const profileModule = Number((item.accessoryProfileSize || '2020').slice(0, 2)) / SCENE_SCALE;
+    const horizontalLength = Math.max(1, item.width || (profileModule * SCENE_SCALE)) / SCENE_SCALE;
+    const verticalLength = Math.max(1, item.height || (profileModule * SCENE_SCALE)) / SCENE_SCALE;
+    const depth = Math.max(1, item.thickness || (profileModule * SCENE_SCALE)) / SCENE_SCALE;
+    const wallThickness = THREE.MathUtils.clamp(profileModule * 0.18, 0.026, 0.06);
+    const base = new THREE.Mesh(
+      new THREE.BoxGeometry(horizontalLength, wallThickness, depth),
       material,
     );
-    triangle.position.z = -depth / 2;
-    group.add(triangle);
+    const upright = new THREE.Mesh(
+      new THREE.BoxGeometry(wallThickness, verticalLength, depth),
+      material.clone(),
+    );
+    base.position.set(horizontalLength / 2, wallThickness / 2, 0);
+    upright.position.set(wallThickness / 2, verticalLength / 2, 0);
+    group.add(base, upright);
 
-    // Two recessed mounting points remain visible on the broad faces without
-    // adding any geometry beyond the triangular outline.
-    const holeRadius = THREE.MathUtils.clamp(size * 0.105, 0.022, 0.065);
-    addFrontHole(size * 0.27, size * 0.27, depth / 2 + 0.012, holeRadius);
-    addFrontHole(size * 0.27, size * 0.27, -depth / 2 - 0.012, holeRadius);
-    hitboxSize.set(size + 0.14, size + 0.14, depth + 0.18);
-  } else if (item.kind === 'extruded_connector') {
-    // No.2 follows the continuous A6063 extrusion: two orthogonal mounting
-    // faces, longitudinal edge ribs and the characteristic triangular web.
-    const size = THREE.MathUtils.clamp((item.width || 28) / SCENE_SCALE, 0.2, 1.1);
-    const profileModule = Number((item.accessoryProfileSize || '2020').slice(0, 2)) / SCENE_SCALE;
-    const plateThickness = THREE.MathUtils.clamp((item.thickness || 3) / SCENE_SCALE, 0.03, 0.1);
-    const depth = THREE.MathUtils.clamp(profileModule * 0.72, 0.1, 0.38);
-    const horizontal = new THREE.Mesh(new THREE.BoxGeometry(size, plateThickness, depth), material);
-    const vertical = new THREE.Mesh(new THREE.BoxGeometry(plateThickness, size, depth), material.clone());
-    horizontal.position.set(size / 2, plateThickness / 2, 0);
-    vertical.position.set(plateThickness / 2, size / 2, 0);
+    // Two side gussets reproduce the open-center die-cast form while keeping
+    // both perpendicular seating faces continuous across the profile width.
     const webShape = new THREE.Shape();
-    webShape.moveTo(plateThickness, plateThickness);
-    webShape.lineTo(size * 0.78, plateThickness);
-    webShape.lineTo(plateThickness, size * 0.78);
+    webShape.moveTo(wallThickness, wallThickness);
+    webShape.lineTo(horizontalLength * 0.82, wallThickness);
+    webShape.lineTo(wallThickness, verticalLength * 0.82);
     webShape.closePath();
+    const ribDepth = THREE.MathUtils.clamp(depth * 0.12, 0.018, 0.04);
+    [-1, 1].forEach((side) => {
+      const rib = new THREE.Mesh(
+        new THREE.ExtrudeGeometry(webShape, {
+          depth: ribDepth,
+          bevelEnabled: true,
+          bevelSegments: 2,
+          bevelSize: Math.min(0.008, ribDepth * 0.2),
+          bevelThickness: Math.min(0.006, ribDepth * 0.16),
+        }),
+        material.clone(),
+      );
+      rib.position.z = side > 0 ? depth / 2 - ribDepth : -depth / 2;
+      group.add(rib);
+    });
+
+    const holeRadius = THREE.MathUtils.clamp(profileModule * 0.15, 0.02, 0.052);
+    const baseHoleX = horizontalLength * 0.58;
+    const uprightHoleY = verticalLength * 0.58;
+    addSurfaceHole(new THREE.Vector3(baseHoleX, wallThickness + 0.004, 0), 'y', holeRadius, 1.08);
+    addSurfaceHole(new THREE.Vector3(wallThickness + 0.004, uprightHoleY, 0), 'x', holeRadius, 1.08);
+    // Each socket-head screw is normal to the profile face it fastens. One
+    // points through the base, the other through the upright.
+    [
+      { position: new THREE.Vector3(baseHoleX, wallThickness + 0.006, 0), axis: 'y' as const },
+      { position: new THREE.Vector3(wallThickness + 0.006, uprightHoleY, 0), axis: 'x' as const },
+    ].forEach(({ position, axis }) => {
+      const headHeight = Math.max(0.026, holeRadius * 0.78);
+      const headRadius = holeRadius * 0.82;
+      const head = new THREE.Mesh(
+        new THREE.CylinderGeometry(headRadius, headRadius, headHeight, 24),
+        steel.clone(),
+      );
+      const socket = new THREE.Mesh(
+        new THREE.TorusGeometry(holeRadius * 0.29, Math.max(0.0025, holeRadius * 0.07), 6, 6),
+        new THREE.MeshBasicMaterial({ color: '#475569', depthTest: false, depthWrite: false }),
+      );
+      if (axis === 'y') {
+        head.position.copy(position).add(new THREE.Vector3(0, headHeight / 2, 0));
+        socket.rotation.x = -Math.PI / 2;
+        socket.position.copy(position).add(new THREE.Vector3(0, headHeight + 0.002, 0));
+      } else {
+        head.rotation.z = Math.PI / 2;
+        head.position.copy(position).add(new THREE.Vector3(headHeight / 2, 0, 0));
+        socket.rotation.y = Math.PI / 2;
+        socket.position.copy(position).add(new THREE.Vector3(headHeight + 0.002, 0, 0));
+      }
+      head.userData.accessoryDecoration = true;
+      socket.userData.accessoryDecoration = true;
+      socket.renderOrder = 107;
+      group.add(head, socket);
+    });
+    hitboxSize.set(horizontalLength + 0.12, verticalLength + 0.12, depth + 0.14);
+  } else if (item.kind === 'extruded_connector') {
+    // No.2 follows the supplied 5020 press-extruded reference. The two seating
+    // legs are always 50 mm long; the extrusion spans the full 15/20/30 mm
+    // width of the corresponding profile family.
+    const horizontalLength = THREE.MathUtils.clamp((item.width || 50) / SCENE_SCALE, 0.45, 0.58);
+    const verticalLength = THREE.MathUtils.clamp((item.height || 50) / SCENE_SCALE, 0.45, 0.58);
+    const profileModule = Number((item.accessoryProfileSize || '2020').slice(0, 2)) / SCENE_SCALE;
+    const depth = THREE.MathUtils.clamp((item.thickness || profileModule * SCENE_SCALE) / SCENE_SCALE, 0.145, 0.32);
+    const wallThickness = THREE.MathUtils.clamp(profileModule * 0.22, 0.032, 0.07);
+    const horizontal = new THREE.Mesh(
+      new THREE.BoxGeometry(horizontalLength, wallThickness, depth),
+      material,
+    );
+    const vertical = new THREE.Mesh(
+      new THREE.BoxGeometry(wallThickness, verticalLength, depth),
+      material.clone(),
+    );
+    horizontal.position.set(horizontalLength / 2, wallThickness / 2, 0);
+    vertical.position.set(wallThickness / 2, verticalLength / 2, 0);
+    const webShape = new THREE.Shape();
+    webShape.moveTo(wallThickness, wallThickness);
+    webShape.lineTo(horizontalLength * 0.76, wallThickness);
+    webShape.lineTo(wallThickness, verticalLength * 0.76);
+    webShape.closePath();
+    const webDepth = Math.max(depth * 0.7, 0.1);
     const web = new THREE.Mesh(
       new THREE.ExtrudeGeometry(webShape, {
-        depth: Math.max(plateThickness * 0.7, 0.022),
+        depth: webDepth,
         bevelEnabled: true,
         bevelSegments: 2,
-        bevelSize: Math.min(0.012, plateThickness * 0.25),
-        bevelThickness: Math.min(0.008, plateThickness * 0.2),
+        bevelSize: Math.min(0.012, wallThickness * 0.18),
+        bevelThickness: Math.min(0.008, wallThickness * 0.14),
       }),
       material.clone(),
     );
-    web.position.z = -Math.max(plateThickness * 0.7, 0.022) / 2;
-
-    const ribSize = Math.max(0.014, plateThickness * 0.42);
-    const horizontalRib = new THREE.Mesh(
-      new THREE.BoxGeometry(size * 0.88, ribSize, depth),
-      material.clone(),
-    );
-    horizontalRib.position.set(size * 0.54, plateThickness + ribSize / 2, 0);
-    const verticalRib = new THREE.Mesh(
-      new THREE.BoxGeometry(ribSize, size * 0.88, depth),
-      material.clone(),
-    );
-    verticalRib.position.set(plateThickness + ribSize / 2, size * 0.54, 0);
-    group.add(horizontal, vertical, web, horizontalRib, verticalRib);
+    web.position.z = -webDepth / 2;
+    group.add(horizontal, vertical, web);
     const holeRadius = THREE.MathUtils.clamp(profileModule * 0.14, 0.02, 0.06);
-    addSurfaceHole(new THREE.Vector3(size * 0.55, plateThickness + ribSize + 0.003, 0), 'y', holeRadius, 1.12);
-    addSurfaceHole(new THREE.Vector3(plateThickness + ribSize + 0.003, size * 0.55, 0), 'x', holeRadius, 1.12);
-    hitboxSize.set(size + 0.14, size + 0.14, depth + 0.16);
+    const horizontalHoleX = horizontalLength * 0.58;
+    const verticalHoleY = verticalLength * 0.58;
+    addSurfaceHole(new THREE.Vector3(horizontalHoleX, wallThickness + 0.004, 0), 'y', holeRadius, 1.12);
+    addSurfaceHole(new THREE.Vector3(wallThickness + 0.004, verticalHoleY, 0), 'x', holeRadius, 1.12);
+    // The reference uses one socket-head fastener on each seating leg. Add a
+    // restrained cap and hex socket rather than a large decorative screw.
+    [
+      { position: new THREE.Vector3(horizontalHoleX, wallThickness + 0.008, 0), axis: 'y' as const },
+      { position: new THREE.Vector3(wallThickness + 0.008, verticalHoleY, 0), axis: 'x' as const },
+    ].forEach(({ position, axis }) => {
+      const headHeight = Math.max(0.025, holeRadius * 0.7);
+      const head = new THREE.Mesh(
+        new THREE.CylinderGeometry(holeRadius * 0.78, holeRadius * 0.78, headHeight, 24),
+        steel.clone(),
+      );
+      const socket = new THREE.Mesh(
+        new THREE.TorusGeometry(holeRadius * 0.28, Math.max(0.0025, holeRadius * 0.07), 6, 6),
+        new THREE.MeshBasicMaterial({ color: '#475569', depthTest: false, depthWrite: false }),
+      );
+      if (axis === 'y') {
+        head.position.copy(position).add(new THREE.Vector3(0, headHeight / 2, 0));
+        socket.rotation.x = -Math.PI / 2;
+        socket.position.copy(position).add(new THREE.Vector3(0, headHeight + 0.002, 0));
+      } else {
+        head.rotation.z = Math.PI / 2;
+        head.position.copy(position).add(new THREE.Vector3(headHeight / 2, 0, 0));
+        socket.rotation.y = Math.PI / 2;
+        socket.position.copy(position).add(new THREE.Vector3(headHeight + 0.002, 0, 0));
+      }
+      head.userData.accessoryDecoration = true;
+      socket.userData.accessoryDecoration = true;
+      socket.renderOrder = 107;
+      group.add(head, socket);
+    });
+    hitboxSize.set(horizontalLength + 0.14, verticalLength + 0.14, depth + 0.16);
   } else if (item.kind === 'l_connector') {
-    const size = THREE.MathUtils.clamp((item.width || 60) / SCENE_SCALE, 0.4, 1.2);
-    const armWidth = Math.max(0.16, size * 0.3);
+    const width = THREE.MathUtils.clamp((item.width || 60) / SCENE_SCALE, 0.4, 1.45);
+    const height = THREE.MathUtils.clamp((item.height || 60) / SCENE_SCALE, 0.4, 1.45);
+    const profileModule = getAccessoryGeometryModuleSize(
+      'l_connector',
+      item.accessoryProfileSize || '2020',
+    ) / SCENE_SCALE;
+    // Each L-plate arm fills the complete profile module. The group origin is
+    // the centre of the two-profile contact—not the centre of the L's bounding
+    // square—so neither arm drifts half a width off its target extrusion.
+    const armWidth = profileModule;
     const plateThickness = THREE.MathUtils.clamp((item.thickness || 2) / SCENE_SCALE, 0.02, 0.1);
-    const horizontal = new THREE.Mesh(new THREE.BoxGeometry(size, armWidth, plateThickness), material);
-    const vertical = new THREE.Mesh(new THREE.BoxGeometry(armWidth, size, plateThickness), material.clone());
-    horizontal.position.y = -size / 2 + armWidth / 2;
-    vertical.position.x = -size / 2 + armWidth / 2;
+    const horizontal = new THREE.Mesh(new THREE.BoxGeometry(width, armWidth, plateThickness), material);
+    const vertical = new THREE.Mesh(new THREE.BoxGeometry(armWidth, height, plateThickness), material.clone());
+    horizontal.position.x = width / 2;
+    vertical.position.y = height / 2;
     group.add(horizontal, vertical);
     const faceZ = plateThickness / 2 + 0.008;
-    const holeRadius = Math.min(0.06, armWidth * 0.22);
-    addFrontHole(-size * 0.3, -size * 0.35, faceZ, holeRadius);
-    addFrontHole(size * 0.2, -size * 0.35, faceZ, holeRadius);
-    addFrontHole(-size * 0.35, -size * 0.02, faceZ, holeRadius);
-    addFrontHole(-size * 0.35, size * 0.28, faceZ, holeRadius);
-    hitboxSize.set(size + 0.12, size + 0.12, plateThickness + 0.16);
+    const holeRadius = Math.min(0.065, armWidth * 0.13);
+    const boltPoints = [
+      new THREE.Vector2(width * 0.34, 0),
+      new THREE.Vector2(width * 0.72, 0),
+      new THREE.Vector2(0, height * 0.34),
+      new THREE.Vector2(0, height * 0.72),
+    ];
+    boltPoints.forEach((point) => {
+      addFrontHole(point.x, point.y, faceZ, holeRadius);
+      addSetScrew(point.x, point.y, faceZ + 0.002, holeRadius);
+    });
+    hitboxSize.set(width + armWidth + 0.12, height + armWidth + 0.12, plateThickness + 0.16);
   } else if (item.kind === 't_connector') {
     // No.7 T plate is a flat four-hole profile joining plate. It is distinct
     // from No.9, which is a three-dimensional internal corner connector.
@@ -2897,69 +4732,139 @@ const createAccessoryObject = (item: DIYSceneItem, selected: boolean) => {
       't_connector',
       item.accessoryProfileSize || '2020',
     ) / SCENE_SCALE;
-    const armWidth = THREE.MathUtils.clamp(profileModule * 0.9, 0.12, 0.38);
+    // As with the L plate, every part of the T must be supported by one of the
+    // two target profiles. The crossbar is centred on the contact and the stem
+    // begins at it, with both using the complete matched-profile width.
+    const armWidth = profileModule;
     const plateThickness = THREE.MathUtils.clamp((item.thickness || 2) / SCENE_SCALE, 0.02, 0.12);
     const crossbar = new THREE.Mesh(new THREE.BoxGeometry(width, armWidth, plateThickness), material);
     const stem = new THREE.Mesh(new THREE.BoxGeometry(armWidth, height, plateThickness), material.clone());
-    crossbar.position.y = -height / 2 + armWidth / 2;
-    stem.position.y = 0;
+    crossbar.position.set(0, 0, 0);
+    stem.position.set(0, height / 2, 0);
     group.add(crossbar, stem);
     const faceZ = plateThickness / 2 + 0.008;
     const holeRadius = THREE.MathUtils.clamp(profileModule * 0.13, 0.02, 0.065);
-    addFrontHole(-width * 0.31, crossbar.position.y, faceZ, holeRadius);
-    addFrontHole(width * 0.31, crossbar.position.y, faceZ, holeRadius);
-    addFrontHole(0, height * 0.04, faceZ, holeRadius);
-    addFrontHole(0, height * 0.34, faceZ, holeRadius);
-    hitboxSize.set(width + 0.14, height + 0.14, plateThickness + 0.16);
+    const boltPoints = [
+      new THREE.Vector2(-width * 0.31, 0),
+      new THREE.Vector2(width * 0.31, 0),
+      new THREE.Vector2(0, height * 0.34),
+      new THREE.Vector2(0, height * 0.72),
+    ];
+    boltPoints.forEach((point) => {
+      addFrontHole(point.x, point.y, faceZ, holeRadius);
+      addSetScrew(point.x, point.y, faceZ + 0.002, holeRadius);
+    });
+    hitboxSize.set(width + 0.14, height + armWidth + 0.14, plateThickness + 0.16);
   } else if (item.kind === 'hidden_connector') {
-    // No.5 sits inside the profile grooves. It is a compact L-shaped casting,
-    // with one threaded opening and one grub/set screw on each arm.
-    const length = THREE.MathUtils.clamp((item.width || 25) / SCENE_SCALE, 0.24, 0.72);
-    const armWidth = THREE.MathUtils.clamp((item.height || 10) / SCENE_SCALE, 0.09, 0.22);
-    const depth = THREE.MathUtils.clamp((item.thickness || 5) / SCENE_SCALE, 0.045, 0.13);
-    const horizontal = new THREE.Mesh(new THREE.BoxGeometry(length, armWidth, depth), material);
-    const vertical = new THREE.Mesh(new THREE.BoxGeometry(armWidth, length, depth), material.clone());
-    horizontal.position.set(length / 2 - armWidth / 2, 0, 0);
-    vertical.position.set(0, length / 2 - armWidth / 2, 0);
-
-    const ridgeHeight = Math.max(0.018, depth * 0.26);
-    const ridgeWidth = Math.max(0.014, armWidth * 0.18);
-    const horizontalRidge = new THREE.Mesh(
-      new THREE.BoxGeometry(length * 0.8, ridgeWidth, ridgeHeight),
-      steel,
+    // No.5 follows the supplied single-hole slot-connector reference: two
+    // shallow cast strips disappear into perpendicular T-slots, leaving one
+    // flush socket on each arm visible at the corner.
+    const length = THREE.MathUtils.clamp((item.width || 28) / SCENE_SCALE, 0.24, 0.82);
+    const armWidth = THREE.MathUtils.clamp((item.height || 8.4) / SCENE_SCALE, 0.07, 0.18);
+    const depth = THREE.MathUtils.clamp((item.thickness || 2.8) / SCENE_SCALE, 0.022, 0.08);
+    const lShape = new THREE.Shape();
+    lShape.moveTo(0, 0);
+    lShape.lineTo(length, 0);
+    lShape.lineTo(length, armWidth);
+    lShape.lineTo(armWidth, armWidth);
+    lShape.lineTo(armWidth, length);
+    lShape.lineTo(0, length);
+    lShape.closePath();
+    const casting = new THREE.Mesh(
+      new THREE.ExtrudeGeometry(lShape, {
+        depth,
+        bevelEnabled: true,
+        bevelSegments: 2,
+        bevelSize: Math.min(0.008, depth * 0.18),
+        bevelThickness: Math.min(0.006, depth * 0.16),
+      }),
+      material,
     );
-    horizontalRidge.position.set(length * 0.52, armWidth * 0.34, depth / 2 + ridgeHeight / 2);
-    const verticalRidge = new THREE.Mesh(
-      new THREE.BoxGeometry(ridgeWidth, length * 0.8, ridgeHeight),
-      steel,
-    );
-    verticalRidge.position.set(armWidth * 0.34, length * 0.52, depth / 2 + ridgeHeight / 2);
-    group.add(horizontal, vertical, horizontalRidge, verticalRidge);
+    casting.position.z = -depth / 2;
+    group.add(casting);
 
-    const holeRadius = THREE.MathUtils.clamp(armWidth * 0.24, 0.022, 0.05);
+    const holeRadius = THREE.MathUtils.clamp(armWidth * 0.27, 0.02, 0.045);
     const horizontalHoleX = length * 0.58;
     const verticalHoleY = length * 0.58;
-    addSurfaceHole(new THREE.Vector3(horizontalHoleX, 0, depth / 2 + 0.003), 'z', holeRadius);
-    addSurfaceHole(new THREE.Vector3(0, verticalHoleY, depth / 2 + 0.003), 'z', holeRadius);
-    addSetScrew(horizontalHoleX, 0, depth / 2 + 0.004, holeRadius);
-    addSetScrew(0, verticalHoleY, depth / 2 + 0.004, holeRadius);
-    hitboxSize.set(length + 0.14, length + 0.14, depth + ridgeHeight + 0.16);
+    [
+      new THREE.Vector2(horizontalHoleX, armWidth / 2),
+      new THREE.Vector2(armWidth / 2, verticalHoleY),
+    ].forEach((point) => {
+      addSurfaceHole(new THREE.Vector3(point.x, point.y, depth / 2 + 0.004), 'z', holeRadius);
+      const hexSocket = new THREE.Mesh(
+        new THREE.TorusGeometry(holeRadius * 0.42, Math.max(0.0025, holeRadius * 0.09), 6, 6),
+        new THREE.MeshBasicMaterial({
+          color: '#475569',
+          transparent: true,
+          opacity: 0.88,
+          depthTest: false,
+          depthWrite: false,
+        }),
+      );
+      hexSocket.position.set(point.x, point.y, depth / 2 + 0.008);
+      hexSocket.userData.accessoryDecoration = true;
+      hexSocket.renderOrder = 107;
+      group.add(hexSocket);
+    });
+    hitboxSize.set(length + 0.1, length + 0.1, depth + 0.1);
   } else if (item.kind === 'tee_connector') {
-    // No.9 is shown as one compact square three-way block. The profile-facing
-    // ports are represented by recessed holes; no arms protrude from the cube.
-    const profileModule = Number((item.accessoryProfileSize || '2020').slice(0, 2)) / SCENE_SCALE;
-    const coreSize = THREE.MathUtils.clamp(profileModule, 0.15, 0.42);
+    // No.9 is a true series-sized end-connection cube: 1515 = 15mm³,
+    // 2020 = 20mm³, and 3030 = 30mm³. Three perpendicular profiles seat on
+    // local +X/-Y/+Z; the opposite three faces remain visible and carry the
+    // round installation openings shown in the physical reference.
+    const coreSizeMm = Number((item.accessoryProfileSize || '2020').slice(0, 2));
+    const coreSize = coreSizeMm / SCENE_SCALE;
     const core = new THREE.Mesh(new THREE.BoxGeometry(coreSize, coreSize, coreSize), material);
     group.add(core);
-    const holeRadius = THREE.MathUtils.clamp(profileModule * 0.13, 0.02, 0.055);
-    addSurfaceHole(new THREE.Vector3(coreSize / 2 + 0.004, 0, 0), 'x', holeRadius);
-    addSurfaceHole(new THREE.Vector3(0, -coreSize / 2 - 0.004, 0), 'y', holeRadius);
-    addSurfaceHole(new THREE.Vector3(0, 0, coreSize / 2 + 0.004), 'z', holeRadius);
+    const holeRadius = coreSize * 0.23;
+    const addVisiblePort = (normal: THREE.Vector3) => {
+      const facePosition = normal.clone().multiplyScalar(coreSize / 2 + 0.004);
+      const faceQuaternion = new THREE.Quaternion().setFromUnitVectors(
+        new THREE.Vector3(0, 0, 1),
+        normal,
+      );
+      const opening = new THREE.Mesh(
+        new THREE.CircleGeometry(holeRadius * 0.82, 32),
+        new THREE.MeshStandardMaterial({
+          color: '#59636e',
+          metalness: 0.72,
+          roughness: 0.32,
+          side: THREE.DoubleSide,
+        }),
+      );
+      const rim = new THREE.Mesh(
+        new THREE.RingGeometry(holeRadius * 0.82, holeRadius, 32),
+        new THREE.MeshStandardMaterial({
+          color: '#cbd2d9',
+          metalness: 0.78,
+          roughness: 0.24,
+          side: THREE.DoubleSide,
+        }),
+      );
+      opening.position.copy(facePosition);
+      rim.position.copy(facePosition).addScaledVector(normal, 0.0015);
+      opening.quaternion.copy(faceQuaternion);
+      rim.quaternion.copy(faceQuaternion);
+      opening.userData.accessoryDecoration = true;
+      rim.userData.accessoryDecoration = true;
+      opening.renderOrder = 106;
+      rim.renderOrder = 107;
+      group.add(opening, rim);
+    };
+    addVisiblePort(new THREE.Vector3(-1, 0, 0));
+    addVisiblePort(new THREE.Vector3(0, 1, 0));
+    addVisiblePort(new THREE.Vector3(0, 0, -1));
     hitboxSize.set(coreSize + 0.14, coreSize + 0.14, coreSize + 0.14);
   } else if (item.kind === 'screw') {
-    const screwLength = THREE.MathUtils.clamp((item.height || 35) / SCENE_SCALE, 0.16, 1.2);
+    // Keep short catalog screws physically short in the scene. In particular,
+    // wardrobe M6×8 screws must stop before the perpendicular countersunk bore
+    // instead of being visually stretched to the former 16mm minimum.
+    const screwLength = THREE.MathUtils.clamp((item.height || 35) / SCENE_SCALE, 0.06, 1.2);
     const shaftRadius = THREE.MathUtils.clamp((item.width || 12) / SCENE_SCALE * 0.28, 0.025, 0.07);
-    const shaft = new THREE.Mesh(new THREE.CylinderGeometry(shaftRadius, shaftRadius, screwLength, 24), screwCyan);
+    const shaft = new THREE.Mesh(
+      new THREE.CylinderGeometry(shaftRadius, shaftRadius, screwLength, 24),
+      screwShaftMaterial,
+    );
     // Local origin is the underside of the head; the shaft always travels
     // toward -Y through the source profile and into the mating tapped profile.
     shaft.position.y = -screwLength / 2;
@@ -2972,31 +4877,73 @@ const createAccessoryObject = (item: DIYSceneItem, selected: boolean) => {
     const headGeometry = isButtonHead
       ? new THREE.SphereGeometry(headRadius, 28, 14)
       : new THREE.CylinderGeometry(headRadius, headRadius, headHeight, 28);
-    const head = new THREE.Mesh(headGeometry, screwBlue);
+    const head = new THREE.Mesh(headGeometry, screwHeadMaterial);
     if (isButtonHead) head.scale.set(1, headHeight / (headRadius * 2), 1);
     head.position.y = headHeight / 2;
     const collar = new THREE.Mesh(
       new THREE.CylinderGeometry(headRadius * 0.96, headRadius * 0.96, Math.max(0.018, headHeight * 0.2), 28),
-      screwBlue,
+      screwHeadMaterial,
     );
     collar.position.y = Math.max(0.009, headHeight * 0.1);
     const socket = new THREE.Mesh(
       new THREE.CylinderGeometry(headRadius * 0.38, headRadius * 0.38, 0.008, 6),
-      new THREE.MeshBasicMaterial({ color: '#082f49' }),
+      new THREE.MeshBasicMaterial({ color: '#263342' }),
     );
     socket.position.y = headHeight + 0.006;
-    group.add(shaft, collar, head, socket);
+    // A through-hole/button-head connection is hidden inside the extrusion in
+    // the ordinary assembly view: the customer should see only the circular
+    // through-hole opening on the profile surface. Counterbore/countersunk
+    // connections keep their seated socket head visible. Translucent
+    // inspection restores every head plus the complete internal shaft.
+    if (showInternalHardware) group.add(shaft);
+    if (showInternalHardware || linkedHoleType !== 'through') {
+      group.add(collar, head, socket);
+    }
+    const screwOrderSpec = getDiyScrewOrderSpec(
+      item.accessoryProfileSize,
+      item.screwHead,
+      Math.max(1, Math.round(item.height || 35)),
+    );
+    if (showInternalHardware && screwOrderSpec.includesElasticFastener) {
+      // 3030 M8×20 button-head kits include a spring T-slot fastener, not a
+      // loose washer. Model the shallow rectangular nut across the groove so
+      // translucent inspection reads like the physical connection reference.
+      const fastenerThickness = Math.max(0.026, shaftRadius * 0.42);
+      const springFastener = new THREE.Mesh(
+        new THREE.BoxGeometry(headRadius * 2.65, fastenerThickness, headRadius * 1.5),
+        darkMetal.clone(),
+      );
+      springFastener.position.y = -Math.max(0.025, shaftRadius * 0.58);
+      const springTabs = [-1, 1].map((side) => {
+        const tab = new THREE.Mesh(
+          new THREE.BoxGeometry(headRadius * 0.52, fastenerThickness * 0.72, headRadius * 0.46),
+          steel.clone(),
+        );
+        tab.position.set(side * headRadius * 1.02, springFastener.position.y - fastenerThickness * 0.34, 0);
+        tab.rotation.z = side * 0.18;
+        return tab;
+      });
+      group.add(springFastener, ...springTabs);
+    }
     hitboxSize.set(headRadius * 2.6, screwLength + headHeight + 0.16, headRadius * 2.6);
   }
   group.traverse((child) => {
     if (child instanceof THREE.Mesh) {
+      if (item.kind === 'screw') {
+        const materials = Array.isArray(child.material) ? child.material : [child.material];
+        materials.forEach((meshMaterial) => {
+          meshMaterial.depthTest = !showInternalHardware;
+          meshMaterial.depthWrite = !showInternalHardware;
+        });
+        child.renderOrder = 124;
+      }
       child.castShadow = true;
       child.receiveShadow = true;
       if (!child.userData.accessoryDecoration) {
         addEdges(
           child,
-          item.kind === 'screw' ? '#075985' : '#475569',
-          item.kind === 'screw' ? 0.72 : 0.55,
+          item.kind === 'screw' ? '#64748b' : '#475569',
+          item.kind === 'screw' ? 0.5 : 0.55,
         );
       }
     }
@@ -3019,27 +4966,20 @@ const customizeTranslateGizmo = (transform: TransformControls) => {
   const translatePicker = internals._gizmo?.picker.translate;
   if (!translateGizmo || !translatePicker) return;
 
-  const removeUnwantedHandles = (container: THREE.Group, replaceCenter: boolean) => {
+  const removePlaneHandles = (container: THREE.Group) => {
     container.children.slice().forEach((child) => {
       if (!(child instanceof THREE.Mesh || child instanceof THREE.Line)) return;
-      if (child.name === 'XY' || child.name === 'YZ' || child.name === 'XZ' || (replaceCenter && child.name === 'XYZ')) {
-        container.remove(child);
-        child.geometry.dispose();
-        return;
-      }
-      if (child.name !== 'X' && child.name !== 'Y' && child.name !== 'Z') return;
-      child.geometry.computeBoundingBox();
-      const center = child.geometry.boundingBox?.getCenter(new THREE.Vector3());
-      const component = child.name === 'X' ? center?.x : child.name === 'Y' ? center?.y : center?.z;
-      if (component !== undefined && component < -0.04) {
+      if (child.name === 'XY' || child.name === 'YZ' || child.name === 'XZ' || child.name === 'XYZ') {
         container.remove(child);
         child.geometry.dispose();
       }
     });
   };
 
-  removeUnwantedHandles(translateGizmo, true);
-  removeUnwantedHandles(translatePicker, true);
+  // Keep both the positive and negative X/Y/Z arrows. Movement is deliberately
+  // axis-only; plane and free-center handles remain unavailable.
+  removePlaneHandles(translateGizmo);
+  removePlaneHandles(translatePicker);
 };
 
 const createProfileLengthHandles = () => {
@@ -3081,6 +5021,18 @@ const createProfileLengthHandles = () => {
   return root;
 };
 
+const setProfileLengthHandleHighlight = (handles: THREE.Group, highlightedSide: -1 | 1 | null) => {
+  handles.children.forEach((handle) => {
+    const side = handle.userData.lengthHandleSide as -1 | 1;
+    handle.traverse((child) => {
+      if (!(child instanceof THREE.Mesh) || child.userData.lengthHandleSide !== undefined) return;
+      const material = child.material as THREE.MeshBasicMaterial;
+      if (!material?.color || material.colorWrite === false) return;
+      material.color.set(side === highlightedSide ? '#f59e0b' : '#111827');
+    });
+  });
+};
+
 const syncProfileLengthHandles = (
   handles: THREE.Group,
   profileGroup: THREE.Group | undefined,
@@ -3102,6 +5054,44 @@ const syncProfileLengthHandles = (
   });
 };
 
+type ProfileMeasurementOverlay = {
+  id: string;
+  kind: 'length' | 'clearance' | 'gap';
+  label: string;
+  start: { x: number; y: number };
+  end: { x: number; y: number };
+  labelPoint: { x: number; y: number };
+};
+
+type ProfileConnectionOverlay = {
+  id: string;
+  label: string;
+  point: { x: number; y: number };
+};
+
+type ProfileRelationOverlay = {
+  measurements: ProfileMeasurementOverlay[];
+  connections: ProfileConnectionOverlay[];
+};
+
+type AccessoryEditJointOverlay = {
+  key: string;
+  status: AccessoryEditJointStatus;
+  point: { x: number; y: number };
+};
+
+type ProfileDrawCommit = {
+  position: Vec3;
+  rotation: Vec3;
+  length: number;
+};
+
+type AccessoryPlacementOverlay = {
+  key: string;
+  point: { x: number; y: number };
+  placement: AccessoryPlacement;
+};
+
 const ThreeAssembly: React.FC<{
   items: DIYSceneItem[];
   selectedId: string | null;
@@ -3110,7 +5100,10 @@ const ThreeAssembly: React.FC<{
   rotationMenuTitle: string;
   interactionLabels: {
     sceneRotation: string;
-    contextHint: string;
+    orbit: string;
+    pan: string;
+    zoom: string;
+    part: string;
     interferenceWarning: string;
   };
   snapLabels: {
@@ -3129,13 +5122,27 @@ const ThreeAssembly: React.FC<{
     end: string;
     connectedTo: string;
   };
-  workPlaneLabels: { title: string; auto: string; xy: string; xz: string; yz: string; hint: string };
   accessorySnapLabel: string;
   renderErrorLabel: string;
   deleteLabel: string;
   frameAllLabel: string;
+  resetViewLabel: string;
   fillScrewsLabel: string;
   fillScrewsHint: string;
+  connectionGenerationLabels: {
+    title: string;
+    hint: string;
+    cornerBracket: string;
+    slotConnector: string;
+    drillTap: string;
+    chooseType: string;
+    applyAll: string;
+    deleteAll: string;
+    exit: string;
+    addable: string;
+    replaceable: string;
+    installed: string;
+  };
   displayLabels: {
     transparentProfiles: string;
     machiningMarks: string;
@@ -3147,7 +5154,11 @@ const ThreeAssembly: React.FC<{
   };
   drillMode: boolean;
   drillEditorLabels: { position: string; left: string; right: string; confirm: string; cancel: string };
-  operationLabels: { length: string; move: string; duplicateMove: string; duplicateMoveHint: string; apply: string };
+  operationLabels: { length: string; dimensionLength: string; move: string; connectionReady: string; apply: string };
+  profileDrawTemplate: DIYSceneItem | null;
+  profileDrawLabels: { hint: string; invalid: string; restore: string };
+  accessoryPlacementTemplate: DIYSceneItem | null;
+  accessoryPlacementLabels: { hint: string; invalid: string; success: string; restore: string };
   onSelect: (id: string | null, additive?: boolean) => void;
   onSelectionChange: (ids: string[]) => void;
   onTransform: (
@@ -3161,8 +5172,15 @@ const ThreeAssembly: React.FC<{
   onRotateQuarterTurn: (id: string, axisIndex: RotationAxisIndex) => void;
   onDelete: (id: string) => void;
   onFillScrews: () => void;
+  onGenerateConnections: (mode: DIYAutoConnectionMode) => void;
+  onDeleteConnections: (mode: DIYAutoConnectionMode) => void;
+  onApplyConnectionAtJoint: (mode: DIYAutoConnectionMode, jointKey: string) => void;
   onPlaceHole: (id: string, side: ProfileSide, positionMm: number, displayGrooveIndex: number, physicalGrooveIndex: number) => void;
   onCancelDrillMode: () => void;
+  onCommitProfileDraw: (draft: ProfileDrawCommit) => void;
+  onExitProfileDraw: () => void;
+  onCommitAccessoryPlacement: (template: DIYSceneItem, placement: AccessoryPlacement) => void;
+  onExitAccessoryPlacement: () => void;
 }> = ({
   items,
   selectedId,
@@ -3179,17 +5197,22 @@ const ThreeAssembly: React.FC<{
     end: 'End',
     connectedTo: 'Connected to',
   },
-  workPlaneLabels,
   accessorySnapLabel,
   renderErrorLabel,
   deleteLabel,
   frameAllLabel,
+  resetViewLabel,
   fillScrewsLabel,
   fillScrewsHint,
+  connectionGenerationLabels,
   displayLabels,
   drillMode,
   drillEditorLabels,
   operationLabels,
+  profileDrawTemplate,
+  profileDrawLabels,
+  accessoryPlacementTemplate,
+  accessoryPlacementLabels,
   onSelect,
   onSelectionChange,
   onTransform,
@@ -3197,8 +5220,15 @@ const ThreeAssembly: React.FC<{
   onRotateQuarterTurn,
   onDelete,
   onFillScrews,
+  onGenerateConnections,
+  onDeleteConnections,
+  onApplyConnectionAtJoint,
   onPlaceHole,
   onCancelDrillMode,
+  onCommitProfileDraw,
+  onExitProfileDraw,
+  onCommitAccessoryPlacement,
+  onExitAccessoryPlacement,
 }) => {
   const mountRef = useRef<HTMLDivElement>(null);
   const [renderError, setRenderError] = useState<string | null>(null);
@@ -3206,9 +5236,11 @@ const ThreeAssembly: React.FC<{
   const [snapHint, setSnapHint] = useState<string | null>(null);
   const snapHintTimerRef = useRef<number>(0);
   const [snapAlignment, setSnapAlignment] = useState<SnapAlignment>('auto');
-  const [workPlane, setWorkPlane] = useState<'auto' | 'xy' | 'xz' | 'yz'>('auto');
   const [transparentProfiles, setTransparentProfiles] = useState(false);
   const [showMachiningMarks, setShowMachiningMarks] = useState(true);
+  const [connectionMenuOpen, setConnectionMenuOpen] = useState(false);
+  const [accessoryEditMode, setAccessoryEditMode] = useState<DIYAutoConnectionMode | null>(null);
+  const [accessoryEditOverlay, setAccessoryEditOverlay] = useState<AccessoryEditJointOverlay[]>([]);
   const [holeDraft, setHoleDraft] = useState<{
     itemId: string;
     side: ProfileSide;
@@ -3231,6 +5263,27 @@ const ThreeAssembly: React.FC<{
     side?: -1 | 1;
     startPosition?: Vec3;
     direction?: Vec3;
+    dragging?: boolean;
+  } | null>(null);
+  const [profileRelationOverlay, setProfileRelationOverlay] = useState<ProfileRelationOverlay>({
+    measurements: [],
+    connections: [],
+  });
+  const [profileDrawOverlay, setProfileDrawOverlay] = useState<{
+    x: number;
+    y: number;
+    length: number;
+    extending: boolean;
+    axis?: 'X' | 'Y' | 'Z';
+    snapped?: boolean;
+    invalid?: boolean;
+  } | null>(null);
+  const [accessoryPlacementOverlay, setAccessoryPlacementOverlay] = useState<AccessoryPlacementOverlay[]>([]);
+  const [hoveredAccessoryPlacementKey, setHoveredAccessoryPlacementKey] = useState<string | null>(null);
+  const [accessoryPlacementMessage, setAccessoryPlacementMessage] = useState<{
+    text: string;
+    x: number;
+    y: number;
   } | null>(null);
   const collidingProfileIds = useMemo(() => findCollidingProfileIds(items), [items]);
   const selectedSceneItem = selectedId ? items.find((item) => item.id === selectedId) : undefined;
@@ -3239,6 +5292,7 @@ const ThreeAssembly: React.FC<{
   const rendererRef = useRef<THREE.WebGLRenderer | null>(null);
   const orbitRef = useRef<OrbitControls | null>(null);
   const transformRef = useRef<TransformControls | null>(null);
+  const transformAnchorRef = useRef<THREE.Object3D | null>(null);
   const lengthHandlesRef = useRef<THREE.Group | null>(null);
   const contentRef = useRef<THREE.Group | null>(null);
 
@@ -3260,11 +5314,20 @@ const ThreeAssembly: React.FC<{
   const onDeleteRef = useRef(onDelete);
   const onPlaceHoleRef = useRef(onPlaceHole);
   const onCancelDrillModeRef = useRef(onCancelDrillMode);
+  const onApplyConnectionAtJointRef = useRef(onApplyConnectionAtJoint);
+  const profileDrawTemplateRef = useRef(profileDrawTemplate);
+  const onCommitProfileDrawRef = useRef(onCommitProfileDraw);
+  const onExitProfileDrawRef = useRef(onExitProfileDraw);
+  const accessoryPlacementTemplateRef = useRef(accessoryPlacementTemplate);
+  const onCommitAccessoryPlacementRef = useRef(onCommitAccessoryPlacement);
+  const onExitAccessoryPlacementRef = useRef(onExitAccessoryPlacement);
+  const hoveredAccessoryPlacementKeyRef = useRef(hoveredAccessoryPlacementKey);
+  const accessoryEditModeRef = useRef(accessoryEditMode);
   const drillModeRef = useRef(drillMode);
   const snapLabelsRef = useRef(snapLabels);
   const alignmentLabelsRef = useRef(alignmentLabels);
   const snapAlignmentRef = useRef(snapAlignment);
-  const workPlaneRef = useRef(workPlane);
+  const operationLabelsRef = useRef(operationLabels);
   const drillEditorLabelsRef = useRef(drillEditorLabels);
 
   const frameAll = () => {
@@ -3299,6 +5362,37 @@ const ThreeAssembly: React.FC<{
     orbit.update();
   };
 
+  const resetView = () => {
+    const content = contentRef.current;
+    const camera = cameraRef.current;
+    const orbit = orbitRef.current;
+    if (!content || !camera || !orbit) return;
+    const defaultDirection = new THREE.Vector3(14, 11, 16).normalize();
+    if (content.children.length === 0) {
+      orbit.target.set(0, 4, 0);
+      camera.position.copy(orbit.target).add(defaultDirection.multiplyScalar(Math.sqrt(14 ** 2 + 11 ** 2 + 16 ** 2)));
+      camera.near = 0.02;
+      camera.far = 200;
+      camera.updateProjectionMatrix();
+      orbit.update();
+      return;
+    }
+    const bounds = new THREE.Box3().setFromObject(content);
+    const sphere = bounds.getBoundingSphere(new THREE.Sphere());
+    if (!Number.isFinite(sphere.radius) || sphere.radius <= 0) return;
+    const verticalHalfFov = THREE.MathUtils.degToRad(camera.fov * 0.5);
+    const horizontalHalfFov = Math.atan(Math.tan(verticalHalfFov) * Math.max(0.1, camera.aspect));
+    const limitingHalfFov = Math.min(verticalHalfFov, horizontalHalfFov);
+    const distance = Math.max(4, (sphere.radius / Math.sin(limitingHalfFov)) * 1.22);
+    orbit.target.copy(sphere.center);
+    camera.position.copy(sphere.center).add(defaultDirection.multiplyScalar(distance));
+    camera.up.set(0, 1, 0);
+    camera.near = Math.max(0.02, distance / 100);
+    camera.far = Math.max(200, distance * 20);
+    camera.updateProjectionMatrix();
+    orbit.update();
+  };
+
   useEffect(() => { itemsRef.current = items; }, [items]);
   useEffect(() => { selectedIdsRef.current = selectedIds; }, [selectedIds]);
   useEffect(() => { onSelectRef.current = onSelect; }, [onSelect]);
@@ -3309,6 +5403,11 @@ const ThreeAssembly: React.FC<{
   useEffect(() => { onDeleteRef.current = onDelete; }, [onDelete]);
   useEffect(() => { onPlaceHoleRef.current = onPlaceHole; }, [onPlaceHole]);
   useEffect(() => { onCancelDrillModeRef.current = onCancelDrillMode; }, [onCancelDrillMode]);
+  useEffect(() => { onApplyConnectionAtJointRef.current = onApplyConnectionAtJoint; }, [onApplyConnectionAtJoint]);
+  useEffect(() => {
+    accessoryEditModeRef.current = accessoryEditMode;
+    if (!accessoryEditMode) setAccessoryEditOverlay([]);
+  }, [accessoryEditMode]);
   useEffect(() => {
     drillModeRef.current = drillMode;
     if (!drillMode) setHoleDraft(null);
@@ -3316,8 +5415,33 @@ const ThreeAssembly: React.FC<{
   useEffect(() => { snapLabelsRef.current = snapLabels; }, [snapLabels]);
   useEffect(() => { alignmentLabelsRef.current = alignmentLabels; }, [alignmentLabels]);
   useEffect(() => { snapAlignmentRef.current = snapAlignment; }, [snapAlignment]);
-  useEffect(() => { workPlaneRef.current = workPlane; }, [workPlane]);
+  useEffect(() => { operationLabelsRef.current = operationLabels; }, [operationLabels]);
   useEffect(() => { drillEditorLabelsRef.current = drillEditorLabels; }, [drillEditorLabels]);
+  useEffect(() => { profileDrawTemplateRef.current = profileDrawTemplate; }, [profileDrawTemplate]);
+  useEffect(() => { onCommitProfileDrawRef.current = onCommitProfileDraw; }, [onCommitProfileDraw]);
+  useEffect(() => { onExitProfileDrawRef.current = onExitProfileDraw; }, [onExitProfileDraw]);
+  useEffect(() => { accessoryPlacementTemplateRef.current = accessoryPlacementTemplate; }, [accessoryPlacementTemplate]);
+  useEffect(() => { onCommitAccessoryPlacementRef.current = onCommitAccessoryPlacement; }, [onCommitAccessoryPlacement]);
+  useEffect(() => { onExitAccessoryPlacementRef.current = onExitAccessoryPlacement; }, [onExitAccessoryPlacement]);
+  useEffect(() => { hoveredAccessoryPlacementKeyRef.current = hoveredAccessoryPlacementKey; }, [hoveredAccessoryPlacementKey]);
+  useEffect(() => {
+    if (accessoryPlacementTemplate) return;
+    setAccessoryPlacementOverlay([]);
+    setHoveredAccessoryPlacementKey(null);
+    setAccessoryPlacementMessage(null);
+    if (orbitRef.current) orbitRef.current.enabled = true;
+    if (transformRef.current) transformRef.current.enabled = true;
+    if (rendererRef.current) rendererRef.current.domElement.style.cursor = '';
+  }, [accessoryPlacementTemplate]);
+  useEffect(() => {
+    if (profileDrawTemplate) return;
+    const preview = sceneRef.current?.getObjectByName('profile-draw-preview');
+    if (preview) preview.visible = false;
+    if (orbitRef.current) orbitRef.current.enabled = true;
+    if (transformRef.current) transformRef.current.enabled = true;
+    if (rendererRef.current) rendererRef.current.domElement.style.cursor = '';
+    setProfileDrawOverlay(null);
+  }, [profileDrawTemplate]);
 
   const applyHoleDraft = () => {
     if (!holeDraft) return;
@@ -3337,7 +5461,7 @@ const ThreeAssembly: React.FC<{
     setHoleDraft(null);
   };
 
-  const applyOperationEditor = (duplicateMove = false) => {
+  const applyOperationEditor = () => {
     if (!operationEditor) return;
     const editor = operationEditor;
     // Close first so a parent item update cannot leave the floating editor
@@ -3382,7 +5506,7 @@ const ThreeAssembly: React.FC<{
           ],
           item.rotation,
           undefined,
-          duplicateMove && item.kind === 'profile',
+          false,
         );
       }
     }
@@ -3424,9 +5548,9 @@ const ThreeAssembly: React.FC<{
     orbit.zoomSpeed = 0.82;
     orbit.panSpeed = 0.72;
     orbit.screenSpacePanning = true;
-    orbit.mouseButtons.LEFT = null;
+    orbit.mouseButtons.LEFT = THREE.MOUSE.ROTATE;
     orbit.mouseButtons.MIDDLE = THREE.MOUSE.PAN;
-    orbit.mouseButtons.RIGHT = THREE.MOUSE.ROTATE;
+    orbit.mouseButtons.RIGHT = THREE.MOUSE.PAN;
     orbit.target.set(0, 4, 0);
     orbit.maxDistance = 55;
     orbit.minDistance = 0.75;
@@ -3436,7 +5560,46 @@ const ThreeAssembly: React.FC<{
     transform.setSize(0.78);
     const helper = transform.getHelper();
     scene.add(helper);
+    // TransformControls normally sits on the selected object's origin. A long
+    // profile can therefore lose its only movement handle when the customer
+    // zooms/pans to inspect an end. Attach it to a separate view-aware anchor;
+    // the actual item remains the movement/manufacturing authority.
+    const transformAnchor = new THREE.Object3D();
+    transformAnchor.name = 'view-aware-transform-anchor';
+    scene.add(transformAnchor);
     customizeTranslateGizmo(transform);
+    // Translation is handled by the explicit left-button axis gesture below.
+    // Disconnect the built-in listeners so a left drag only moves when our
+    // picker has already confirmed one of the six axis arrows; otherwise the
+    // same left drag remains camera orbit.
+    transform.disconnect();
+    const getTransformTarget = () => transform.object?.userData.targetObject as THREE.Group | undefined;
+    const viewCenterPointer = new THREE.Vector2(0, 0);
+    const updateViewAwareTransformAnchor = () => {
+      const target = getTransformTarget();
+      if (!target) return;
+      if (freeMoveState?.object === target && freeMoveState.gizmoOffset) {
+        transformAnchor.position.copy(target.position).add(freeMoveState.gizmoOffset);
+        return;
+      }
+      const itemId = target.userData.itemId as string | undefined;
+      const item = itemId ? itemsRef.current.find((entry) => entry.id === itemId) : undefined;
+      if (item?.kind !== 'profile') {
+        target.getWorldPosition(transformAnchor.position);
+        return;
+      }
+      target.updateMatrixWorld(true);
+      const halfLength = profileDimensions(item).length / 2;
+      const start = target.localToWorld(new THREE.Vector3(-halfLength, 0, 0));
+      const end = target.localToWorld(new THREE.Vector3(halfLength, 0, 0));
+      const centerRay = new THREE.Raycaster();
+      centerRay.setFromCamera(viewCenterPointer, camera);
+      // Place the gizmo at the point on the selected profile nearest the
+      // current screen-center ray. It therefore remains available when a long
+      // profile is zoomed/panned to either end, while preserving world axes.
+      centerRay.ray.distanceSqToSegment(start, end, undefined, transformAnchor.position);
+    };
+    renderer.domElement.style.touchAction = 'none';
     const lengthHandles = createProfileLengthHandles();
     scene.add(lengthHandles);
     const snapGuide = new THREE.Mesh(
@@ -3471,6 +5634,98 @@ const ThreeAssembly: React.FC<{
     snapPreview.add(snapPreviewFill, snapPreviewOutline);
     snapPreview.visible = false;
     scene.add(snapPreview);
+    const connectionHighlightGeometry = new THREE.BoxGeometry(1, 1, 1);
+    const connectionHighlightEdgeGeometry = new THREE.EdgesGeometry(connectionHighlightGeometry);
+    const connectionHighlightMaterial = new THREE.MeshBasicMaterial({
+      color: '#f59e0b',
+      transparent: true,
+      opacity: 0.14,
+      depthTest: false,
+      depthWrite: false,
+    });
+    const connectionHighlightEdgeMaterial = new THREE.LineBasicMaterial({
+      color: '#d97706',
+      transparent: true,
+      opacity: 0.92,
+      depthTest: false,
+    });
+    const connectionHighlightMeshes = Array.from({ length: 8 }, () => {
+      const group = new THREE.Group();
+      const fill = new THREE.Mesh(connectionHighlightGeometry, connectionHighlightMaterial);
+      const outline = new THREE.LineSegments(connectionHighlightEdgeGeometry, connectionHighlightEdgeMaterial);
+      fill.renderOrder = 110;
+      outline.renderOrder = 111;
+      group.add(fill, outline);
+      group.visible = false;
+      scene.add(group);
+      return group;
+    });
+    const flushAlignmentMeshes = Array.from({ length: 2 }, () => {
+      const group = new THREE.Group();
+      const fill = new THREE.Mesh(
+        connectionHighlightGeometry,
+        new THREE.MeshBasicMaterial({
+          color: '#f59e0b',
+          transparent: true,
+          opacity: 0.28,
+          depthTest: false,
+          depthWrite: false,
+        }),
+      );
+      const outline = new THREE.LineSegments(
+        connectionHighlightEdgeGeometry,
+        new THREE.LineBasicMaterial({
+          color: '#d97706',
+          transparent: true,
+          opacity: 1,
+          depthTest: false,
+        }),
+      );
+      fill.renderOrder = 112;
+      outline.renderOrder = 113;
+      group.add(fill, outline);
+      group.visible = false;
+      scene.add(group);
+      return group;
+    });
+    const accessoryEditHighlightGeometry = new THREE.BoxGeometry(1, 1, 1);
+    const accessoryEditHighlightMeshes = Array.from({ length: 32 }, () => {
+      const mesh = new THREE.Mesh(
+        accessoryEditHighlightGeometry,
+        new THREE.MeshBasicMaterial({
+          color: '#a855f7',
+          transparent: true,
+          opacity: 0.68,
+          depthTest: false,
+          depthWrite: false,
+        }),
+      );
+      mesh.visible = false;
+      mesh.renderOrder = 116;
+      scene.add(mesh);
+      return mesh;
+    });
+    const accessoryPlacementHighlightGeometry = new THREE.BoxGeometry(1, 1, 1);
+    const accessoryPlacementHighlightMeshes = Array.from({ length: 64 }, () => {
+      const mesh = new THREE.Mesh(
+        accessoryPlacementHighlightGeometry,
+        new THREE.MeshBasicMaterial({
+          color: '#a855f7',
+          transparent: true,
+          opacity: 0.54,
+          depthTest: false,
+          depthWrite: false,
+        }),
+      );
+      mesh.visible = false;
+      mesh.renderOrder = 118;
+      scene.add(mesh);
+      return mesh;
+    });
+    const accessoryPlacementPreview = new THREE.Group();
+    accessoryPlacementPreview.name = 'accessory-placement-preview';
+    accessoryPlacementPreview.visible = false;
+    scene.add(accessoryPlacementPreview);
     let transformWasDragging = false;
     let transformDragActive = false;
     let transformSnapLock: ProfileSnap | null = null;
@@ -3509,38 +5764,359 @@ const ThreeAssembly: React.FC<{
         releaseDistance: THREE.MathUtils.clamp(worldPerPixel * 34, 0.24, 0.75),
       };
     };
-    const formatSnapHint = (snap: ProfileSnap) => {
-      const alignmentLabel = alignmentLabelsRef.current[snap.alignment];
-      return `${snapLabelsRef.current[snap.label]} · ${alignmentLabel} · ${alignmentLabelsRef.current.connectedTo} ${snap.targetName} ${snap.targetPort} · ${snapLabelsRef.current.clearance}: ${snapLabelsRef.current.leftSpace} ${snap.targetEndDistances.left}mm · ${snapLabelsRef.current.rightSpace} ${snap.targetEndDistances.right}mm`;
+    const getProfileSnapTolerances = (position: THREE.Vector3, item: DIYSceneItem) => {
+      const screenTolerances = getSnapTolerances(position);
+      const dimensions = profileDimensions(item);
+      // JLCFA-style feel: stay continuous until the connection is already very
+      // close, then settle into a narrow zero band that is easy to cross in
+      // either direction and does not pull from far away.
+      const crossSectionSize = Math.max(dimensions.width, dimensions.height);
+      const maxDistance = crossSectionSize * 0.72;
+      return {
+        maxDistance: Math.min(screenTolerances.maxDistance, maxDistance),
+        planeTolerance: Math.min(screenTolerances.planeTolerance, crossSectionSize * 0.18),
+        flushDistance: Math.min(screenTolerances.maxDistance, crossSectionSize * 0.28),
+        releaseDistance: Math.min(screenTolerances.releaseDistance, crossSectionSize * 0.55),
+      };
     };
-    const showSnapVisual = (snap: ProfileSnap, object: THREE.Group, item: DIYSceneItem) => {
+    const showSnapVisual = (snap: ProfileSnap, _object: THREE.Group, _item: DIYSceneItem) => {
       if (snapVisualHideTimer !== null) {
         window.clearTimeout(snapVisualHideTimer);
         snapVisualHideTimer = null;
       }
-      const dimensions = profileDimensions(item);
-      snapGuide.position.copy(snap.point);
-      snapGuide.quaternion.copy(camera.quaternion);
-      snapGuide.visible = true;
-      snapPreview.position.copy(snap.position);
-      snapPreview.quaternion.copy(object.quaternion);
-      snapPreview.scale.set(
-        dimensions.length + 0.05,
-        dimensions.height + 0.05,
-        dimensions.width + 0.05,
-      );
-      snapPreview.visible = true;
-      setSnapHint(formatSnapHint(snap));
+      // Keep profile snapping as quiet as the JLCFA reference. The live signed
+      // distance reaches 0.0 mm and the real contact patch appears on the two
+      // touching faces; a large cyan ghost and detached target ring obscure
+      // both the joint and the profile's exact position.
+      snapGuide.visible = false;
+      snapPreview.visible = false;
+      flushAlignmentMeshes.forEach((mesh, index) => {
+        const face = snap.flushFaces?.[index];
+        if (!face) {
+          mesh.visible = false;
+          return;
+        }
+        mesh.position.copy(face.center);
+        mesh.scale.copy(face.size);
+        mesh.visible = true;
+      });
+      setSnapHint(null);
     };
     const hideSnapVisual = (delayMs = 0) => {
       if (snapVisualHideTimer !== null) window.clearTimeout(snapVisualHideTimer);
       const hide = () => {
         snapGuide.visible = false;
         snapPreview.visible = false;
+        flushAlignmentMeshes.forEach((mesh) => { mesh.visible = false; });
         snapVisualHideTimer = null;
       };
       if (delayMs > 0) snapVisualHideTimer = window.setTimeout(hide, delayMs);
       else hide();
+    };
+    let profileRelationSignature = '';
+    let lastProfileRelationUpdateAt = 0;
+    let accessoryEditSignature = '';
+    let lastAccessoryEditUpdateAt = 0;
+    let accessoryPlacementSignature = '';
+    let accessoryPlacementTemplateSignature = '';
+    let lastAccessoryPlacementUpdateAt = 0;
+    const projectRelationPoint = (point: THREE.Vector3) => {
+      const rect = renderer.domElement.getBoundingClientRect();
+      const projected = point.clone().project(camera);
+      if (projected.z < -1 || projected.z > 1) return null;
+      return {
+        x: ((projected.x + 1) / 2) * rect.width,
+        y: ((1 - projected.y) / 2) * rect.height,
+      };
+    };
+    const relationLineOffset = (axis: THREE.Vector3, amount: number) => {
+      const cameraDirection = camera.getWorldDirection(new THREE.Vector3()).normalize();
+      const offset = new THREE.Vector3().crossVectors(axis, cameraDirection);
+      if (offset.lengthSq() < 1e-5) offset.copy(new THREE.Vector3(0, 1, 0).cross(axis));
+      if (offset.lengthSq() < 1e-5) offset.set(0, 0, 1);
+      return offset.normalize().multiplyScalar(amount);
+    };
+    const updateAccessoryEditVisuals = (force = false) => {
+      const now = performance.now();
+      if (!force && now - lastAccessoryEditUpdateAt < 48) return;
+      lastAccessoryEditUpdateAt = now;
+      const mode = accessoryEditModeRef.current;
+      if (!mode) {
+        accessoryEditHighlightMeshes.forEach((mesh) => { mesh.visible = false; });
+        if (accessoryEditSignature) {
+          accessoryEditSignature = '';
+          setAccessoryEditOverlay([]);
+        }
+        return;
+      }
+      const source = itemsRef.current;
+      const joints = autoConnectionJoints(source).slice(0, accessoryEditHighlightMeshes.length);
+      const overlay = joints.flatMap((joint, index) => {
+        const status = accessoryEditJointStatus(source, joint, mode);
+        const mesh = accessoryEditHighlightMeshes[index];
+        const material = mesh.material as THREE.MeshBasicMaterial;
+        const color = status === 'installed' ? '#10b981' : status === 'replace' ? '#f97316' : '#a855f7';
+        material.color.set(color);
+        material.opacity = status === 'installed' ? 0.52 : 0.7;
+        mesh.position.copy(joint.contact.point);
+        mesh.scale.set(
+          Math.max(0.16, joint.contact.size.x + 0.06),
+          Math.max(0.16, joint.contact.size.y + 0.06),
+          Math.max(0.16, joint.contact.size.z + 0.06),
+        );
+        mesh.visible = true;
+        const point = projectRelationPoint(joint.contact.point);
+        return point ? [{ key: joint.key, status, point }] : [];
+      });
+      accessoryEditHighlightMeshes.slice(joints.length).forEach((mesh) => { mesh.visible = false; });
+      const nextSignature = JSON.stringify(overlay.map((entry) => [
+        entry.key,
+        entry.status,
+        Math.round(entry.point.x),
+        Math.round(entry.point.y),
+      ]));
+      if (nextSignature !== accessoryEditSignature) {
+        accessoryEditSignature = nextSignature;
+        setAccessoryEditOverlay(overlay);
+      }
+    };
+    const updateAccessoryPlacementVisuals = (force = false) => {
+      const now = performance.now();
+      if (!force && now - lastAccessoryPlacementUpdateAt < 48) return;
+      lastAccessoryPlacementUpdateAt = now;
+      const template = accessoryPlacementTemplateRef.current;
+      if (!template) {
+        accessoryPlacementHighlightMeshes.forEach((mesh) => { mesh.visible = false; });
+        accessoryPlacementPreview.visible = false;
+        if (accessoryPlacementSignature) {
+          accessoryPlacementSignature = '';
+          setAccessoryPlacementOverlay([]);
+        }
+        return;
+      }
+      const candidates = accessoryPlacementCandidates(template, itemsRef.current)
+        .slice(0, accessoryPlacementHighlightMeshes.length);
+      const moduleSize = Number((template.accessoryProfileSize || '2020').slice(0, 2)) / SCENE_SCALE;
+      const overlay = candidates.flatMap((placement, index) => {
+        const marker = accessoryPlacementHighlightMeshes[index];
+        marker.position.copy(placement.position);
+        marker.rotation.set(
+          THREE.MathUtils.degToRad(placement.rotation[0]),
+          THREE.MathUtils.degToRad(placement.rotation[1]),
+          THREE.MathUtils.degToRad(placement.rotation[2]),
+        );
+        marker.scale.setScalar(THREE.MathUtils.clamp(moduleSize * 0.76, 0.14, 0.34));
+        marker.visible = true;
+        const point = projectRelationPoint(placement.position);
+        return point ? [{ key: placement.key, point, placement }] : [];
+      });
+      accessoryPlacementHighlightMeshes.slice(candidates.length).forEach((mesh) => { mesh.visible = false; });
+
+      const templateSignature = [template.kind, template.accessoryProfileSize, template.width, template.height, template.thickness].join(':');
+      if (templateSignature !== accessoryPlacementTemplateSignature) {
+        accessoryPlacementPreview.children.slice().forEach((child) => {
+          accessoryPlacementPreview.remove(child);
+          disposeObject(child);
+        });
+        const previewObject = createAccessoryObject(template, false);
+        previewObject.traverse((child) => {
+          if (!(child instanceof THREE.Mesh) || child.userData.selectionProxy) return;
+          const materials = Array.isArray(child.material) ? child.material : [child.material];
+          const cloned = materials.map((material) => {
+            const nextMaterial = material.clone();
+            if ('color' in nextMaterial) (nextMaterial as THREE.MeshBasicMaterial).color.set('#22d3ee');
+            nextMaterial.transparent = true;
+            nextMaterial.opacity = 0.7;
+            nextMaterial.depthTest = false;
+            nextMaterial.depthWrite = false;
+            return nextMaterial;
+          });
+          child.material = Array.isArray(child.material) ? cloned : cloned[0];
+          child.renderOrder = 119;
+        });
+        accessoryPlacementPreview.add(previewObject);
+        accessoryPlacementTemplateSignature = templateSignature;
+      }
+      const hovered = candidates.find((candidate) => candidate.key === hoveredAccessoryPlacementKeyRef.current);
+      if (hovered) {
+        accessoryPlacementPreview.position.copy(hovered.position);
+        accessoryPlacementPreview.rotation.set(
+          THREE.MathUtils.degToRad(hovered.rotation[0]),
+          THREE.MathUtils.degToRad(hovered.rotation[1]),
+          THREE.MathUtils.degToRad(hovered.rotation[2]),
+        );
+        accessoryPlacementPreview.visible = true;
+      } else {
+        accessoryPlacementPreview.visible = false;
+      }
+      const nextSignature = JSON.stringify(overlay.map((entry) => [
+        entry.key,
+        Math.round(entry.point.x),
+        Math.round(entry.point.y),
+      ]));
+      if (nextSignature !== accessoryPlacementSignature) {
+        accessoryPlacementSignature = nextSignature;
+        setAccessoryPlacementOverlay(overlay);
+      }
+    };
+    const updateProfileRelationVisuals = (force = false) => {
+      const now = performance.now();
+      if (!force && now - lastProfileRelationUpdateAt < 48) return;
+      lastProfileRelationUpdateAt = now;
+      const selectedObject = getTransformTarget();
+      const selectedItemId = selectedObject?.userData.itemId as string | undefined;
+      const selectedItem = selectedItemId
+        ? itemsRef.current.find((entry) => entry.id === selectedItemId)
+        : undefined;
+      if (!selectedObject || selectedItem?.kind !== 'profile') {
+        connectionHighlightMeshes.forEach((mesh) => { mesh.visible = false; });
+        if (profileRelationSignature) {
+          profileRelationSignature = '';
+          setProfileRelationOverlay({ measurements: [], connections: [] });
+        }
+        return;
+      }
+
+      const selectedBox = profileBox(selectedItem, selectedObject);
+      const measurementWorld: Array<{
+        id: string;
+        kind: ProfileMeasurementOverlay['kind'];
+        label: string;
+        start: THREE.Vector3;
+        end: THREE.Vector3;
+      }> = [];
+      const relationOffset = relationLineOffset(selectedBox.axes[0], 0.95);
+      measurementWorld.push({
+        id: `${selectedItem.id}:length`,
+        kind: 'length',
+        label: `${operationLabelsRef.current.dimensionLength}: ${Math.round(selectedBox.halfSizes[0] * 2 * SCENE_SCALE)} mm`,
+        start: selectedBox.center.clone().addScaledVector(selectedBox.axes[0], -selectedBox.halfSizes[0]).add(relationOffset),
+        end: selectedBox.center.clone().addScaledVector(selectedBox.axes[0], selectedBox.halfSizes[0]).add(relationOffset),
+      });
+
+      const contacts: Array<{
+        item: DIYSceneItem;
+        box: ProfileBox;
+        contact: ProfileContact;
+      }> = [];
+      const nearestGaps = new Map<number, { item: DIYSceneItem; gap: ProfileAxisGap }>();
+      itemsRef.current.forEach((targetItem) => {
+        if (targetItem.id === selectedItem.id || targetItem.kind !== 'profile') return;
+        const targetObject = groupsRef.current.get(targetItem.id);
+        if (!targetObject) return;
+        const targetBox = profileBox(targetItem, targetObject);
+        const contact = profileContact(selectedBox, targetBox);
+        if (contact) contacts.push({ item: targetItem, box: targetBox, contact });
+        const gap = profileAxisGap(selectedBox, targetBox);
+        if (!gap) return;
+        const current = nearestGaps.get(gap.axisIndex);
+        if (!current || gap.distance < current.gap.distance) nearestGaps.set(gap.axisIndex, { item: targetItem, gap });
+      });
+
+      connectionHighlightMeshes.forEach((mesh, index) => {
+        const relation = contacts[index];
+        if (!relation) {
+          mesh.visible = false;
+          return;
+        }
+        mesh.position.copy(relation.contact.point);
+        mesh.scale.set(
+          Math.max(0.025, relation.contact.size.x + 0.012),
+          Math.max(0.025, relation.contact.size.y + 0.012),
+          Math.max(0.025, relation.contact.size.z + 0.012),
+        );
+        mesh.visible = true;
+      });
+
+      contacts.slice(0, 3).forEach(({ item: targetItem, box: targetBox }, contactIndex) => {
+        const movingHalfAlongTarget = selectedBox.axes.reduce(
+          (sum, axis, axisIndex) => sum + Math.abs(axis.dot(targetBox.axes[0])) * selectedBox.halfSizes[axisIndex],
+          0,
+        );
+        const selectedCenterAlongTarget = selectedBox.center.clone().sub(targetBox.center).dot(targetBox.axes[0]);
+        const negativeDistance = Math.max(0, targetBox.halfSizes[0] + selectedCenterAlongTarget - movingHalfAlongTarget);
+        const positiveDistance = Math.max(0, targetBox.halfSizes[0] - selectedCenterAlongTarget - movingHalfAlongTarget);
+        const offset = relationLineOffset(targetBox.axes[0], 0.22 + contactIndex * 0.1);
+        if (negativeDistance > 0.005) {
+          measurementWorld.push({
+            id: `${selectedItem.id}:${targetItem.id}:negative-clearance`,
+            kind: 'clearance',
+            label: `${Math.round(negativeDistance * SCENE_SCALE)} mm`,
+            start: targetBox.center.clone().addScaledVector(targetBox.axes[0], -targetBox.halfSizes[0]).add(offset),
+            end: targetBox.center.clone().addScaledVector(targetBox.axes[0], selectedCenterAlongTarget - movingHalfAlongTarget).add(offset),
+          });
+        }
+        if (positiveDistance > 0.005) {
+          measurementWorld.push({
+            id: `${selectedItem.id}:${targetItem.id}:positive-clearance`,
+            kind: 'clearance',
+            label: `${Math.round(positiveDistance * SCENE_SCALE)} mm`,
+            start: targetBox.center.clone().addScaledVector(targetBox.axes[0], selectedCenterAlongTarget + movingHalfAlongTarget).add(offset),
+            end: targetBox.center.clone().addScaledVector(targetBox.axes[0], targetBox.halfSizes[0]).add(offset),
+          });
+        }
+      });
+
+      [...nearestGaps.values()]
+        .sort((first, second) => first.gap.distance - second.gap.distance)
+        .slice(0, 3)
+        .forEach(({ item: targetItem, gap }) => {
+          measurementWorld.push({
+            id: `${selectedItem.id}:${targetItem.id}:gap:${gap.axisIndex}`,
+            kind: 'gap',
+            label: `${Math.round(gap.distance * SCENE_SCALE)} mm`,
+            start: gap.start,
+            end: gap.end,
+          });
+        });
+
+      const projectedMeasurements = measurementWorld.flatMap((measurement) => {
+        const start = projectRelationPoint(measurement.start);
+        const end = projectRelationPoint(measurement.end);
+        return start && end ? [{ ...measurement, start, end }] : [];
+      });
+      const viewportRect = renderer.domElement.getBoundingClientRect();
+      const occupiedLabels: Array<{ x: number; y: number }> = [];
+      const measurements = projectedMeasurements.map((measurement, measurementIndex) => {
+        let x = (measurement.start.x + measurement.end.x) / 2;
+        let y = (measurement.start.y + measurement.end.y) / 2;
+        if (measurement.kind === 'length') y -= 64;
+        if (measurement.kind === 'gap') y += 14;
+        let attempt = 0;
+        while (occupiedLabels.some((occupied) => Math.abs(occupied.x - x) < 82 && Math.abs(occupied.y - y) < 28) && attempt < 6) {
+          attempt += 1;
+          const direction = attempt % 2 === 0 ? 1 : -1;
+          y += direction * (18 + Math.ceil(attempt / 2) * 8);
+          x += ((measurementIndex + attempt) % 2 === 0 ? 1 : -1) * 8;
+        }
+        x = THREE.MathUtils.clamp(x, 58, Math.max(58, viewportRect.width - 58));
+        y = THREE.MathUtils.clamp(y, 20, Math.max(20, viewportRect.height - 20));
+        occupiedLabels.push({ x, y });
+        return { ...measurement, labelPoint: { x, y } };
+      });
+      const connections: ProfileRelationOverlay['connections'] = [];
+      const nextOverlay = { measurements, connections };
+      const nextSignature = JSON.stringify({
+        measurements: measurements.map((measurement) => [
+          measurement.id,
+          measurement.label,
+          Math.round(measurement.start.x),
+          Math.round(measurement.start.y),
+          Math.round(measurement.end.x),
+          Math.round(measurement.end.y),
+          Math.round(measurement.labelPoint.x),
+          Math.round(measurement.labelPoint.y),
+        ]),
+        connections: connections.map((connection) => [
+          connection.id,
+          Math.round(connection.point.x),
+          Math.round(connection.point.y),
+        ]),
+      });
+      if (nextSignature !== profileRelationSignature) {
+        profileRelationSignature = nextSignature;
+        setProfileRelationOverlay(nextOverlay);
+      }
     };
     const retainSnapLock = (
       lock: ProfileSnap | null,
@@ -3560,14 +6136,14 @@ const ThreeAssembly: React.FC<{
         hideSnapVisual();
         return;
       }
-      const object = transform.object as THREE.Group | undefined;
+      const object = getTransformTarget();
       const itemId = object?.userData.itemId as string | undefined;
       const item = itemId ? itemsRef.current.find((entry) => entry.id === itemId) : undefined;
       if (!object || !item || item.kind !== 'profile') {
         hideSnapVisual();
         return;
       }
-      const tolerances = getSnapTolerances(object.position);
+      const tolerances = getProfileSnapTolerances(object.position, item);
       const rawPosition = object.position.clone();
       const retainedLock = retainSnapLock(
         transformSnapLock,
@@ -3611,7 +6187,7 @@ const ThreeAssembly: React.FC<{
       setSnapHint(null);
     };
     const onTransformMouseUp = () => {
-      const object = transform.object;
+      const object = getTransformTarget();
       const itemId = object?.userData.itemId as string | undefined;
       if (!object || !itemId) return;
       onTransformRef.current(
@@ -3653,6 +6229,134 @@ const ThreeAssembly: React.FC<{
     const content = new THREE.Group();
     scene.add(content);
 
+    // Continuous profile drawing uses a scene-level preview so it can follow
+    // the pointer without becoming a selectable/BOM item before confirmation.
+    const profileDrawPreview = new THREE.Group();
+    profileDrawPreview.visible = false;
+    profileDrawPreview.name = 'profile-draw-preview';
+    profileDrawPreview.renderOrder = 125;
+    scene.add(profileDrawPreview);
+    const profileDrawPlane = new THREE.Plane();
+    let profileDrawSignature = '';
+    let profileDrawWasActive = false;
+    let profileDrawAnchor: THREE.Vector3 | null = null;
+    let profileDrawAxis = new THREE.Vector3(1, 0, 0);
+    let profileDrawSignedLength = 0.4;
+    let profileDrawLength = 0.4;
+    let profileDrawAnchorPointer = new THREE.Vector2();
+    let profileDrawPointerTravel = 0;
+    let profileDrawCurrentRotation = new THREE.Euler();
+    let profileDrawBlocked = false;
+    let profileDrawStartSnap: ProfileDrawSnapPoint | null = null;
+    let profileDrawPreviousMember: {
+      anchor: THREE.Vector3;
+      end: THREE.Vector3;
+      axis: THREE.Vector3;
+      quaternion: THREE.Quaternion;
+    } | null = null;
+
+    // Free-draw connection feedback is intentionally a small amber contact
+    // patch, matching the ordinary profile-to-profile joint visualization.
+    // It communicates the physical intersection without the old oversized
+    // check-mark badge obscuring the member.
+    const profileDrawContactMaterial = new THREE.MeshBasicMaterial({
+      color: '#f59e0b',
+      transparent: true,
+      opacity: 0.38,
+      depthTest: false,
+      depthWrite: false,
+    });
+    const profileDrawContactEdgeMaterial = new THREE.LineBasicMaterial({
+      color: '#d97706',
+      transparent: true,
+      opacity: 0.98,
+      depthTest: false,
+    });
+    const profileDrawContactGeometry = new THREE.BoxGeometry(1, 1, 1);
+    const profileDrawContactEdgeGeometry = new THREE.EdgesGeometry(profileDrawContactGeometry);
+    const profileDrawContactHighlights = Array.from({ length: 2 }, () => {
+      const group = new THREE.Group();
+      const fill = new THREE.Mesh(profileDrawContactGeometry, profileDrawContactMaterial);
+      const outline = new THREE.LineSegments(profileDrawContactEdgeGeometry, profileDrawContactEdgeMaterial);
+      fill.renderOrder = 126;
+      outline.renderOrder = 127;
+      group.add(fill, outline);
+      group.visible = false;
+      scene.add(group);
+      return group;
+    });
+
+    const resetProfileDrawDraft = () => {
+      profileDrawAnchor = null;
+      profileDrawSignedLength = 0.4;
+      profileDrawLength = 0.4;
+      profileDrawPointerTravel = 0;
+      profileDrawBlocked = false;
+      profileDrawStartSnap = null;
+      profileDrawPreviousMember = null;
+      profileDrawContactHighlights.forEach((highlight) => { highlight.visible = false; });
+      setProfileDrawOverlay(null);
+    };
+
+    const ensureProfileDrawPreview = () => {
+      const template = profileDrawTemplateRef.current;
+      if (!template || template.kind !== 'profile') {
+        profileDrawPreview.visible = false;
+        resetProfileDrawDraft();
+        profileDrawSignature = '';
+        return null;
+      }
+      const signature = [template.variantId, template.colorId, template.rotation.join(',')].join(':');
+      if (signature !== profileDrawSignature) {
+        profileDrawPreview.children.slice().forEach((child) => {
+          profileDrawPreview.remove(child);
+          disposeObject(child);
+        });
+        const previewItem: DIYSceneItem = {
+          ...template,
+          id: 'profile-draw-preview',
+          length: 40,
+          holes: [],
+          tappingLeft: false,
+          tappingRight: false,
+          lockedPosition: false,
+          attachedProfileIds: undefined,
+          attachmentKey: undefined,
+        };
+        const object = createProfileObject(previewItem, true, false, false, 1, false);
+        object.traverse((child) => {
+          child.userData.profileDrawPreview = true;
+          if (child instanceof THREE.Mesh) {
+            const materials = Array.isArray(child.material) ? child.material : [child.material];
+            materials.forEach((material) => {
+              material.transparent = true;
+              material.opacity = Math.min(material.opacity, 0.76);
+              material.depthWrite = false;
+            });
+            child.renderOrder = 125;
+          }
+        });
+        profileDrawPreview.add(object);
+        profileDrawPreview.rotation.set(
+          THREE.MathUtils.degToRad(template.rotation[0]),
+          THREE.MathUtils.degToRad(template.rotation[1]),
+          THREE.MathUtils.degToRad(template.rotation[2]),
+        );
+        profileDrawCurrentRotation.copy(profileDrawPreview.rotation);
+        profileDrawAxis.set(1, 0, 0).applyEuler(profileDrawPreview.rotation).normalize();
+        profileDrawSignature = signature;
+      }
+      profileDrawPreview.visible = true;
+      return profileDrawPreview.children[0] as THREE.Group | undefined;
+    };
+
+    const setProfileDrawPreviewLength = (length: number) => {
+      const object = ensureProfileDrawPreview();
+      if (!object) return;
+      profileDrawLength = THREE.MathUtils.clamp(length, 0.21, 30);
+      object.scale.set(profileDrawLength / 0.4, 1, 1);
+    };
+
     const pointer = new THREE.Vector2();
     const raycaster = new THREE.Raycaster();
     raycaster.params.Line.threshold = 0.025;
@@ -3677,17 +6381,19 @@ const ThreeAssembly: React.FC<{
       pointerId: number;
       startPoint: THREE.Vector3;
       startPosition: THREE.Vector3;
+      dragOriginPosition: THREE.Vector3;
       validPosition: THREE.Vector3;
       moved: boolean;
-      duplicateOnCommit: boolean;
-      collisionItem: DIYSceneItem;
-      axis?: THREE.Vector3;
+      axis: THREE.Vector3;
       startRotation: THREE.Quaternion;
       accessoryPlacement?: AccessoryPlacement | null;
       snapLock?: ProfileSnap | null;
       snapPointerPosition?: THREE.Vector3 | null;
       snapSuppressed?: boolean;
       snapRearmAt?: number;
+      gizmoOffset?: THREE.Vector3;
+      sourceAttachmentKey?: string;
+      duplicateOnCommit: boolean;
     };
     let freeMoveState: FreeMoveState | null = null;
     let marqueeState: { pointerId: number; startX: number; startY: number; currentX: number; currentY: number } | null = null;
@@ -3698,6 +6404,29 @@ const ThreeAssembly: React.FC<{
       pointer.x = ((clientX - rect.left) / rect.width) * 2 - 1;
       pointer.y = -((clientY - rect.top) / rect.height) * 2 + 1;
       raycaster.setFromCamera(pointer, camera);
+    };
+    const profileDrawPointerPoint = (clientX: number, clientY: number) => {
+      setPointerRay(clientX, clientY);
+      const templatePosition = profileDrawTemplateRef.current?.position || [0, 0, 0];
+      if (!profileDrawAnchor) {
+        // Empty-space drawing starts on one stable XZ construction plane.
+        // The previous camera-facing plane looked flat but silently introduced
+        // depth/height offsets, making four members miss one another at closure.
+        profileDrawPlane.setFromNormalAndCoplanarPoint(
+          new THREE.Vector3(0, 1, 0),
+          new THREE.Vector3(0, templatePosition[1] / SCENE_SCALE, 0),
+        );
+        const groundPoint = raycaster.ray.intersectPlane(profileDrawPlane, new THREE.Vector3());
+        if (groundPoint) return groundPoint;
+      }
+      const cameraDirection = camera.getWorldDirection(new THREE.Vector3()).normalize();
+      const planePoint = profileDrawAnchor || new THREE.Vector3(
+        templatePosition[0],
+        templatePosition[1],
+        templatePosition[2],
+      ).multiplyScalar(1 / SCENE_SCALE);
+      profileDrawPlane.setFromNormalAndCoplanarPoint(cameraDirection, planePoint);
+      return raycaster.ray.intersectPlane(profileDrawPlane, new THREE.Vector3());
     };
     const getItemIdFromObject = (object: THREE.Object3D | null) => {
       let current = object;
@@ -3720,50 +6449,594 @@ const ThreeAssembly: React.FC<{
         ))
         || null;
     };
+    type ProfileDrawSnapPoint = {
+      point: THREE.Vector3;
+      size: THREE.Vector3;
+      quaternion: THREE.Quaternion;
+      normal?: THREE.Vector3;
+      targetAxis?: THREE.Vector3;
+      targetEndDirection?: THREE.Vector3;
+      sideButtAtEnd?: boolean;
+      targetProfileId?: string;
+      endFace?: boolean;
+    };
+    const showProfileDrawContact = (index: number, snap: ProfileDrawSnapPoint | null) => {
+      const highlight = profileDrawContactHighlights[index];
+      if (!snap) {
+        highlight.visible = false;
+        return;
+      }
+      highlight.position.copy(snap.point);
+      highlight.quaternion.copy(snap.quaternion);
+      highlight.scale.copy(snap.size);
+      highlight.visible = true;
+    };
+    const getProfileDrawSnapPoint = (clientX: number, clientY: number): ProfileDrawSnapPoint | null => {
+      const rect = renderer.domElement.getBoundingClientRect();
+      // A structural endpoint has more than one useful 90-degree start. The
+      // centre seats the next profile across the top/end face; the four edge
+      // points butt it against one of the side faces while keeping both outer
+      // ends flush. Treat them as separate screen-space magnets instead of
+      // letting one large centre target steal every near-end pointer gesture.
+      const endpointSnap = itemsRef.current
+        .filter((entry) => entry.kind === 'profile')
+        .flatMap((entry) => {
+          const object = groupsRef.current.get(entry.id);
+          if (!object) return [];
+          const dimensions = profileDimensions(entry);
+          const targetAxis = new THREE.Vector3(1, 0, 0).applyQuaternion(object.quaternion).normalize();
+          return [-1, 1].flatMap((side) => {
+            const endDirection = targetAxis.clone().multiplyScalar(side);
+            const endLocalX = side * dimensions.length / 2;
+            const localCandidates = [
+              {
+                localPoint: new THREE.Vector3(endLocalX, 0, 0),
+                localNormal: new THREE.Vector3(side, 0, 0),
+                sideButtAtEnd: false,
+                size: new THREE.Vector3(
+                  0.055,
+                  Math.max(0.09, dimensions.height * 0.72),
+                  Math.max(0.09, dimensions.width * 0.72),
+                ),
+              },
+              {
+                localPoint: new THREE.Vector3(endLocalX, dimensions.height / 2, 0),
+                localNormal: new THREE.Vector3(0, 1, 0),
+                sideButtAtEnd: true,
+                size: new THREE.Vector3(0.07, 0.045, Math.max(0.09, dimensions.width * 0.62)),
+              },
+              {
+                localPoint: new THREE.Vector3(endLocalX, -dimensions.height / 2, 0),
+                localNormal: new THREE.Vector3(0, -1, 0),
+                sideButtAtEnd: true,
+                size: new THREE.Vector3(0.07, 0.045, Math.max(0.09, dimensions.width * 0.62)),
+              },
+              {
+                localPoint: new THREE.Vector3(endLocalX, 0, dimensions.width / 2),
+                localNormal: new THREE.Vector3(0, 0, 1),
+                sideButtAtEnd: true,
+                size: new THREE.Vector3(0.07, Math.max(0.09, dimensions.height * 0.62), 0.045),
+              },
+              {
+                localPoint: new THREE.Vector3(endLocalX, 0, -dimensions.width / 2),
+                localNormal: new THREE.Vector3(0, 0, -1),
+                sideButtAtEnd: true,
+                size: new THREE.Vector3(0.07, Math.max(0.09, dimensions.height * 0.62), 0.045),
+              },
+            ];
+            return localCandidates.map((candidate) => {
+              const point = object.localToWorld(candidate.localPoint.clone());
+              const projected = point.clone().project(camera);
+              const screenX = rect.left + (projected.x * 0.5 + 0.5) * rect.width;
+              const screenY = rect.top + (-projected.y * 0.5 + 0.5) * rect.height;
+              return {
+                snap: {
+                  point,
+                  size: candidate.size,
+                  quaternion: object.quaternion.clone(),
+                  normal: candidate.localNormal.applyQuaternion(object.quaternion).normalize(),
+                  targetAxis: targetAxis.clone(),
+                  targetEndDirection: endDirection.clone(),
+                  sideButtAtEnd: candidate.sideButtAtEnd,
+                  targetProfileId: entry.id,
+                  endFace: !candidate.sideButtAtEnd,
+                },
+                distance: Math.hypot(clientX - screenX, clientY - screenY),
+                visible: projected.z >= -1 && projected.z <= 1,
+              };
+            });
+          });
+        })
+        .filter((entry) => entry.visible && entry.distance <= 30)
+        .sort((first, second) => first.distance - second.distance)[0]?.snap;
+      if (endpointSnap) return endpointSnap;
+      const hit = getContentHit(clientX, clientY);
+      const itemId = hit ? getItemIdFromObject(hit.object) : null;
+      const item = itemId ? itemsRef.current.find((entry) => entry.id === itemId) : undefined;
+      const object = itemId ? groupsRef.current.get(itemId) : undefined;
+      if (!hit || item?.kind !== 'profile' || !object) return null;
+
+      const dimensions = profileDimensions(item);
+      const localHit = object.worldToLocal(hit.point.clone());
+      const crossSection = Math.max(dimensions.width, dimensions.height);
+      const targetAxis = new THREE.Vector3(1, 0, 0).applyQuaternion(object.quaternion).normalize();
+      let localPoint = localHit.clone();
+      let localSize = new THREE.Vector3(0.055, Math.max(0.09, dimensions.height * 0.72), Math.max(0.09, dimensions.width * 0.72));
+
+      // End faces take precedence near either end. Elsewhere keep the clicked
+      // longitudinal station and settle onto the nearest physical side face.
+      const endDistance = Math.abs(Math.abs(localHit.x) - dimensions.length / 2);
+      const yDistance = Math.abs(Math.abs(localHit.y) - dimensions.height / 2);
+      const zDistance = Math.abs(Math.abs(localHit.z) - dimensions.width / 2);
+      const isEndFace = endDistance <= Math.min(yDistance, zDistance) + crossSection * 0.18;
+      const sideNearEnd = !isEndFace && endDistance <= crossSection * 1.35;
+      const targetEndSide = localHit.x < 0 ? -1 : 1;
+      if (isEndFace) {
+        localPoint.set(localHit.x < 0 ? -dimensions.length / 2 : dimensions.length / 2, 0, 0);
+      } else if (yDistance <= zDistance) {
+        localPoint.set(
+          sideNearEnd
+            ? targetEndSide * dimensions.length / 2
+            : THREE.MathUtils.clamp(localHit.x, -dimensions.length / 2, dimensions.length / 2),
+          localHit.y < 0 ? -dimensions.height / 2 : dimensions.height / 2,
+          0,
+        );
+        localSize = new THREE.Vector3(Math.max(0.09, Math.min(crossSection, 0.24)), 0.045, Math.max(0.09, dimensions.width * 0.72));
+      } else {
+        localPoint.set(
+          sideNearEnd
+            ? targetEndSide * dimensions.length / 2
+            : THREE.MathUtils.clamp(localHit.x, -dimensions.length / 2, dimensions.length / 2),
+          0,
+          localHit.z < 0 ? -dimensions.width / 2 : dimensions.width / 2,
+        );
+        localSize = new THREE.Vector3(Math.max(0.09, Math.min(crossSection, 0.24)), Math.max(0.09, dimensions.height * 0.72), 0.045);
+      }
+      let point = object.localToWorld(localPoint.clone());
+
+      // If the click is close to an already established joint, snap to that
+      // exact shared contact instead of an arbitrary point on either profile.
+      const box = profileBox(item, object);
+      let nearestJoint: ProfileContact | null = null;
+      let nearestJointDistance = Infinity;
+      itemsRef.current.forEach((otherItem) => {
+        if (otherItem.id === item.id || otherItem.kind !== 'profile') return;
+        const otherObject = groupsRef.current.get(otherItem.id);
+        if (!otherObject) return;
+        const contact = profileContact(box, profileBox(otherItem, otherObject));
+        if (!contact) return;
+        const distance = contact.point.distanceTo(hit.point);
+        if (distance < nearestJointDistance && distance <= crossSection * 1.2) {
+          nearestJointDistance = distance;
+          nearestJoint = contact;
+        }
+      });
+      if (nearestJoint) {
+        point = nearestJoint.point.clone();
+        localSize = nearestJoint.size.clone().max(new THREE.Vector3(0.045, 0.045, 0.045));
+        return { point, size: localSize, quaternion: new THREE.Quaternion() };
+      }
+      const localNormal = isEndFace
+        ? new THREE.Vector3(localHit.x < 0 ? -1 : 1, 0, 0)
+        : yDistance <= zDistance
+          ? new THREE.Vector3(0, localHit.y < 0 ? -1 : 1, 0)
+          : new THREE.Vector3(0, 0, localHit.z < 0 ? -1 : 1);
+      return {
+        point,
+        size: localSize,
+        quaternion: object.quaternion.clone(),
+        normal: localNormal.applyQuaternion(object.quaternion).normalize(),
+        targetAxis,
+        targetEndDirection: sideNearEnd ? targetAxis.clone().multiplyScalar(targetEndSide) : undefined,
+        sideButtAtEnd: sideNearEnd,
+        targetProfileId: item.id,
+        endFace: isEndFace,
+      };
+    };
+    const getProfileDrawContinuationSnap = (clientX: number, clientY: number): ProfileDrawSnapPoint | null => {
+      if (!profileDrawPreviousMember) return null;
+      const rect = renderer.domElement.getBoundingClientRect();
+      const projected = profileDrawPreviousMember.end.clone().project(camera);
+      if (projected.z < -1 || projected.z > 1) return null;
+      const screenX = rect.left + (projected.x * 0.5 + 0.5) * rect.width;
+      const screenY = rect.top + (-projected.y * 0.5 + 0.5) * rect.height;
+      if (Math.hypot(clientX - screenX, clientY - screenY) > 28) return null;
+      return {
+        point: profileDrawPreviousMember.end.clone(),
+        size: new THREE.Vector3(0.08, 0.08, 0.08),
+        quaternion: profileDrawPreviousMember.quaternion.clone(),
+        normal: profileDrawPreviousMember.axis.clone(),
+        targetAxis: profileDrawPreviousMember.axis.clone(),
+        targetEndDirection: profileDrawPreviousMember.axis.clone(),
+        };
+    };
+    const profileDrawQuaternionForAxis = (axis: THREE.Vector3) => {
+      const template = profileDrawTemplateRef.current;
+      if (!template || template.kind !== 'profile') return new THREE.Quaternion();
+      const baseQuaternion = new THREE.Quaternion().setFromEuler(new THREE.Euler(
+        THREE.MathUtils.degToRad(template.rotation[0]),
+        THREE.MathUtils.degToRad(template.rotation[1]),
+        THREE.MathUtils.degToRad(template.rotation[2]),
+      ));
+      const baseAxis = new THREE.Vector3(1, 0, 0).applyQuaternion(baseQuaternion).normalize();
+      return new THREE.Quaternion().setFromUnitVectors(baseAxis, axis).multiply(baseQuaternion);
+    };
+    const profileDrawEffectiveAnchor = (
+      axis: THREE.Vector3,
+      quaternion = profileDrawQuaternionForAxis(axis),
+    ) => {
+      if (!profileDrawAnchor) return null;
+      const normal = profileDrawStartSnap?.normal;
+      if (!normal) return profileDrawAnchor.clone();
+      const template = profileDrawTemplateRef.current;
+      if (!template || template.kind !== 'profile') return profileDrawAnchor.clone();
+      const dimensions = profileDimensions(template);
+      const localY = new THREE.Vector3(0, 1, 0).applyQuaternion(quaternion).normalize();
+      const localZ = new THREE.Vector3(0, 0, 1).applyQuaternion(quaternion).normalize();
+      const effectiveAnchor = profileDrawAnchor.clone();
+      // A centre end-face hotspot carries the next member across the target
+      // face, so offset its centreline by half of the new cross-section. A
+      // side hotspot instead uses the side face itself as the new member's
+      // butt end and therefore needs no offset along that same normal.
+      if (Math.abs(normal.dot(axis)) <= 0.92) {
+        const crossHalfExtent = Math.abs(localY.dot(normal)) * dimensions.height / 2
+          + Math.abs(localZ.dot(normal)) * dimensions.width / 2;
+        effectiveAnchor.addScaledVector(normal, crossHalfExtent + 0.001);
+      }
+      if (profileDrawStartSnap?.sideButtAtEnd && profileDrawStartSnap.targetEndDirection) {
+        // The side hotspot represents a perpendicular member whose end is
+        // flush with the selected target end. Move its centreline back by its
+        // own half-section along the target length; otherwise its body extends
+        // past the corner even though the clicked side face is correct.
+        const endDirection = profileDrawStartSnap.targetEndDirection;
+        const endHalfExtent = Math.abs(localY.dot(endDirection)) * dimensions.height / 2
+          + Math.abs(localZ.dot(endDirection)) * dimensions.width / 2;
+        effectiveAnchor.addScaledVector(endDirection, -endHalfExtent);
+      }
+      return effectiveAnchor;
+    };
+    const profileDrawCandidateCollides = (
+      axis: THREE.Vector3,
+      signedLength: number,
+      quaternion = profileDrawQuaternionForAxis(axis),
+    ) => {
+      const template = profileDrawTemplateRef.current;
+      if (!profileDrawAnchor || !template || template.kind !== 'profile') return false;
+      const direction = signedLength < 0 ? -1 : 1;
+      const length = THREE.MathUtils.clamp(Math.abs(signedLength), 0.21, 30);
+      const effectiveAnchor = profileDrawEffectiveAnchor(axis, quaternion) || profileDrawAnchor;
+      const center = effectiveAnchor.clone().addScaledVector(axis, direction * length / 2);
+      const rotation = new THREE.Euler().setFromQuaternion(quaternion, 'XYZ');
+      const candidate: DIYSceneItem = {
+        ...template,
+        id: 'profile-draw-candidate',
+        position: [center.x * SCENE_SCALE, center.y * SCENE_SCALE, center.z * SCENE_SCALE],
+        rotation: [
+          THREE.MathUtils.radToDeg(rotation.x),
+          THREE.MathUtils.radToDeg(rotation.y),
+          THREE.MathUtils.radToDeg(rotation.z),
+        ],
+        length: length * SCENE_SCALE,
+      };
+      return profileItemCollides(candidate, itemsRef.current);
+    };
+    const setProfileDrawPreviewBlocked = (blocked: boolean) => {
+      profileDrawBlocked = blocked;
+      profileDrawPreview.traverse((child) => {
+        if (!(child instanceof THREE.Mesh)) return;
+        const materials = Array.isArray(child.material) ? child.material : [child.material];
+        materials.forEach((material) => {
+          if (!(material instanceof THREE.MeshStandardMaterial)) return;
+          material.emissive.set(blocked ? '#ef4444' : '#000000');
+          material.emissiveIntensity = blocked ? 0.72 : 0;
+        });
+      });
+    };
+    const setProfileDrawAxisFromPointer = (clientX: number, clientY: number) => {
+      if (!profileDrawAnchor) return;
+      const rect = renderer.domElement.getBoundingClientRect();
+      const pointerDelta = new THREE.Vector2(
+        clientX - profileDrawAnchorPointer.x,
+        clientY - profileDrawAnchorPointer.y,
+      );
+      profileDrawPointerTravel = pointerDelta.length();
+      if (profileDrawPointerTravel < 5) return;
+
+      const anchorNdc = profileDrawAnchor.clone().project(camera);
+      const anchorScreen = new THREE.Vector2(
+        (anchorNdc.x * 0.5 + 0.5) * rect.width,
+        (-anchorNdc.y * 0.5 + 0.5) * rect.height,
+      );
+      const candidates = [
+        { name: 'X' as const, axis: new THREE.Vector3(1, 0, 0) },
+        { name: 'Y' as const, axis: new THREE.Vector3(0, 1, 0) },
+        { name: 'Z' as const, axis: new THREE.Vector3(0, 0, 1) },
+      ].map((candidate) => {
+        const projected = profileDrawAnchor!.clone().add(candidate.axis).project(camera);
+        const screenVector = new THREE.Vector2(
+          (projected.x * 0.5 + 0.5) * rect.width - anchorScreen.x,
+          (-projected.y * 0.5 + 0.5) * rect.height - anchorScreen.y,
+        );
+        const pixelsPerWorld = screenVector.length();
+        const direction = pixelsPerWorld > 0.001 ? screenVector.clone().divideScalar(pixelsPerWorld) : new THREE.Vector2();
+        const projectedDistance = pointerDelta.dot(direction);
+        const signedLength = THREE.MathUtils.clamp(
+          projectedDistance / Math.max(0.001, pixelsPerWorld),
+          -30,
+          30,
+        );
+        const quaternion = profileDrawQuaternionForAxis(candidate.axis);
+        const targetAxis = profileDrawStartSnap?.targetAxis;
+        const perpendicularToTarget = Boolean(targetAxis && Math.abs(candidate.axis.dot(targetAxis)) < 0.15);
+        const sideNormal = profileDrawStartSnap?.sideButtAtEnd ? profileDrawStartSnap.normal : undefined;
+        // At a side-edge hotspot, follow the selected side normal so the new
+        // profile butts into that face. At the centre end-face hotspot, retain
+        // the broader 90-degree preference and let pointer direction choose
+        // between the two perpendicular world axes.
+        const preferredBySnap = sideNormal
+          ? Math.abs(candidate.axis.dot(sideNormal)) > 0.92
+          : perpendicularToTarget;
+        return {
+          ...candidate,
+          pixelsPerWorld,
+          projectedDistance,
+          signedLength,
+          quaternion,
+          perpendicularToTarget,
+          preferredBySnap,
+          collides: profileDrawCandidateCollides(candidate.axis, signedLength, quaternion),
+          score: pixelsPerWorld < 2 ? -1 : Math.abs(projectedDistance) / Math.max(1, profileDrawPointerTravel),
+        };
+      }).sort((first, second) => (
+        Number(first.collides) - Number(second.collides)
+        // Starting at an existing member should naturally form a 90-degree
+        // frame corner. Keep parallel continuation available only when no
+        // perpendicular screen projection is usable.
+        || Number(second.preferredBySnap) - Number(first.preferredBySnap)
+        || second.score - first.score
+      ));
+      const best = candidates.find((candidate) => !candidate.collides) || candidates[0];
+      if (!best || best.score < 0) return;
+      profileDrawAxis.copy(best.axis);
+      profileDrawSignedLength = best.signedLength;
+      profileDrawPreview.quaternion.copy(best.quaternion);
+      profileDrawCurrentRotation.setFromQuaternion(profileDrawPreview.quaternion, 'XYZ');
+    };
+    const updateProfileDrawPreview = (clientX: number, clientY: number) => {
+      const template = profileDrawTemplateRef.current;
+      if (!template || template.kind !== 'profile') return;
+      const point = profileDrawPointerPoint(clientX, clientY);
+      if (!point) return;
+      const rect = renderer.domElement.getBoundingClientRect();
+      let snapped = false;
+      if (!profileDrawAnchor) {
+        const startSnap = getProfileDrawContinuationSnap(clientX, clientY) || getProfileDrawSnapPoint(clientX, clientY);
+        const contentHit = getContentHit(clientX, clientY);
+        const hitItemId = contentHit ? getItemIdFromObject(contentHit.object) : null;
+        const hitItem = hitItemId ? itemsRef.current.find((entry) => entry.id === hitItemId) : undefined;
+        // A board/accessory under the pointer must not masquerade as a valid
+        // profile connection. Keep the sample near the cursor until the user
+        // reaches a real profile or moves back to empty drawing space.
+        const blockedByNonProfile = Boolean(contentHit && hitItem?.kind !== 'profile');
+        const pointerPoint = startSnap?.point || point;
+        snapped = Boolean(startSnap);
+        showProfileDrawContact(0, startSnap);
+        showProfileDrawContact(1, null);
+        setProfileDrawPreviewLength(0.4);
+        profileDrawPreview.position.copy(pointerPoint).addScaledVector(profileDrawAxis, 0.2);
+        profileDrawPreview.visible = !blockedByNonProfile;
+        setProfileDrawPreviewBlocked(false);
+      } else {
+        setProfileDrawAxisFromPointer(clientX, clientY);
+        const endSnap = getProfileDrawSnapPoint(clientX, clientY);
+        if (endSnap) {
+          const direction = profileDrawSignedLength < 0 ? -1 : 1;
+          const effectiveAnchor = profileDrawEffectiveAnchor(
+            profileDrawAxis,
+            profileDrawPreview.quaternion,
+          ) || profileDrawAnchor;
+          const targetPoint = endSnap.point.clone();
+          // Closing a frame on another profile's endpoint is not a
+          // centerline-to-centerline operation. Stop the new member at the
+          // target's nearest side face so the two solids touch without sharing
+          // the target's half cross-section (normally 10mm for 2020).
+          if (endSnap.endFace && endSnap.targetProfileId && endSnap.normal
+            && Math.abs(endSnap.normal.dot(profileDrawAxis)) < 0.92) {
+            const targetProfile = itemsRef.current.find((entry) => (
+              entry.id === endSnap.targetProfileId && entry.kind === 'profile'
+            ));
+            if (targetProfile) {
+              const targetExtent = projectedBoxExtent(profileBoxFromItem(targetProfile), profileDrawAxis);
+              targetPoint.addScaledVector(profileDrawAxis, -direction * (targetExtent + 0.001));
+            }
+          }
+          const fromAnchor = targetPoint.sub(effectiveAnchor);
+          const projected = fromAnchor.dot(profileDrawAxis);
+          const perpendicular = fromAnchor.clone().addScaledVector(profileDrawAxis, -projected).length();
+          const templateDimensions = profileDimensions(template);
+          if (Math.abs(projected) >= 0.21 && perpendicular <= Math.max(templateDimensions.width, templateDimensions.height) * 0.8) {
+            profileDrawSignedLength = THREE.MathUtils.clamp(projected, -30, 30);
+            snapped = true;
+            showProfileDrawContact(1, endSnap);
+          } else {
+            showProfileDrawContact(1, null);
+          }
+        } else {
+          showProfileDrawContact(1, null);
+        }
+        const direction = profileDrawSignedLength < 0 ? -1 : 1;
+        const length = THREE.MathUtils.clamp(Math.abs(profileDrawSignedLength), 0.21, 30);
+        setProfileDrawPreviewLength(length);
+        const effectiveAnchor = profileDrawEffectiveAnchor(profileDrawAxis, profileDrawPreview.quaternion) || profileDrawAnchor;
+        profileDrawPreview.position.copy(effectiveAnchor).addScaledVector(profileDrawAxis, direction * length / 2);
+        setProfileDrawPreviewBlocked(profileDrawCandidateCollides(profileDrawAxis, profileDrawSignedLength));
+      }
+      const axisName = Math.abs(profileDrawAxis.x) > 0.5 ? 'X' : Math.abs(profileDrawAxis.y) > 0.5 ? 'Y' : 'Z';
+      setProfileDrawOverlay({
+        x: THREE.MathUtils.clamp(clientX - rect.left + 62, 76, Math.max(76, rect.width - 76)),
+        y: THREE.MathUtils.clamp(clientY - rect.top - 54, 28, Math.max(28, rect.height - 36)),
+        length: Math.round((profileDrawAnchor ? profileDrawLength : 0.4) * SCENE_SCALE),
+        extending: Boolean(profileDrawAnchor),
+        axis: profileDrawAnchor ? axisName : undefined,
+        snapped,
+        invalid: profileDrawBlocked,
+      });
+      renderer.domElement.style.cursor = 'crosshair';
+    };
     const getHitItemId = (clientX: number, clientY: number) => {
       const hit = getContentHit(clientX, clientY);
       return hit ? getItemIdFromObject(hit.object) : null;
     };
+    const rayHitsDifferentItem = (clientX: number, clientY: number, currentItemId?: string) => {
+      const hitItemId = getHitItemId(clientX, clientY);
+      return Boolean(hitItemId && hitItemId !== currentItemId);
+    };
+    const getOperationEditorPosition = (clientX: number, clientY: number) => {
+      const rect = renderer.domElement.getBoundingClientRect();
+      const localX = clientX - rect.left;
+      const localY = clientY - rect.top;
+      const placeRight = localX < rect.width * 0.62;
+      const placeBelow = localY < rect.height * 0.42;
+      return {
+        x: THREE.MathUtils.clamp(localX + (placeRight ? 190 : -190), 125, Math.max(125, rect.width - 125)),
+        y: THREE.MathUtils.clamp(localY + (placeBelow ? 96 : -136), 20, Math.max(20, rect.height - 92)),
+      };
+    };
+    const getMoveEditorEdgePosition = (clientX: number, clientY: number) => {
+      const rect = renderer.domElement.getBoundingClientRect();
+      const localX = clientX - rect.left;
+      const localY = clientY - rect.top;
+      // Once the axis gesture ends, park the compact exact-value editor at
+      // the opposite viewport edge. It remains close enough to reach without
+      // covering the profile and its contact/measurement information.
+      return {
+        x: localX < rect.width / 2 ? Math.max(98, rect.width - 98) : 98,
+        y: THREE.MathUtils.clamp(localY, 46, Math.max(46, rect.height - 46)),
+      };
+    };
+    const getAxisRelationMm = (
+      item: DIYSceneItem,
+      object: THREE.Group,
+      position: THREE.Vector3,
+      axis: THREE.Vector3,
+      snap?: ProfileSnap | null,
+    ) => {
+      if (snap) return 0;
+      const movingBox = profileBox(item, object, position);
+      let nearest: number | null = null;
+      itemsRef.current.forEach((targetItem) => {
+        if (targetItem.id === item.id || targetItem.kind !== 'profile') return;
+        const targetObject = groupsRef.current.get(targetItem.id);
+        if (!targetObject) return;
+        const targetBox = profileBox(targetItem, targetObject);
+        const currentAxis = Math.abs(axis.x) > 0.5 ? 0 : Math.abs(axis.y) > 0.5 ? 1 : 2;
+        const movingIntervals = profileWorldIntervals(movingBox);
+        const targetIntervals = profileWorldIntervals(targetBox);
+        const otherAxesOverlap = ([0, 1, 2] as const)
+          .filter((axisIndex) => axisIndex !== currentAxis)
+          .every((axisIndex) => intervalGap(movingIntervals[axisIndex], targetIntervals[axisIndex]) < 0.18);
+        if (!otherAxesOverlap) return;
+        const movingInterval = movingIntervals[currentAxis];
+        const targetInterval = targetIntervals[currentAxis];
+        const candidates = [
+          targetInterval.min - movingInterval.max,
+          targetInterval.max - movingInterval.min,
+        ];
+        candidates.forEach((worldDelta) => {
+          const signedMm = worldDelta * (axis.getComponent(currentAxis) < 0 ? -1 : 1) * SCENE_SCALE;
+          if (nearest === null || Math.abs(signedMm) < Math.abs(nearest)) nearest = signedMm;
+        });
+      });
+      return nearest === null ? null : Math.round(nearest);
+    };
+    const setLiveProfileInterference = (object: THREE.Group, interfering: boolean) => {
+      const body = object.children.find((child) => (
+        child instanceof THREE.Mesh && child.material instanceof THREE.MeshStandardMaterial
+      )) as THREE.Mesh<THREE.BufferGeometry, THREE.MeshStandardMaterial> | undefined;
+      if (body) {
+        body.material.emissive.set(interfering ? '#ef4444' : '#2563eb');
+        body.material.emissiveIntensity = interfering ? 0.68 : 0.42;
+      }
+      object.traverse((child) => {
+        if (!(child instanceof THREE.LineSegments) || !child.userData.selectionDecoration) return;
+        const material = child.material as THREE.LineBasicMaterial;
+        material.color.set(interfering ? '#dc2626' : '#0ea5e9');
+      });
+    };
     const onPointerDown = (event: PointerEvent) => {
       setOperationEditor(null);
       hideSnapVisual();
-      let shiftDuplicateProfile = false;
-      if (event.button === 0 && event.shiftKey) {
-        const selectedObject = transform.object as THREE.Group | undefined;
-        const selectedItemId = selectedObject?.userData.itemId as string | undefined;
-        const selectedItem = selectedItemId
-          ? itemsRef.current.find((entry) => entry.id === selectedItemId)
-          : undefined;
-        setPointerRay(event.clientX, event.clientY);
-        const translatePicker = (transform as TransformGizmoInternals)._gizmo?.picker.translate;
-        const transformHandleHit = translatePicker
-          ? raycaster.intersectObjects(translatePicker.children, true)[0]
-          : undefined;
-        const contentHitId = getHitItemId(event.clientX, event.clientY);
-        shiftDuplicateProfile = selectedItem?.kind === 'profile'
-          && (Boolean(transformHandleHit) || contentHitId === selectedItemId);
-      }
-      if (event.button === 0 && event.shiftKey && !shiftDuplicateProfile) {
-        const rect = renderer.domElement.getBoundingClientRect();
-        marqueeState = {
-          pointerId: event.pointerId,
-          startX: event.clientX - rect.left,
-          startY: event.clientY - rect.top,
-          currentX: event.clientX - rect.left,
-          currentY: event.clientY - rect.top,
-        };
-        setSelectionRect({ left: marqueeState.startX, top: marqueeState.startY, width: 0, height: 0 });
+      if (event.button === 2) rightPointerMoved = false;
+      if (event.button === 0 && accessoryPlacementTemplateRef.current) {
+        pointerStart = { x: event.clientX, y: event.clientY, button: event.button };
         orbit.enabled = false;
         transform.enabled = false;
-        renderer.domElement.setPointerCapture?.(event.pointerId);
-        pointerStart = null;
+        renderer.domElement.style.cursor = 'crosshair';
         event.preventDefault();
         event.stopImmediatePropagation();
         return;
       }
-      if (event.button === 0 && drillModeRef.current) {
-        pointerStart = { x: event.clientX, y: event.clientY, button: event.button };
-        setContextMenu(null);
+      if (event.button === 0 && profileDrawTemplateRef.current?.kind === 'profile') {
+        updateProfileDrawPreview(event.clientX, event.clientY);
+        const point = profileDrawPointerPoint(event.clientX, event.clientY);
+        if (point) {
+          if (!profileDrawAnchor) {
+            const startSnap = getProfileDrawContinuationSnap(event.clientX, event.clientY)
+              || getProfileDrawSnapPoint(event.clientX, event.clientY);
+            const contentHit = getContentHit(event.clientX, event.clientY);
+            const hitItemId = contentHit ? getItemIdFromObject(contentHit.object) : null;
+            const hitItem = hitItemId ? itemsRef.current.find((entry) => entry.id === hitItemId) : undefined;
+            if (contentHit && hitItem?.kind !== 'profile') {
+              orbit.enabled = false;
+              transform.enabled = false;
+              pointerStart = null;
+              event.preventDefault();
+              event.stopImmediatePropagation();
+              return;
+            }
+            profileDrawAnchor = (startSnap?.point || point).clone();
+            profileDrawStartSnap = startSnap;
+            profileDrawAnchorPointer.set(event.clientX, event.clientY);
+            profileDrawPointerTravel = 0;
+            profileDrawSignedLength = 0.4;
+            showProfileDrawContact(0, startSnap);
+            updateProfileDrawPreview(event.clientX, event.clientY);
+          } else if (profileDrawPointerTravel >= 7 && !profileDrawBlocked) {
+            const length = THREE.MathUtils.clamp(Math.round(profileDrawLength * SCENE_SCALE), 21, 3000);
+            const direction = profileDrawSignedLength < 0 ? -1 : 1;
+            const effectiveAnchor = profileDrawEffectiveAnchor(profileDrawAxis, profileDrawPreview.quaternion) || profileDrawAnchor;
+            const center = effectiveAnchor.clone().addScaledVector(profileDrawAxis, direction * (length / SCENE_SCALE) / 2);
+            onCommitProfileDrawRef.current({
+              position: [
+                Math.round(center.x * SCENE_SCALE),
+                Math.round(center.y * SCENE_SCALE),
+                Math.round(center.z * SCENE_SCALE),
+              ],
+              rotation: [
+                Math.round(THREE.MathUtils.radToDeg(profileDrawCurrentRotation.x)),
+                Math.round(THREE.MathUtils.radToDeg(profileDrawCurrentRotation.y)),
+                Math.round(THREE.MathUtils.radToDeg(profileDrawCurrentRotation.z)),
+              ],
+              length,
+            });
+            profileDrawPreviousMember = {
+              anchor: effectiveAnchor.clone(),
+              end: effectiveAnchor.clone().addScaledVector(profileDrawAxis, direction * (length / SCENE_SCALE)),
+              axis: profileDrawAxis.clone().multiplyScalar(direction),
+              quaternion: profileDrawPreview.quaternion.clone(),
+            };
+            profileDrawAnchor = null;
+            profileDrawSignedLength = 0.4;
+            profileDrawLength = 0.4;
+            profileDrawPointerTravel = 0;
+            profileDrawStartSnap = null;
+            profileDrawContactHighlights.forEach((highlight) => { highlight.visible = false; });
+            updateProfileDrawPreview(event.clientX, event.clientY);
+          }
+        }
+        orbit.enabled = false;
+        transform.enabled = false;
+        pointerStart = null;
         event.preventDefault();
         event.stopImmediatePropagation();
         return;
@@ -3775,10 +7048,10 @@ const ThreeAssembly: React.FC<{
           let handleObject: THREE.Object3D | null = handleHit.object;
           while (handleObject && handleObject.userData.lengthHandleSide === undefined) handleObject = handleObject.parent;
           const side = handleObject?.userData.lengthHandleSide as -1 | 1 | undefined;
-          const object = transform.object as THREE.Group | undefined;
+          const object = getTransformTarget();
           const itemId = object?.userData.itemId as string | undefined;
           const item = itemId ? itemsRef.current.find((entry) => entry.id === itemId) : undefined;
-          if (side && object && item?.kind === 'profile') {
+          if (side && object && item?.kind === 'profile' && !rayHitsDifferentItem(event.clientX, event.clientY, itemId)) {
             const startLength = profileDimensions(item).length;
             const axis = new THREE.Vector3(1, 0, 0).applyQuaternion(object.quaternion).normalize();
             const cameraDirection = camera.getWorldDirection(new THREE.Vector3()).normalize();
@@ -3817,34 +7090,39 @@ const ThreeAssembly: React.FC<{
           : undefined;
         if (transformHandleHit) {
           const axisName = transformHandleHit.object.name;
-          const axis = axisName === 'X'
+          const baseAxis = axisName === 'X'
             ? new THREE.Vector3(1, 0, 0)
             : axisName === 'Y'
               ? new THREE.Vector3(0, 1, 0)
               : axisName === 'Z'
                 ? new THREE.Vector3(0, 0, 1)
                 : null;
-          const selectedObject = transform.object as THREE.Group | undefined;
+          const selectedObject = getTransformTarget();
           const selectedItemId = selectedObject?.userData.itemId as string | undefined;
           const item = selectedItemId ? itemsRef.current.find((entry) => entry.id === selectedItemId) : undefined;
-          if (axis && selectedObject && item) {
+          if (baseAxis && selectedObject && item && !rayHitsDifferentItem(event.clientX, event.clientY, selectedItemId)) {
+            // The translate gizmo has two arrows per axis. Use the picked side
+            // as a signed direction so each handle represents one of the six
+            // explicit movements: ±X, ±Y, and ±Z.
+            const directionSign = transformHandleHit.point
+              .clone()
+              .sub(selectedObject.position)
+              .dot(baseAxis) < 0 ? -1 : 1;
+            const axis = baseAxis.multiplyScalar(directionSign);
             const cameraDirection = camera.getWorldDirection(new THREE.Vector3()).normalize();
             movePlane.setFromNormalAndCoplanarPoint(cameraDirection, transformHandleHit.point);
             const startPoint = raycaster.ray.intersectPlane(movePlane, new THREE.Vector3());
             if (startPoint) {
-              const rect = renderer.domElement.getBoundingClientRect();
+              const editorPosition = getOperationEditorPosition(event.clientX, event.clientY);
               freeMoveState = {
                 item,
                 object: selectedObject,
                 pointerId: event.pointerId,
                 startPoint,
                 startPosition: selectedObject.position.clone(),
+                dragOriginPosition: selectedObject.position.clone(),
                 validPosition: selectedObject.position.clone(),
                 moved: false,
-                duplicateOnCommit: event.shiftKey && item.kind === 'profile',
-                collisionItem: event.shiftKey && item.kind === 'profile'
-                  ? { ...item, id: `${item.id}:shift-copy` }
-                  : item,
                 axis,
                 startRotation: selectedObject.quaternion.clone(),
                 accessoryPlacement: null,
@@ -3852,17 +7130,20 @@ const ThreeAssembly: React.FC<{
                 snapPointerPosition: null,
                 snapSuppressed: false,
                 snapRearmAt: 0,
+                gizmoOffset: transformAnchor.position.clone().sub(selectedObject.position),
+                sourceAttachmentKey: item.lockedPosition ? item.attachmentKey : undefined,
+                duplicateOnCommit: event.shiftKey && item.kind === 'profile',
               };
-              if (freeMoveState.duplicateOnCommit) setSnapHint(operationLabels.duplicateMove);
               if (!freeMoveState.duplicateOnCommit) {
                 setOperationEditor({
                   kind: 'move',
                   itemId: item.id,
                   valueMm: 0,
-                  x: THREE.MathUtils.clamp(event.clientX - rect.left, 105, Math.max(105, rect.width - 105)),
-                  y: THREE.MathUtils.clamp(event.clientY - rect.top - 54, 58, Math.max(58, rect.height - 58)),
+                  x: editorPosition.x,
+                  y: editorPosition.y,
                   startPosition: [selectedObject.position.x, selectedObject.position.y, selectedObject.position.z],
                   direction: [axis.x, axis.y, axis.z],
+                  dragging: true,
                 });
               }
               orbit.enabled = false;
@@ -3875,83 +7156,31 @@ const ThreeAssembly: React.FC<{
             }
           }
         }
-        const selectedObject = transform.object as THREE.Group | undefined;
-        const selectedItemId = selectedObject?.userData.itemId as string | undefined;
-        const hit = getContentHit(event.clientX, event.clientY);
-        const hitItemId = hit ? getItemIdFromObject(hit.object) : null;
-        const item = selectedItemId ? itemsRef.current.find((entry) => entry.id === selectedItemId) : undefined;
-        if (hit && selectedObject && item && hitItemId === selectedItemId) {
-          let movementPlaneNormal = workPlaneRef.current === 'xy'
-            ? new THREE.Vector3(0, 0, 1)
-            : workPlaneRef.current === 'xz'
-              ? new THREE.Vector3(0, 1, 0)
-              : workPlaneRef.current === 'yz'
-                ? new THREE.Vector3(1, 0, 0)
-                : camera.getWorldDirection(new THREE.Vector3()).normalize();
-          if (workPlaneRef.current === 'auto' && item.kind === 'profile') {
-            const localPoint = selectedObject.worldToLocal(hit.point.clone());
-            const dimensions = profileDimensions(item);
-            const distances = [
-              {
-                distance: Math.abs(Math.abs(localPoint.x) - dimensions.length / 2),
-                normal: new THREE.Vector3(Math.sign(localPoint.x) || 1, 0, 0),
-              },
-              {
-                distance: Math.abs(Math.abs(localPoint.y) - dimensions.height / 2),
-                normal: new THREE.Vector3(0, Math.sign(localPoint.y) || 1, 0),
-              },
-              {
-                distance: Math.abs(Math.abs(localPoint.z) - dimensions.width / 2),
-                normal: new THREE.Vector3(0, 0, Math.sign(localPoint.z) || 1),
-              },
-            ].sort((first, second) => first.distance - second.distance);
-            movementPlaneNormal = distances[0].normal.applyQuaternion(selectedObject.quaternion).normalize();
-          } else if (workPlaneRef.current === 'auto' && hit.face && hit.object instanceof THREE.Mesh) {
-            movementPlaneNormal = hit.face.normal
-              .clone()
-              .transformDirection(hit.object.matrixWorld)
-              .normalize();
-          }
-          movePlane.setFromNormalAndCoplanarPoint(movementPlaneNormal, hit.point);
-          const startPoint = raycaster.ray.intersectPlane(movePlane, new THREE.Vector3());
-          if (startPoint) {
-            freeMoveState = {
-              item,
-              object: selectedObject,
-              pointerId: event.pointerId,
-              startPoint,
-              startPosition: selectedObject.position.clone(),
-              validPosition: selectedObject.position.clone(),
-              moved: false,
-              duplicateOnCommit: event.shiftKey && item.kind === 'profile',
-              collisionItem: event.shiftKey && item.kind === 'profile'
-                ? { ...item, id: `${item.id}:shift-copy` }
-                : item,
-              startRotation: selectedObject.quaternion.clone(),
-              accessoryPlacement: null,
-              snapLock: null,
-              snapPointerPosition: null,
-              snapSuppressed: false,
-              snapRearmAt: 0,
-            };
-            if (freeMoveState.duplicateOnCommit) setSnapHint(operationLabels.duplicateMove);
-            orbit.enabled = false;
-            transform.enabled = false;
-            renderer.domElement.setPointerCapture?.(event.pointerId);
-            pointerStart = null;
-            event.preventDefault();
-            event.stopImmediatePropagation();
-            return;
-          }
-        }
+      }
+      if (event.button === 0 && event.shiftKey && !getHitItemId(event.clientX, event.clientY)) {
+        const rect = renderer.domElement.getBoundingClientRect();
+        const startX = event.clientX - rect.left;
+        const startY = event.clientY - rect.top;
+        marqueeState = {
+          pointerId: event.pointerId,
+          startX,
+          startY,
+          currentX: startX,
+          currentY: startY,
+        };
+        setSelectionRect({ left: startX, top: startY, width: 0, height: 0 });
+        orbit.enabled = false;
+        transform.enabled = false;
+        renderer.domElement.setPointerCapture?.(event.pointerId);
+        pointerStart = null;
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        return;
       }
       pointerStart = { x: event.clientX, y: event.clientY, button: event.button };
-      if (event.button === 2) {
-        rightPointerMoved = false;
-        const orbitPivot = getContentHit(event.clientX, event.clientY);
-        if (orbitPivot) orbit.target.copy(orbitPivot.point);
+      if (event.button === 0) {
+        setContextMenu(null);
       }
-      else setContextMenu(null);
     };
     const onPointerMove = (event: PointerEvent) => {
       if (marqueeState) {
@@ -3967,38 +7196,61 @@ const ThreeAssembly: React.FC<{
         event.preventDefault();
         return;
       }
+      if (pointerStart?.button === 2 && (event.buttons & 2) !== 0) {
+        const rightDragDistance = Math.hypot(
+          event.clientX - pointerStart.x,
+          event.clientY - pointerStart.y,
+        );
+        if (rightDragDistance > 7) {
+          rightPointerMoved = true;
+          setContextMenu(null);
+        }
+      }
+      if (profileDrawTemplateRef.current?.kind === 'profile') {
+        updateProfileDrawPreview(event.clientX, event.clientY);
+        orbit.enabled = false;
+        event.preventDefault();
+        return;
+      }
       if (freeMoveState) {
         const state = freeMoveState;
         setPointerRay(event.clientX, event.clientY);
         const currentPoint = raycaster.ray.intersectPlane(movePlane, new THREE.Vector3());
         if (!currentPoint) return;
-        const movement = currentPoint.sub(state.startPoint);
-        if (state.axis) {
-          const axisDistance = movement.dot(state.axis);
-          movement.copy(state.axis).multiplyScalar(axisDistance);
-        }
+        const movement = currentPoint.clone().sub(state.startPoint);
+        // The reference designer advances arrow drags on a 5 mm workshop
+        // grid (+55, +105, -25, ...). Keep the gesture equally steady while
+        // preserving 1 mm entry in the exact-value editor after release.
+        const axisDistanceMm = Math.round(movement.dot(state.axis) * SCENE_SCALE / 5) * 5;
+        const axisDistance = axisDistanceMm / SCENE_SCALE;
+        movement.copy(state.axis).multiplyScalar(axisDistance);
         if (movement.lengthSq() < 1e-7) return;
         state.moved = true;
         const nextPosition = state.startPosition.clone().add(movement);
         state.object.position.copy(nextPosition);
+        if (state.gizmoOffset) transformAnchor.position.copy(nextPosition).add(state.gizmoOffset);
         if (state.item.kind === 'profile') {
-          // A Shift-drag starts the prospective copy directly on top of its
-          // source. Ignore that source while looking for a magnetic snap so
-          // the copy can leave the initial overlap naturally.
-          const collisionItems = state.duplicateOnCommit
-            ? itemsRef.current.filter((item) => item.id !== state.item.id)
-            : itemsRef.current;
-          const tolerances = getSnapTolerances(state.object.position);
+          const collisionItems = itemsRef.current;
+          const tolerances = getProfileSnapTolerances(state.object.position, state.item);
           const retainedLock = retainSnapLock(
             state.snapLock || null,
             state.snapPointerPosition || null,
             nextPosition,
             tolerances.releaseDistance,
             state.object,
-            state.collisionItem,
+            state.item,
             collisionItems,
           );
           if (state.snapLock && !retainedLock) {
+            // Consume the extra pointer travel used to overcome the magnetic
+            // detent. Re-anchor at the held position so releasing a flush face
+            // never makes the profile jump to the raw pointer position.
+            const releasedPosition = state.snapLock.position.clone();
+            state.startPoint.copy(currentPoint);
+            state.startPosition.copy(releasedPosition);
+            nextPosition.copy(releasedPosition);
+            state.object.position.copy(releasedPosition);
+            if (state.gizmoOffset) transformAnchor.position.copy(releasedPosition).add(state.gizmoOffset);
             state.snapLock = null;
             state.snapPointerPosition = null;
             state.snapSuppressed = true;
@@ -4009,35 +7261,77 @@ const ThreeAssembly: React.FC<{
             ? null
             : findMagneticProfileSnap(
               state.object,
-              state.collisionItem,
+              state.item,
               collisionItems,
               groupsRef.current,
               tolerances.maxDistance,
               tolerances.planeTolerance,
               snapAlignmentRef.current,
+            ) || findAxisFlushSnap(
+              state.object,
+              state.item,
+              collisionItems,
+              groupsRef.current,
+              state.axis,
+              tolerances.flushDistance,
             );
           const snap = retainedLock || candidateSnap;
-          if (snap) {
+          const axialSnapPosition = snap
+            ? state.startPosition.clone().addScaledVector(
+              state.axis,
+              snap.position.clone().sub(state.startPosition).dot(state.axis),
+            )
+            : null;
+          const snapFollowsAxis = Boolean(
+            snap
+            && axialSnapPosition
+            && snap.position.distanceToSquared(axialSnapPosition) < 1e-8,
+          );
+          if (snap && axialSnapPosition && snapFollowsAxis) {
             if (!retainedLock) state.snapPointerPosition = nextPosition.clone();
             state.snapLock = snap;
-            nextPosition.copy(snap.position);
+            nextPosition.copy(axialSnapPosition);
             state.object.position.copy(nextPosition);
+            if (state.gizmoOffset) transformAnchor.position.copy(nextPosition).add(state.gizmoOffset);
             showSnapVisual(snap, state.object, state.item);
           } else {
             state.snapLock = null;
             state.snapPointerPosition = null;
             hideSnapVisual(260);
-            setSnapHint(state.duplicateOnCommit ? operationLabels.duplicateMove : null);
+            setSnapHint(null);
           }
+          setLiveProfileInterference(
+            state.object,
+            profileCollides(state.object, state.item, nextPosition, collisionItems, groupsRef.current),
+          );
         } else if (isConnectionAccessoryKind(state.item.kind)) {
           const tolerances = getSnapTolerances(state.object.position);
-          const placement = findAccessoryPlacement(
+          const candidatePlacement = findAccessoryPlacement(
             state.item,
             itemsRef.current,
             nextPosition,
             null,
             THREE.MathUtils.clamp(tolerances.maxDistance * 0.55, 0.55, 2.4),
           );
+          const isOriginalPlacement = Boolean(
+            candidatePlacement
+            && state.sourceAttachmentKey
+            && (
+              candidatePlacement.key === state.sourceAttachmentKey
+              || candidatePlacement.key.startsWith(`${state.sourceAttachmentKey}:`)
+              || state.sourceAttachmentKey.startsWith(`${candidatePlacement.key}:`)
+            )
+          );
+          const axialPlacementPosition = candidatePlacement
+            ? state.startPosition.clone().addScaledVector(
+              state.axis,
+              Math.max(0, candidatePlacement.position.clone().sub(state.startPosition).dot(state.axis)),
+            )
+            : null;
+          const placement = candidatePlacement && !isOriginalPlacement && axialPlacementPosition
+            && candidatePlacement.position.distanceToSquared(axialPlacementPosition) < 1e-8
+            ? { ...candidatePlacement, position: axialPlacementPosition }
+            : null;
           state.accessoryPlacement = placement;
           if (placement) {
             nextPosition.copy(placement.position);
@@ -4060,21 +7354,63 @@ const ThreeAssembly: React.FC<{
         }
         state.validPosition.copy(nextPosition);
         syncProfileLengthHandles(lengthHandles, state.object, state.item);
-        if (state.axis) {
-          const moveDistanceMm = Math.round(
-            nextPosition.clone().sub(state.startPosition).dot(state.axis) * SCENE_SCALE,
-          );
-          setOperationEditor((current) => (
-            current?.kind === 'move' && current.itemId === state.item.id
-              ? { ...current, valueMm: moveDistanceMm }
-              : current
-          ));
-        }
+        const moveDistanceMm = Math.round(
+          nextPosition.clone().sub(state.dragOriginPosition).dot(state.axis) * SCENE_SCALE,
+        );
+        const viewportRect = renderer.domElement.getBoundingClientRect();
+        const anchorPoint = projectRelationPoint(transformAnchor.position);
+        const anchorX = anchorPoint?.x ?? event.clientX - viewportRect.left;
+        const anchorY = anchorPoint?.y ?? event.clientY - viewportRect.top;
+        const liveLabelX = THREE.MathUtils.clamp(
+          anchorX + (anchorX < viewportRect.width * 0.68 ? 88 : -88),
+          48,
+          Math.max(48, viewportRect.width - 48),
+        );
+        const liveLabelY = THREE.MathUtils.clamp(
+          anchorY + (anchorY < viewportRect.height * 0.72 ? 62 : -62),
+          18,
+          Math.max(18, viewportRect.height - 28),
+        );
+        setOperationEditor((current) => (
+          current?.kind === 'move' && current.itemId === state.item.id
+            ? {
+              ...current,
+              valueMm: moveDistanceMm,
+              x: liveLabelX,
+              y: liveLabelY,
+              dragging: true,
+            }
+            : current
+        ));
         event.preventDefault();
         return;
       }
       const state = lengthResizeState;
-      if (!state) return;
+      if (!state) {
+        if (event.buttons !== 0) return;
+        setPointerRay(event.clientX, event.clientY);
+        const handleHit = lengthHandles.visible
+          ? raycaster.intersectObjects(lengthHandles.children, true)[0]
+          : undefined;
+        let hoveredLengthSide: -1 | 1 | null = null;
+        if (handleHit) {
+          let handleObject: THREE.Object3D | null = handleHit.object;
+          while (handleObject && handleObject.userData.lengthHandleSide === undefined) handleObject = handleObject.parent;
+          hoveredLengthSide = handleObject?.userData.lengthHandleSide as -1 | 1 | null;
+        }
+        setProfileLengthHandleHighlight(lengthHandles, hoveredLengthSide);
+        const translatePicker = (transform as TransformGizmoInternals)._gizmo?.picker.translate;
+        const transformHandleHit = !hoveredLengthSide && translatePicker
+          ? raycaster.intersectObjects(translatePicker.children, true)[0]
+          : undefined;
+        transform.axis = transformHandleHit?.object.name === 'X'
+          || transformHandleHit?.object.name === 'Y'
+          || transformHandleHit?.object.name === 'Z'
+          ? transformHandleHit.object.name
+          : null;
+        renderer.domElement.style.cursor = hoveredLengthSide || transform.axis ? 'grab' : '';
+        return;
+      }
       setPointerRay(event.clientX, event.clientY);
       const currentPoint = raycaster.ray.intersectPlane(resizePlane, new THREE.Vector3());
       if (!currentPoint) return;
@@ -4099,13 +7435,13 @@ const ThreeAssembly: React.FC<{
       state.object.position.copy(nextPosition);
       state.object.scale.set(nextLength / state.startLength, 1, 1);
       syncProfileLengthHandles(lengthHandles, state.object, state.item, nextLength, nextPosition);
-      const rect = renderer.domElement.getBoundingClientRect();
+      const editorPosition = getOperationEditorPosition(event.clientX, event.clientY);
       setOperationEditor({
         kind: 'length',
         itemId: state.item.id,
         valueMm: Math.round(nextLength * SCENE_SCALE),
-        x: THREE.MathUtils.clamp(event.clientX - rect.left, 105, Math.max(105, rect.width - 105)),
-        y: THREE.MathUtils.clamp(event.clientY - rect.top - 54, 58, Math.max(58, rect.height - 58)),
+        x: editorPosition.x,
+        y: editorPosition.y,
         fixedEnd: [state.fixedEnd.x, state.fixedEnd.y, state.fixedEnd.z],
         axis: [state.axis.x, state.axis.y, state.axis.z],
         side: state.side,
@@ -4114,6 +7450,11 @@ const ThreeAssembly: React.FC<{
       event.preventDefault();
     };
     const onPointerUp = (event: PointerEvent) => {
+      if (profileDrawTemplateRef.current?.kind === 'profile') {
+        event.preventDefault();
+        event.stopPropagation();
+        return;
+      }
       if (marqueeState) {
         const state = marqueeState;
         marqueeState = null;
@@ -4128,18 +7469,31 @@ const ThreeAssembly: React.FC<{
         const bottom = Math.max(state.startY, state.currentY);
         const dragDistance = Math.hypot(state.currentX - state.startX, state.currentY - state.startY);
         setSelectionRect(null);
-        if (dragDistance <= 7) {
-          const itemId = getHitItemId(event.clientX, event.clientY);
-          if (itemId) onSelectRef.current(itemId, true);
-        } else {
-          const rect = renderer.domElement.getBoundingClientRect();
-          const enclosed = [...groupsRef.current.entries()].filter(([, group]) => {
-            const center = new THREE.Box3().setFromObject(group).getCenter(new THREE.Vector3()).project(camera);
-            const x = ((center.x + 1) / 2) * rect.width;
-            const y = ((1 - center.y) / 2) * rect.height;
-            return x >= left && x <= right && y >= top && y <= bottom;
+        if (dragDistance > 7) {
+          const viewport = renderer.domElement.getBoundingClientRect();
+          const selectedByRect = [...groupsRef.current.entries()].filter(([, group]) => {
+            const bounds = new THREE.Box3().setFromObject(group);
+            if (bounds.isEmpty()) return false;
+            const corners = [
+              new THREE.Vector3(bounds.min.x, bounds.min.y, bounds.min.z),
+              new THREE.Vector3(bounds.min.x, bounds.min.y, bounds.max.z),
+              new THREE.Vector3(bounds.min.x, bounds.max.y, bounds.min.z),
+              new THREE.Vector3(bounds.min.x, bounds.max.y, bounds.max.z),
+              new THREE.Vector3(bounds.max.x, bounds.min.y, bounds.min.z),
+              new THREE.Vector3(bounds.max.x, bounds.min.y, bounds.max.z),
+              new THREE.Vector3(bounds.max.x, bounds.max.y, bounds.min.z),
+              new THREE.Vector3(bounds.max.x, bounds.max.y, bounds.max.z),
+            ].map((corner) => corner.project(camera));
+            if (!corners.some((corner) => corner.z >= -1 && corner.z <= 1)) return false;
+            const xs = corners.map((corner) => ((corner.x + 1) / 2) * viewport.width);
+            const ys = corners.map((corner) => ((1 - corner.y) / 2) * viewport.height);
+            const projectedLeft = Math.min(...xs);
+            const projectedRight = Math.max(...xs);
+            const projectedTop = Math.min(...ys);
+            const projectedBottom = Math.max(...ys);
+            return projectedRight >= left && projectedLeft <= right && projectedBottom >= top && projectedTop <= bottom;
           }).map(([id]) => id);
-          onSelectionChangeRef.current([...new Set([...selectedIdsRef.current, ...enclosed])]);
+          onSelectionChangeRef.current([...new Set([...selectedIdsRef.current, ...selectedByRect])]);
         }
         event.preventDefault();
         event.stopPropagation();
@@ -4168,27 +7522,29 @@ const ThreeAssembly: React.FC<{
             state.duplicateOnCommit,
           );
         }
-        if (state.axis && !state.duplicateOnCommit) {
-          const movement = state.validPosition.clone().sub(state.startPosition);
-          const rect = renderer.domElement.getBoundingClientRect();
+        const movement = state.validPosition.clone().sub(state.dragOriginPosition);
+        const editorPosition = getMoveEditorEdgePosition(event.clientX, event.clientY);
+        if (state.duplicateOnCommit) {
+          setOperationEditor(null);
+        } else {
           setOperationEditor((current) => (
             current?.kind === 'move' && current.itemId === state.item.id
               ? {
                 ...current,
                 valueMm: Math.round(movement.dot(state.axis) * SCENE_SCALE),
+                dragging: false,
               }
               : {
                 kind: 'move',
                 itemId: state.item.id,
                 valueMm: Math.round(movement.dot(state.axis) * SCENE_SCALE),
-                x: THREE.MathUtils.clamp(event.clientX - rect.left, 105, Math.max(105, rect.width - 105)),
-                y: THREE.MathUtils.clamp(event.clientY - rect.top - 54, 58, Math.max(58, rect.height - 58)),
-                startPosition: [state.startPosition.x, state.startPosition.y, state.startPosition.z],
+                x: editorPosition.x,
+                y: editorPosition.y,
+                startPosition: [state.dragOriginPosition.x, state.dragOriginPosition.y, state.dragOriginPosition.z],
                 direction: [state.axis.x, state.axis.y, state.axis.z],
+                dragging: false,
               }
           ));
-        } else {
-          setOperationEditor(null);
         }
         hideSnapVisual(650);
         window.clearTimeout(snapHintTimerRef.current);
@@ -4226,6 +7582,26 @@ const ThreeAssembly: React.FC<{
       pointerStart = null;
       if (!start) return;
       const distance = Math.hypot(event.clientX - start.x, event.clientY - start.y);
+      if (accessoryPlacementTemplateRef.current) {
+        orbit.enabled = true;
+        transform.enabled = true;
+        renderer.domElement.style.cursor = 'crosshair';
+        if (start.button === 0 && distance <= 7) {
+          const hit = getContentHit(start.x, start.y);
+          const itemId = hit ? getItemIdFromObject(hit.object) : null;
+          const item = itemId ? itemsRef.current.find((entry) => entry.id === itemId) : undefined;
+          if (item?.kind === 'profile') {
+            const rect = renderer.domElement.getBoundingClientRect();
+            setAccessoryPlacementMessage({
+              text: accessoryPlacementLabels.invalid,
+              x: THREE.MathUtils.clamp(start.x - rect.left + 18, 120, Math.max(120, rect.width - 120)),
+              y: THREE.MathUtils.clamp(start.y - rect.top - 24, 32, Math.max(32, rect.height - 44)),
+            });
+            window.setTimeout(() => setAccessoryPlacementMessage(null), 1800);
+          }
+        }
+        return;
+      }
       if (start.button === 0 && drillModeRef.current && distance <= 7) {
         let validHoleSurface = false;
         const hit = getContentHit(event.clientX, event.clientY);
@@ -4285,7 +7661,10 @@ const ThreeAssembly: React.FC<{
         return;
       }
       if (distance > 7) return;
-      onSelectRef.current(getHitItemId(event.clientX, event.clientY), event.shiftKey);
+      // Use the original pointer-down coordinate for click selection. OrbitControls
+      // may rotate the camera by a tiny amount between down/up, which previously
+      // made narrow profiles and end caps appear to dodge the pointer.
+      onSelectRef.current(getHitItemId(start.x, start.y), event.shiftKey);
     };
     const onContextMenu = (event: MouseEvent) => {
       event.preventDefault();
@@ -4314,6 +7693,34 @@ const ThreeAssembly: React.FC<{
     window.addEventListener('pointerup', onPointerUp, true);
     window.addEventListener('pointercancel', onPointerUp, true);
     renderer.domElement.addEventListener('contextmenu', onContextMenu);
+    const onProfileDrawKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') return;
+      if (drillModeRef.current) {
+        setHoleDraft(null);
+        onCancelDrillModeRef.current();
+      }
+      if (profileDrawTemplateRef.current) {
+        resetProfileDrawDraft();
+        profileDrawPreview.visible = false;
+        orbit.enabled = true;
+        transform.enabled = true;
+        renderer.domElement.style.cursor = '';
+        onExitProfileDrawRef.current();
+      }
+      if (accessoryPlacementTemplateRef.current) {
+        accessoryPlacementTemplateRef.current = null;
+        accessoryPlacementPreview.visible = false;
+        accessoryPlacementHighlightMeshes.forEach((mesh) => { mesh.visible = false; });
+        setAccessoryPlacementOverlay([]);
+        setHoveredAccessoryPlacementKey(null);
+        setAccessoryPlacementMessage(null);
+        orbit.enabled = true;
+        transform.enabled = true;
+        renderer.domElement.style.cursor = '';
+        onExitAccessoryPlacementRef.current();
+      }
+    };
+    window.addEventListener('keydown', onProfileDrawKeyDown);
 
     const resize = () => {
       const rect = mount.getBoundingClientRect();
@@ -4331,7 +7738,23 @@ const ThreeAssembly: React.FC<{
 
     let animationFrame = 0;
     const animate = () => {
+      const profileDrawActive = profileDrawTemplateRef.current?.kind === 'profile';
+      if (profileDrawActive && !profileDrawWasActive) {
+        profileDrawWasActive = true;
+        resetProfileDrawDraft();
+      } else if (!profileDrawActive && profileDrawWasActive) {
+        profileDrawWasActive = false;
+        resetProfileDrawDraft();
+        profileDrawPreview.visible = false;
+        // Re-entering free draw from a freshly selected profile must start
+        // from that profile's own orientation, not the last branch direction.
+        profileDrawSignature = '';
+      }
       orbit.update();
+      updateViewAwareTransformAnchor();
+      updateProfileRelationVisuals();
+      updateAccessoryEditVisuals();
+      updateAccessoryPlacementVisuals();
       if (lengthHandles.visible) {
         const helperDistance = camera.position.distanceTo(lengthHandles.position);
         const helperScale = THREE.MathUtils.clamp(helperDistance * 0.075, 0.34, 1.35);
@@ -4351,6 +7774,7 @@ const ThreeAssembly: React.FC<{
     rendererRef.current = renderer;
     orbitRef.current = orbit;
     transformRef.current = transform;
+    transformAnchorRef.current = transformAnchor;
     lengthHandlesRef.current = lengthHandles;
     contentRef.current = content;
 
@@ -4364,17 +7788,43 @@ const ThreeAssembly: React.FC<{
       window.removeEventListener('pointerup', onPointerUp, true);
       window.removeEventListener('pointercancel', onPointerUp, true);
       renderer.domElement.removeEventListener('contextmenu', onContextMenu);
+      window.removeEventListener('keydown', onProfileDrawKeyDown);
       transform.removeEventListener('dragging-changed', onDraggingChanged);
       transform.removeEventListener('objectChange', onObjectChange);
       transform.removeEventListener('mouseUp', onTransformMouseUp);
       transform.detach();
       transform.dispose();
+      scene.remove(transformAnchor);
       disposeObject(lengthHandles);
       scene.remove(lengthHandles);
       snapGuide.geometry.dispose();
       (snapGuide.material as THREE.Material).dispose();
       disposeObject(snapPreview);
       scene.remove(snapPreview);
+      disposeObject(profileDrawPreview);
+      scene.remove(profileDrawPreview);
+      profileDrawContactHighlights.forEach((highlight) => scene.remove(highlight));
+      profileDrawContactGeometry.dispose();
+      profileDrawContactEdgeGeometry.dispose();
+      profileDrawContactMaterial.dispose();
+      profileDrawContactEdgeMaterial.dispose();
+      connectionHighlightMeshes.forEach((mesh) => scene.remove(mesh));
+      connectionHighlightGeometry.dispose();
+      connectionHighlightEdgeGeometry.dispose();
+      connectionHighlightMaterial.dispose();
+      connectionHighlightEdgeMaterial.dispose();
+      accessoryEditHighlightMeshes.forEach((mesh) => {
+        scene.remove(mesh);
+        (mesh.material as THREE.Material).dispose();
+      });
+      accessoryEditHighlightGeometry.dispose();
+      accessoryPlacementHighlightMeshes.forEach((mesh) => {
+        scene.remove(mesh);
+        (mesh.material as THREE.Material).dispose();
+      });
+      accessoryPlacementHighlightGeometry.dispose();
+      disposeObject(accessoryPlacementPreview);
+      scene.remove(accessoryPlacementPreview);
       orbit.dispose();
       disposeObject(content);
       renderer.dispose();
@@ -4384,6 +7834,7 @@ const ThreeAssembly: React.FC<{
       rendererRef.current = null;
       orbitRef.current = null;
       transformRef.current = null;
+      transformAnchorRef.current = null;
       lengthHandlesRef.current = null;
       contentRef.current = null;
       groupsRef.current.clear();
@@ -4393,8 +7844,9 @@ const ThreeAssembly: React.FC<{
   useEffect(() => {
     const content = contentRef.current;
     const transform = transformRef.current;
+    const transformAnchor = transformAnchorRef.current;
     const lengthHandles = lengthHandlesRef.current;
-    if (!content || !transform || !lengthHandles) return;
+    if (!content || !transform || !transformAnchor || !lengthHandles) return;
     transform.detach();
     lengthHandles.visible = false;
     content.children.slice().forEach((child) => {
@@ -4402,8 +7854,15 @@ const ThreeAssembly: React.FC<{
       disposeObject(child);
     });
     const groups = new Map<string, THREE.Group>();
-    const selectedSet = new Set(selectedIds);
+    const selectedSet = new Set<string>(selectedIds);
     const collidingSet = findCollidingProfileIds(items);
+    const linkedScrewHoleIdsByProfile = new Map<string, Set<string>>();
+    items.forEach((item) => {
+      if (item.kind !== 'screw' || !item.linkedProfileId || !item.linkedHoleId) return;
+      const linkedHoleIds = linkedScrewHoleIdsByProfile.get(item.linkedProfileId) || new Set<string>();
+      linkedHoleIds.add(item.linkedHoleId);
+      linkedScrewHoleIdsByProfile.set(item.linkedProfileId, linkedHoleIds);
+    });
     const showMultiSelectionOutline = selectedIds.length > 1;
     items.forEach((item) => {
       const showSelectionOutline = showMultiSelectionOutline && selectedSet.has(item.id);
@@ -4416,14 +7875,25 @@ const ThreeAssembly: React.FC<{
         ? createProfileObject(
           item,
           showSelectionOutline,
-          transparentProfiles,
+          transparentProfiles || Boolean(accessoryEditMode),
           showMachiningMarks,
           machiningEmphasis,
           collidingSet.has(item.id),
+          linkedScrewHoleIdsByProfile.get(item.id),
         )
         : item.kind === 'plate' || item.kind === 'pegboard' || item.kind === 'marine_board'
           ? createBoardObject(item, showSelectionOutline)
-          : createAccessoryObject(item, showSelectionOutline);
+          : item.kind === 'cabinet_door'
+            ? createCabinetDoorObject(item, showSelectionOutline)
+          : createAccessoryObject(
+            item,
+            showSelectionOutline,
+            transparentProfiles || Boolean(accessoryEditMode),
+            item.kind === 'screw' && item.linkedProfileId && item.linkedHoleId
+              ? items.find((candidate) => candidate.id === item.linkedProfileId && candidate.kind === 'profile')
+                ?.holes?.find((hole) => hole.id === item.linkedHoleId)?.type
+              : undefined,
+          );
       group.userData.itemId = item.id;
       group.traverse((child) => {
         child.userData.itemId = item.id;
@@ -4440,24 +7910,32 @@ const ThreeAssembly: React.FC<{
     groupsRef.current = groups;
     const selected = selectedId ? groups.get(selectedId) : undefined;
     const selectedItem = selectedId ? items.find((item) => item.id === selectedId) : undefined;
-    if (selected && selectedIds.length === 1 && !selectedItem?.lockedPosition) transform.attach(selected);
+    const selectedCanMove = Boolean(
+      selectedItem
+      && (!selectedItem.lockedPosition || isMovableAccessoryKind(selectedItem.kind))
+    );
+    if (selected && selectedIds.length === 1 && selectedCanMove) {
+      transformAnchor.position.copy(selected.position);
+      transformAnchor.userData.targetObject = selected;
+      transform.attach(transformAnchor);
+    } else {
+      transformAnchor.userData.targetObject = undefined;
+    }
     syncProfileLengthHandles(lengthHandles, selectedIds.length === 1 ? selected : undefined, selectedIds.length === 1 ? selectedItem : undefined);
 
-    const frameSignature = items.map((item) => [
-      item.id,
-      item.kind,
-      item.variantId,
-      item.length,
-      item.width,
-      item.height,
-      item.thickness,
-      item.rotation.join(','),
-    ].join(':')).join('|');
-    if (items.length > 0 && frameSignature !== lastFrameSignatureRef.current) {
+    // Auto-fit only when scene membership changes. Property edits and 90°
+    // rotations preserve the customer's current zoom, orbit and camera target.
+    const frameSignature = items.map((item) => item.id).join('|');
+    if (
+      items.length > 0
+      && frameSignature !== lastFrameSignatureRef.current
+      && !profileDrawTemplateRef.current
+      && !accessoryPlacementTemplateRef.current
+    ) {
       frameAll();
     }
     lastFrameSignatureRef.current = frameSignature;
-  }, [items, selectedId, selectedIds, showMachiningMarks, transparentProfiles]);
+  }, [items, selectedId, selectedIds, showMachiningMarks, transparentProfiles, accessoryEditMode]);
 
   return (
     <div
@@ -4468,6 +7946,173 @@ const ThreeAssembly: React.FC<{
       }}
     >
       <div ref={mountRef} className="absolute inset-0 overflow-hidden" data-testid="diy-3d-canvas" />
+      {selectionRect && (
+        <div
+          className="pointer-events-none absolute z-40 border-2 border-blue-500 bg-blue-400/15"
+          style={selectionRect}
+          data-testid="diy-selection-marquee"
+        />
+      )}
+      {profileDrawTemplate && profileDrawOverlay && (
+        <div
+          className={`pointer-events-none absolute z-[42] -translate-x-1/2 -translate-y-full whitespace-nowrap rounded-xl border bg-white/95 px-3 py-2 text-[11px] font-black shadow-xl backdrop-blur ${profileDrawOverlay.invalid ? 'border-red-400 text-red-600' : 'border-blue-300 text-slate-800'}`}
+          style={{ left: profileDrawOverlay.x, top: profileDrawOverlay.y }}
+          data-testid="diy-profile-draw-length"
+        >
+          {profileDrawOverlay.length} mm
+          {profileDrawOverlay.axis && (
+            <span className="ml-2 rounded-md bg-slate-100 px-1.5 py-0.5 text-[9px] text-slate-600">
+              {profileDrawOverlay.axis}
+            </span>
+          )}
+          {profileDrawOverlay.snapped && (
+            <span className="ml-2 text-[9px] text-amber-600">●</span>
+          )}
+          {profileDrawOverlay.invalid && (
+            <span className="ml-2 text-[9px]">{profileDrawLabels.invalid}</span>
+          )}
+          <span className="ml-2 text-[9px] text-blue-600">
+            {profileDrawOverlay.extending ? '2 / 2' : '1 / 2'}
+          </span>
+        </div>
+      )}
+      {profileDrawTemplate && (
+        <div className="pointer-events-none absolute left-1/2 top-3 z-[41] w-[min(520px,calc(100%-24px))] -translate-x-1/2 rounded-2xl border border-blue-200 bg-white/95 px-4 py-2.5 text-center text-[10px] font-black leading-relaxed text-slate-700 shadow-xl backdrop-blur">
+          {profileDrawLabels.hint}
+        </div>
+      )}
+      {accessoryPlacementTemplate && (
+        <div
+          className="pointer-events-none absolute left-1/2 top-3 z-[43] w-[min(560px,calc(100%-24px))] -translate-x-1/2 rounded-2xl border border-purple-200 bg-white/95 px-4 py-2.5 text-center text-[10px] font-black leading-relaxed text-slate-700 shadow-xl backdrop-blur"
+          data-testid="diy-accessory-placement-hint"
+        >
+          {accessoryPlacementLabels.hint}
+        </div>
+      )}
+      {accessoryPlacementTemplate && accessoryPlacementOverlay.map((candidate) => (
+        <button
+          key={candidate.key}
+          type="button"
+          aria-label={accessoryPlacementLabels.hint}
+          data-testid="diy-accessory-placement-candidate"
+          onPointerDown={(event) => {
+            event.preventDefault();
+            event.stopPropagation();
+          }}
+          onPointerEnter={() => {
+            setHoveredAccessoryPlacementKey(candidate.key);
+            setAccessoryPlacementMessage(null);
+          }}
+          onPointerLeave={() => setHoveredAccessoryPlacementKey((current) => current === candidate.key ? null : current)}
+          onClick={(event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            onCommitAccessoryPlacementRef.current(accessoryPlacementTemplate, candidate.placement);
+            const rect = rendererRef.current?.domElement.getBoundingClientRect();
+            if (rect) {
+              setAccessoryPlacementMessage({
+                text: accessoryPlacementLabels.success,
+                x: THREE.MathUtils.clamp(event.clientX - rect.left, 120, Math.max(120, rect.width - 120)),
+                y: THREE.MathUtils.clamp(event.clientY - rect.top - 30, 32, Math.max(32, rect.height - 44)),
+              });
+              window.setTimeout(() => setAccessoryPlacementMessage(null), 1500);
+            }
+          }}
+          className={`absolute z-[44] h-9 w-9 -translate-x-1/2 -translate-y-1/2 rounded-lg border-2 shadow-[0_0_0_7px_rgba(168,85,247,0.2)] transition ${
+            hoveredAccessoryPlacementKey === candidate.key
+              ? 'scale-125 border-cyan-100 bg-cyan-400/90 shadow-[0_0_0_9px_rgba(34,211,238,0.22)]'
+              : 'border-purple-200 bg-purple-600/80 hover:scale-110 hover:bg-purple-500'
+          }`}
+          style={{ left: candidate.point.x, top: candidate.point.y }}
+        />
+      ))}
+      {accessoryPlacementTemplate && accessoryPlacementMessage && (
+        <div
+          className={`pointer-events-none absolute z-[45] -translate-x-1/2 -translate-y-full whitespace-nowrap rounded-xl border bg-white/95 px-3 py-2 text-[11px] font-black shadow-xl backdrop-blur ${
+            accessoryPlacementMessage.text === accessoryPlacementLabels.invalid
+              ? 'border-amber-300 text-amber-700'
+              : 'border-emerald-300 text-emerald-700'
+          }`}
+          style={{ left: accessoryPlacementMessage.x, top: accessoryPlacementMessage.y }}
+          role="status"
+        >
+          {accessoryPlacementMessage.text}
+        </div>
+      )}
+      {profileRelationOverlay.measurements.length > 0 && (
+        <svg
+          className="pointer-events-none absolute inset-0 z-[12] h-full w-full overflow-visible"
+          aria-hidden="true"
+          data-testid="diy-profile-dimensions"
+        >
+          {profileRelationOverlay.measurements.filter((measurement) => measurement.kind !== 'length').map((measurement) => {
+            const color = measurement.kind === 'gap' ? '#475569' : '#0284c7';
+            return (
+              <g key={measurement.id}>
+                <line
+                  x1={measurement.start.x}
+                  y1={measurement.start.y}
+                  x2={measurement.end.x}
+                  y2={measurement.end.y}
+                  stroke={color}
+                  strokeWidth="1.5"
+                  strokeDasharray={measurement.kind === 'length' ? undefined : '4 4'}
+                />
+                <circle cx={measurement.start.x} cy={measurement.start.y} r="3" fill={color} />
+                <circle cx={measurement.end.x} cy={measurement.end.y} r="3" fill={color} />
+              </g>
+            );
+          })}
+        </svg>
+      )}
+      {profileRelationOverlay.measurements.map((measurement) => (
+        <div
+          key={`${measurement.id}:label`}
+          className={`pointer-events-none absolute z-[13] -translate-x-1/2 -translate-y-1/2 whitespace-nowrap rounded-lg border bg-white/95 px-2.5 py-1 text-[11px] font-black shadow-md backdrop-blur ${
+            measurement.kind === 'gap'
+              ? 'border-slate-300 text-slate-700'
+              : 'border-sky-400 text-slate-800'
+          }`}
+          style={{
+            left: measurement.labelPoint.x,
+            top: measurement.labelPoint.y,
+          }}
+        >
+          {measurement.label}
+        </div>
+      ))}
+      {accessoryEditMode && accessoryEditOverlay.map((joint) => {
+        const label = joint.status === 'installed'
+          ? connectionGenerationLabels.installed
+          : joint.status === 'replace'
+            ? connectionGenerationLabels.replaceable
+            : connectionGenerationLabels.addable;
+        const symbol = joint.status === 'installed' ? '✓' : joint.status === 'replace' ? '↻' : '+';
+        return (
+          <button
+            key={`${accessoryEditMode}:${joint.key}`}
+            type="button"
+            data-testid={`diy-accessory-joint-${joint.status}`}
+            aria-label={label}
+            title={label}
+            onPointerDown={(event) => event.stopPropagation()}
+            onClick={(event) => {
+              event.stopPropagation();
+              onApplyConnectionAtJointRef.current(accessoryEditMode, joint.key);
+            }}
+            className={`absolute z-[18] flex h-8 w-8 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-lg border-2 text-sm font-black text-white shadow-[0_0_0_5px_rgba(168,85,247,0.18)] transition hover:scale-110 focus:outline-none focus:ring-2 focus:ring-white ${
+              joint.status === 'installed'
+                ? 'border-emerald-200 bg-emerald-500/90 shadow-[0_0_0_5px_rgba(16,185,129,0.18)]'
+                : joint.status === 'replace'
+                  ? 'border-orange-200 bg-orange-500/90 shadow-[0_0_0_5px_rgba(249,115,22,0.2)]'
+                  : 'border-purple-200 bg-purple-600/90'
+            }`}
+            style={{ left: joint.point.x, top: joint.point.y }}
+          >
+            {symbol}
+          </button>
+        );
+      })}
       {selectedSceneItem && selectedIds.length === 1 && !selectedSceneItem.lockedPosition && (
         <div
           className="absolute left-3 top-28 z-20 w-[190px] rounded-2xl border border-slate-200 bg-white/95 p-2.5 shadow-xl backdrop-blur"
@@ -4508,8 +8153,23 @@ const ThreeAssembly: React.FC<{
         </div>
       )}
       {collidingProfileIds.size === 0 && (
-        <div className="pointer-events-none absolute bottom-3 right-3 z-20 max-w-[270px] rounded-xl border border-white/80 bg-slate-950/78 px-3 py-2 text-[9px] font-bold leading-relaxed text-white shadow-lg backdrop-blur">
-          {interactionLabels.contextHint}
+        <div
+          className="pointer-events-none absolute bottom-3 right-3 z-20 w-[min(370px,calc(100%-24px))] rounded-2xl border border-slate-700 bg-slate-950/95 p-2.5 text-white shadow-2xl shadow-slate-950/25"
+          data-testid="diy-scene-control-hint"
+        >
+          <div className="flex items-center gap-2">
+            <MousePointer2 className="h-4 w-4 shrink-0 text-sky-300" />
+            <div className="flex flex-wrap gap-1.5 text-[10px] font-black leading-none">
+              {[interactionLabels.orbit, interactionLabels.pan, interactionLabels.zoom].map((label) => (
+                <span key={label} className="rounded-lg border border-white/15 bg-white/10 px-2 py-1.5">
+                  {label}
+                </span>
+              ))}
+            </div>
+          </div>
+          <div className="mt-2 border-t border-white/15 pt-2 text-[10px] font-bold leading-snug text-slate-200">
+            {interactionLabels.part}
+          </div>
         </div>
       )}
       {holeDraft && (
@@ -4572,68 +8232,146 @@ const ThreeAssembly: React.FC<{
       )}
       {operationEditor && (
         <div
-          className="absolute z-40 w-[300px] -translate-x-1/2 rounded-2xl border border-blue-200 bg-white/95 p-3 shadow-2xl backdrop-blur"
+          className={`absolute z-40 -translate-x-1/2 border border-sky-300 bg-sky-100/95 font-black text-slate-800 shadow-lg backdrop-blur ${
+            operationEditor.kind === 'move' && operationEditor.dragging
+              ? 'w-auto rounded-md px-2 py-1 text-[11px]'
+              : operationEditor.kind === 'move'
+                ? 'w-[184px] rounded-xl px-2 py-2'
+                : 'w-[230px] rounded-2xl p-3'
+          }`}
           style={{ left: operationEditor.x, top: operationEditor.y }}
           onPointerDown={(event) => event.stopPropagation()}
+          data-testid={operationEditor.kind === 'move' && operationEditor.dragging ? 'diy-live-axis-distance' : undefined}
         >
-          <div className="mb-1 text-[9px] font-black uppercase tracking-widest text-slate-400">
-            {operationEditor.kind === 'length' ? operationLabels.length : operationLabels.move}
-          </div>
-          <div className="flex items-center gap-1.5">
-            <input
-              type="number"
-              aria-label={operationEditor.kind === 'length' ? operationLabels.length : operationLabels.move}
-              data-testid="diy-operation-value"
-              value={operationEditor.valueMm}
-              min={operationEditor.kind === 'length' ? 21 : undefined}
-              max={operationEditor.kind === 'length' ? 3000 : undefined}
-              autoFocus={operationEditor.kind === 'length'}
-              onChange={(event) => setOperationEditor((current) => current ? {
-                ...current,
-                valueMm: Number(event.target.value) || 0,
-              } : current)}
-              onKeyDown={(event) => {
-                if (event.key === 'Enter') applyOperationEditor(event.shiftKey);
-                if (event.key === 'Escape') setOperationEditor(null);
-              }}
-              className="min-w-0 flex-1 rounded-lg border border-blue-200 bg-blue-50 px-2 py-1.5 text-right text-xs font-black text-slate-900 outline-none focus:border-blue-500"
-            />
-            <span className="text-[10px] font-black text-slate-400">mm</span>
-            <button
-              type="button"
-              data-testid="diy-operation-apply"
-              onClick={(event) => applyOperationEditor(event.shiftKey)}
-              className="rounded-lg bg-blue-600 px-2 py-1.5 text-[10px] font-black text-white hover:bg-blue-500"
-            >
-              {operationLabels.apply}
-            </button>
-          </div>
-          {operationEditor.kind === 'move' && (
-            <div className="mt-2 rounded-xl bg-blue-50 px-3 py-2 text-[10px] font-bold leading-relaxed text-blue-700">
-              <span className="mb-0.5 block font-black">{operationLabels.duplicateMove}</span>
-              {operationLabels.duplicateMoveHint}
+          {operationEditor.kind === 'move' && operationEditor.dragging ? (
+            <span>{operationEditor.valueMm > 0 ? '+' : ''}{operationEditor.valueMm.toFixed(1)}mm</span>
+          ) : operationEditor.kind === 'move' ? (
+            <div className="flex items-center gap-1.5">
+              <span className="shrink-0 text-[8px] font-black text-slate-500">
+                {operationLabels.move}
+              </span>
+              <input
+                type="number"
+                aria-label={operationLabels.move}
+                data-testid="diy-operation-value"
+                value={operationEditor.valueMm}
+                onChange={(event) => setOperationEditor((current) => current ? {
+                  ...current,
+                  valueMm: Number(event.target.value) || 0,
+                } : current)}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter') applyOperationEditor();
+                  if (event.key === 'Escape') setOperationEditor(null);
+                }}
+                className="w-14 min-w-0 rounded-md border border-blue-200 bg-white px-1.5 py-1 text-right text-[11px] font-black text-slate-900 outline-none focus:border-blue-500"
+              />
+              <span className="shrink-0 text-[9px] font-black text-slate-400">mm</span>
+              <button
+                type="button"
+                data-testid="diy-operation-apply"
+                onClick={() => applyOperationEditor()}
+                className="shrink-0 rounded-md bg-blue-600 px-2 py-1 text-[9px] font-black text-white hover:bg-blue-500"
+              >
+                {operationLabels.apply}
+              </button>
             </div>
+          ) : (
+            <>
+              <div className="mb-1 text-[9px] font-black uppercase tracking-widest text-slate-400">
+                {operationEditor.kind === 'length' ? operationLabels.length : operationLabels.move}
+              </div>
+              <div className="flex items-center gap-1.5">
+                <input
+                  type="number"
+                  aria-label={operationEditor.kind === 'length' ? operationLabels.length : operationLabels.move}
+                  data-testid="diy-operation-value"
+                  value={operationEditor.valueMm}
+                  min={operationEditor.kind === 'length' ? 21 : undefined}
+                  max={operationEditor.kind === 'length' ? 3000 : undefined}
+                  autoFocus={operationEditor.kind === 'length'}
+                  onChange={(event) => setOperationEditor((current) => current ? {
+                    ...current,
+                    valueMm: Number(event.target.value) || 0,
+                  } : current)}
+                  onKeyDown={(event) => {
+                    if (event.key === 'Enter') applyOperationEditor();
+                    if (event.key === 'Escape') setOperationEditor(null);
+                  }}
+                  className="min-w-0 flex-1 rounded-lg border border-blue-200 bg-blue-50 px-2 py-1.5 text-right text-xs font-black text-slate-900 outline-none focus:border-blue-500"
+                />
+                <span className="text-[10px] font-black text-slate-400">mm</span>
+                <button
+                  type="button"
+                  data-testid="diy-operation-apply"
+                  onClick={() => applyOperationEditor()}
+                  className="rounded-lg bg-blue-600 px-2 py-1.5 text-[10px] font-black text-white hover:bg-blue-500"
+                >
+                  {operationLabels.apply}
+                </button>
+              </div>
+            </>
           )}
         </div>
       )}
-      {selectionRect && (
+      {accessoryEditMode && !connectionMenuOpen && (
         <div
-          className="pointer-events-none absolute z-40 border-2 border-blue-500 bg-blue-400/15"
-          style={selectionRect}
-        />
+          className="absolute right-3 top-28 z-30 flex items-center gap-1.5 rounded-2xl border border-purple-300 bg-white/95 p-1.5 shadow-xl backdrop-blur"
+          data-testid="diy-accessory-edit-status"
+          onPointerDown={(event) => event.stopPropagation()}
+        >
+          <span className="rounded-xl bg-purple-100 px-2.5 py-2 text-[10px] font-black text-purple-800">
+            {accessoryEditMode === 'corner_bracket'
+              ? connectionGenerationLabels.cornerBracket
+              : accessoryEditMode === 'slot_connector'
+                ? connectionGenerationLabels.slotConnector
+                : connectionGenerationLabels.drillTap}
+          </span>
+          <button
+            type="button"
+            data-testid="diy-apply-all-accessory-joints-toolbar"
+            onPointerDown={(event) => {
+              event.preventDefault();
+              event.stopPropagation();
+              onGenerateConnections(accessoryEditMode);
+            }}
+            onClick={(event) => {
+              // Keyboard activation has detail 0 and does not emit the pointer
+              // gesture above. Mouse/pointer activation is handled on down so
+              // the canvas cannot consume the action first.
+              if (event.detail === 0) onGenerateConnections(accessoryEditMode);
+            }}
+            className="rounded-xl bg-purple-600 px-2.5 py-2 text-[10px] font-black text-white transition hover:bg-purple-500"
+          >
+            {connectionGenerationLabels.applyAll}
+          </button>
+          <button
+            type="button"
+            data-testid="diy-delete-all-accessory-joints-toolbar"
+            onPointerDown={(event) => {
+              event.preventDefault();
+              event.stopPropagation();
+              onDeleteConnections(accessoryEditMode);
+            }}
+            onClick={(event) => {
+              if (event.detail === 0) onDeleteConnections(accessoryEditMode);
+            }}
+            className="rounded-xl border border-rose-300 bg-white px-2.5 py-2 text-[10px] font-black text-rose-600 transition hover:bg-rose-50"
+          >
+            {connectionGenerationLabels.deleteAll}
+          </button>
+          <button
+            type="button"
+            data-testid="diy-exit-accessory-edit-toolbar"
+            aria-label={connectionGenerationLabels.exit}
+            title={connectionGenerationLabels.exit}
+            onClick={() => setAccessoryEditMode(null)}
+            className="flex h-8 w-8 items-center justify-center rounded-xl border border-slate-200 text-sm font-black text-slate-500 transition hover:bg-slate-50"
+          >
+            ×
+          </button>
+        </div>
       )}
       <div className="absolute right-3 top-3 z-20 flex items-center gap-1.5">
-        <button
-          type="button"
-          onClick={onFillScrews}
-          title={fillScrewsHint}
-          aria-label={fillScrewsLabel}
-          data-testid="diy-fill-screws"
-          className="flex items-center gap-2 rounded-xl border border-blue-200 bg-white/95 px-3 py-2 text-[11px] font-black text-blue-700 shadow-lg backdrop-blur transition hover:border-blue-400 hover:bg-blue-50"
-        >
-          <Wrench className="h-4 w-4" />
-          <span className="hidden lg:inline">{fillScrewsLabel}</span>
-        </button>
         <button
           type="button"
           onClick={() => setTransparentProfiles((current) => !current)}
@@ -4652,19 +8390,14 @@ const ThreeAssembly: React.FC<{
         </button>
         <button
           type="button"
-          onClick={() => setShowMachiningMarks((current) => !current)}
-          title={displayLabels.machiningMarks}
-          aria-label={displayLabels.machiningMarks}
-          aria-pressed={showMachiningMarks}
-          data-testid="diy-machining-marks"
-          className={`flex items-center gap-2 rounded-xl border px-3 py-2 text-[11px] font-black shadow-lg backdrop-blur transition ${
-            showMachiningMarks
-              ? 'border-rose-300 bg-white/95 text-rose-600'
-              : 'border-slate-200 bg-white/95 text-slate-400 hover:border-rose-200 hover:text-rose-500'
-          }`}
+          onClick={resetView}
+          title={resetViewLabel}
+          aria-label={resetViewLabel}
+          data-testid="diy-reset-view"
+          className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white/95 px-3 py-2 text-[11px] font-black text-slate-700 shadow-lg backdrop-blur transition hover:border-blue-300 hover:text-blue-700"
         >
-          <ScanLine className="h-4 w-4" />
-          <span className="hidden md:inline">{displayLabels.machiningMarks}</span>
+          <Home className="h-4 w-4" />
+          <span className="hidden sm:inline">{resetViewLabel}</span>
         </button>
         <button
           type="button"
@@ -4676,62 +8409,6 @@ const ThreeAssembly: React.FC<{
           <Maximize2 className="h-4 w-4" />
           <span className="hidden sm:inline">{frameAllLabel}</span>
         </button>
-      </div>
-      <div className="absolute right-3 top-14 z-20 rounded-2xl border border-slate-200 bg-white/95 p-1.5 shadow-lg backdrop-blur">
-        <div className="px-1.5 pb-1 text-[8px] font-black uppercase tracking-widest text-slate-400">
-          {alignmentLabels.title}
-        </div>
-        <div className="flex gap-1">
-          {([
-            { value: 'auto', label: alignmentLabels.auto },
-            { value: 'start', label: alignmentLabels.start },
-            { value: 'center', label: alignmentLabels.center },
-            { value: 'end', label: alignmentLabels.end },
-          ] as Array<{ value: SnapAlignment; label: string }>).map((option) => (
-            <button
-              key={option.value}
-              type="button"
-              data-testid={`diy-snap-align-${option.value}`}
-              onClick={() => setSnapAlignment(option.value)}
-              className={`rounded-lg px-2 py-1.5 text-[9px] font-black transition ${
-                snapAlignment === option.value
-                  ? 'bg-sky-500 text-white shadow-sm'
-                  : 'bg-slate-50 text-slate-500 hover:bg-sky-50 hover:text-sky-700'
-              }`}
-            >
-              {option.label}
-            </button>
-          ))}
-        </div>
-      </div>
-      <div className="absolute right-3 top-[6.6rem] z-20 max-w-[280px] rounded-2xl border border-slate-200 bg-white/95 p-1.5 shadow-lg backdrop-blur">
-        <div className="px-1.5 pb-1 text-[8px] font-black uppercase tracking-widest text-slate-400" title={workPlaneLabels.hint}>
-          {workPlaneLabels.title}
-        </div>
-        <div className="grid grid-cols-4 gap-1">
-          {([
-            { value: 'auto', label: workPlaneLabels.auto },
-            { value: 'xy', label: 'XY' },
-            { value: 'xz', label: 'XZ' },
-            { value: 'yz', label: 'YZ' },
-          ] as const).map((option) => (
-            <button
-              key={option.value}
-              type="button"
-              title={option.value === 'auto' ? workPlaneLabels.hint : workPlaneLabels[option.value]}
-              data-testid={`diy-work-plane-${option.value}`}
-              aria-pressed={workPlane === option.value}
-              onClick={() => setWorkPlane(option.value)}
-              className={`rounded-lg px-2 py-1.5 text-[9px] font-black transition ${
-                workPlane === option.value
-                  ? 'bg-indigo-600 text-white shadow-sm'
-                  : 'bg-slate-50 text-slate-500 hover:bg-indigo-50 hover:text-indigo-700'
-              }`}
-            >
-              {option.label}
-            </button>
-          ))}
-        </div>
       </div>
       {contextMenu && (
         <div
@@ -4821,6 +8498,15 @@ const getItemLabel = (item: DIYSceneItem, language: Language) => {
   if (item.kind === 'plate') return `${t.plate} · ${item.width}×${item.height}`;
   if (item.kind === 'pegboard') return `${t.pegboard} · ${item.width}×${item.height}`;
   if (item.kind === 'marine_board') return `${t.marine} · ${item.width}×${item.height}`;
+  if (item.kind === 'cabinet_door') {
+    const materialLabel = item.doorMaterial === 'marine'
+      ? t.doorMarine
+      : item.doorMaterial === 'pegboard' ? t.doorPegboard : t.doorAluminum;
+    const overlayLabel = item.doorOverlay === 'half'
+      ? t.doorHalfOverlay
+      : item.doorOverlay === 'inset' ? t.doorInsetOverlay : t.doorFullOverlay;
+    return `${materialLabel} · ${item.width}×${item.height} · ${overlayLabel} · ${item.openingSide === 'right' ? t.doorRightOpen : t.doorLeftOpen}`;
+  }
   if (item.kind === 'shelf_support') return `${t.shelfSupport} · ${item.thickness || 0}mm · ${getShelfSupportFinishLabel(item, t)}`;
   if (item.kind === 'connector') return `${t.connector} · ${item.accessoryProfileSize || '2020'}`;
   if (item.kind === 'extruded_connector') return `${t.extrudedConnector} · ${item.accessoryProfileSize || '2020'}`;
@@ -4841,7 +8527,16 @@ const getItemLabel = (item: DIYSceneItem, language: Language) => {
       item.screwHead,
       Math.max(1, Math.round(item.height || 35)),
     );
-    return `${label} · ${orderSpec.threadSize}×${orderSpec.lengthMm}${item.linkedHoleId ? ` · ${t.linkedHole}` : ''}`;
+    const kitSuffix = orderSpec.includesElasticFastener ? ` + ${t.elasticFastener}` : '';
+    return `${label} · ${orderSpec.threadSize}×${orderSpec.lengthMm}${kitSuffix}${item.linkedHoleId ? ` · ${t.linkedHole}` : ''}`;
+  }
+  if (item.kind === 'caster') {
+    return `${t.caster} · ${item.accessoryThreadSize || 'M8'} · ${item.hasBrake ? t.casterWithBrake : t.casterWithoutBrake}`;
+  }
+  if (item.kind === 'foot') return `${t.foot} · ${Math.round(item.height || 60)}mm`;
+  if (item.kind === 'end_cap') {
+    const endLabel = item.attachedEnd === 'right' ? t.rightEnd : t.leftEnd;
+    return `${t.endCap} · ${item.variantId || item.accessoryProfileSize || '2020'} · ${endLabel}`;
   }
   return t.foot;
 };
@@ -4857,6 +8552,8 @@ const isGroupableProjectAccessory = (item: DIYSceneItem) => (
   isConnectionAccessoryKind(item.kind)
   || item.kind === 'screw'
   || item.kind === 'foot'
+  || item.kind === 'caster'
+  || item.kind === 'end_cap'
   || item.kind === 'shelf_support'
 );
 
@@ -4870,6 +8567,9 @@ const projectAccessorySpecKey = (item: DIYSceneItem) => JSON.stringify({
   height: Number(item.height || 0),
   thickness: Number(item.thickness || 0),
   screwHead: item.screwHead || '',
+  accessoryThreadSize: item.accessoryThreadSize || '',
+  hasBrake: Boolean(item.hasBrake),
+  attachedEnd: item.kind === 'end_cap' ? item.attachedEnd || '' : '',
   accessoryPrice: Number(item.accessoryPrice || 0),
 });
 
@@ -4939,6 +8639,30 @@ const getProfileMachiningSummary = (item: DIYSceneItem, language: Language) => {
 
 const profileFinishForColor = (colorId: string) => (colorId === 'natural' ? 'oxidized' : 'powder');
 
+const getCabinetDoorPricing = (item: DIYSceneItem, user?: User | null) => {
+  const membership = normalizeMembershipLevel(user?.membershipLevel);
+  const areaSqm = ((item.width || 0) * (item.height || 0)) / 1_000_000;
+  const chargedArea = areaSqm > 0 && areaSqm < MIN_BOARD_AREA ? MIN_BOARD_AREA : areaSqm;
+  const material = item.doorMaterial || 'aluminum';
+  const thickness = material === 'marine' ? Math.max(12, item.thickness || 18) : 2;
+  const unitRate = material === 'aluminum'
+    ? (membership === 'vip_plus' ? VIP_PLUS_ALUMINUM_DOOR_PRICE : ALUMINUM_PLATE_PRICE[2])
+    : material === 'pegboard'
+      ? (membership === 'vip_plus' ? VIP_PLUS_PEGBOARD_DOOR_PRICE : PEGBOARD_PRICE[2])
+      : (MARINE_BOARD_PRICE[thickness] || 0) + (isMarineNaturalColor(item.colorId) ? 0 : MARINE_COLOR_SURCHARGE);
+  const hingeCount = getDoorHingePositions(item.height || 0).length;
+  const hingeFee = hingeCount * DOOR_HINGE_UNIT_PRICE;
+  return {
+    areaSqm,
+    chargedArea,
+    thickness,
+    unitRate,
+    hingeCount,
+    hingeFee,
+    unitPrice: Number((chargedArea * unitRate + hingeFee).toFixed(1)),
+  };
+};
+
 const calculatePrice = (item: DIYSceneItem, user?: User | null) => {
   const quantity = Math.max(1, item.quantity || 1);
   if (item.kind === 'profile') {
@@ -4962,9 +8686,13 @@ const calculatePrice = (item: DIYSceneItem, user?: User | null) => {
         : (MARINE_BOARD_PRICE[thickness] || 0) + (isMarineNaturalColor(item.colorId) ? 0 : MARINE_COLOR_SURCHARGE);
     return Number((area * rate * quantity).toFixed(1));
   }
+  if (item.kind === 'cabinet_door') return getCabinetDoorPricing(item, user).unitPrice;
   if (item.kind === 'shelf_support') {
     return Number((getShelfSupportUnitPrice(item.thickness || 0, item.finish || 'oxidized') * quantity).toFixed(2));
   }
+  if (item.kind === 'caster') return Number((getCasterEstimatedUnitPrice(item) * quantity).toFixed(1));
+  if (item.kind === 'foot') return Number((FOOT_ESTIMATED_PRICE * quantity).toFixed(1));
+  if (item.kind === 'end_cap') return Number((getEndCapEstimatedUnitPrice(item) * quantity).toFixed(1));
   const standardAccessoryPrice = getStandardAccessoryUnitPrice(item);
   return Number((((standardAccessoryPrice ?? item.accessoryPrice) || 0) * quantity).toFixed(1));
 };
@@ -4984,6 +8712,48 @@ const NumberField: React.FC<{ label: string; value: number; min?: number; max?: 
   </label>
 );
 
+const removeItemsWithOwnedEndTapping = (source: DIYSceneItem[], requestedIds: Set<string>) => {
+  const removedProfileIds = new Set(source
+    .filter((item) => requestedIds.has(item.id) && item.kind === 'profile')
+    .map((item) => item.id));
+  const removalIds = new Set(requestedIds);
+  source.forEach((item) => {
+    if (
+      item.attachmentKey?.startsWith('PANEL:')
+      && item.attachedProfileIds?.some((attachmentId) => requestedIds.has(attachmentId))
+      && isConnectionAccessoryKind(item.kind)
+    ) {
+      removalIds.add(item.id);
+    }
+    if (item.kind === 'end_cap' && item.attachedProfileIds?.some((profileId) => removedProfileIds.has(profileId))) {
+      removalIds.add(item.id);
+    }
+    if (item.kind === 'cabinet_door' && item.attachedProfileIds?.some((profileId) => removedProfileIds.has(profileId))) {
+      removalIds.add(item.id);
+    }
+  });
+  const removedOwnedCaps = source.filter((item) => (
+    removalIds.has(item.id)
+    && item.kind === 'end_cap'
+    && item.autoAddedTapping
+    && item.attachedEnd
+    && item.attachedProfileIds?.[0]
+  ));
+  const remaining = source.filter((item) => !removalIds.has(item.id));
+  return remaining.map((item) => {
+    if (item.kind !== 'profile') return item;
+    const removeLeft = removedOwnedCaps.some((cap) => cap.attachedProfileIds?.[0] === item.id && cap.attachedEnd === 'left')
+      && !remaining.some((cap) => cap.kind === 'end_cap' && cap.attachedProfileIds?.[0] === item.id && cap.attachedEnd === 'left');
+    const removeRight = removedOwnedCaps.some((cap) => cap.attachedProfileIds?.[0] === item.id && cap.attachedEnd === 'right')
+      && !remaining.some((cap) => cap.kind === 'end_cap' && cap.attachedProfileIds?.[0] === item.id && cap.attachedEnd === 'right');
+    return {
+      ...item,
+      ...(removeLeft ? { tappingLeft: false } : {}),
+      ...(removeRight ? { tappingRight: false } : {}),
+    };
+  });
+};
+
 const DIYDesigner: React.FC<DIYDesignerProps> = ({ language, onLanguageChange, user, onAddBatchToCart }) => {
   const t = TEXT[language];
   const navigate = useNavigate();
@@ -5002,9 +8772,12 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({ language, onLanguageChange, u
   const [threadSize, setThreadSize] = useState<ThreadSize>('M6');
   const [drillMode, setDrillMode] = useState(false);
   const [drillSetupOpen, setDrillSetupOpen] = useState(false);
-  const [pendingProfile, setPendingProfile] = useState<{ variantId: string; length: number } | null>(null);
+  const [profileDrawTemplate, setProfileDrawTemplate] = useState<DIYSceneItem | null>(null);
+  const [libraryProfileVariantId, setLibraryProfileVariantId] = useState('2020');
+  const [accessoryPlacementTemplate, setAccessoryPlacementTemplate] = useState<DIYSceneItem | null>(null);
   const [selectedAccessoryProfileSize, setSelectedAccessoryProfileSize] = useState<DIYAccessoryProfileSize>('2020');
   const [fileMenu, setFileMenu] = useState<'json' | 'excel' | null>(null);
+  const [projectPanelCollapsed, setProjectPanelCollapsed] = useState(false);
   const [maycadImporting, setMaycadImporting] = useState(false);
   const [maycadReview, setMaycadReview] = useState<{ source: string; confidence?: number; warnings: string[] } | null>(null);
   const [maycadProfileReviewPrompt, setMaycadProfileReviewPrompt] = useState<{
@@ -5018,6 +8791,11 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({ language, onLanguageChange, u
   const loadedTemplateTokenRef = useRef<string | null>(null);
 
   const selected = items.find((item) => item.id === selectedId) || null;
+  const selectedFrameProfileIds = selectedIds.filter((id) => items.some((item) => item.id === id && item.kind === 'profile'));
+  const cabinetDoorOpening = useMemo(() => detectCabinetDoorOpening(
+    items,
+    selectedFrameProfileIds.length >= 4 ? new Set(selectedFrameProfileIds) : undefined,
+  ), [items, selectedFrameProfileIds.join('|')]);
   const selectedTapPortCount = selected?.kind === 'profile' ? getProfileTapPortCount(selected.variantId) : 0;
   const selectedTappingMode = selected?.kind === 'profile'
     ? selected.tappingLeft && selected.tappingRight
@@ -5066,11 +8844,20 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({ language, onLanguageChange, u
         || patch.rotation !== undefined
         || patch.height !== undefined
         || patch.width !== undefined);
-    const candidate = {
+    let candidate = {
       ...selected,
       ...patch,
       ...(detachLinkedScrew ? { autoGenerated: false, linkedProfileId: undefined, linkedHoleId: undefined } : {}),
     };
+    if (selected.kind === 'profile') {
+      const hasLeftCap = items.some((item) => item.kind === 'end_cap' && item.attachedProfileIds?.[0] === selected.id && item.attachedEnd === 'left');
+      const hasRightCap = items.some((item) => item.kind === 'end_cap' && item.attachedProfileIds?.[0] === selected.id && item.attachedEnd === 'right');
+      candidate = {
+        ...candidate,
+        tappingLeft: hasLeftCap ? true : candidate.tappingLeft,
+        tappingRight: hasRightCap ? true : candidate.tappingRight,
+      };
+    }
     const changesProfileEnvelope = selected.kind === 'profile'
       && (patch.length !== undefined || patch.variantId !== undefined);
     if (changesProfileEnvelope && profileItemCollides(candidate, items)) return;
@@ -5090,13 +8877,13 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({ language, onLanguageChange, u
   };
 
   const deleteItem = (itemId: string) => {
-    commit(items.filter((item) => item.id !== itemId), null);
+    commit(removeItemsWithOwnedEndTapping(items, new Set([itemId])), null);
   };
 
   const deleteSelected = () => {
     if (!selectedIds.length) return;
-    const selectedSet = new Set(selectedIds);
-    commit(items.filter((item) => !selectedSet.has(item.id)), null);
+    const selectedSet = new Set<string>(selectedIds as string[]);
+    commit(removeItemsWithOwnedEndTapping(items, selectedSet), null);
   };
 
   const fillScrews = () => {
@@ -5136,13 +8923,241 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({ language, onLanguageChange, u
     showNotice(`${t.screwsFilled} · ${added + updated}`);
   };
 
+  const applyConnectionMode = (mode: DIYAutoConnectionMode, onlyJointKeys?: Set<string>) => {
+    const allJoints = autoConnectionJoints(items);
+    const joints = onlyJointKeys
+      ? allJoints.filter((joint) => onlyJointKeys.has(joint.key))
+      : allJoints;
+    if (!joints.length) {
+      showNotice(t.noCompatibleConnections);
+      return;
+    }
+
+    const targetJointKeys = new Set(joints.map((joint) => joint.key));
+    const targetDrillTapKeys = new Set(joints.map((joint) => `${joint.key}:DRILL-TAP`));
+    const desiredKind: DIYConnectionKind | null = mode === 'corner_bracket'
+      ? 'connector'
+      : mode === 'slot_connector'
+        ? 'hidden_connector'
+        : null;
+    let baseItems = items.flatMap((item) => {
+      const attachedToTargetJoint = item.attachmentKey
+        ? Array.from(targetJointKeys).some((jointKey) => (
+          item.attachmentKey === jointKey || item.attachmentKey.startsWith(`${jointKey}:`)
+        ))
+        : false;
+      if (
+        isConnectionAccessoryKind(item.kind)
+        && attachedToTargetJoint
+        && item.kind !== desiredKind
+      ) return [];
+      if (item.kind !== 'profile' || mode === 'drill_tap') return [item];
+      const holes = (item.holes || []).filter((hole) => !hole.jointKey || !targetDrillTapKeys.has(hole.jointKey));
+      return holes.length === (item.holes || []).length ? [item] : [{ ...item, holes }];
+    });
+    if (mode !== 'drill_tap') {
+      const installedDrillTapKeys = new Set(items.flatMap((item) => (
+        item.kind === 'profile' ? (item.holes || []).map((hole) => hole.jointKey).filter(Boolean) : []
+      )));
+      const removedTapPlans = joints
+        .map(drillTapJointPlan)
+        .filter((plan): plan is DrillTapJointPlan => Boolean(plan) && installedDrillTapKeys.has(plan!.jointKey));
+      const remainingDrillTapKeys = new Set(baseItems.flatMap((item) => (
+        item.kind === 'profile' ? (item.holes || []).map((hole) => hole.jointKey).filter(Boolean) : []
+      )));
+      const remainingTapPlans = allJoints
+        .map(drillTapJointPlan)
+        .filter((plan): plan is DrillTapJointPlan => Boolean(plan) && remainingDrillTapKeys.has(plan!.jointKey));
+      baseItems = baseItems.map((item) => {
+        if (item.kind !== 'profile') return item;
+        const removedLeft = removedTapPlans.some((plan) => plan.tappedProfile.id === item.id && plan.tappedEnd < 0);
+        const removedRight = removedTapPlans.some((plan) => plan.tappedProfile.id === item.id && plan.tappedEnd > 0);
+        if (!removedLeft && !removedRight) return item;
+        return {
+          ...item,
+          tappingLeft: removedLeft && !remainingTapPlans.some((plan) => plan.tappedProfile.id === item.id && plan.tappedEnd < 0)
+            ? false
+            : item.tappingLeft,
+          tappingRight: removedRight && !remainingTapPlans.some((plan) => plan.tappedProfile.id === item.id && plan.tappedEnd > 0)
+            ? false
+            : item.tappingRight,
+        };
+      });
+    }
+
+    if (mode === 'drill_tap') {
+      const existingJointKeys = new Set(baseItems.flatMap((item) => (
+        item.kind === 'profile' ? (item.holes || []).map((hole) => hole.jointKey).filter(Boolean) : []
+      )));
+      const plans = joints
+        .map(drillTapJointPlan)
+        .filter((plan): plan is DrillTapJointPlan => Boolean(plan) && !existingJointKeys.has(plan!.jointKey));
+      if (!plans.length) {
+        showNotice(t.connectionsUpToDate);
+        return;
+      }
+      const nextProfiles = baseItems.map((item) => {
+        if (item.kind !== 'profile') return item;
+        const drilledPlans = plans.filter((plan) => plan.drilledProfile.id === item.id);
+        const tappedPlans = plans.filter((plan) => plan.tappedProfile.id === item.id);
+        if (!drilledPlans.length && !tappedPlans.length) return item;
+        return {
+          ...item,
+          holes: [...(item.holes || []), ...drilledPlans.map((plan) => plan.hole)],
+          tappingLeft: item.tappingLeft || tappedPlans.some((plan) => plan.tappedEnd < 0),
+          tappingRight: item.tappingRight || tappedPlans.some((plan) => plan.tappedEnd > 0),
+        };
+      });
+      commit(withAutoFilledScrews(syncLinkedScrews(nextProfiles)), selectedId);
+      showNotice(`${t.connectionsGenerated} · ${plans.length}`);
+      return;
+    }
+
+    const kind = desiredKind as DIYConnectionKind;
+    const validJointKeys = new Set(joints.map((joint) => joint.key));
+    const existingKeys = new Set<string>(baseItems
+      .filter((item) => item.kind === kind && Boolean(item.attachmentKey))
+      .map((item) => item.attachmentKey as string));
+    const generated: DIYSceneItem[] = [];
+    (['2020', '3030'] as const).forEach((series) => {
+      const probe = createItem(kind, 0, series);
+      accessoryPlacementCandidates(probe, baseItems)
+        .filter((placement) => {
+          const jointKey = joints.find((joint) => placement.targetProfileIds.includes(joint.first.id)
+            && placement.targetProfileIds.includes(joint.second.id))?.key;
+          return placement.joint
+            && Boolean(jointKey && validJointKeys.has(jointKey))
+            && !existingKeys.has(placement.key)
+            && ![...existingKeys].some((key) => key === jointKey || key.startsWith(`${jointKey}:`));
+        })
+        .forEach((placement) => {
+          generated.push({
+            ...createItem(kind, baseItems.length + generated.length, series),
+            position: [
+              Math.round(placement.position.x * SCENE_SCALE),
+              Math.round(placement.position.y * SCENE_SCALE),
+              Math.round(placement.position.z * SCENE_SCALE),
+            ],
+            rotation: placement.rotation,
+            lockedPosition: true,
+            autoGenerated: true,
+            attachedProfileIds: placement.targetProfileIds,
+            attachmentKey: placement.key,
+          });
+          existingKeys.add(placement.key);
+        });
+    });
+    if (!generated.length) {
+      if (baseItems.length !== items.length || baseItems.some((item, index) => item !== items[index])) {
+        commit(syncLinkedScrews(baseItems), selectedId);
+        showNotice(`${t.connectionsGenerated} · ${joints.length}`);
+        return;
+      }
+      showNotice(t.connectionsUpToDate);
+      return;
+    }
+    commit(syncLinkedScrews([...baseItems, ...generated]), selectedId);
+    showNotice(`${t.connectionsGenerated} · ${generated.length}`);
+  };
+
+  const generateConnections = (mode: DIYAutoConnectionMode) => applyConnectionMode(mode);
+
+  const deleteConnections = (mode: DIYAutoConnectionMode, onlyJointKeys?: Set<string>) => {
+    const allJoints = autoConnectionJoints(items);
+    const joints = onlyJointKeys
+      ? allJoints.filter((joint) => onlyJointKeys.has(joint.key))
+      : allJoints;
+    if (!joints.length) {
+      showNotice(t.noConnectionsToDelete);
+      return;
+    }
+    const targetJointKeys = new Set(joints.map((joint) => joint.key));
+    let deleted = 0;
+    let next: DIYSceneItem[] = items;
+
+    if (mode === 'corner_bracket' || mode === 'slot_connector') {
+      const kind: DIYConnectionKind = mode === 'corner_bracket' ? 'connector' : 'hidden_connector';
+      next = items.filter((item) => {
+        const attachmentKey = item.attachmentKey || '';
+        const shouldDelete = item.kind === kind
+          && Boolean(attachmentKey)
+          && [...targetJointKeys].some((jointKey) => (
+            attachmentKey === jointKey || attachmentKey.startsWith(`${jointKey}:`)
+          ));
+        if (shouldDelete) deleted += 1;
+        return !shouldDelete;
+      });
+    } else {
+      const targetDrillTapKeys = new Set(joints.map((joint) => `${joint.key}:DRILL-TAP`));
+      const installedDrillTapKeys = new Set(items.flatMap((item) => (
+        item.kind === 'profile' ? (item.holes || []).map((hole) => hole.jointKey).filter(Boolean) : []
+      )));
+      const removedTapPlans = joints
+        .map(drillTapJointPlan)
+        .filter((plan): plan is DrillTapJointPlan => Boolean(plan) && installedDrillTapKeys.has(plan!.jointKey));
+      next = items.map((item) => {
+        if (item.kind !== 'profile') return item;
+        const holes = (item.holes || []).filter((hole) => {
+          const shouldDelete = Boolean(hole.jointKey) && targetDrillTapKeys.has(hole.jointKey!);
+          if (shouldDelete) deleted += 1;
+          return !shouldDelete;
+        });
+        return holes.length === (item.holes || []).length ? item : { ...item, holes };
+      });
+      const remainingDrillTapKeys = new Set(next.flatMap((item) => (
+        item.kind === 'profile' ? (item.holes || []).map((hole) => hole.jointKey).filter(Boolean) : []
+      )));
+      const remainingTapPlans = allJoints
+        .map(drillTapJointPlan)
+        .filter((plan): plan is DrillTapJointPlan => Boolean(plan) && remainingDrillTapKeys.has(plan!.jointKey));
+      next = next.map((item) => {
+        if (item.kind !== 'profile') return item;
+        const removedLeft = removedTapPlans.some((plan) => plan.tappedProfile.id === item.id && plan.tappedEnd < 0);
+        const removedRight = removedTapPlans.some((plan) => plan.tappedProfile.id === item.id && plan.tappedEnd > 0);
+        if (!removedLeft && !removedRight) return item;
+        return {
+          ...item,
+          tappingLeft: removedLeft && !remainingTapPlans.some((plan) => plan.tappedProfile.id === item.id && plan.tappedEnd < 0)
+            ? false
+            : item.tappingLeft,
+          tappingRight: removedRight && !remainingTapPlans.some((plan) => plan.tappedProfile.id === item.id && plan.tappedEnd > 0)
+            ? false
+            : item.tappingRight,
+        };
+      });
+      next = syncLinkedScrews(next);
+    }
+
+    if (!deleted) {
+      showNotice(t.noConnectionsToDelete);
+      return;
+    }
+    const nextSelectedId = selectedId && next.some((item) => item.id === selectedId) ? selectedId : null;
+    commit(next, nextSelectedId);
+    showNotice(`${t.connectionsDeleted} · ${deleted}`);
+  };
+
+  const applyConnectionAtJoint = (mode: DIYAutoConnectionMode, jointKey: string) => {
+    const joint = autoConnectionJoints(items).find((entry) => entry.key === jointKey);
+    if (!joint) {
+      showNotice(t.noCompatibleConnections);
+      return;
+    }
+    if (accessoryEditJointStatus(items, joint, mode) === 'installed') {
+      deleteConnections(mode, new Set([jointKey]));
+      return;
+    }
+    applyConnectionMode(mode, new Set([jointKey]));
+  };
+
   const duplicateSelected = () => {
     if (!selectedIds.length) return;
     const selectedSet = new Set(selectedIds);
-    const duplicates = items.filter((item) => selectedSet.has(item.id)).map((item) => ({
+    const duplicates = items.filter((item) => selectedSet.has(item.id) && item.kind !== 'end_cap' && item.kind !== 'cabinet_door').map((item) => ({
       ...duplicateSceneItem(item),
       position: [item.position[0] + 80, item.position[1] + 80, item.position[2]] as Vec3,
     }));
+    if (!duplicates.length) return;
     const next = [...items, ...duplicates];
     commit(next, duplicates[duplicates.length - 1]?.id || null);
     setSelectedIds(duplicates.map((item) => item.id));
@@ -5151,7 +9166,14 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({ language, onLanguageChange, u
   const updateSelectedItems = (patch: Partial<DIYSceneItem>) => {
     if (!selectedIds.length) return;
     const selectedSet = new Set(selectedIds);
-    commit(items.map((item) => selectedSet.has(item.id) ? { ...item, ...patch } : item), selectedIds[selectedIds.length - 1]);
+    commit(items.map((item) => {
+      if (!selectedSet.has(item.id)) return item;
+      if (patch.colorId && (item.kind === 'caster' || item.kind === 'foot')) return item;
+      const updated = { ...item, ...patch };
+      return item.kind === 'end_cap' && patch.colorId
+        ? { ...updated, accessoryPrice: getEndCapEstimatedUnitPrice(updated) }
+        : updated;
+    }), selectedIds[selectedIds.length - 1]);
     setSelectedIds((current) => current.filter((id) => items.some((item) => item.id === id)));
   };
 
@@ -5185,7 +9207,71 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({ language, onLanguageChange, u
 
   const addItem = (kind: DIYItemKind, variantId?: string) => {
     if (kind === 'profile') {
-      setPendingProfile({ variantId: variantId || '2020', length: 200 });
+      startProfileDrawFromVariant(variantId || libraryProfileVariantId);
+      return;
+    }
+    if (kind === 'cabinet_door') {
+      if (!cabinetDoorOpening) {
+        showNotice(t.doorNeedFrame);
+        return;
+      }
+      if (items.some((item) => item.kind === 'cabinet_door' && item.attachmentKey === cabinetDoorOpening.key)) {
+        showNotice(t.doorAlreadyAdded);
+        return;
+      }
+      const door = fitCabinetDoorToOpening(createItem('cabinet_door', items.length), cabinetDoorOpening);
+      if ((door.width || 0) > 1500 || (door.height || 0) > 3000) {
+        showNotice(t.doorSizeUnsupported);
+        return;
+      }
+      commit([...items, door], door.id);
+      showNotice(t.doorAdded);
+      return;
+    }
+    if (kind === 'end_cap') {
+      if (!selected || selected.kind !== 'profile') {
+        showNotice(t.endCapSelectProfile);
+        return;
+      }
+      const occupiedEnds = new Set(items
+        .filter((item) => item.kind === 'end_cap' && item.attachedProfileIds?.[0] === selected.id)
+        .map((item) => item.attachedEnd));
+      const missingEnds = (['left', 'right'] as const).filter((end) => !occupiedEnds.has(end));
+      if (!missingEnds.length) {
+        showNotice(t.endCapBothOccupied);
+        return;
+      }
+      const [width, height] = profileSize(selected.variantId);
+      const endCaps = missingEnds.map((attachedEnd, endIndex) => {
+        const placement = endCapPlacementForProfile(selected, attachedEnd);
+        const autoAddedTapping = attachedEnd === 'left' ? !selected.tappingLeft : !selected.tappingRight;
+        return {
+          ...createItem('end_cap', items.length + endIndex, selected.variantId),
+          width,
+          height,
+          thickness: 3,
+          colorId: selected.colorId,
+          accessoryPrice: getEndCapEstimatedUnitPrice({ colorId: selected.colorId, quantity: 1 }),
+          position: placement.position,
+          rotation: placement.rotation,
+          attachedEnd,
+          autoAddedTapping,
+          autoGenerated: true,
+          lockedPosition: true,
+          attachedProfileIds: [selected.id],
+          attachmentKey: placement.key,
+        } satisfies DIYSceneItem;
+      });
+      const updatedProfile = {
+        ...selected,
+        ...(missingEnds.includes('left') ? { tappingLeft: true } : {}),
+        ...(missingEnds.includes('right') ? { tappingRight: true } : {}),
+      };
+      commit(
+        [...items.map((item) => item.id === selected.id ? updatedProfile : item), ...endCaps],
+        endCaps[endCaps.length - 1].id,
+      );
+      showNotice(t.endCapInstalled);
       return;
     }
     const accessorySeries = isConnectionAccessoryKind(kind)
@@ -5194,6 +9280,15 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({ language, onLanguageChange, u
         : selectedAccessoryProfileSize)
       : undefined;
     if (isConnectionAccessoryKind(kind) && !ACCESSORY_PRICES[kind][accessorySeries!]) return;
+    if (kind === 'connector' || kind === 'l_connector' || kind === 't_connector' || kind === 'tee_connector') {
+      const template = createItem(kind, items.length, accessorySeries);
+      setAccessoryPlacementTemplate(template);
+      setProfileDrawTemplate(null);
+      setDrillMode(false);
+      setSelectedId(null);
+      if (!accessoryPlacementCandidates(template, items).length) showNotice(t.noCompatibleJoint);
+      return;
+    }
     let item = createItem(kind, items.length, accessorySeries || variantId);
     const selectedProfileId = selected?.kind === 'profile' ? selected.id : null;
     if (isConnectionAccessoryKind(kind) && selectedProfileId) {
@@ -5220,6 +9315,44 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({ language, onLanguageChange, u
     }
     commit([...items, item], item.id);
     if (item.lockedPosition) showNotice(t.accessorySnapped);
+  };
+
+  const commitAccessoryPlacement = (template: DIYSceneItem, placement: AccessoryPlacement) => {
+    const placed: DIYSceneItem = {
+      ...createItem(template.kind, items.length, template.accessoryProfileSize || template.variantId),
+      position: [
+        Math.round(placement.position.x * SCENE_SCALE),
+        Math.round(placement.position.y * SCENE_SCALE),
+        Math.round(placement.position.z * SCENE_SCALE),
+      ],
+      rotation: placement.rotation,
+      lockedPosition: true,
+      attachedProfileIds: placement.targetProfileIds,
+      attachmentKey: placement.key,
+    };
+    const adjustments = new Map((placement.profileAdjustments || []).map((adjustment) => [adjustment.id, adjustment]));
+    let next = items.map((item) => {
+      const adjustment = adjustments.get(item.id);
+      return adjustment && item.kind === 'profile'
+        ? {
+          ...item,
+          length: adjustment.length,
+          position: adjustment.position,
+          holes: (item.holes || []).filter((hole) => hole.positionMm <= adjustment.length - 5),
+        }
+        : item;
+    });
+    const existingIndex = next.findIndex((item) => (
+      item.kind === template.kind
+      && item.attachmentKey === placement.key
+    ));
+    if (existingIndex >= 0) {
+      next = next.map((item, index) => index === existingIndex ? { ...placed, id: item.id } : item);
+    } else {
+      next = [...next, placed];
+    }
+    commit(next, null);
+    showNotice(t.accessoryPlacementSuccess);
   };
 
   const installSelectedAccessory = () => {
@@ -5261,14 +9394,52 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({ language, onLanguageChange, u
     });
   };
 
-  const confirmProfileLength = () => {
-    if (!pendingProfile) return;
-    const item = {
-      ...createItem('profile', items.length, pendingProfile.variantId),
-      length: THREE.MathUtils.clamp(Math.round(pendingProfile.length), 21, 3000),
+  const startProfileDrawFromVariant = (variantId: string) => {
+    const template = createItem('profile', items.length, variantId);
+    setDrillMode(false);
+    setAccessoryPlacementTemplate(null);
+    setSelectedId(null);
+    setProfileDrawTemplate({
+      ...template,
+      holes: [],
+      tappingLeft: false,
+      tappingRight: false,
+      lockedPosition: false,
+      attachedProfileIds: undefined,
+      attachmentKey: undefined,
+    });
+  };
+
+  const restorePointerMode = () => {
+    setProfileDrawTemplate(null);
+    setAccessoryPlacementTemplate(null);
+    setDrillMode(false);
+    setDrillSetupOpen(false);
+  };
+
+  const commitProfileDraw = (draft: ProfileDrawCommit) => {
+    if (!profileDrawTemplate) return;
+    const item: DIYSceneItem = {
+      ...createItem('profile', items.length, profileDrawTemplate.variantId),
+      name: profileDrawTemplate.name,
+      variantId: profileDrawTemplate.variantId,
+      colorId: profileDrawTemplate.colorId,
+      finish: profileDrawTemplate.finish,
+      position: draft.position,
+      rotation: draft.rotation,
+      length: THREE.MathUtils.clamp(Math.round(draft.length), 21, 3000),
+      holes: [],
+      tappingLeft: false,
+      tappingRight: false,
+      remark: '',
     };
+    // The scene already blocks this visually. Keep the data boundary defensive
+    // so stale pointer events can never manufacture overlapping members.
+    if (profileItemCollides(item, items)) {
+      showNotice(t.freeDrawOverlap);
+      return;
+    }
     commit([...items, item], item.id);
-    setPendingProfile(null);
   };
 
   const openDrillSetup = () => {
@@ -5474,6 +9645,7 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({ language, onLanguageChange, u
     const plateProduct = INITIAL_PRODUCTS.find((product) => product.type === ProductType.ALUMINUM_PLATE)!;
     const pegboardProduct = INITIAL_PRODUCTS.find((product) => product.type === ProductType.PEGBOARD)!;
     const marineProduct = INITIAL_PRODUCTS.find((product) => product.type === ProductType.MARINE_BOARD)!;
+    const cabinetDoorProduct = INITIAL_PRODUCTS.find((product) => product.type === ProductType.CABINET_DOOR)!;
     const accessoryProduct: Product = {
       id: 'accessory',
       type: ProductType.ACCESSORY,
@@ -5502,6 +9674,57 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({ language, onLanguageChange, u
           remark: item.remark?.trim() || undefined,
         };
         return { id: makeId(), product: profileProduct, quantity: item.quantity, config, totalPrice };
+      }
+      if (item.kind === 'cabinet_door') {
+        const pricing = getCabinetDoorPricing(item, user);
+        const hingePositions = getDoorHingePositions(item.height || 0);
+        const baseProduct = item.doorMaterial === 'marine'
+          ? marineProduct
+          : item.doorMaterial === 'pegboard' ? pegboardProduct : cabinetDoorProduct;
+        const product: Product = {
+          ...baseProduct,
+          name: item.doorMaterial === 'marine'
+            ? { cn: '海洋板门', en: 'Marine-board Door', jp: 'マリンボード扉' }
+            : item.doorMaterial === 'pegboard'
+              ? { cn: '铝洞洞板门', en: 'Aluminum Pegboard Door', jp: 'アルミペグボード扉' }
+              : { cn: '铝柜门', en: 'Aluminum Cabinet Door', jp: 'アルミ扉' },
+        };
+        const config = {
+          width: item.width,
+          height: item.height,
+          thickness: pricing.thickness,
+          colorId: item.colorId,
+          colorName: getSceneItemColorName(item, language),
+          cabinetDoor: true,
+          doorMaterial: item.doorMaterial || 'aluminum',
+          doorOverlay: item.doorOverlay || 'full',
+          openingSide: item.openingSide || 'left',
+          marginMm: 2,
+          hingeSide: item.openingSide || 'left',
+          hingePositions,
+          hingePositionsMm: hingePositions,
+          topHingeOffset: hingePositions.length ? Math.max(0, (item.height || 0) - hingePositions[hingePositions.length - 1]) : 0,
+          bottomHingeOffset: hingePositions[0] || 0,
+          hingeGaps: hingePositions.slice(1).map((position, index) => position - hingePositions[index]),
+          hingeCount: pricing.hingeCount,
+          hingeUnitPrice: DOOR_HINGE_UNIT_PRICE,
+          hingeFeePerPiece: pricing.hingeFee,
+          unitPrice: pricing.unitPrice,
+          areaSqm: pricing.areaSqm,
+          chargedArea: pricing.chargedArea,
+          unitRate: pricing.unitRate,
+          minAreaApplied: pricing.areaSqm > 0 && pricing.areaSqm < MIN_BOARD_AREA,
+          pegHolePattern: item.doorMaterial === 'pegboard' ? 'ikea' : undefined,
+          marineSpecId: item.doorMaterial === 'marine' ? 'marine_bbb_uv_film' : undefined,
+          frameThicknessMm: item.doorMaterial === 'aluminum' ? 18 : undefined,
+          autoFitFrame: true,
+          attachedProfileIds: item.attachedProfileIds,
+          attachmentKey: item.attachmentKey,
+          diyPosition: item.position,
+          diyRotation: item.rotation,
+          remark: item.remark?.trim() || undefined,
+        };
+        return { id: makeId(), product, quantity: 1, config, totalPrice };
       }
       if (item.kind === 'plate' || item.kind === 'pegboard' || item.kind === 'marine_board') {
         const product = item.kind === 'plate' ? plateProduct : item.kind === 'pegboard' ? pegboardProduct : marineProduct;
@@ -5552,16 +9775,18 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({ language, onLanguageChange, u
             ? { id: 'diy-socket-cylinder-screw', code: 3, label: t.socketCylinderScrew, imageKey: '3' }
             : { id: 'diy-socket-head-screw', code: 3, label: t.screw, imageKey: '3' },
         foot: { id: 'diy-leveling-foot', code: 8, label: t.foot, imageKey: '8' },
+        caster: { id: 'diy-threaded-caster', code: 0, label: t.caster, imageKey: '' },
+        end_cap: { id: 'diy-profile-end-cap', code: 0, label: t.endCap, imageKey: '' },
         shelf_support: { id: 'diy-shelf-support', code: 0, label: t.shelfSupport, imageKey: '' },
-      }[item.kind as 'connector' | 'extruded_connector' | 'l_connector' | 't_connector' | 'hidden_connector' | 'tee_connector' | 'screw' | 'foot' | 'shelf_support'];
+      }[item.kind as 'connector' | 'extruded_connector' | 'l_connector' | 't_connector' | 'hidden_connector' | 'tee_connector' | 'screw' | 'foot' | 'caster' | 'end_cap' | 'shelf_support'];
       const accessoryId = accessoryDefinition.id;
       const unitPrice = Number((totalPrice / Math.max(1, item.quantity)).toFixed(2));
       const linkedProfile = item.linkedProfileId
         ? items.find((candidate) => candidate.kind === 'profile' && candidate.id === item.linkedProfileId)
         : undefined;
-      const compatibleProfileSize = item.accessoryProfileSize
+      const compatibleProfileSize = (item.kind === 'end_cap' ? item.variantId : item.accessoryProfileSize)
         || (linkedProfile ? profileAccessorySeriesFromVariant(linkedProfile.variantId) : undefined)
-        || '2020';
+        || (item.kind === 'caster' || item.kind === 'foot' ? 'universal' : '2020');
       const renderedScrewLengthMm = item.kind === 'screw' ? Math.max(1, Math.round(item.height || 35)) : undefined;
       const screwOrderSpec = item.kind === 'screw'
         ? getDiyScrewOrderSpec(compatibleProfileSize, item.screwHead, renderedScrewLengthMm || 1)
@@ -5572,9 +9797,15 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({ language, onLanguageChange, u
         ? Math.max(1, Math.round(item.thickness || 0))
         : undefined;
       const accessoryLineName = item.kind === 'screw'
-        ? `${accessoryDefinition.label} · ${screwThreadSize}×${screwLengthMm}`
+        ? `${accessoryDefinition.label} · ${screwThreadSize}×${screwLengthMm}${screwOrderSpec?.includesElasticFastener ? ` + ${t.elasticFastener}` : ''}`
         : item.kind === 'shelf_support'
           ? `${accessoryDefinition.label} · ${getShelfSupportFinishLabel(item, t)} · ${accessoryLengthMm}mm`
+          : item.kind === 'caster'
+            ? `${accessoryDefinition.label} · ${item.accessoryThreadSize || 'M8'} · ${item.hasBrake ? t.casterWithBrake : t.casterWithoutBrake}`
+            : item.kind === 'foot'
+              ? `${accessoryDefinition.label} · ${Math.round(item.height || 60)}mm · M8`
+            : item.kind === 'end_cap'
+              ? `${accessoryDefinition.label} · ${item.variantId || item.accessoryProfileSize || '2020'} · ${item.attachedEnd === 'right' ? t.rightEnd : t.leftEnd}`
           : accessoryDefinition.label;
       return {
         id: makeId(),
@@ -5585,7 +9816,7 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({ language, onLanguageChange, u
           profileSize: compatibleProfileSize,
           colorMode: item.colorId === 'natural' ? 'natural' : 'colored',
           colorId: item.colorId,
-          colorName: PROFILE_COLORS.find((color) => color.id === item.colorId)?.name[language] || item.colorId,
+          colorName: getDesignerColorName(item.colorId, language, item.kind),
           finish: item.kind === 'shelf_support' ? (item.finish || 'oxidized') : undefined,
           quantities: { [accessoryId]: item.quantity },
           totalQuantity: item.quantity,
@@ -5605,10 +9836,15 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({ language, onLanguageChange, u
           screwHead: item.screwHead,
           screwLengthMm,
           screwThreadSize,
+          includesElasticFastener: screwOrderSpec?.includesElasticFastener,
           renderedScrewLengthMm,
           accessoryLengthMm,
           accessoryWidthMm: item.kind === 'shelf_support' ? item.width : undefined,
           accessoryHeightMm: item.kind === 'shelf_support' ? item.height : undefined,
+          accessoryThreadSize: item.accessoryThreadSize,
+          hasBrake: item.hasBrake,
+          attachedEnd: item.attachedEnd,
+          autoAddedTapping: item.autoAddedTapping,
           linkedProfileId: item.linkedProfileId,
           linkedProfileVariantId: linkedProfile?.variantId,
           linkedHoleId: item.linkedHoleId,
@@ -5681,16 +9917,10 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({ language, onLanguageChange, u
 
   const paletteGroups = [
     {
-      id: 'profiles',
-      label: t.profileParts,
+      id: 'materials',
+      label: '',
       items: [
-        { kind: 'profile' as const, label: t.profile, icon: Box },
-      ],
-    },
-    {
-      id: 'panels',
-      label: t.panelParts,
-      items: [
+        { kind: 'cabinet_door' as const, label: t.cabinetDoor, icon: PanelTop },
         { kind: 'plate' as const, label: t.plate, icon: PanelTop },
         { kind: 'pegboard' as const, label: t.pegboard, icon: Grid3X3 },
         { kind: 'marine_board' as const, label: t.marine, icon: PanelTop },
@@ -5708,7 +9938,16 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({ language, onLanguageChange, u
         { kind: 'tee_connector' as const, label: t.teeConnector, icon: PanelTop },
       ].filter((entry) => !isConnectionAccessoryKind(entry.kind) || Boolean(ACCESSORY_PRICES[entry.kind][selectedAccessoryProfileSize])),
     },
-    // 调平脚和内六角螺丝暂时从零件库隐藏；旧设计中已有的项目仍兼容。
+    {
+      id: 'other',
+      label: t.otherParts,
+      items: [
+        { kind: 'end_cap' as const, label: t.endCap, icon: Box },
+        { kind: 'caster' as const, label: t.caster, icon: CircleDot },
+        { kind: 'foot' as const, label: t.foot, icon: CircleDot },
+      ],
+    },
+    // 内六角螺丝仍由孔位自动生成，不在零件库重复暴露。
   ];
 
   return (
@@ -5797,7 +10036,7 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({ language, onLanguageChange, u
         </div>
       </div>
 
-      <div className="mx-auto grid w-full max-w-[1800px] grid-cols-1 gap-3 p-3 xl:min-h-0 xl:flex-1 xl:grid-cols-[260px_minmax(0,1fr)_330px] xl:items-stretch xl:overflow-hidden">
+      <div className={`mx-auto grid w-full max-w-[1800px] grid-cols-1 gap-3 p-3 transition-[grid-template-columns] duration-200 xl:min-h-0 xl:flex-1 xl:items-stretch xl:overflow-hidden ${projectPanelCollapsed ? 'xl:grid-cols-[260px_minmax(0,1fr)]' : 'xl:grid-cols-[260px_minmax(0,1fr)_330px]'}`}>
         <aside className="order-1 rounded-3xl border border-slate-200 bg-white p-4 shadow-sm xl:min-h-0 xl:overflow-y-auto">
           <div className="flex items-center justify-between">
             <h2 className="text-sm font-black uppercase tracking-widest text-slate-500">{t.library}</h2>
@@ -5807,11 +10046,54 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({ language, onLanguageChange, u
           <div className="mt-4 space-y-4">
             {paletteGroups.map((paletteGroup) => (
               <section key={paletteGroup.id}>
-                <div className="mb-2 flex items-center gap-2 text-[9px] font-black uppercase tracking-[0.18em] text-slate-400">
-                  <span className="h-px flex-1 bg-slate-100" />
-                  {paletteGroup.label}
-                  <span className="h-px flex-1 bg-slate-100" />
-                </div>
+                {paletteGroup.label && (
+                  <div className="mb-2 flex items-center gap-2 text-[9px] font-black uppercase tracking-[0.18em] text-slate-400">
+                    <span className="h-px flex-1 bg-slate-100" />
+                    {paletteGroup.label}
+                    <span className="h-px flex-1 bg-slate-100" />
+                  </div>
+                )}
+                {paletteGroup.id === 'materials' && (
+                  <div className="rounded-2xl border border-blue-100 bg-blue-50/70 p-3">
+                    <div className="mb-2 flex items-center gap-3">
+                      <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-white text-blue-600 shadow-sm">
+                        <Box className="h-5 w-5" />
+                      </span>
+                      <span className="text-xs font-black text-slate-700">{t.profile}</span>
+                    </div>
+                    <label className="block">
+                      <span className="mb-1.5 block text-[9px] font-black uppercase tracking-widest text-blue-700">{t.selectProfileModel}</span>
+                      <select
+                        data-testid="diy-library-profile-model"
+                        value={libraryProfileVariantId}
+                        onChange={(event) => {
+                          const variantId = event.target.value;
+                          setLibraryProfileVariantId(variantId);
+                          if (profileDrawTemplate) startProfileDrawFromVariant(variantId);
+                        }}
+                        className="diy-select bg-white"
+                      >
+                        {PROFILE_VARIANTS.map((variant) => (
+                          <option key={variant.id} value={variant.id}>{variant.name}</option>
+                        ))}
+                      </select>
+                    </label>
+                    <button
+                      type="button"
+                      data-testid="diy-library-start-profile-draw"
+                      onClick={() => startProfileDrawFromVariant(libraryProfileVariantId)}
+                      className={`mt-2.5 flex w-full items-center justify-center gap-2 rounded-xl px-3 py-2.5 text-xs font-black transition ${
+                        profileDrawTemplate
+                          ? 'bg-blue-600 text-white shadow-md shadow-blue-600/20 hover:bg-blue-500'
+                          : 'border border-blue-200 bg-white text-blue-700 hover:border-blue-400 hover:bg-blue-50'
+                      }`}
+                    >
+                      <Move3D className="h-4 w-4" />
+                      {t.freeDrawProfile}
+                    </button>
+                    <p className="mt-2 text-[9px] font-bold leading-relaxed text-blue-600/80">{t.freeDrawHint}</p>
+                  </div>
+                )}
                 {paletteGroup.id === 'fasteners' && (
                   <div className="mb-2 rounded-2xl border border-blue-100 bg-blue-50/70 p-2.5">
                     <div className="mb-2 flex items-center justify-between gap-2">
@@ -5836,6 +10118,7 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({ language, onLanguageChange, u
                 <div className="grid grid-cols-2 gap-2 xl:grid-cols-1">
                   {paletteGroup.items.map((entry) => {
                     const Icon = entry.icon;
+                    const entryDisabled = entry.kind === 'cabinet_door' && !cabinetDoorOpening;
                     const accessoryPrice = isConnectionAccessoryKind(entry.kind)
                       ? ACCESSORY_PRICES[entry.kind][selectedAccessoryProfileSize]
                       : undefined;
@@ -5843,7 +10126,9 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({ language, onLanguageChange, u
                       <button
                         key={`${entry.kind}-${'variantId' in entry ? entry.variantId || '' : ''}`}
                         data-testid={`diy-add-${entry.kind}${'variantId' in entry && entry.variantId ? `-${entry.variantId}` : ''}`}
-                        draggable
+                        draggable={!entryDisabled}
+                        disabled={entryDisabled}
+                        title={entry.kind === 'cabinet_door' ? (cabinetDoorOpening ? t.doorFrameReady : t.doorNeedFrame) : undefined}
                         onDragStart={(event) => event.dataTransfer.setData('application/x-mengkaile-part', JSON.stringify({
                           kind: entry.kind,
                           variantId: isConnectionAccessoryKind(entry.kind)
@@ -5856,11 +10141,16 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({ language, onLanguageChange, u
                             ? selectedAccessoryProfileSize
                             : 'variantId' in entry ? entry.variantId : undefined,
                         )}
-                        className="group flex items-center gap-3 rounded-2xl border border-slate-200 bg-slate-50 p-3 text-left transition hover:border-blue-400 hover:bg-blue-50"
+                        className="group flex items-center gap-3 rounded-2xl border border-slate-200 bg-slate-50 p-3 text-left transition hover:border-blue-400 hover:bg-blue-50 disabled:cursor-not-allowed disabled:opacity-45 disabled:hover:border-slate-200 disabled:hover:bg-slate-50"
                       >
                         <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-white text-slate-500 shadow-sm group-hover:text-blue-600"><Icon className="h-5 w-5" /></span>
                         <span className="min-w-0 flex-1">
                           <span className="block text-xs font-black text-slate-700">{entry.label}</span>
+                          {entry.kind === 'cabinet_door' && (
+                            <span className={`mt-0.5 block text-[9px] font-bold ${cabinetDoorOpening ? 'text-emerald-600' : 'text-slate-400'}`}>
+                              {cabinetDoorOpening ? t.doorFrameReady : t.doorNeedFrame}
+                            </span>
+                          )}
                           {accessoryPrice && (
                             <span className="mt-0.5 block text-[9px] font-bold text-blue-500">
                               {selectedAccessoryProfileSize} · {currency}{accessoryPrice.natural.toFixed(1)}
@@ -5893,6 +10183,18 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({ language, onLanguageChange, u
             }
           }}
         >
+          <button
+            type="button"
+            data-testid="diy-toggle-project-panel"
+            aria-expanded={!projectPanelCollapsed}
+            aria-controls="diy-project-panel"
+            aria-label={projectPanelCollapsed ? t.expandProjectPanel : t.collapseProjectPanel}
+            title={projectPanelCollapsed ? t.expandProjectPanel : t.collapseProjectPanel}
+            onClick={() => setProjectPanelCollapsed((current) => !current)}
+            className="absolute right-2 top-1/2 z-40 hidden h-16 w-8 -translate-y-1/2 items-center justify-center rounded-2xl border border-slate-200 bg-white/95 text-slate-400 shadow-lg backdrop-blur transition hover:border-blue-300 hover:bg-blue-50 hover:text-blue-600 xl:flex"
+          >
+            {projectPanelCollapsed ? <ChevronLeft className="h-5 w-5" /> : <ChevronRight className="h-5 w-5" />}
+          </button>
           <ThreeAssembly
             items={items}
             selectedId={selectedId}
@@ -5901,7 +10203,10 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({ language, onLanguageChange, u
             rotationMenuTitle={t.rotation}
             interactionLabels={{
               sceneRotation: t.sceneRotation,
-              contextHint: t.sceneContextHint,
+              orbit: t.sceneOrbitControl,
+              pan: t.scenePanControl,
+              zoom: t.sceneZoomControl,
+              part: t.scenePartControl,
               interferenceWarning: t.interferenceWarning,
             }}
             snapLabels={{
@@ -5920,20 +10225,27 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({ language, onLanguageChange, u
               end: t.alignEnd,
               connectedTo: t.connectedTo,
             }}
-            workPlaneLabels={{
-              title: t.workPlane,
-              auto: t.workPlaneAuto,
-              xy: t.workPlaneXY,
-              xz: t.workPlaneXZ,
-              yz: t.workPlaneYZ,
-              hint: t.workPlaneHint,
-            }}
             accessorySnapLabel={t.accessorySnap}
             renderErrorLabel={t.renderUnavailable}
             deleteLabel={t.delete}
             frameAllLabel={t.frameAll}
+            resetViewLabel={t.resetView}
             fillScrewsLabel={t.fillScrews}
             fillScrewsHint={t.fillScrewsHint}
+            connectionGenerationLabels={{
+              title: t.generateConnections,
+              hint: t.generateConnectionsHint,
+              cornerBracket: t.cornerBracketConnection,
+              slotConnector: t.slotConnectorConnection,
+              drillTap: t.drillTapConnection,
+              chooseType: t.chooseConnectionType,
+              applyAll: t.applyAllConnections,
+              deleteAll: t.deleteAllConnections,
+              exit: t.exitConnectionEdit,
+              addable: t.connectionAddable,
+              replaceable: t.connectionReplaceable,
+              installed: t.connectionInstalled,
+            }}
             displayLabels={{
               transparentProfiles: t.transparentProfiles,
               machiningMarks: t.machiningMarks,
@@ -5953,10 +10265,19 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({ language, onLanguageChange, u
             }}
             operationLabels={{
               length: t.currentLength,
+              dimensionLength: t.sceneLength,
               move: t.moveDistance,
-              duplicateMove: t.duplicateMove,
-              duplicateMoveHint: t.duplicateMoveHint,
+              connectionReady: t.connectionReady,
               apply: t.apply,
+            }}
+            profileDrawTemplate={profileDrawTemplate}
+            profileDrawLabels={{ hint: t.freeDrawHint, invalid: t.freeDrawOverlap, restore: t.restoreCursor }}
+            accessoryPlacementTemplate={accessoryPlacementTemplate}
+            accessoryPlacementLabels={{
+              hint: t.accessoryPlacementHint,
+              invalid: t.accessoryPlacementInvalid,
+              success: t.accessoryPlacementSuccess,
+              restore: t.restoreCursor,
             }}
             onSelect={selectItem}
             onSelectionChange={setSelection}
@@ -5972,6 +10293,7 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({ language, onLanguageChange, u
                 commit([...items, duplicated], duplicated.id);
                 return;
               }
+              const movingAccessory = isMovableAccessoryKind(transformed.kind);
               const candidate = {
                 ...transformed,
                 position,
@@ -5989,11 +10311,24 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({ language, onLanguageChange, u
                       attachmentKey: undefined,
                     }
                   : {}),
+                ...(movingAccessory && !placement
+                  ? {
+                    lockedPosition: false,
+                    attachedProfileIds: undefined,
+                    attachmentKey: undefined,
+                    ...(transformed.kind === 'end_cap'
+                      ? { attachedEnd: undefined, autoAddedTapping: false }
+                      : {}),
+                  }
+                  : {}),
                 ...(transformed.kind === 'screw' && transformed.autoGenerated
                   ? { autoGenerated: false, linkedProfileId: undefined, linkedHoleId: undefined }
                   : {}),
               };
-              const next = items.map((item) => item.id === id ? candidate : item);
+              const baseItems = transformed.kind === 'end_cap' && transformed.autoAddedTapping
+                ? removeItemsWithOwnedEndTapping(items, new Set([id]))
+                : items.filter((item) => item.id !== id);
+              const next = [...baseItems, candidate];
               commit(next, id);
             }}
             onResizeProfile={(id, length, position) => {
@@ -6011,13 +10346,31 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({ language, onLanguageChange, u
             onRotateQuarterTurn={rotateItemQuarterTurn}
             onDelete={deleteItem}
             onFillScrews={fillScrews}
+            onGenerateConnections={generateConnections}
+            onDeleteConnections={deleteConnections}
+            onApplyConnectionAtJoint={applyConnectionAtJoint}
             onPlaceHole={placeHoleFrom3D}
             onCancelDrillMode={() => {
               setDrillMode(false);
               setSelectedId(null);
             }}
+            onCommitProfileDraw={commitProfileDraw}
+            onExitProfileDraw={() => setProfileDrawTemplate(null)}
+            onCommitAccessoryPlacement={commitAccessoryPlacement}
+            onExitAccessoryPlacement={() => setAccessoryPlacementTemplate(null)}
           />
-          <div className="pointer-events-none absolute left-4 top-4 rounded-2xl border border-white/80 bg-white/85 px-4 py-3 shadow-lg backdrop-blur">
+          {(profileDrawTemplate || accessoryPlacementTemplate || drillMode) && (
+            <button
+              type="button"
+              data-testid="diy-canvas-restore-cursor"
+              onClick={restorePointerMode}
+              className="absolute left-4 top-4 z-50 flex items-center gap-2 rounded-2xl border border-purple-400 bg-purple-600 px-4 py-3 text-xs font-black text-white shadow-lg shadow-purple-700/20 transition hover:bg-purple-500 focus:outline-none focus:ring-2 focus:ring-purple-300"
+            >
+              <MousePointer2 className="h-4 w-4" />
+              {t.restoreCursor}
+            </button>
+          )}
+          <div className={`pointer-events-none absolute left-4 rounded-2xl border border-white/80 bg-white/85 px-4 py-3 shadow-lg backdrop-blur transition-[top] ${profileDrawTemplate || accessoryPlacementTemplate || drillMode ? 'top-20' : 'top-4'}`}>
             <div className="text-[10px] font-black uppercase tracking-widest text-slate-400">{t.total}</div>
             <div className="text-2xl font-black text-slate-900">{currency}{total.toFixed(1)}</div>
             <div className="text-[11px] font-bold text-slate-400">{items.length} {t.partsCount}</div>
@@ -6042,7 +10395,10 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({ language, onLanguageChange, u
           {notice && <div className="absolute bottom-5 left-1/2 -translate-x-1/2 rounded-2xl bg-slate-950 px-5 py-3 text-sm font-black text-white shadow-2xl">{notice}</div>}
         </main>
 
-        <aside className="order-3 rounded-3xl border border-slate-200 bg-white p-4 shadow-sm xl:min-h-0 xl:overflow-y-auto">
+        <aside
+          id="diy-project-panel"
+          className={`order-3 rounded-3xl border border-slate-200 bg-white p-4 shadow-sm xl:min-h-0 xl:overflow-y-auto ${projectPanelCollapsed ? 'xl:hidden' : ''}`}
+        >
           {selectedIds.length > 1 ? (
             <>
               <button onClick={() => setSelectedId(null)} className="mb-3 text-xs font-black text-blue-600 transition hover:text-blue-500">← {t.backToProject}</button>
@@ -6079,7 +10435,7 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({ language, onLanguageChange, u
                   {PROFILE_COLORS.map((color) => (
                     <button
                       key={color.id}
-                      title={color.name[language]}
+                      title={getDesignerColorName(color.id, language, selected.kind)}
                       onClick={() => updateSelectedItems({ colorId: color.id })}
                       className="h-9 rounded-xl border border-slate-200 shadow-inner transition hover:scale-105 hover:border-blue-500"
                       style={{ backgroundColor: COLOR_HEX[color.id] || '#ccc' }}
@@ -6166,13 +10522,13 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({ language, onLanguageChange, u
               )}
               <div className="mt-4 space-y-5">
               <div className="flex items-center gap-2">
-                <button onClick={() => {
+                {selected.kind !== 'end_cap' && selected.kind !== 'cabinet_door' && <button onClick={() => {
                   const duplicated = {
                     ...duplicateSceneItem(selected),
                     position: [selected.position[0] + 80, selected.position[1] + 80, selected.position[2]] as Vec3,
                   };
                   commit([...items, duplicated], duplicated.id);
-                }} className="diy-toolbar-button flex-1 gap-2"><Copy className="h-4 w-4" />{t.duplicate}</button>
+                }} className="diy-toolbar-button flex-1 gap-2"><Copy className="h-4 w-4" />{t.duplicate}</button>}
                 <button onClick={() => deleteItem(selected.id)} className="diy-toolbar-button flex-1 gap-2 text-red-600 hover:border-red-300 hover:bg-red-50"><Trash2 className="h-4 w-4" />{t.delete}</button>
               </div>
 
@@ -6198,6 +10554,64 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({ language, onLanguageChange, u
                       {(selected.kind === 'marine_board' ? [12, 18] : selected.kind === 'pegboard' ? [2, 5] : [1, 2, 3, 4, 5]).map((value) => <option key={value} value={value}>{value}mm</option>)}
                     </select>
                   </label>
+                </div>
+              )}
+
+              {selected.kind === 'cabinet_door' && (
+                <div className="rounded-2xl border border-blue-100 bg-blue-50/60 p-4">
+                  <div className="mb-3 flex items-center gap-2">
+                    <PanelTop className="h-4 w-4 text-blue-600" />
+                    <h3 className="text-xs font-black uppercase tracking-widest text-blue-900">{t.cabinetDoor}</h3>
+                  </div>
+                  <label className="block">
+                    <span className="diy-field-label">{t.doorMaterial}</span>
+                    <select
+                      data-testid="diy-door-material"
+                      value={selected.doorMaterial || 'aluminum'}
+                      onChange={(event) => {
+                        const doorMaterial = event.target.value as DIYDoorMaterial;
+                        updateSelected({
+                          doorMaterial,
+                          thickness: doorMaterial === 'marine' ? 18 : 2,
+                          colorId: doorMaterial === 'marine' ? 'wood_natural' : 'natural',
+                        });
+                      }}
+                      className="diy-select"
+                    >
+                      <option value="aluminum">{t.doorAluminum}</option>
+                      <option value="marine">{t.doorMarine}</option>
+                      <option value="pegboard">{t.doorPegboard}</option>
+                    </select>
+                  </label>
+                  {selected.doorMaterial === 'marine' && (
+                    <label className="mt-3 block">
+                      <span className="diy-field-label">{t.thickness}</span>
+                      <select value={selected.thickness || 18} onChange={(event) => updateSelected({ thickness: Number(event.target.value) })} className="diy-select">
+                        {[12, 18].map((value) => <option key={value} value={value}>{value}mm</option>)}
+                      </select>
+                    </label>
+                  )}
+                  <label className="mt-3 block">
+                    <span className="diy-field-label">{t.doorOverlay}</span>
+                    <select data-testid="diy-door-overlay" value={selected.doorOverlay || 'full'} onChange={(event) => updateSelected({ doorOverlay: event.target.value as DIYDoorOverlay })} className="diy-select">
+                      <option value="full">{t.doorFullOverlay}</option>
+                      <option value="half" disabled>{t.doorHalfOverlay} · {t.doorHalfUnavailable}</option>
+                      <option value="inset">{t.doorInsetOverlay}</option>
+                    </select>
+                  </label>
+                  <label className="mt-3 block">
+                    <span className="diy-field-label">{t.doorOpeningSide}</span>
+                    <select data-testid="diy-door-opening" value={selected.openingSide || 'left'} onChange={(event) => updateSelected({ openingSide: event.target.value as 'left' | 'right' })} className="diy-select">
+                      <option value="left">{t.doorLeftOpen}</option>
+                      <option value="right">{t.doorRightOpen}</option>
+                    </select>
+                  </label>
+                  <div className="mt-3 rounded-xl border border-white bg-white px-3 py-2.5">
+                    <div className="text-[9px] font-black uppercase tracking-widest text-slate-400">{t.doorAutoSize}</div>
+                    <div className="mt-1 text-lg font-black text-slate-900">{Math.round(selected.width || 0)} × {Math.round(selected.height || 0)}mm</div>
+                    <div className="mt-1 text-[10px] font-bold text-blue-600">{getDoorHingePositions(selected.height || 0).length} × {t.doorHinge} · {currency}{DOOR_HINGE_UNIT_PRICE}</div>
+                  </div>
+                  <p className="mt-2 text-[10px] font-bold leading-relaxed text-blue-700">{t.doorMarginHint}</p>
                 </div>
               )}
 
@@ -6232,6 +10646,83 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({ language, onLanguageChange, u
                       <option value="powder">{t.shelfSupportPowder}</option>
                     </select>
                   </label>
+                </div>
+              )}
+
+              {selected.kind === 'caster' && (
+                <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                  <div className="mb-3 flex items-center gap-2">
+                    <CircleDot className="h-4 w-4 text-blue-600" />
+                    <h3 className="text-xs font-black uppercase tracking-widest text-slate-700">{t.accessorySpec}</h3>
+                  </div>
+                  <label className="block">
+                    <span className="diy-field-label">{t.casterThread}</span>
+                    <select
+                      value={selected.accessoryThreadSize || 'M8'}
+                      onChange={(event) => {
+                        const accessoryThreadSize = event.target.value as DIYAccessoryThreadSize;
+                        updateSelected({
+                          accessoryThreadSize,
+                          accessoryPrice: getCasterEstimatedUnitPrice({ accessoryThreadSize, hasBrake: selected.hasBrake }),
+                        });
+                      }}
+                      className="diy-select"
+                    >
+                      {(['M6', 'M8', 'M10', 'M12'] as DIYAccessoryThreadSize[]).map((size) => <option key={size} value={size}>{size}</option>)}
+                    </select>
+                  </label>
+                  <label className="mt-3 block">
+                    <span className="diy-field-label">{t.casterBrake}</span>
+                    <select
+                      value={selected.hasBrake ? 'brake' : 'plain'}
+                      onChange={(event) => {
+                        const hasBrake = event.target.value === 'brake';
+                        updateSelected({
+                          hasBrake,
+                          accessoryPrice: getCasterEstimatedUnitPrice({ accessoryThreadSize: selected.accessoryThreadSize, hasBrake }),
+                        });
+                      }}
+                      className="diy-select"
+                    >
+                      <option value="plain">{t.casterWithoutBrake}</option>
+                      <option value="brake">{t.casterWithBrake}</option>
+                    </select>
+                  </label>
+                  <p className="mt-3 rounded-xl bg-white px-3 py-2 text-[10px] font-black text-slate-600">{t.fixedBlack}</p>
+                  <p className="mt-3 rounded-xl bg-amber-50 px-3 py-2 text-[10px] font-black text-amber-700">{t.estimatedPrice}：{currency}{getCasterEstimatedUnitPrice(selected)} · {t.pricePending}</p>
+                </div>
+              )}
+
+              {selected.kind === 'foot' && (
+                <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                  <div className="mb-3 flex items-center gap-2">
+                    <CircleDot className="h-4 w-4 text-blue-600" />
+                    <h3 className="text-xs font-black uppercase tracking-widest text-slate-700">{t.accessorySpec}</h3>
+                  </div>
+                  <NumberField
+                    label={t.adjustableHeight}
+                    value={selected.height || 45}
+                    min={35}
+                    max={60}
+                    onChange={(height) => updateSelected({ height: THREE.MathUtils.clamp(height, 35, 60) })}
+                  />
+                  <p className="mt-3 rounded-xl bg-white px-3 py-2 text-[10px] font-black leading-relaxed text-slate-600">{t.footReferenceSpec}</p>
+                  <p className="mt-2 rounded-xl bg-white px-3 py-2 text-[10px] font-black text-slate-600">{t.fixedGold}</p>
+                  <p className="mt-2 rounded-xl bg-amber-50 px-3 py-2 text-[10px] font-black text-amber-700">{t.estimatedPrice}：{currency}{FOOT_ESTIMATED_PRICE} · {t.pricePending}</p>
+                </div>
+              )}
+
+              {selected.kind === 'end_cap' && (
+                <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                  <div className="mb-3 flex items-center gap-2">
+                    <Box className="h-4 w-4 text-blue-600" />
+                    <h3 className="text-xs font-black uppercase tracking-widest text-slate-700">{t.accessorySpec}</h3>
+                  </div>
+                  <div className="rounded-xl bg-white px-3 py-2 text-[10px] font-black leading-relaxed text-slate-600">
+                    {t.model} · {selected.variantId || selected.accessoryProfileSize || '2020'}<br />
+                    {t.endCapTarget} · {selected.attachedEnd === 'right' ? t.rightEnd : t.leftEnd}
+                  </div>
+                  <p className="mt-2 rounded-xl bg-amber-50 px-3 py-2 text-[10px] font-black text-amber-700">{t.estimatedPrice}：{currency}{getEndCapEstimatedUnitPrice(selected)} · {t.pricePending}</p>
                 </div>
               )}
 
@@ -6306,7 +10797,7 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({ language, onLanguageChange, u
                       {selected.lockedPosition && (
                         <div className="mt-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-[10px] font-black text-amber-700">
                           {t.lockedLocation}
-                          {!!selected.attachedProfileIds?.length && ` · ${t.attachedTo}: ${selected.attachedProfileIds.length}`}
+                          {!!selected.attachedProfileIds?.length && ` · ${selected.attachmentKey?.startsWith('PANEL:') ? t.attachedParts : t.attachedTo}: ${selected.attachedProfileIds.length}`}
                         </div>
                       )}
                       <div className="mt-2 rounded-xl bg-white px-3 py-2 text-[10px] font-black text-slate-500">
@@ -6327,7 +10818,10 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({ language, onLanguageChange, u
                       return <>
                       <div className="rounded-xl border border-blue-100 bg-white px-3 py-3">
                         <div className="text-[10px] font-black uppercase tracking-widest text-slate-400">{t.screwOrderSpec}</div>
-                        <div className="mt-1 text-xl font-black text-slate-900">{orderSpec.threadSize}×{orderSpec.lengthMm}</div>
+                        <div className="mt-1 text-xl font-black text-slate-900">
+                          {orderSpec.threadSize}×{orderSpec.lengthMm}
+                          {orderSpec.includesElasticFastener ? ` + ${t.elasticFastener}` : ''}
+                        </div>
                         <div className="mt-1 text-[10px] font-bold text-slate-500">{t.accessoryProfileSize} · {selected.accessoryProfileSize || '2020'}</div>
                       </div>
                       {selected.screwHead && (
@@ -6348,10 +10842,10 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({ language, onLanguageChange, u
                 </div>
               )}
 
-              <div>
+              {selected.kind !== 'caster' && selected.kind !== 'foot' && <div>
                 <div className="mb-2 flex items-center gap-2"><Paintbrush className="h-4 w-4 text-blue-600" /><span className="diy-field-label !mb-0">{t.color}</span></div>
                 <div className="grid grid-cols-2 gap-2">
-                  {(selected.kind === 'marine_board' ? MARINE_BOARD_COLORS : PROFILE_COLORS).map((color) => (
+                  {(selected.kind === 'marine_board' || (selected.kind === 'cabinet_door' && selected.doorMaterial === 'marine') ? MARINE_BOARD_COLORS : PROFILE_COLORS).map((color) => (
                     <button
                       key={color.id}
                       title={color.name[language]}
@@ -6368,17 +10862,20 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({ language, onLanguageChange, u
                               : (selected.finish === 'powder' ? 'powder' : 'electrophoretic'),
                           ),
                         } : {}),
+                        ...(selected.kind === 'end_cap' ? {
+                          accessoryPrice: getEndCapEstimatedUnitPrice({ colorId: color.id, quantity: selected.quantity }),
+                        } : {}),
                       })}
                       className={`flex min-w-0 items-center gap-2 rounded-xl border p-2 text-left transition ${selected.colorId === color.id ? 'border-blue-600 bg-blue-50 ring-2 ring-blue-100' : 'border-slate-200 bg-slate-50 hover:border-blue-300'}`}
                     >
                       <span className="h-7 w-7 shrink-0 rounded-lg border border-black/10 shadow-inner" style={{ backgroundColor: COLOR_HEX[color.id] || '#ccc' }} />
-                      <span className="min-w-0 truncate text-[10px] font-black text-slate-700">{color.name[language]}</span>
+                      <span className="min-w-0 truncate text-[10px] font-black text-slate-700">{selected.kind === 'cabinet_door' && selected.doorMaterial === 'marine' ? getMarineBoardOrderColorName(color.id, language) : getDesignerColorName(color.id, language, selected.kind)}</span>
                     </button>
                   ))}
                 </div>
-              </div>
+              </div>}
 
-              <NumberField label={t.quantity} value={selected.quantity} min={1} max={999} onChange={(quantity) => updateSelected({ quantity: Math.max(1, quantity) })} />
+              {selected.kind !== 'end_cap' && selected.kind !== 'cabinet_door' && <NumberField label={t.quantity} value={selected.quantity} min={1} max={999} onChange={(quantity) => updateSelected({ quantity: Math.max(1, quantity) })} />}
 
               {!selected.lockedPosition ? <div>
                 <div className="diy-field-label">{t.position}</div>
@@ -6626,56 +11123,6 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({ language, onLanguageChange, u
               >
                 {t.maycadTapAllBothEnds}
               </button>
-            </div>
-          </div>
-        </div>
-      )}
-      {pendingProfile && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/45 p-4 backdrop-blur-sm">
-          <div className="w-full max-w-md rounded-3xl border border-white/70 bg-white p-6 shadow-2xl">
-            <div className="text-[10px] font-black uppercase tracking-[0.2em] text-blue-600">{t.profile}</div>
-            <h2 className="mt-2 text-xl font-black text-slate-950">{t.newProfileLength}</h2>
-            <label className="mt-5 block">
-              <span className="diy-field-label">{t.model}</span>
-              <select
-                autoFocus
-                value={pendingProfile.variantId}
-                onChange={(event) => setPendingProfile((current) => current ? {
-                  ...current,
-                  variantId: event.target.value,
-                } : current)}
-                className="diy-select"
-              >
-                {PROFILE_VARIANTS.map((variant) => (
-                  <option key={variant.id} value={variant.id}>{variant.name}</option>
-                ))}
-              </select>
-            </label>
-            <label className="mt-5 block">
-              <span className="diy-field-label">{t.length}</span>
-              <div className="flex items-center gap-2">
-                <input
-                  type="number"
-                  min={21}
-                  max={3000}
-                  value={pendingProfile.length}
-                  onChange={(event) => setPendingProfile((current) => current ? {
-                    ...current,
-                    length: Number(event.target.value) || 0,
-                  } : current)}
-                  onKeyDown={(event) => {
-                    if (event.key === 'Enter') confirmProfileLength();
-                    if (event.key === 'Escape') setPendingProfile(null);
-                  }}
-                  className="min-w-0 flex-1 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-lg font-black text-slate-900 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
-                />
-                <span className="text-sm font-black text-slate-400">mm</span>
-              </div>
-            </label>
-            <p className="mt-2 text-xs font-bold text-slate-400">21–3000mm</p>
-            <div className="mt-6 grid grid-cols-2 gap-3">
-              <button onClick={() => setPendingProfile(null)} className="rounded-2xl border border-slate-200 px-4 py-3 text-sm font-black text-slate-600 hover:bg-slate-50">{t.cancel}</button>
-              <button onClick={confirmProfileLength} className="rounded-2xl bg-blue-600 px-4 py-3 text-sm font-black text-white hover:bg-blue-500">{t.addProfile}</button>
             </div>
           </div>
         </div>

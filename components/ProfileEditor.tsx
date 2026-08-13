@@ -9,6 +9,7 @@ import { displayGrooveToPhysical, getProfileGrooveCount, getProfileTapPortCount 
 import { Plus, Trash2, List, ShoppingCart, Pencil, X, Hammer, Settings2, Copy } from 'lucide-react';
 import ProfileVisualizer from './ProfileVisualizer';
 import ProfileSectionGuide from './ProfileSectionGuide';
+import { ApiService } from '../services/apiService';
 
 interface ProfileEditorProps {
   language: Language;
@@ -83,6 +84,8 @@ const ProfileEditor: React.FC<ProfileEditorProps> = ({ language, product, user, 
   const [profileImgError, setProfileImgError] = useState(false);
   const [colorImgError, setColorImgError] = useState(false);
   const [hasChosenColor, setHasChosenColor] = useState(Boolean(initialConfig?.colorId && initialConfig.colorId !== 'natural'));
+  const [inventoryMeters, setInventoryMeters] = useState<number | null>(null);
+  const [inventoryLoaded, setInventoryLoaded] = useState(false);
 
   const selectedVariant = PROFILE_VARIANTS.find(v => v.id === variantId) || PROFILE_VARIANTS[0];
   const selectedColor = PROFILE_COLORS.find(c => c.id === colorId) || PROFILE_COLORS[0];
@@ -109,6 +112,24 @@ const ProfileEditor: React.FC<ProfileEditorProps> = ({ language, product, user, 
   useEffect(() => {
     setColorImgError(false);
   }, [colorId]);
+
+  useEffect(() => {
+    let active = true;
+    setInventoryLoaded(false);
+    ApiService.getProfileInventory()
+      .then((rows) => {
+        if (!active) return;
+        const matched = rows.find((row) => row.variantId === variantId && row.colorId === colorId);
+        setInventoryMeters(matched ? matched.totalMeters : 0);
+        setInventoryLoaded(true);
+      })
+      .catch(() => {
+        if (!active) return;
+        setInventoryMeters(null);
+        setInventoryLoaded(false);
+      });
+    return () => { active = false; };
+  }, [variantId, colorId]);
 
   useEffect(() => {
     if (finish === 'oxidized') {
@@ -328,6 +349,15 @@ const ProfileEditor: React.FC<ProfileEditorProps> = ({ language, product, user, 
             </select>
           </div>
         </div>
+
+        {inventoryLoaded && inventoryMeters !== null && (
+          <div
+            data-testid="profile-inventory-meters"
+            className={`mb-8 rounded-2xl border px-4 py-3 text-sm font-black ${inventoryMeters > 0 ? 'border-emerald-200 bg-emerald-50 text-emerald-800' : 'border-amber-200 bg-amber-50 text-amber-800'}`}
+          >
+            {language === 'cn' ? '当前库存' : language === 'jp' ? '現在庫' : 'Stock available'}：{inventoryMeters.toFixed(2)} m
+          </div>
+        )}
 
         <div className="mb-8">
           <ProfileSectionGuide language={language} showPalette={!hasChosenColor} />

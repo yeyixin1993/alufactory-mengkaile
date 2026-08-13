@@ -109,6 +109,27 @@
             font-weight: 700;
             color: #1f2937;
         }
+
+        .analytics-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+            gap: 20px;
+            margin-top: 20px;
+        }
+
+        .analytics-card {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+
+        .analytics-card h3 { margin-bottom: 16px; color: #1f2937; }
+        .metric-row { display: grid; grid-template-columns: 90px 1fr auto; gap: 12px; align-items: center; margin: 10px 0; font-size: 13px; }
+        .metric-track { height: 10px; overflow: hidden; border-radius: 999px; background: #e5e7eb; }
+        .metric-bar { height: 100%; border-radius: inherit; background: #3b82f6; }
+        .inventory-input { width: 90px; padding: 7px 9px; border: 1px solid #d1d5db; border-radius: 6px; }
+        .inventory-toolbar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
         
         .table-wrapper {
             background: white;
@@ -344,6 +365,7 @@
             <nav>
                 <div class="nav-item active" onclick="switchTab('dashboard')">📊 仪表板</div>
                 <div class="nav-item" onclick="switchTab('users')">👥 用户管理</div>
+                <div class="nav-item" onclick="switchTab('profile_inventory')">📏 型材库存</div>
                 <!-- <div class="nav-item" onclick="switchTab('profiles')">📋 用户资料</div> -->
                 <div class="nav-item" onclick="switchTab('orders_profile')">📦 总订单管理</div>
                 <div class="nav-item" onclick="switchTab('orders_pegboard')">📦 铝合金洞洞板订单管理</div>
@@ -391,6 +413,39 @@
                         <h3>总收入</h3>
                         <div class="value" id="totalRevenue">¥0</div>
                     </div>
+                </div>
+                <div class="analytics-grid">
+                    <div class="analytics-card">
+                        <h3>每月收入</h3>
+                        <div id="monthlyRevenueChart">暂无有效订单</div>
+                    </div>
+                    <div class="analytics-card">
+                        <h3>彩色型材 Top 5（米）</h3>
+                        <div id="topColorsChart">暂无彩色型材订单</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Profile Inventory -->
+            <div id="profile_inventory" class="content hidden">
+                <div class="table-wrapper">
+                    <div class="table-header">
+                        <div>
+                            <h3>型材库存</h3>
+                            <div style="margin-top:6px;color:#6b7280;font-size:13px;">后台按支管理：每支固定3.15米；“坯料”仅后台管理，前台仅显示成品颜色的合计剩余米数。</div>
+                        </div>
+                        <div class="inventory-toolbar">
+                            <select id="inventoryVariantFilter" class="search-box" style="width:170px" onchange="renderInventoryRows()"><option value="">全部型号</option></select>
+                            <select id="inventoryColorFilter" class="search-box" style="width:170px" onchange="renderInventoryRows()"><option value="">全部颜色</option></select>
+                            <button class="btn btn-success" onclick="downloadInventoryExcel()">下载 Excel</button>
+                            <button class="btn btn-primary" onclick="document.getElementById('inventoryFile').click()">上传 Excel</button>
+                            <input id="inventoryFile" type="file" accept=".xlsx" hidden onchange="uploadInventoryExcel(this)">
+                        </div>
+                    </div>
+                    <table>
+                        <thead><tr><th>型材型号</th><th>颜色</th><th>单支长度</th><th>库存支数</th><th>库存总米数</th><th>更新时间</th><th>操作</th></tr></thead>
+                        <tbody id="profileInventoryTableBody"></tbody>
+                    </table>
                 </div>
             </div>
             
@@ -694,6 +749,8 @@
         let currentOrderStatusFilter = '';
         let currentOrderCategory = 'profile';
         let currentUserPhoneSearch = '';
+        let inventoryCache = [];
+        let inventoryColorNames = {};
 
         const ORDER_TAB_MAP = {
             'orders_profile': { category: 'profile', title: '总订单管理' },
@@ -718,6 +775,15 @@
             if (normalized === 'vip_plus') return 'VIP+';
             if (normalized === 'vip') return 'VIP';
             return '标准';
+        }
+
+        function escapeHtml(value) {
+            return String(value ?? '')
+                .replaceAll('&', '&amp;')
+                .replaceAll('<', '&lt;')
+                .replaceAll('>', '&gt;')
+                .replaceAll('"', '&quot;')
+                .replaceAll("'", '&#039;');
         }
         
         // Initialize
@@ -797,6 +863,7 @@
                 'dashboard': '仪表板',
                 'users': '用户管理',
                 'profiles': '用户资料',
+                'profile_inventory': '型材库存',
                 'orders': '订单管理',
                 'orders_profile': '总订单管理',
                 'orders_pegboard': '铝合金洞洞板订单管理',
@@ -812,6 +879,7 @@
             // Load data
             if (tab === 'users') loadUsers();
             if (tab === 'profiles') loadProfiles();
+            if (tab === 'profile_inventory') loadProfileInventory();
             if (tab === 'orders') loadOrders();
             if (ORDER_TAB_MAP[tab]) {
                 currentOrderCategory = ORDER_TAB_MAP[tab].category;
@@ -1018,9 +1086,121 @@
                 document.getElementById('paidOrders').textContent = data.paid_orders;
                 document.getElementById('shippedOrders').textContent = data.shipped_orders;
                 document.getElementById('totalRevenue').textContent = '¥' + data.total_revenue.toFixed(2);
+                renderMetricChart('monthlyRevenueChart', data.monthly_revenue || [], 'month', 'revenue', (value) => '¥' + Number(value).toFixed(2));
+                renderMetricChart('topColorsChart', data.top_profile_colors || [], 'color_name', 'meters', (value) => Number(value).toFixed(2) + ' m', '#8b5cf6');
             } catch (error) {
                 console.error('Error loading dashboard:', error);
             }
+        }
+
+        function renderMetricChart(elementId, rows, labelKey, valueKey, formatValue, color = '#3b82f6') {
+            const container = document.getElementById(elementId);
+            if (!container) return;
+            if (!rows.length) {
+                container.innerHTML = '<div style="color:#9ca3af;font-size:13px;">暂无数据</div>';
+                return;
+            }
+            const max = Math.max(...rows.map(row => Number(row[valueKey]) || 0), 1);
+            container.innerHTML = rows.map(row => {
+                const value = Number(row[valueKey]) || 0;
+                const width = Math.max(2, (value / max) * 100);
+                return `<div class="metric-row"><span>${escapeHtml(row[labelKey])}</span><span class="metric-track"><span class="metric-bar" style="display:block;width:${width}%;background:${color}"></span></span><strong>${formatValue(value)}</strong></div>`;
+            }).join('');
+        }
+
+        async function loadProfileInventory() {
+            try {
+                const response = await fetch(`${API_BASE}/admin/profile-inventory`, { headers: { 'Authorization': `Bearer ${authToken}` } });
+                const data = await response.json();
+                if (!response.ok) throw new Error(data.error || '加载库存失败');
+                inventoryCache = data.inventory || [];
+                inventoryColorNames = data.color_names || {};
+                populateInventoryFilters();
+                renderInventoryRows();
+            } catch (error) {
+                alert('库存加载失败: ' + error.message);
+            }
+        }
+
+        function populateInventoryFilters() {
+            const variantSelect = document.getElementById('inventoryVariantFilter');
+            const colorSelect = document.getElementById('inventoryColorFilter');
+            if (!variantSelect || !colorSelect) return;
+            const selectedVariant = variantSelect.value;
+            const selectedColor = colorSelect.value;
+            const variants = [...new Set(inventoryCache.map(row => row.variant_id))].sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
+            const colors = [...new Set(inventoryCache.map(row => row.color_id))].sort((a, b) => {
+                if (a === 'raw_material') return -1;
+                if (b === 'raw_material') return 1;
+                return String(inventoryColorNames[a] || a).localeCompare(String(inventoryColorNames[b] || b), 'zh-CN');
+            });
+            variantSelect.innerHTML = '<option value="">全部型号</option>' + variants.map(id => `<option value="${escapeHtml(id)}">${escapeHtml(id)}</option>`).join('');
+            colorSelect.innerHTML = '<option value="">全部颜色</option>' + colors.map(id => `<option value="${escapeHtml(id)}">${escapeHtml(inventoryColorNames[id] || id)}</option>`).join('');
+            variantSelect.value = variants.includes(selectedVariant) ? selectedVariant : '';
+            colorSelect.value = colors.includes(selectedColor) ? selectedColor : '';
+        }
+
+        function renderInventoryRows() {
+            const body = document.getElementById('profileInventoryTableBody');
+            if (!body) return;
+            const variantId = document.getElementById('inventoryVariantFilter')?.value || '';
+            const colorId = document.getElementById('inventoryColorFilter')?.value || '';
+            const rows = inventoryCache.filter(row =>
+                (!variantId || row.variant_id === variantId) && (!colorId || row.color_id === colorId)
+            );
+            body.innerHTML = rows.map(row => `
+                <tr>
+                    <td><strong>${escapeHtml(row.variant_id)}</strong></td>
+                    <td>${escapeHtml(inventoryColorNames[row.color_id] || row.color_id)}<div style="color:#9ca3af;font-size:11px;">${escapeHtml(row.color_id)}</div></td>
+                    <td>${Number(row.bar_length_m).toFixed(2)} m / 支</td>
+                    <td><input class="inventory-input" id="inventory-count-${row.id}" type="number" min="0" step="1" value="${Number(row.bar_count) || 0}"></td>
+                    <td><strong>${Number(row.total_meters).toFixed(2)} m</strong></td>
+                    <td>${row.updated_at ? new Date(row.updated_at).toLocaleString('zh-CN') : '-'}</td>
+                    <td><button class="btn btn-primary" onclick="saveInventoryRow(${row.id})">保存</button></td>
+                </tr>`).join('');
+        }
+
+        async function saveInventoryRow(id) {
+            const input = document.getElementById(`inventory-count-${id}`);
+            const barCount = Number(input?.value);
+            if (!Number.isInteger(barCount) || barCount < 0) return alert('库存支数必须是非负整数');
+            const response = await fetch(`${API_BASE}/admin/profile-inventory/${id}`, {
+                method: 'PUT',
+                headers: { 'Authorization': `Bearer ${authToken}`, 'Content-Type': 'application/json' },
+                body: JSON.stringify({ bar_count: barCount })
+            });
+            const data = await response.json();
+            if (!response.ok) return alert(data.error || '保存失败');
+            const index = inventoryCache.findIndex(row => row.id === id);
+            if (index >= 0) inventoryCache[index] = data.inventory;
+            renderInventoryRows();
+        }
+
+        async function downloadInventoryExcel() {
+            const response = await fetch(`${API_BASE}/admin/profile-inventory/export`, { headers: { 'Authorization': `Bearer ${authToken}` } });
+            if (!response.ok) return alert('下载失败');
+            const blob = await response.blob();
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = `型材库存-${new Date().toISOString().slice(0, 10)}.xlsx`;
+            link.click();
+            URL.revokeObjectURL(url);
+        }
+
+        async function uploadInventoryExcel(input) {
+            const file = input.files?.[0];
+            if (!file) return;
+            const form = new FormData();
+            form.append('file', file);
+            const response = await fetch(`${API_BASE}/admin/profile-inventory/import`, {
+                method: 'POST', headers: { 'Authorization': `Bearer ${authToken}` }, body: form
+            });
+            const data = await response.json();
+            input.value = '';
+            if (!response.ok) return alert(data.error || '导入失败');
+            alert(`库存导入成功，更新 ${data.updated} 行`);
+            loadProfileInventory();
         }
         
         // Load users

@@ -72,6 +72,14 @@ const quarterTurn = (radians: number) => {
   return Object.is(degrees, -0) ? 0 : degrees;
 };
 
+// MayCAD stores transforms in centimetres and commonly places 30-series
+// profile starts/centres on half-millimetre coordinates (for example 0.5cm
+// posts paired with an 85.5cm rail). Preserve one decimal place after
+// converting to millimetres. Rounding to whole millimetres moves a rail by
+// 0.5mm, which turns a valid face contact into a reported solid overlap and
+// forces the import repair pass to shorten the source cut length.
+const maycadCentimetresToMillimetres = (value: number) => Math.round(value * 100) / 10;
+
 // MayCAD extrudes profiles along local +Y. Mengkaile profiles use local +X;
 // their local Y/Z cross-section axes correspond to MayCAD +Z/-X.
 const MAYCAD_TO_MENGKAILE_LOCAL = new THREE.Matrix4().set(
@@ -96,6 +104,165 @@ const faceFromRelativeOffset = (offset: THREE.Vector3): ProfileSide => {
 
 const directChildren = (parent: Element, tagName: string) => Array.from(parent.children)
   .filter((child) => child.tagName === tagName);
+
+type MaycadImportedProfileBox = {
+  item: MaycadImportedItem;
+  center: THREE.Vector3;
+  axes: [THREE.Vector3, THREE.Vector3, THREE.Vector3];
+  halfSizes: [number, number, number];
+};
+
+const importedProfileCrossSection = (variantId = '2020'): [number, number] => {
+  const match = variantId.match(/^(\d{2})(\d{2,3})/);
+  return match ? [Number(match[1]), Number(match[2])] : [20, 20];
+};
+
+const importedProfileBox = (item: MaycadImportedItem): MaycadImportedProfileBox => {
+  const quaternion = new THREE.Quaternion().setFromEuler(new THREE.Euler(
+    THREE.MathUtils.degToRad(item.rotation[0]),
+    THREE.MathUtils.degToRad(item.rotation[1]),
+    THREE.MathUtils.degToRad(item.rotation[2]),
+    'XYZ',
+  ));
+  const [width, height] = importedProfileCrossSection(item.variantId);
+  return {
+    item,
+    center: new THREE.Vector3(...item.position),
+    axes: [
+      new THREE.Vector3(1, 0, 0).applyQuaternion(quaternion).normalize(),
+      new THREE.Vector3(0, 1, 0).applyQuaternion(quaternion).normalize(),
+      new THREE.Vector3(0, 0, 1).applyQuaternion(quaternion).normalize(),
+    ],
+    halfSizes: [Math.max(20, item.length || 20) / 2, height / 2, width / 2],
+  };
+};
+
+const importedBoxesOverlap = (
+  first: MaycadImportedProfileBox,
+  second: MaycadImportedProfileBox,
+  toleranceMm = 0.4,
+) => {
+  const axes = [
+    ...first.axes,
+    ...second.axes,
+    ...first.axes.flatMap((firstAxis) => second.axes.map((secondAxis) => (
+      new THREE.Vector3().crossVectors(firstAxis, secondAxis)
+    ))),
+  ];
+  const centerDelta = second.center.clone().sub(first.center);
+  return axes.every((candidateAxis) => {
+    if (candidateAxis.lengthSq() < 1e-8) return true;
+    const axis = candidateAxis.normalize();
+    const centerDistance = Math.abs(centerDelta.dot(axis));
+    const firstRadius = first.axes.reduce(
+      (sum, boxAxis, index) => sum + first.halfSizes[index] * Math.abs(boxAxis.dot(axis)),
+      0,
+    );
+    const secondRadius = second.axes.reduce(
+      (sum, boxAxis, index) => sum + second.halfSizes[index] * Math.abs(boxAxis.dot(axis)),
+      0,
+    );
+    return centerDistance < firstRadius + secondRadius - toleranceMm;
+  });
+};
+
+type MaycadEndTrim = {
+  item: MaycadImportedItem;
+  axis: THREE.Vector3;
+  side: -1 | 1;
+  trimMm: number;
+  vertical: boolean;
+};
+
+const shallowEndTrim = (
+  moving: MaycadImportedProfileBox,
+  target: MaycadImportedProfileBox,
+): MaycadEndTrim | null => {
+  const movingAxis = moving.axes[0];
+  if (Math.abs(movingAxis.dot(target.axes[0])) > 0.12) return null;
+  const targetRadiusOnMovingAxis = target.axes.reduce(
+    (sum, axis, index) => sum + target.halfSizes[index] * Math.abs(axis.dot(movingAxis)),
+    0,
+  );
+  const targetCenterOnMovingAxis = target.center.clone().sub(moving.center).dot(movingAxis);
+  let best: MaycadEndTrim | null = null;
+
+  ([-1, 1] as const).forEach((side) => {
+    const endpoint = moving.center.clone().addScaledVector(movingAxis, side * moving.halfSizes[0]);
+    const targetLongCoordinate = endpoint.clone().sub(target.center).dot(target.axes[0]);
+    if (Math.abs(targetLongCoordinate) > target.halfSizes[0] + 0.6) return;
+    const desiredEndpoint = targetCenterOnMovingAxis - side * targetRadiusOnMovingAxis;
+    const trimMm = side * (side * moving.halfSizes[0] - desiredEndpoint);
+    // Only repair the common MayCAD butt-joint error: an endpoint entering a
+    // perpendicular member by no more than that member's half-section. A deep
+    // crossing remains a real collision and must still be reviewed.
+    if (trimMm <= 0.4 || trimMm > targetRadiusOnMovingAxis + 1) return;
+    const nextLength = (moving.item.length || 20) - trimMm;
+    if (nextLength < 20) return;
+    const holes = moving.item.holes || [];
+    if (side < 0 && holes.some((hole) => hole.positionMm <= trimMm + 5)) return;
+    if (side > 0 && holes.some((hole) => hole.positionMm >= nextLength - 5)) return;
+    const candidate = {
+      item: moving.item,
+      axis: movingAxis.clone(),
+      side,
+      trimMm,
+      vertical: Math.abs(movingAxis.y) > 0.82,
+    } satisfies MaycadEndTrim;
+    if (!best || candidate.trimMm < best.trimMm) best = candidate;
+  });
+  return best;
+};
+
+const applyImportedEndTrim = (trim: MaycadEndTrim) => {
+  const nextLength = Math.max(20, (trim.item.length || 20) - trim.trimMm);
+  const nextCenter = new THREE.Vector3(...trim.item.position)
+    .addScaledVector(trim.axis, -trim.side * trim.trimMm / 2);
+  trim.item.length = Math.round(nextLength * 10) / 10;
+  trim.item.position = [
+    Math.round(nextCenter.x * 10) / 10,
+    Math.round(nextCenter.y * 10) / 10,
+    Math.round(nextCenter.z * 10) / 10,
+  ];
+  if (trim.side < 0) {
+    trim.item.holes = (trim.item.holes || []).map((hole) => ({
+      ...hole,
+      positionMm: Math.round((hole.positionMm - trim.trimMm) * 10) / 10,
+    }));
+  }
+};
+
+export const repairMaycadShallowProfileIntersections = (items: MaycadImportedItem[]) => {
+  const profiles = items.filter((item) => item.kind === 'profile');
+  let repairs = 0;
+  // A rail may need independent correction at both ends. Rebuild the boxes
+  // after every trim and repeat until no shallow perpendicular overlap remains.
+  for (let pass = 0; pass < profiles.length * 2; pass += 1) {
+    let repairedThisPass = false;
+    for (let firstIndex = 0; firstIndex < profiles.length && !repairedThisPass; firstIndex += 1) {
+      for (let secondIndex = firstIndex + 1; secondIndex < profiles.length; secondIndex += 1) {
+        const first = importedProfileBox(profiles[firstIndex]);
+        const second = importedProfileBox(profiles[secondIndex]);
+        if (!importedBoxesOverlap(first, second)) continue;
+        const candidates = [shallowEndTrim(first, second), shallowEndTrim(second, first)]
+          .filter((candidate): candidate is MaycadEndTrim => Boolean(candidate))
+          // Preserve long vertical posts when an L-corner is ambiguous; the
+          // horizontal/depth rail is the normal cut-to-fit member.
+          .sort((left, right) => Number(left.vertical) - Number(right.vertical)
+            || (left.item.length || 20) - (right.item.length || 20)
+            || left.trimMm - right.trimMm);
+        const selected = candidates[0];
+        if (!selected) continue;
+        applyImportedEndTrim(selected);
+        repairs += 1;
+        repairedThisPass = true;
+        break;
+      }
+    }
+    if (!repairedThisPass) break;
+  }
+  return repairs;
+};
 
 export const parseMaycadSceneXml = (xmlText: string): MaycadImportResult => {
   const document = new DOMParser().parseFromString(xmlText, 'application/xml');
@@ -137,7 +304,11 @@ export const parseMaycadSceneXml = (xmlText: string): MaycadImportResult => {
       name: mapped.variantId,
       variantId: mapped.variantId,
       length: lengthMm,
-      position: [Math.round(center.x * 10), Math.round(center.y * 10), Math.round(center.z * 10)],
+      position: [
+        maycadCentimetresToMillimetres(center.x),
+        maycadCentimetresToMillimetres(center.y),
+        maycadCentimetresToMillimetres(center.z),
+      ],
       rotation: [quarterTurn(euler.x), quarterTurn(euler.y), quarterTurn(euler.z)],
       colorId: 'natural',
       quantity: 1,
@@ -195,6 +366,7 @@ export const parseMaycadSceneXml = (xmlText: string): MaycadImportResult => {
 
   const items = Array.from(profileRecords.values()).map((record) => record.item);
   if (!items.length) throw new Error('No MayCAD aluminum profiles were found');
+  repairMaycadShallowProfileIntersections(items);
   const title = scene.querySelector('title')?.textContent || undefined;
   return {
     items,
