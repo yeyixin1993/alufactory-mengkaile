@@ -331,6 +331,8 @@ const TEXT: Record<Language, Record<string, string>> = {
     maycadImporting: '正在解析 MayCAD 文件…',
     maycadLoaded: 'MayCAD模型已导入，可继续编辑',
     maycadImportFailed: 'MayCAD导入失败',
+    jsonImportFailed: 'JSON读取失败',
+    jsonImportUnsupported: 'JSON格式不支持，请选择设计器导出的JSON或系统订单导出的JSON',
     maycadSceneOnly: '请选择 MayCAD 导出的 .scene 文件。PDF、图片及其他格式暂不支持。',
     maycadImportScope: '目前仅导入铝型材和打孔记录；连接件、螺丝等配件导入正在开发中。',
     maycadProfileReviewTitle: '请确认未验证的型材型号',
@@ -582,6 +584,8 @@ const TEXT: Record<Language, Record<string, string>> = {
     maycadImporting: 'Parsing MayCAD file…',
     maycadLoaded: 'MayCAD model imported and ready to edit',
     maycadImportFailed: 'MayCAD import failed',
+    jsonImportFailed: 'Unable to import JSON',
+    jsonImportUnsupported: 'Unsupported JSON format. Choose a designer-export JSON or a system order-export JSON.',
     maycadSceneOnly: 'Choose a .scene file exported by MayCAD. PDF, images, and other formats are not currently supported.',
     maycadImportScope: 'Currently only aluminum profiles and drilling records are imported. Accessory import is under development.',
     maycadProfileReviewTitle: 'Confirm unverified profile models',
@@ -833,6 +837,8 @@ const TEXT: Record<Language, Record<string, string>> = {
     maycadImporting: 'MayCADファイルを解析中…',
     maycadLoaded: 'MayCADモデルを読み込みました。編集できます',
     maycadImportFailed: 'MayCADの読み込みに失敗しました',
+    jsonImportFailed: 'JSONの読み込みに失敗しました',
+    jsonImportUnsupported: '未対応のJSON形式です。デザイナー出力JSONまたはシステム注文出力JSONを選択してください。',
     maycadSceneOnly: 'MayCADから書き出した.sceneファイルを選択してください。PDF・画像・その他の形式は現在対応していません。',
     maycadImportScope: '現在読み込めるのはアルミ形材と穴あけ記録のみです。金具・ねじなどの部品読込は開発中です。',
     maycadProfileReviewTitle: '未検証の形材型番を確認してください',
@@ -1144,6 +1150,68 @@ const buildDesignDocument = (items: DIYSceneItem[], language: Language) => ({
   },
   items: normalizeDesignItems(items),
   production: buildProductionData(items, language),
+});
+
+const VALID_PROFILE_SIDES = new Set<ProfileSide>(['A', 'B', 'C', 'D']);
+const VALID_HOLE_TYPES = new Set<HoleType>(['through', 'countersunk', 'threaded']);
+const VALID_THREAD_SIZES = new Set<ThreadSize>(['M3', 'M4', 'M5', 'M6', 'M8']);
+const VALID_PROFILE_FINISHES = new Set<ProfileFinish>(['oxidized', 'electrophoretic', 'powder']);
+
+const hasTappingEnabled = (value: unknown) => (
+  Array.isArray(value)
+    ? value.some(Boolean)
+    : Boolean(value)
+);
+
+const mapSystemOrderProfileItemsToDesignerItems = (
+  sourceItems: any[],
+  createProfileItem: (index: number, variantId?: string) => DIYSceneItem,
+): DIYSceneItem[] => sourceItems.flatMap((sourceItem: any, index: number) => {
+  if (String(sourceItem?.product_type || '').toUpperCase() !== 'PROFILE') return [];
+  const config = sourceItem?.config || {};
+  const variantId = String(config.variantId || '2020');
+  const base = createProfileItem(index, variantId);
+  const length = Math.max(20, Math.round(Number(config.length || base.length || 200)));
+  const quantity = Math.max(1, Math.round(Number(sourceItem?.quantity || 1)));
+  const finishCandidate = String(config.finish || '').toLowerCase() as ProfileFinish;
+  const finish = VALID_PROFILE_FINISHES.has(finishCandidate) ? finishCandidate : undefined;
+  const holes: DrillHole[] = (Array.isArray(config.holes) ? config.holes : []).flatMap((rawHole: any) => {
+    const holeType = String(rawHole?.type || '').toLowerCase() as HoleType;
+    if (!VALID_HOLE_TYPES.has(holeType)) return [];
+    const sideCandidate = String(rawHole?.side || 'A').toUpperCase() as ProfileSide;
+    const side = VALID_PROFILE_SIDES.has(sideCandidate) ? sideCandidate : 'A';
+    const rawPosition = Number(rawHole?.positionMm);
+    if (!Number.isFinite(rawPosition)) return [];
+    const rawPhysicalGrooveIndex = Number(rawHole?.physicalGrooveIndex ?? rawHole?.grooveIndex ?? 0);
+    const physicalGrooveIndex = Number.isFinite(rawPhysicalGrooveIndex) ? Math.max(0, Math.round(rawPhysicalGrooveIndex)) : 0;
+    const threadSizeCandidate = String(rawHole?.threadSize || '').toUpperCase() as ThreadSize;
+    const threadSize = holeType === 'threaded' && VALID_THREAD_SIZES.has(threadSizeCandidate)
+      ? threadSizeCandidate
+      : undefined;
+    return [{
+      id: makeId(),
+      side,
+      type: holeType,
+      threadSize,
+      grooveIndex: physicalGrooveIndex,
+      physicalGrooveIndex,
+      positionMm: Math.min(length - 5, Math.max(5, Math.round(rawPosition * 10) / 10)),
+    } satisfies DrillHole];
+  });
+
+  return [{
+    ...base,
+    name: variantId,
+    variantId,
+    length,
+    quantity,
+    colorId: typeof config.colorId === 'string' && config.colorId.trim() ? config.colorId : base.colorId,
+    finish,
+    holes,
+    tappingLeft: hasTappingEnabled(config?.tapping?.left),
+    tappingRight: hasTappingEnabled(config?.tapping?.right),
+    remark: typeof config.remark === 'string' ? config.remark : (base.remark || ''),
+  } satisfies DIYSceneItem];
 });
 
 const downloadTextFile = (content: string, mimeType: string, filename: string) => {
@@ -9535,12 +9603,21 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({ language, onLanguageChange, u
     reader.onload = () => {
       try {
         const parsed = JSON.parse(String(reader.result || '{}'));
-        if (Array.isArray(parsed.items)) {
-          commit(normalizeDesignItems(parsed.items), null);
-          showNotice(t.loaded);
+        let importedItems: DIYSceneItem[] = [];
+        if (Array.isArray(parsed?.items)) {
+          importedItems = normalizeDesignItems(parsed.items as DIYSceneItem[]);
+        } else if (Array.isArray(parsed?.order_json?.items)) {
+          importedItems = normalizeDesignItems(mapSystemOrderProfileItemsToDesignerItems(
+            parsed.order_json.items,
+            (index, variantId) => createItem('profile', index, variantId),
+          ));
         }
+        if (!importedItems.length) throw new Error(t.jsonImportUnsupported);
+        commit(importedItems, null);
+        showNotice(`${t.loaded} · ${importedItems.length}`);
       } catch (error) {
         console.warn('Unable to import DIY design', error);
+        showNotice(`${t.jsonImportFailed}: ${String((error as any)?.message || error)}`);
       }
     };
     reader.readAsText(file);
