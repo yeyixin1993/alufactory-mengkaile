@@ -886,18 +886,15 @@ const Cart: React.FC<{
     return w;
   }, [cart]);
 
-  const accessorySubtotal = React.useMemo(
-    () => cart.reduce((sum, item) => {
-      if (item.product.type !== ProductType.ACCESSORY) return sum;
-      return sum + (Number(item.totalPrice) || 0);
-    }, 0),
+  const totalItemAmount = React.useMemo(
+    () => cart.reduce((sum, item) => sum + (Number(item.totalPrice) || 0), 0),
     [cart]
   );
 
   const accessoryShippingWeightKg = React.useMemo(() => {
     const hasAccessory = cart.some(item => item.product.type === ProductType.ACCESSORY);
-    return getAccessoryShippingWeightKg(user, hasAccessory, accessorySubtotal);
-  }, [cart, accessorySubtotal, user]);
+    return getAccessoryShippingWeightKg(user, hasAccessory, totalItemAmount);
+  }, [cart, totalItemAmount, user]);
 
   const totalWeightKg = totalProfileWeightKg + totalMarineBoardWeightKg + accessoryShippingWeightKg;
 

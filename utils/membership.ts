@@ -38,7 +38,7 @@ export const isVipMembership = (value: unknown): boolean => {
 export const getAccessoryShippingWeightKg = (
   user: { membershipLevel?: unknown } | null | undefined,
   hasAccessory: boolean,
-  accessorySubtotal: number,
+  orderAmount: number,
 ): number => {
   if (!hasAccessory) return 0;
 
@@ -47,5 +47,5 @@ export const getAccessoryShippingWeightKg = (
   // accessory threshold instead of inheriting the zero-weight branch.
   if (user && normalizeMembershipLevel(user.membershipLevel) === 'vip_plus') return 0;
 
-  return accessorySubtotal < 30 ? 1 : 0;
+  return orderAmount < 30 ? 1 : 0;
 };

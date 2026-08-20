@@ -336,7 +336,6 @@ const FactorySheet: React.FC<FactorySheetProps> = ({ cart, user, language, order
   const calculateTotalWeight = () => {
     let totalWeightKg = 0;
     let hasAccessory = false;
-    let accessorySubtotal = 0;
     cart.forEach(item => {
       if (item.product.type === ProductType.PROFILE) {
         const cfg = item.config as ProfileConfig;
@@ -344,12 +343,11 @@ const FactorySheet: React.FC<FactorySheetProps> = ({ cart, user, language, order
         totalWeightKg += weightPerM * (cfg.length / 1000) * item.quantity;
       } else if (item.product.type === ProductType.ACCESSORY) {
         hasAccessory = true;
-        accessorySubtotal += Number(item.totalPrice) || 0;
       } else {
         totalWeightKg += 1 * item.quantity;
       }
     });
-    return totalWeightKg + getAccessoryShippingWeightKg(user, hasAccessory, accessorySubtotal);
+    return totalWeightKg + getAccessoryShippingWeightKg(user, hasAccessory, baseTotal);
   };
 
   // 2. 运费计算 — use passed-in values if available, otherwise auto-calculate cheapest
@@ -401,11 +399,11 @@ const FactorySheet: React.FC<FactorySheetProps> = ({ cart, user, language, order
 
   const isAccessoryOnlyOrder =
     cart.length > 0 && cart.every((item) => item.product.type === ProductType.ACCESSORY);
-  const accessorySubtotal = isAccessoryOnlyOrder
+  const accessoryOnlyOrderAmount = isAccessoryOnlyOrder
     ? cart.reduce((sum, item) => sum + (Number(item.totalPrice) || 0), 0)
     : 0;
   const isConfirmedFreeAccessoryOnlyOrder =
-    isAccessoryOnlyOrder && getAccessoryShippingWeightKg(user, true, accessorySubtotal) === 0;
+    isAccessoryOnlyOrder && getAccessoryShippingWeightKg(user, true, accessoryOnlyOrderAmount) === 0;
 
   // A missing address or an unexplained zero-fee order remains freight
   // collect. An authenticated VIP+ accessory order, or an accessory-only
