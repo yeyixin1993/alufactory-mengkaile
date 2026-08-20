@@ -12,6 +12,7 @@ import {
   isDiyScrewAccessory,
   summarizeDiyScrewCartItems,
 } from '../utils/cartAccessories';
+import { normalizeMembershipLevel } from '../utils/membership';
 
 interface FactorySheetProps {
   cart: CartItem[];
@@ -334,11 +335,15 @@ const FactorySheet: React.FC<FactorySheetProps> = ({ cart, user, language, order
   // 1. 先计算总重量（如果还没计算的话）
   const calculateTotalWeight = () => {
     let totalWeightKg = 0;
+    const isVipPlus = normalizeMembershipLevel(user?.membershipLevel) === 'vip_plus';
     cart.forEach(item => {
       if (item.product.type === ProductType.PROFILE) {
         const cfg = item.config as ProfileConfig;
         const weightPerM = PROFILE_WEIGHTS[cfg.variantId!] || 0.6;
         totalWeightKg += weightPerM * (cfg.length / 1000) * item.quantity;
+      } else if (item.product.type === ProductType.ACCESSORY && isVipPlus) {
+        // VIP+ accessories do not contribute billable shipping weight.
+        totalWeightKg += 0;
       } else {
         totalWeightKg += 1 * item.quantity;
       }
@@ -357,6 +362,7 @@ const FactorySheet: React.FC<FactorySheetProps> = ({ cart, user, language, order
 
   const calcForMethod = (method: 'standard' | 'sf' | 'anneng' | 'sf_collect', province: string, weightKg: number) => {
     if (method === 'sf_collect') return 0;
+    if (weightKg <= 0) return 0;
     const olFee = (method === 'standard' || method === 'sf') && hasOverlength ? 20 : 0;
     if (method === 'anneng') {
       const rate = SHIPPING_RATES_AN[province] || { first: 50, next: 3 };
@@ -392,10 +398,15 @@ const FactorySheet: React.FC<FactorySheetProps> = ({ cart, user, language, order
     shippingLabel = SHIPPING_METHOD_NAMES[normalizedShippingMethod as ShippingMethod][language];
   }
 
-  // Zero-fee previews and sheets without an address have not completed the
-  // prepaid shipping flow. Label them freight collect instead of ordinary
-  // prepaid courier service.
-  if (shippingFee <= 0 || !activeAddress) {
+  const isVipPlusAccessoryOnlyOrder =
+    normalizeMembershipLevel(user?.membershipLevel) === 'vip_plus' &&
+    cart.length > 0 &&
+    cart.every((item) => item.product.type === ProductType.ACCESSORY);
+
+  // A missing address or an unexplained zero-fee order remains freight
+  // collect. VIP+ accessory-only orders are a confirmed free-shipping case,
+  // so retain the selected courier label with a ¥0 fee.
+  if (!activeAddress || (shippingFee <= 0 && !isVipPlusAccessoryOnlyOrder)) {
     shippingFee = 0;
     shippingLabel = SHIPPING_METHOD_NAMES.sf_collect[language];
   }

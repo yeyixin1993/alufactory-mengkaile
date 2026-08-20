@@ -15,7 +15,7 @@ import { openFactorySheetPreview } from './components/FactorySheetPreview';
 import FactorySheet from './components/FactorySheet';
 import ExportOverlay from './components/ExportOverlay';
 import { buildOrderPdfFilename, formatEast8Date, formatEast8DateTime } from './utils/orderFormatting';
-import { normalizeMembershipLevel } from './utils/membership';
+import { getAccessoryShippingWeightKg, normalizeMembershipLevel } from './utils/membership';
 import { calculateScrewPlan, inferInclude304ScrewsByTotal } from './utils/screwCalculator';
 import { preloadImages } from './utils/imagePreload';
 import { exportElementToPdf } from './utils/pdfExport';
@@ -893,9 +893,8 @@ const Cart: React.FC<{
 
   const accessoryShippingWeightKg = React.useMemo(() => {
     const hasAccessory = cart.some(item => item.product.type === ProductType.ACCESSORY);
-    if (!hasAccessory) return 0;
-    return totalItemAmount < 30 ? 1 : 0;
-  }, [cart, totalItemAmount]);
+    return getAccessoryShippingWeightKg(user?.membershipLevel, hasAccessory, totalItemAmount);
+  }, [cart, totalItemAmount, user?.membershipLevel]);
 
   const totalWeightKg = totalProfileWeightKg + totalMarineBoardWeightKg + accessoryShippingWeightKg;
 

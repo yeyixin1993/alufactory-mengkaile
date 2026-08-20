@@ -1,7 +1,10 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Language, CartItem, Product, User } from '../types';
 import { PROFILE_COLORS, getProfileColorPhotoSrc } from '../constants';
+import { ACCESSORY_BULK_THRESHOLD, END_CAP_PRICES } from '../utils/accessoryPricing';
+import { normalizeMembershipLevel } from '../utils/membership';
+import { ApiService } from '../services/apiService';
 
 type AccessoryProfileSize = '1515' | '2020' | '3030' | '4040';
 type AccessoryColorMode = 'natural' | 'colored';
@@ -16,6 +19,7 @@ interface AccessoryPrice {
 interface AccessoryDefinition {
   id: string;
   code: number;
+  codeLabel?: Record<Language, string>;
   name: Record<Language, string>;
   note?: string;
   imageKey?: string;
@@ -130,6 +134,34 @@ const ACCESSORY_DEFINITIONS: AccessoryDefinition[] = [
       '1515': { natural: 3, colored: 4, naturalBulk: 2.5, coloredBulk: 3 },
       '2020': { natural: 4, colored: 5, naturalBulk: 3.5, coloredBulk: 4 },
       '3030': { natural: 6, colored: 7, naturalBulk: 5.5, coloredBulk: 6 },
+    },
+  },
+  {
+    id: 'end_cap_2020',
+    code: 0,
+    codeLabel: { en: 'End cap', cn: '端盖', jp: 'エンドキャップ' },
+    name: { en: '2020 Aluminum Profile End Cap', cn: '2020铝型材端盖', jp: '2020アルミプロファイル端キャップ' },
+    prices: {
+      '2020': {
+        natural: END_CAP_PRICES['2020'].retail,
+        colored: END_CAP_PRICES['2020'].retail,
+        naturalBulk: END_CAP_PRICES['2020'].bulk,
+        coloredBulk: END_CAP_PRICES['2020'].bulk,
+      },
+    },
+  },
+  {
+    id: 'end_cap_3030',
+    code: 0,
+    codeLabel: { en: 'End cap', cn: '端盖', jp: 'エンドキャップ' },
+    name: { en: '3030 Aluminum Profile End Cap', cn: '3030铝型材端盖', jp: '3030アルミプロファイル端キャップ' },
+    prices: {
+      '3030': {
+        natural: END_CAP_PRICES['3030'].retail,
+        colored: END_CAP_PRICES['3030'].retail,
+        naturalBulk: END_CAP_PRICES['3030'].bulk,
+        coloredBulk: END_CAP_PRICES['3030'].bulk,
+      },
     },
   },
   {
@@ -257,8 +289,9 @@ const AccessoryQuoteEditor: React.FC<{
   returnCartPath: string;
   onAddToCart: (item: CartItem) => void;
   onUpdateItem: (item: CartItem) => void;
-}> = ({ language, product, initialItem, returnCartPath, onAddToCart, onUpdateItem }) => {
+}> = ({ language, product, user, initialItem, returnCartPath, onAddToCart, onUpdateItem }) => {
   const navigate = useNavigate();
+  const isVipPlus = normalizeMembershipLevel(user?.membershipLevel) === 'vip_plus';
 
   const seeded = (initialItem?.config || {}) as Partial<AccessoryConfig>;
 
@@ -277,6 +310,32 @@ const AccessoryQuoteEditor: React.FC<{
   const [colorImgError, setColorImgError] = useState(false);
   const colorPhotoSrc = getProfileColorPhotoSrc(colorId);
   const [zoomPreview, setZoomPreview] = useState<{ src: string; alt: string } | null>(null);
+  const [inventoryByAccessoryId, setInventoryByAccessoryId] = useState<Record<string, number>>({});
+  const [inventoryLoaded, setInventoryLoaded] = useState(false);
+  const inventoryColorId = colorMode === 'natural' ? 'natural' : colorId;
+
+  useEffect(() => {
+    let active = true;
+    setInventoryLoaded(false);
+    ApiService.getAccessoryInventory()
+      .then((rows) => {
+        if (!active) return;
+        const next: Record<string, number> = {};
+        rows.forEach((row) => {
+          if (row.profileSize === profileSize && row.colorId === inventoryColorId) {
+            next[row.accessoryId] = row.quantity;
+          }
+        });
+        setInventoryByAccessoryId(next);
+        setInventoryLoaded(true);
+      })
+      .catch(() => {
+        if (!active) return;
+        setInventoryByAccessoryId({});
+        setInventoryLoaded(false);
+      });
+    return () => { active = false; };
+  }, [inventoryColorId, profileSize]);
 
   const ui = useMemo(() => {
     if (language === 'cn') {
@@ -296,10 +355,12 @@ const AccessoryQuoteEditor: React.FC<{
         bulk: '批量单价(≥20)',
         qty: '数量',
         subtotal: '小计',
+        stock: '库存',
+        pieces: '件',
         notAvailable: '该型号暂不提供',
         total: '总计',
         totalQty: '总数量',
-        freeShippingNotice: '🔥 满30包邮',
+        freeShippingNotice: isVipPlus ? '🔥 VIP+ 配件不限金额包邮' : '🔥 满30包邮',
         batchRule: '同一编号一次买 20 个及以上，自动使用批量单价。',
         add: '加入购物车',
         update: '更新购物车',
@@ -323,10 +384,12 @@ const AccessoryQuoteEditor: React.FC<{
         bulk: '大量単価(20個以上)',
         qty: '数量',
         subtotal: '小計',
+        stock: '在庫',
+        pieces: '個',
         notAvailable: 'このサイズは未提供',
         total: '合計',
         totalQty: '総数量',
-        freeShippingNotice: '🔥 30元以上で送料無料',
+        freeShippingNotice: isVipPlus ? '🔥 VIP+ 部品は金額に関わらず送料無料' : '🔥 30元以上で送料無料',
         batchRule: '同一番号を20個以上購入時、自動で大量単価になります。',
         add: 'カートに追加',
         update: 'カートを更新',
@@ -349,16 +412,18 @@ const AccessoryQuoteEditor: React.FC<{
       bulk: 'Bulk Unit (>=20)',
       qty: 'Qty',
       subtotal: 'Subtotal',
+      stock: 'Stock',
+      pieces: 'pcs',
       notAvailable: 'Not available for this size',
       total: 'Total',
       totalQty: 'Total Qty',
-      freeShippingNotice: '🔥 Free shipping for orders over ¥30',
+      freeShippingNotice: isVipPlus ? '🔥 VIP+ accessories ship free at any order amount' : '🔥 Free shipping for orders over ¥30',
       batchRule: 'For the same code, qty >=20 uses bulk unit price.',
       add: 'Add to Cart',
       update: 'Update Cart',
       pickFirst: 'Please enter quantity first',
     };
-  }, [language]);
+  }, [isVipPlus, language]);
 
   const availableDefs = useMemo(
     () => ACCESSORY_DEFINITIONS.filter((d) => Boolean(d.prices[profileSize])),
@@ -370,7 +435,7 @@ const AccessoryQuoteEditor: React.FC<{
       .map((def) => {
         const p = def.prices[profileSize]!;
         const qty = Math.max(0, Number(qtyMap[def.id] ?? 0));
-        const isBulk = qty >= 20;
+        const isBulk = qty >= ACCESSORY_BULK_THRESHOLD;
         const unitPrice = colorMode === 'natural'
           ? (isBulk ? p.naturalBulk : p.natural)
           : (isBulk ? p.coloredBulk : p.colored);
@@ -549,6 +614,7 @@ const AccessoryQuoteEditor: React.FC<{
                 <th className="p-2 border border-slate-200">{ui.image}</th>
                 <th className="p-2 border border-slate-200">{ui.unit}</th>
                 <th className="p-2 border border-slate-200">{ui.bulk}</th>
+                <th className="p-2 border border-slate-200">{ui.stock}</th>
                 <th className="p-2 border border-slate-200">{ui.qty}</th>
                 <th className="p-2 border border-slate-200">{ui.subtotal}</th>
               </tr>
@@ -558,7 +624,7 @@ const AccessoryQuoteEditor: React.FC<{
                 const p = def.prices[profileSize];
                 if (!p) return null;
                 const qty = Math.max(0, Number(qtyMap[def.id] ?? 0));
-                const isBulk = qty >= 20;
+                const isBulk = qty >= ACCESSORY_BULK_THRESHOLD;
                 const unitPrice = colorMode === 'natural'
                   ? (isBulk ? p.naturalBulk : p.natural)
                   : (isBulk ? p.coloredBulk : p.colored);
@@ -566,7 +632,7 @@ const AccessoryQuoteEditor: React.FC<{
 
                 return (
                   <tr key={def.id} className="odd:bg-white even:bg-slate-50/60">
-                    <td className="p-2 border border-slate-100 font-black">{def.code}号</td>
+                    <td className="p-2 border border-slate-100 font-black">{def.codeLabel?.[language] || `${def.code}号`}</td>
                     <td className="p-2 border border-slate-100">
                       <div className="font-semibold text-slate-800">{def.name[language]}</div>
                       {def.note && <div className="text-[11px] text-slate-500">{def.note}</div>}
@@ -590,12 +656,22 @@ const AccessoryQuoteEditor: React.FC<{
                           }}
                         />
                         <div className="absolute inset-0 hidden items-center justify-center text-[10px] font-bold text-slate-400 bg-slate-50">
-                          #{def.code}
+                          {def.codeLabel?.[language] || `#${def.code}`}
                         </div>
                       </div>
                     </td>
                     <td className="p-2 border border-slate-100">¥{(colorMode === 'natural' ? p.natural : p.colored).toFixed(2)}</td>
                     <td className="p-2 border border-slate-100">¥{(colorMode === 'natural' ? p.naturalBulk : p.coloredBulk).toFixed(2)}</td>
+                    <td className="p-2 border border-slate-100">
+                      {inventoryLoaded ? (
+                        <span
+                          data-testid={`accessory-inventory-${def.id}`}
+                          className={`font-black ${(inventoryByAccessoryId[def.id] || 0) > 0 ? 'text-emerald-700' : 'text-amber-700'}`}
+                        >
+                          {inventoryByAccessoryId[def.id] || 0} {ui.pieces}
+                        </span>
+                      ) : <span className="text-slate-400">-</span>}
+                    </td>
                     <td className="p-2 border border-slate-100">
                       <input
                         type="number"

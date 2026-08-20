@@ -366,6 +366,7 @@
                 <div class="nav-item active" onclick="switchTab('dashboard')">📊 仪表板</div>
                 <div class="nav-item" onclick="switchTab('users')">👥 用户管理</div>
                 <div class="nav-item" onclick="switchTab('profile_inventory')">📏 型材库存</div>
+                <div class="nav-item" onclick="switchTab('accessory_inventory')">🔧 配件库存</div>
                 <!-- <div class="nav-item" onclick="switchTab('profiles')">📋 用户资料</div> -->
                 <div class="nav-item" onclick="switchTab('orders_profile')">📦 总订单管理</div>
                 <div class="nav-item" onclick="switchTab('orders_pegboard')">📦 铝合金洞洞板订单管理</div>
@@ -438,13 +439,37 @@
                             <select id="inventoryVariantFilter" class="search-box" style="width:170px" onchange="renderInventoryRows()"><option value="">全部型号</option></select>
                             <select id="inventoryColorFilter" class="search-box" style="width:170px" onchange="renderInventoryRows()"><option value="">全部颜色</option></select>
                             <button class="btn btn-success" onclick="downloadInventoryExcel()">下载 Excel</button>
-                            <button class="btn btn-primary" onclick="document.getElementById('inventoryFile').click()">上传 Excel</button>
+                            <button id="inventoryUploadButton" class="btn btn-primary" onclick="openInventoryExcelPicker()">上传 Excel</button>
                             <input id="inventoryFile" type="file" accept=".xlsx" hidden onchange="uploadInventoryExcel(this)">
                         </div>
                     </div>
                     <table>
                         <thead><tr><th>型材型号</th><th>颜色</th><th>单支长度</th><th>库存支数</th><th>库存总米数</th><th>更新时间</th><th>操作</th></tr></thead>
                         <tbody id="profileInventoryTableBody"></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Accessory Inventory -->
+            <div id="accessory_inventory" class="content hidden">
+                <div class="table-wrapper">
+                    <div class="table-header">
+                        <div>
+                            <h3>配件库存</h3>
+                            <div style="margin-top:6px;color:#6b7280;font-size:13px;">按配件SKU、适配型号和具体颜色管理件数；保存或上传Excel后会同步到前台配件报价页。</div>
+                        </div>
+                        <div class="inventory-toolbar">
+                            <select id="accessoryInventoryItemFilter" class="search-box" style="width:220px" onchange="renderAccessoryInventoryRows()"><option value="">全部配件</option></select>
+                            <select id="accessoryInventorySizeFilter" class="search-box" style="width:150px" onchange="renderAccessoryInventoryRows()"><option value="">全部型号</option></select>
+                            <select id="accessoryInventoryColorFilter" class="search-box" style="width:170px" onchange="renderAccessoryInventoryRows()"><option value="">全部颜色</option></select>
+                            <button class="btn btn-success" onclick="downloadAccessoryInventoryExcel()">下载 Excel</button>
+                            <button class="btn btn-primary" onclick="document.getElementById('accessoryInventoryFile').click()">上传 Excel</button>
+                            <input id="accessoryInventoryFile" type="file" accept=".xlsx" hidden onchange="uploadAccessoryInventoryExcel(this)">
+                        </div>
+                    </div>
+                    <table>
+                        <thead><tr><th>编号</th><th>配件</th><th>适配型号</th><th>颜色</th><th>库存数量</th><th>更新时间</th><th>操作</th></tr></thead>
+                        <tbody id="accessoryInventoryTableBody"></tbody>
                     </table>
                 </div>
             </div>
@@ -751,6 +776,8 @@
         let currentUserPhoneSearch = '';
         let inventoryCache = [];
         let inventoryColorNames = {};
+        let accessoryInventoryCache = [];
+        let accessoryInventoryColorNames = {};
 
         const ORDER_TAB_MAP = {
             'orders_profile': { category: 'profile', title: '总订单管理' },
@@ -864,6 +891,7 @@
                 'users': '用户管理',
                 'profiles': '用户资料',
                 'profile_inventory': '型材库存',
+                'accessory_inventory': '配件库存',
                 'orders': '订单管理',
                 'orders_profile': '总订单管理',
                 'orders_pegboard': '铝合金洞洞板订单管理',
@@ -880,6 +908,7 @@
             if (tab === 'users') loadUsers();
             if (tab === 'profiles') loadProfiles();
             if (tab === 'profile_inventory') loadProfileInventory();
+            if (tab === 'accessory_inventory') loadAccessoryInventory();
             if (tab === 'orders') loadOrders();
             if (ORDER_TAB_MAP[tab]) {
                 currentOrderCategory = ORDER_TAB_MAP[tab].category;
@@ -1188,19 +1217,161 @@
             URL.revokeObjectURL(url);
         }
 
+        function openInventoryExcelPicker() {
+            const input = document.getElementById('inventoryFile');
+            if (!input) return;
+            // A failed upload used to leave the selected file in the hidden input.
+            // Browsers then suppress change when the administrator chooses the same
+            // workbook again, making the upload button appear completely inert.
+            input.value = '';
+            input.click();
+        }
+
         async function uploadInventoryExcel(input) {
+            const file = input.files?.[0];
+            if (!file) return;
+            const button = document.getElementById('inventoryUploadButton');
+            const originalButtonText = button?.textContent || '上传 Excel';
+            if (button) {
+                button.disabled = true;
+                button.textContent = '上传中…';
+            }
+            try {
+                const form = new FormData();
+                form.append('file', file);
+                const response = await fetch(`${API_BASE}/admin/profile-inventory/import`, {
+                    method: 'POST', headers: { 'Authorization': `Bearer ${authToken}` }, body: form
+                });
+                const responseText = await response.text();
+                let data = {};
+                if (responseText) {
+                    try {
+                        data = JSON.parse(responseText);
+                    } catch (parseError) {
+                        console.warn('Inventory import returned a non-JSON response', parseError, responseText.slice(0, 500));
+                    }
+                }
+                if (!response.ok) {
+                    throw new Error(data.error || responseText.slice(0, 200) || `导入失败（HTTP ${response.status}）`);
+                }
+                alert(`库存导入成功，更新 ${data.updated || 0} 行`);
+                await loadProfileInventory();
+            } catch (error) {
+                console.error('Profile inventory upload failed', error);
+                const rawMessage = String(error?.message || error || '未知错误');
+                const message = /Failed to fetch|NetworkError|Load failed/i.test(rawMessage)
+                    ? `无法连接后台服务。请确认 ${window.location.origin} 已启动，然后重新上传。`
+                    : rawMessage;
+                alert(`库存导入失败：${message}`);
+            } finally {
+                input.value = '';
+                if (button) {
+                    button.disabled = false;
+                    button.textContent = originalButtonText;
+                }
+            }
+        }
+
+        async function loadAccessoryInventory() {
+            try {
+                const response = await fetch(`${API_BASE}/admin/accessory-inventory`, { headers: { 'Authorization': `Bearer ${authToken}` } });
+                const data = await response.json();
+                if (!response.ok) throw new Error(data.error || '加载配件库存失败');
+                accessoryInventoryCache = data.inventory || [];
+                accessoryInventoryColorNames = data.color_names || {};
+                populateAccessoryInventoryFilters();
+                renderAccessoryInventoryRows();
+            } catch (error) {
+                alert('配件库存加载失败: ' + error.message);
+            }
+        }
+
+        function populateAccessoryInventoryFilters() {
+            const itemSelect = document.getElementById('accessoryInventoryItemFilter');
+            const sizeSelect = document.getElementById('accessoryInventorySizeFilter');
+            const colorSelect = document.getElementById('accessoryInventoryColorFilter');
+            if (!itemSelect || !sizeSelect || !colorSelect) return;
+            const selectedItem = itemSelect.value;
+            const selectedSize = sizeSelect.value;
+            const selectedColor = colorSelect.value;
+            const items = [...new Map(accessoryInventoryCache.map(row => [row.accessory_id, row])).values()]
+                .sort((a, b) => String(a.accessory_name).localeCompare(String(b.accessory_name), 'zh-CN'));
+            const sizes = [...new Set(accessoryInventoryCache.map(row => row.profile_size))].sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
+            const colors = [...new Set(accessoryInventoryCache.map(row => row.color_id))].sort((a, b) =>
+                String(accessoryInventoryColorNames[a] || a).localeCompare(String(accessoryInventoryColorNames[b] || b), 'zh-CN')
+            );
+            itemSelect.innerHTML = '<option value="">全部配件</option>' + items.map(row => `<option value="${escapeHtml(row.accessory_id)}">${escapeHtml(row.code)} · ${escapeHtml(row.accessory_name)}</option>`).join('');
+            sizeSelect.innerHTML = '<option value="">全部型号</option>' + sizes.map(id => `<option value="${escapeHtml(id)}">${escapeHtml(id)}</option>`).join('');
+            colorSelect.innerHTML = '<option value="">全部颜色</option>' + colors.map(id => `<option value="${escapeHtml(id)}">${escapeHtml(accessoryInventoryColorNames[id] || id)}</option>`).join('');
+            itemSelect.value = items.some(row => row.accessory_id === selectedItem) ? selectedItem : '';
+            sizeSelect.value = sizes.includes(selectedSize) ? selectedSize : '';
+            colorSelect.value = colors.includes(selectedColor) ? selectedColor : '';
+        }
+
+        function renderAccessoryInventoryRows() {
+            const body = document.getElementById('accessoryInventoryTableBody');
+            if (!body) return;
+            const accessoryId = document.getElementById('accessoryInventoryItemFilter')?.value || '';
+            const profileSize = document.getElementById('accessoryInventorySizeFilter')?.value || '';
+            const colorId = document.getElementById('accessoryInventoryColorFilter')?.value || '';
+            const rows = accessoryInventoryCache.filter(row =>
+                (!accessoryId || row.accessory_id === accessoryId) &&
+                (!profileSize || row.profile_size === profileSize) &&
+                (!colorId || row.color_id === colorId)
+            );
+            body.innerHTML = rows.map(row => `
+                <tr>
+                    <td><strong>${escapeHtml(row.code)}</strong></td>
+                    <td>${escapeHtml(row.accessory_name)}<div style="color:#9ca3af;font-size:11px;">${escapeHtml(row.accessory_id)}</div></td>
+                    <td><strong>${escapeHtml(row.profile_size)}</strong></td>
+                    <td>${escapeHtml(accessoryInventoryColorNames[row.color_id] || row.color_id)}<div style="color:#9ca3af;font-size:11px;">${escapeHtml(row.color_id)}</div></td>
+                    <td><input class="inventory-input" id="accessory-inventory-count-${row.id}" type="number" min="0" step="1" value="${Number(row.quantity) || 0}"> 件</td>
+                    <td>${row.updated_at ? new Date(row.updated_at).toLocaleString('zh-CN') : '-'}</td>
+                    <td><button class="btn btn-primary" onclick="saveAccessoryInventoryRow(${row.id})">保存</button></td>
+                </tr>`).join('');
+        }
+
+        async function saveAccessoryInventoryRow(id) {
+            const input = document.getElementById(`accessory-inventory-count-${id}`);
+            const quantity = Number(input?.value);
+            if (!Number.isInteger(quantity) || quantity < 0) return alert('库存数量必须是非负整数');
+            const response = await fetch(`${API_BASE}/admin/accessory-inventory/${id}`, {
+                method: 'PUT',
+                headers: { 'Authorization': `Bearer ${authToken}`, 'Content-Type': 'application/json' },
+                body: JSON.stringify({ quantity })
+            });
+            const data = await response.json();
+            if (!response.ok) return alert(data.error || '保存失败');
+            const index = accessoryInventoryCache.findIndex(row => row.id === id);
+            if (index >= 0) accessoryInventoryCache[index] = data.inventory;
+            renderAccessoryInventoryRows();
+        }
+
+        async function downloadAccessoryInventoryExcel() {
+            const response = await fetch(`${API_BASE}/admin/accessory-inventory/export`, { headers: { 'Authorization': `Bearer ${authToken}` } });
+            if (!response.ok) return alert('下载失败');
+            const blob = await response.blob();
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = `配件库存-${new Date().toISOString().slice(0, 10)}.xlsx`;
+            link.click();
+            URL.revokeObjectURL(url);
+        }
+
+        async function uploadAccessoryInventoryExcel(input) {
             const file = input.files?.[0];
             if (!file) return;
             const form = new FormData();
             form.append('file', file);
-            const response = await fetch(`${API_BASE}/admin/profile-inventory/import`, {
+            const response = await fetch(`${API_BASE}/admin/accessory-inventory/import`, {
                 method: 'POST', headers: { 'Authorization': `Bearer ${authToken}` }, body: form
             });
             const data = await response.json();
             input.value = '';
             if (!response.ok) return alert(data.error || '导入失败');
-            alert(`库存导入成功，更新 ${data.updated} 行`);
-            loadProfileInventory();
+            alert(`配件库存导入成功，更新 ${data.updated} 行`);
+            loadAccessoryInventory();
         }
         
         // Load users

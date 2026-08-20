@@ -1,7 +1,7 @@
 from flask import Blueprint, request, jsonify, Response, current_app, send_file
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from datetime import datetime
-from app.models.user import db, User, Order, Profile, ProfileInventory
+from app.models.user import db, User, Order, Profile, ProfileInventory, AccessoryInventory
 from app.models.user import Cart
 from app.models.user import normalize_membership_level
 from app.order_utils import build_order_pdf_filename
@@ -26,6 +26,14 @@ from app.profile_inventory import (
     build_inventory_xlsx,
     parse_inventory_xlsx,
     seed_profile_inventory,
+)
+from app.accessory_inventory import (
+    ACCESSORY_COLORS,
+    apply_accessory_inventory_records,
+    build_accessory_inventory_xlsx,
+    parse_accessory_inventory_xlsx,
+    seed_accessory_inventory,
+    serialize_accessory_inventory,
 )
 
 admin_bp = Blueprint('admin', __name__, url_prefix='/api/admin')
@@ -772,6 +780,74 @@ def import_profile_inventory():
         records = parse_inventory_xlsx(upload.stream)
         updated = apply_inventory_records(records)
         return jsonify({'message': '库存导入成功', 'updated': updated}), 200
+    except (ValueError, KeyError, OSError) as error:
+        db.session.rollback()
+        return jsonify({'error': str(error)}), 400
+
+
+@admin_bp.route('/accessory-inventory', methods=['GET'])
+@admin_required
+def get_accessory_inventory_admin():
+    seed_accessory_inventory()
+    rows = AccessoryInventory.query.order_by(
+        AccessoryInventory.accessory_id.asc(),
+        AccessoryInventory.profile_size.asc(),
+        AccessoryInventory.color_id.asc(),
+    ).all()
+    return jsonify({
+        'inventory': [serialize_accessory_inventory(row) for row in rows],
+        'color_names': ACCESSORY_COLORS,
+    }), 200
+
+
+@admin_bp.route('/accessory-inventory/<int:inventory_id>', methods=['PUT'])
+@admin_required
+def update_accessory_inventory(inventory_id):
+    row = AccessoryInventory.query.get(inventory_id)
+    if not row:
+        return jsonify({'error': 'Inventory row not found'}), 404
+    data = request.get_json(silent=True) or {}
+    try:
+        quantity = int(data.get('quantity'))
+    except (TypeError, ValueError):
+        return jsonify({'error': 'quantity must be an integer'}), 400
+    if quantity < 0:
+        return jsonify({'error': 'quantity cannot be negative'}), 400
+    row.quantity = quantity
+    row.updated_at = datetime.utcnow()
+    db.session.commit()
+    return jsonify({'inventory': serialize_accessory_inventory(row)}), 200
+
+
+@admin_bp.route('/accessory-inventory/export', methods=['GET'])
+@admin_required
+def export_accessory_inventory():
+    seed_accessory_inventory()
+    rows = AccessoryInventory.query.order_by(
+        AccessoryInventory.accessory_id.asc(),
+        AccessoryInventory.profile_size.asc(),
+        AccessoryInventory.color_id.asc(),
+    ).all()
+    return send_file(
+        build_accessory_inventory_xlsx(rows),
+        as_attachment=True,
+        download_name=f'配件库存-{datetime.utcnow().strftime("%Y%m%d")}.xlsx',
+        mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    )
+
+
+@admin_bp.route('/accessory-inventory/import', methods=['POST'])
+@admin_required
+def import_accessory_inventory():
+    upload = request.files.get('file')
+    if upload is None or not upload.filename:
+        return jsonify({'error': '请选择要上传的Excel文件'}), 400
+    if not upload.filename.lower().endswith('.xlsx'):
+        return jsonify({'error': '仅支持.xlsx格式'}), 400
+    try:
+        records = parse_accessory_inventory_xlsx(upload.stream)
+        updated = apply_accessory_inventory_records(records)
+        return jsonify({'message': '配件库存导入成功', 'updated': updated}), 200
     except (ValueError, KeyError, OSError) as error:
         db.session.rollback()
         return jsonify({'error': str(error)}), 400

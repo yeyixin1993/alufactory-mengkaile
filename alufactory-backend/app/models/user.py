@@ -305,6 +305,34 @@ class ProfileInventory(db.Model):
             'updated_at': self.updated_at.isoformat() if self.updated_at else None,
         }
 
+
+class AccessoryInventory(db.Model):
+    """Finished accessory stock, tracked by SKU, compatible profile size and color."""
+    __tablename__ = 'accessory_inventory'
+    __table_args__ = (
+        db.UniqueConstraint(
+            'accessory_id', 'profile_size', 'color_id',
+            name='uq_accessory_inventory_sku',
+        ),
+    )
+
+    id = db.Column(db.Integer, primary_key=True, autoincrement=True)
+    accessory_id = db.Column(db.String(80), nullable=False, index=True)
+    profile_size = db.Column(db.String(20), nullable=False, index=True)
+    color_id = db.Column(db.String(50), nullable=False, index=True)
+    quantity = db.Column(db.Integer, nullable=False, default=0)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'accessory_id': self.accessory_id,
+            'profile_size': self.profile_size,
+            'color_id': self.color_id,
+            'quantity': int(self.quantity or 0),
+            'updated_at': self.updated_at.isoformat() if self.updated_at else None,
+        }
+
 class Profile(db.Model):
     """Store user profile data with PDF uploads"""
     __tablename__ = 'profiles'

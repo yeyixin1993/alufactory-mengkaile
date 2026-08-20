@@ -71,9 +71,12 @@ import { groupDiyAccessoryCartItems } from '../utils/cartAccessories';
 import { getDiyScrewOrderSpec } from '../utils/screwCalculator';
 import { getRotationallyCanonicalMachiningKey } from '../utils/profileManufacturingEquivalence';
 import { parseMaycadSceneXml, type MaycadProfileReview } from '../utils/maycadImport';
+import { getConfirmedEndCapUnitPrice, hasConfirmedEndCapPrice } from '../utils/accessoryPricing';
 import {
   DIY_TEMPLATE_STORAGE_PREFIX,
   getShelfSupportUnitPrice,
+  WARDROBE_12MM_BOARD_SUPPORT_PRICE,
+  type ParametricShelfSupportType,
   type ParametricTemplatePayload,
 } from '../utils/parametricFurniture';
 
@@ -122,6 +125,7 @@ interface DIYSceneItem {
   tappingLeft?: boolean;
   tappingRight?: boolean;
   finish?: ProfileFinish;
+  shelfSupportType?: ParametricShelfSupportType;
   accessoryPrice?: number;
   accessoryProfileSize?: DIYAccessoryProfileSize;
   accessoryThreadSize?: DIYAccessoryThreadSize;
@@ -150,6 +154,8 @@ interface DIYDesignerProps {
 }
 
 const SCENE_SCALE = 100;
+const MIN_PROFILE_LENGTH_MM = 21;
+const MAX_PROFILE_LENGTH_MM = 3000;
 const MIN_BOARD_AREA = 0.2;
 const ALUMINUM_PLATE_PRICE: Record<number, number> = { 1: 500, 2: 700, 3: 1000, 4: 1300, 5: 1600 };
 const PEGBOARD_PRICE: Record<number, number> = { 1: 780, 2: 1080, 3: 1380, 4: 1680, 5: 1980 };
@@ -159,7 +165,7 @@ const CASTER_ESTIMATED_BASE_PRICE = 18;
 const CASTER_BRAKE_SURCHARGE = 4;
 const CASTER_THREAD_SURCHARGE: Record<DIYAccessoryThreadSize, number> = { M6: 0, M8: 0, M10: 2, M12: 4 };
 const FOOT_ESTIMATED_PRICE = 12;
-const END_CAP_ESTIMATED_PRICE = { natural: 6, colored: 8 };
+const END_CAP_FALLBACK_ESTIMATED_PRICE = { natural: 6, colored: 8 };
 const DOOR_HINGE_UNIT_PRICE = 10;
 const VIP_PLUS_ALUMINUM_DOOR_PRICE = 420;
 const VIP_PLUS_PEGBOARD_DOOR_PRICE = 520;
@@ -263,6 +269,7 @@ const TEXT: Record<Language, Record<string, string>> = {
     leftEnd: '左端',
     rightEnd: '右端',
     estimatedPrice: '预估价',
+    confirmedPrice: '单价',
     casterThread: '丝杆规格',
     casterBrake: '刹车类型',
     casterWithBrake: '带刹车',
@@ -291,9 +298,10 @@ const TEXT: Record<Language, Record<string, string>> = {
     doorLeftOpen: '左开',
     doorRightOpen: '右开',
     doorAutoSize: '自动门尺寸',
-    doorMarginHint: '尺寸按框架覆盖范围自动计算，四周各留2mm。铰链和拉手位置会随开门方向显示。',
-    doorAdded: '柜门已按框架尺寸自动生成',
-    shelfSupport: '层板托',
+    doorLeafUnit: '扇',
+    doorMarginHint: 'N列自动生成N扇门。全盖门之间留2mm缝隙；大弯门缩进各列型材内侧后，四周再留2mm。',
+    doorAdded: '柜门已按每列框架自动生成',
+    shelfSupport: '层板托', board12ShelfSupport: '12mm板专用层板托',
     shelfSupportFinish: '层板托截面/颜色',
     shelfSupportOxidized: '氧化本色 · 8元/米',
     shelfSupportElectrophoretic: '彩色截面本色 · 10元/米',
@@ -438,6 +446,7 @@ const TEXT: Record<Language, Record<string, string>> = {
     understood: '知道了',
     moveDistance: '平移距离',
     currentLength: '当前长度',
+    profileLengthInvalid: '型材长度需在 21–3000mm 之间，请修改后再确认',
     sceneLength: '长度',
     connectionReady: '连接到位',
     language: '语言',
@@ -516,6 +525,7 @@ const TEXT: Record<Language, Record<string, string>> = {
     leftEnd: 'Left end',
     rightEnd: 'Right end',
     estimatedPrice: 'Estimated price',
+    confirmedPrice: 'Unit price',
     casterThread: 'Stem thread',
     casterBrake: 'Brake type',
     casterWithBrake: 'With brake',
@@ -544,9 +554,10 @@ const TEXT: Record<Language, Record<string, string>> = {
     doorLeftOpen: 'Left opening',
     doorRightOpen: 'Right opening',
     doorAutoSize: 'Automatic door size',
-    doorMarginHint: 'The door follows the detected frame coverage with a 2mm margin on every side. Hinges and handle follow the opening side.',
-    doorAdded: 'Cabinet door auto-sized to the frame',
-    shelfSupport: 'Shelf support',
+    doorLeafUnit: ' leaves',
+    doorMarginHint: 'N bays create N door leaves. Full-overlay leaves keep a 2mm gap; inset leaves fit inside each bay and keep another 2mm perimeter gap.',
+    doorAdded: 'Cabinet doors auto-sized to each frame bay',
+    shelfSupport: 'Shelf support', board12ShelfSupport: '12mm-board shelf support',
     shelfSupportFinish: 'Shelf-support finish',
     shelfSupportOxidized: 'Natural anodized · ¥8/m',
     shelfSupportElectrophoretic: 'Colored, natural section · ¥10/m',
@@ -691,6 +702,7 @@ const TEXT: Record<Language, Record<string, string>> = {
     understood: 'Got it',
     moveDistance: 'Move distance',
     currentLength: 'Current length',
+    profileLengthInvalid: 'Profile length must be between 21 and 3000 mm. Please revise it before applying.',
     sceneLength: 'Length',
     connectionReady: 'Connection aligned',
     language: 'Language',
@@ -769,6 +781,7 @@ const TEXT: Record<Language, Record<string, string>> = {
     leftEnd: '左端',
     rightEnd: '右端',
     estimatedPrice: '概算価格',
+    confirmedPrice: '単価',
     casterThread: 'ねじ規格',
     casterBrake: 'ブレーキ',
     casterWithBrake: 'ブレーキ付き',
@@ -797,9 +810,10 @@ const TEXT: Record<Language, Record<string, string>> = {
     doorLeftOpen: '左開き',
     doorRightOpen: '右開き',
     doorAutoSize: '自動扉寸法',
-    doorMarginHint: '検出した枠の範囲から四周2mmの余白で自動計算します。ヒンジと取っ手も開き方向に追従します。',
-    doorAdded: '枠寸法に合わせて扉を自動生成しました',
-    shelfSupport: '棚受け',
+    doorLeafUnit: '枚',
+    doorMarginHint: 'N列にはN枚の扉を生成します。全かぶせ扉同士は2mm、インセット扉は各列の形材内側から四周2mm空けます。',
+    doorAdded: '各列の枠寸法に合わせて扉を自動生成しました',
+    shelfSupport: '棚受け', board12ShelfSupport: '12mm板専用棚受け',
     shelfSupportFinish: '棚受けの断面・色',
     shelfSupportOxidized: 'ナチュラルアルマイト · 8元/m',
     shelfSupportElectrophoretic: 'カラー・ナチュラル断面 · 10元/m',
@@ -944,6 +958,7 @@ const TEXT: Record<Language, Record<string, string>> = {
     understood: '確認',
     moveDistance: '移動距離',
     currentLength: '現在の長さ',
+    profileLengthInvalid: '形材の長さは 21〜3000mm の範囲で入力し、修正後に確定してください',
     sceneLength: '長さ',
     connectionReady: '接続位置合わせ済み',
     language: '言語',
@@ -978,8 +993,24 @@ function getCasterEstimatedUnitPrice(item: Pick<DIYSceneItem, 'accessoryThreadSi
     + (item.hasBrake ? CASTER_BRAKE_SURCHARGE : 0);
 }
 
-function getEndCapEstimatedUnitPrice(item: Pick<DIYSceneItem, 'colorId' | 'quantity'>) {
-  return item.colorId === 'natural' ? END_CAP_ESTIMATED_PRICE.natural : END_CAP_ESTIMATED_PRICE.colored;
+function getEndCapConfirmedProfileSize(
+  item: Pick<DIYSceneItem, 'variantId' | 'accessoryProfileSize'>,
+): '2020' | '3030' | null {
+  if (item.variantId?.startsWith('2020')) return '2020';
+  if (item.variantId?.startsWith('3030')) return '3030';
+  if (!item.variantId && hasConfirmedEndCapPrice(item.accessoryProfileSize)) return item.accessoryProfileSize;
+  return null;
+}
+
+function getEndCapUnitPrice(
+  item: Pick<DIYSceneItem, 'variantId' | 'accessoryProfileSize' | 'colorId' | 'quantity'>,
+) {
+  const confirmedProfileSize = getEndCapConfirmedProfileSize(item);
+  const confirmedPrice = getConfirmedEndCapUnitPrice(confirmedProfileSize || undefined, item.quantity);
+  if (confirmedPrice !== null) return confirmedPrice;
+  return item.colorId === 'natural'
+    ? END_CAP_FALLBACK_ESTIMATED_PRICE.natural
+    : END_CAP_FALLBACK_ESTIMATED_PRICE.colored;
 }
 
 const getDoorHingePositions = (heightMm: number) => {
@@ -1011,6 +1042,10 @@ const duplicateSceneItem = (item: DIYSceneItem): DIYSceneItem => {
   };
 };
 
+const isBoard12ShelfSupport = (item: Pick<DIYSceneItem, 'kind' | 'shelfSupportType'>) => (
+  item.kind === 'shelf_support' && item.shelfSupportType === 'board_12mm'
+);
+
 const normalizeDesignItems = (source: DIYSceneItem[]) => source.map((item) => {
   const shelfSupportFinish: ProfileFinish = item.finish
     || (item.colorId === 'natural' ? 'oxidized' : 'powder');
@@ -1039,7 +1074,7 @@ const normalizeDesignItems = (source: DIYSceneItem[]) => source.map((item) => {
     } : {}),
     ...(item.kind === 'end_cap' ? {
       thickness: 3,
-      accessoryPrice: getEndCapEstimatedUnitPrice(item),
+      accessoryPrice: getEndCapUnitPrice(item),
     } : {}),
     ...(item.kind === 'cabinet_door' ? {
       doorMaterial: item.doorMaterial || 'aluminum',
@@ -1049,8 +1084,11 @@ const normalizeDesignItems = (source: DIYSceneItem[]) => source.map((item) => {
       quantity: 1,
     } : {}),
     ...(item.kind === 'shelf_support' ? {
+      shelfSupportType: item.shelfSupportType || 'linear',
       finish: shelfSupportFinish,
-      accessoryPrice: getShelfSupportUnitPrice(item.thickness || 0, shelfSupportFinish),
+      accessoryPrice: isBoard12ShelfSupport(item)
+        ? WARDROBE_12MM_BOARD_SUPPORT_PRICE
+        : getShelfSupportUnitPrice(item.thickness || 0, shelfSupportFinish),
     } : {}),
     holes: item.kind === 'profile'
       ? (item.holes || []).map((hole) => ({
@@ -1073,6 +1111,7 @@ const buildProductionData = (items: DIYSceneItem[], language: Language) => {
     heightMm: item.height,
     thicknessMm: item.thickness,
     finish: item.finish,
+    shelfSupportType: item.shelfSupportType,
     accessoryProfileSize: item.accessoryProfileSize,
     accessoryThreadSize: item.accessoryThreadSize,
     hasBrake: item.hasBrake,
@@ -1454,6 +1493,7 @@ const createItem = (kind: DIYItemKind, index = 0, variantId?: string): DIYSceneI
       height: 8,
       thickness: 400,
       finish: 'oxidized',
+      shelfSupportType: 'linear',
       accessoryPrice: getShelfSupportUnitPrice(400, 'oxidized'),
       accessoryProfileSize: '2020',
       quantity: 1,
@@ -1546,7 +1586,7 @@ const createItem = (kind: DIYItemKind, index = 0, variantId?: string): DIYSceneI
       width: 20,
       height: 20,
       thickness: 3,
-      price: END_CAP_ESTIMATED_PRICE.natural,
+      price: END_CAP_FALLBACK_ESTIMATED_PRICE.natural,
     },
   };
   const accessory = accessoryDefaults[kind as keyof typeof accessoryDefaults] || accessoryDefaults.connector;
@@ -1665,6 +1705,7 @@ const itemsFromProductionWorkbook = (production: ProductionWorkbookData): DIYSce
     finish: (part.finish === 'oxidized' || part.finish === 'electrophoretic' || part.finish === 'powder')
       ? part.finish
       : base.finish,
+    shelfSupportType: part.shelfSupportType === 'board_12mm' ? 'board_12mm' : base.shelfSupportType,
     colorId: workbookColorId(part, kind),
     quantity: Math.max(1, Math.round(part.quantity || 1)),
     position,
@@ -2242,6 +2283,9 @@ type CabinetDoorOpening = {
   profileIds: string[];
   outer: { left: number; right: number; bottom: number; top: number };
   inner: { left: number; right: number; bottom: number; top: number };
+  boundaryCenters: { left: number; right: number };
+  columnIndex: number;
+  columnCount: number;
   frontZ: number;
   key: string;
 };
@@ -2250,12 +2294,12 @@ const projectedBoxExtent = (box: ProfileBox, axis: THREE.Vector3) => box.axes.re
   sum + box.halfSizes[index] * Math.abs(boxAxis.dot(axis))
 ), 0);
 
-const detectCabinetDoorOpening = (
+const detectCabinetDoorOpenings = (
   source: DIYSceneItem[],
   preferredProfileIds?: Set<string>,
-): CabinetDoorOpening | null => {
+): CabinetDoorOpening[] => {
   const detect = (profiles: DIYSceneItem[]) => {
-    if (profiles.length < 4) return null;
+    if (profiles.length < 4) return [];
     const worldX = new THREE.Vector3(1, 0, 0);
     const worldY = new THREE.Vector3(0, 1, 0);
     const worldZ = new THREE.Vector3(0, 0, 1);
@@ -2279,50 +2323,61 @@ const detectCabinetDoorOpening = (
     const front = entries.filter((entry) => frontMost - entry.frontSurface <= 0.26);
     const horizontal = front.filter((entry) => entry.horizontal).sort((a, b) => a.box.center.y - b.box.center.y);
     const vertical = front.filter((entry) => entry.vertical).sort((a, b) => a.box.center.x - b.box.center.x);
-    if (horizontal.length < 2 || vertical.length < 2) return null;
+    if (horizontal.length < 2 || vertical.length < 2) return [];
     const bottom = horizontal[0];
     const top = horizontal[horizontal.length - 1];
-    const left = vertical[0];
-    const right = vertical[vertical.length - 1];
     const frameTolerance = 0.6;
-    const cornerAligned = (
-      Math.abs((bottom.box.center.x - bottom.xExtent) - (left.box.center.x - left.xExtent)) <= frameTolerance
-      && Math.abs((top.box.center.x - top.xExtent) - (left.box.center.x - left.xExtent)) <= frameTolerance
-      && Math.abs((bottom.box.center.x + bottom.xExtent) - (right.box.center.x + right.xExtent)) <= frameTolerance
-      && Math.abs((top.box.center.x + top.xExtent) - (right.box.center.x + right.xExtent)) <= frameTolerance
-      && Math.abs((left.box.center.y - left.yExtent) - (bottom.box.center.y - bottom.yExtent)) <= frameTolerance
-      && Math.abs((right.box.center.y - right.yExtent) - (bottom.box.center.y - bottom.yExtent)) <= frameTolerance
-      && Math.abs((left.box.center.y + left.yExtent) - (top.box.center.y + top.yExtent)) <= frameTolerance
-      && Math.abs((right.box.center.y + right.yExtent) - (top.box.center.y + top.yExtent)) <= frameTolerance
-    );
-    if (!cornerAligned) return null;
-    const outer = {
-      left: (left.box.center.x - left.xExtent) * SCENE_SCALE,
-      right: (right.box.center.x + right.xExtent) * SCENE_SCALE,
-      bottom: (bottom.box.center.y - bottom.yExtent) * SCENE_SCALE,
-      top: (top.box.center.y + top.yExtent) * SCENE_SCALE,
-    };
-    const inner = {
-      left: (left.box.center.x + left.xExtent) * SCENE_SCALE,
-      right: (right.box.center.x - right.xExtent) * SCENE_SCALE,
-      bottom: (bottom.box.center.y + bottom.yExtent) * SCENE_SCALE,
-      top: (top.box.center.y - top.yExtent) * SCENE_SCALE,
-    };
-    if (inner.right - inner.left < 20 || inner.top - inner.bottom < 20) return null;
-    const profileIds = [left.profile.id, right.profile.id, bottom.profile.id, top.profile.id];
-    return {
-      profileIds,
-      outer,
-      inner,
-      frontZ: Math.max(left.frontSurface, right.frontSurface, bottom.frontSurface, top.frontSurface) * SCENE_SCALE,
-      key: `${profileIds.slice().sort().join(':')}:CABINET-DOOR`,
-    } satisfies CabinetDoorOpening;
+    const bottomLeft = bottom.box.center.x - bottom.xExtent;
+    const bottomRight = bottom.box.center.x + bottom.xExtent;
+    const topLeft = top.box.center.x - top.xExtent;
+    const topRight = top.box.center.x + top.xExtent;
+    const alignedVertical = vertical.filter((entry) => (
+      entry.box.center.x >= Math.max(bottomLeft, topLeft) - frameTolerance
+      && entry.box.center.x <= Math.min(bottomRight, topRight) + frameTolerance
+      && Math.abs((entry.box.center.y - entry.yExtent) - (bottom.box.center.y - bottom.yExtent)) <= frameTolerance
+      && Math.abs((entry.box.center.y + entry.yExtent) - (top.box.center.y + top.yExtent)) <= frameTolerance
+    ));
+    if (alignedVertical.length < 2) return [];
+
+    const columnCount = alignedVertical.length - 1;
+    return alignedVertical.slice(0, -1).flatMap((left, columnIndex) => {
+      const right = alignedVertical[columnIndex + 1];
+      const outer = {
+        left: (left.box.center.x - left.xExtent) * SCENE_SCALE,
+        right: (right.box.center.x + right.xExtent) * SCENE_SCALE,
+        bottom: (bottom.box.center.y - bottom.yExtent) * SCENE_SCALE,
+        top: (top.box.center.y + top.yExtent) * SCENE_SCALE,
+      };
+      const inner = {
+        left: (left.box.center.x + left.xExtent) * SCENE_SCALE,
+        right: (right.box.center.x - right.xExtent) * SCENE_SCALE,
+        bottom: (bottom.box.center.y + bottom.yExtent) * SCENE_SCALE,
+        top: (top.box.center.y - top.yExtent) * SCENE_SCALE,
+      };
+      if (inner.right - inner.left < 20 || inner.top - inner.bottom < 20) return [];
+      const profileIds = [left.profile.id, right.profile.id, bottom.profile.id, top.profile.id];
+      return [{
+        profileIds,
+        outer,
+        inner,
+        boundaryCenters: {
+          left: left.box.center.x * SCENE_SCALE,
+          right: right.box.center.x * SCENE_SCALE,
+        },
+        columnIndex,
+        columnCount,
+        frontZ: Math.max(left.frontSurface, right.frontSurface, bottom.frontSurface, top.frontSurface) * SCENE_SCALE,
+        key: `${profileIds.slice().sort().join(':')}:CABINET-DOOR`,
+      } satisfies CabinetDoorOpening];
+    });
   };
 
   const allProfiles = source.filter((item) => item.kind === 'profile');
   if (preferredProfileIds && preferredProfileIds.size >= 4) {
-    const preferred = detect(allProfiles.filter((item) => preferredProfileIds.has(item.id)));
-    if (preferred) return preferred;
+    const preferred = detect(allProfiles).filter((opening) => (
+      opening.profileIds.every((profileId) => preferredProfileIds.has(profileId))
+    ));
+    if (preferred.length) return preferred;
   }
   return detect(allProfiles);
 };
@@ -2332,16 +2387,22 @@ const cabinetDoorRenderedThickness = (item: DIYSceneItem) => (
 );
 
 const cabinetDoorBounds = (opening: CabinetDoorOpening, overlay: DIYDoorOverlay) => {
-  const base = overlay === 'full'
-    ? opening.outer
-    : overlay === 'half'
-      ? {
-        left: (opening.outer.left + opening.inner.left) / 2,
-        right: (opening.outer.right + opening.inner.right) / 2,
-        bottom: (opening.outer.bottom + opening.inner.bottom) / 2,
-        top: (opening.outer.top + opening.inner.top) / 2,
-      }
-      : opening.inner;
+  if (overlay === 'full') {
+    return {
+      left: opening.columnIndex === 0 ? opening.outer.left + 2 : opening.boundaryCenters.left + 1,
+      right: opening.columnIndex === opening.columnCount - 1 ? opening.outer.right - 2 : opening.boundaryCenters.right - 1,
+      bottom: opening.outer.bottom + 2,
+      top: opening.outer.top - 2,
+    };
+  }
+  const base = overlay === 'half'
+    ? {
+      left: (opening.outer.left + opening.inner.left) / 2,
+      right: (opening.outer.right + opening.inner.right) / 2,
+      bottom: (opening.outer.bottom + opening.inner.bottom) / 2,
+      top: (opening.outer.top + opening.inner.top) / 2,
+    }
+    : opening.inner;
   return {
     left: base.left + 2,
     right: base.right - 2,
@@ -2397,6 +2458,24 @@ const endCapPlacementForProfile = (profile: DIYSceneItem, end: 'left' | 'right')
 const profileAccessorySeries = (item: DIYSceneItem): DIYAccessoryProfileSize | null => {
   if (item.kind !== 'profile') return null;
   return profileAccessorySeriesFromVariant(item.variantId);
+};
+
+const dominantAccessoryProfileSeries = (
+  source: DIYSceneItem[],
+  supportedSizes: readonly DIYAccessoryProfileSize[] = ACCESSORY_PROFILE_SIZES,
+): DIYAccessoryProfileSize | null => {
+  const supported = new Set(supportedSizes);
+  const counts = new Map<DIYAccessoryProfileSize, number>();
+  source.forEach((item) => {
+    const series = profileAccessorySeries(item);
+    if (!series || !supported.has(series)) return;
+    counts.set(series, (counts.get(series) || 0) + 1);
+  });
+  return [...counts.entries()]
+    .sort((first, second) => (
+      second[1] - first[1]
+      || ACCESSORY_PROFILE_SIZES.indexOf(first[0]) - ACCESSORY_PROFILE_SIZES.indexOf(second[0])
+    ))[0]?.[0] || null;
 };
 
 const closestSegmentPoints = (
@@ -3017,9 +3096,10 @@ const syncAttachedAccessories = (source: DIYSceneItem[]) => source.map((item) =>
       : { ...item, attachedProfileIds: survivingAttachmentIds };
   }
   if (item.kind === 'cabinet_door' && item.lockedPosition) {
-    const preferredIds = new Set(item.attachedProfileIds || []);
-    const opening = detectCabinetDoorOpening(source, preferredIds);
-    if (!opening || (item.attachmentKey && opening.key !== item.attachmentKey && preferredIds.size >= 4)) {
+    const openings = detectCabinetDoorOpenings(source);
+    const opening = openings.find((candidate) => candidate.key === item.attachmentKey)
+      || openings.find((candidate) => candidate.profileIds.every((profileId) => item.attachedProfileIds?.includes(profileId)));
+    if (!opening) {
       return {
         ...item,
         lockedPosition: false,
@@ -4382,7 +4462,7 @@ const createAccessoryObject = (
         side: THREE.DoubleSide,
         transparent: true,
         opacity: 0.82,
-        depthTest: false,
+        depthTest: !showInternalHardware,
         depthWrite: false,
       }),
     );
@@ -4405,7 +4485,7 @@ const createAccessoryObject = (
         side: THREE.DoubleSide,
         transparent: true,
         opacity: 0.82,
-        depthTest: false,
+        depthTest: !showInternalHardware,
         depthWrite: false,
       }),
     );
@@ -4439,7 +4519,7 @@ const createAccessoryObject = (
         color: '#64748b',
         transparent: true,
         opacity: 0.84,
-        depthTest: false,
+        depthTest: !showInternalHardware,
         depthWrite: false,
       }),
     );
@@ -4670,7 +4750,7 @@ const createAccessoryObject = (
       );
       const socket = new THREE.Mesh(
         new THREE.TorusGeometry(holeRadius * 0.29, Math.max(0.0025, holeRadius * 0.07), 6, 6),
-        new THREE.MeshBasicMaterial({ color: '#475569', depthTest: false, depthWrite: false }),
+        new THREE.MeshBasicMaterial({ color: '#475569', depthTest: !showInternalHardware, depthWrite: false }),
       );
       if (axis === 'y') {
         head.position.copy(position).add(new THREE.Vector3(0, headHeight / 2, 0));
@@ -4743,7 +4823,7 @@ const createAccessoryObject = (
       );
       const socket = new THREE.Mesh(
         new THREE.TorusGeometry(holeRadius * 0.28, Math.max(0.0025, holeRadius * 0.07), 6, 6),
-        new THREE.MeshBasicMaterial({ color: '#475569', depthTest: false, depthWrite: false }),
+        new THREE.MeshBasicMaterial({ color: '#475569', depthTest: !showInternalHardware, depthWrite: false }),
       );
       if (axis === 'y') {
         head.position.copy(position).add(new THREE.Vector3(0, headHeight / 2, 0));
@@ -4865,7 +4945,7 @@ const createAccessoryObject = (
           color: '#475569',
           transparent: true,
           opacity: 0.88,
-          depthTest: false,
+          depthTest: !showInternalHardware,
           depthWrite: false,
         }),
       );
@@ -5222,7 +5302,7 @@ const ThreeAssembly: React.FC<{
   };
   drillMode: boolean;
   drillEditorLabels: { position: string; left: string; right: string; confirm: string; cancel: string };
-  operationLabels: { length: string; dimensionLength: string; move: string; connectionReady: string; apply: string };
+  operationLabels: { length: string; dimensionLength: string; move: string; connectionReady: string; apply: string; invalidLength: string };
   profileDrawTemplate: DIYSceneItem | null;
   profileDrawLabels: { hint: string; invalid: string; restore: string };
   accessoryPlacementTemplate: DIYSceneItem | null;
@@ -5324,6 +5404,8 @@ const ThreeAssembly: React.FC<{
     kind: 'length' | 'move';
     itemId: string;
     valueMm: number;
+    draftValue?: string;
+    error?: string;
     x: number;
     y: number;
     fixedEnd?: Vec3;
@@ -5333,6 +5415,7 @@ const ThreeAssembly: React.FC<{
     direction?: Vec3;
     dragging?: boolean;
   } | null>(null);
+  const operationInputRef = useRef<HTMLInputElement>(null);
   const [profileRelationOverlay, setProfileRelationOverlay] = useState<ProfileRelationOverlay>({
     measurements: [],
     connections: [],
@@ -5532,8 +5615,29 @@ const ThreeAssembly: React.FC<{
   const applyOperationEditor = () => {
     if (!operationEditor) return;
     const editor = operationEditor;
-    // Close first so a parent item update cannot leave the floating editor
-    // mounted while the scene is synchronising.
+    const draftValue = editor.draftValue?.trim() ?? String(editor.valueMm);
+    const parsedValue = Number(draftValue);
+    if (
+      editor.kind === 'length'
+      && (
+        draftValue === ''
+        || !Number.isFinite(parsedValue)
+        || parsedValue < MIN_PROFILE_LENGTH_MM
+        || parsedValue > MAX_PROFILE_LENGTH_MM
+      )
+    ) {
+      setOperationEditor((current) => current ? {
+        ...current,
+        error: operationLabels.invalidLength,
+        dragging: false,
+      } : current);
+      window.requestAnimationFrame(() => {
+        operationInputRef.current?.focus();
+        operationInputRef.current?.select();
+      });
+      return;
+    }
+    // Close only after validation so an invalid draft remains editable.
     setOperationEditor(null);
     if (
       editor.kind === 'length'
@@ -5541,7 +5645,7 @@ const ThreeAssembly: React.FC<{
       && editor.axis
       && editor.side
     ) {
-      const lengthMm = THREE.MathUtils.clamp(Math.round(editor.valueMm), 21, 3000);
+      const lengthMm = Math.round(parsedValue);
       const fixedEnd = new THREE.Vector3(...editor.fixedEnd);
       const axis = new THREE.Vector3(...editor.axis).normalize();
       const position = fixedEnd.addScaledVector(axis, editor.side * (lengthMm / SCENE_SCALE) / 2);
@@ -5564,7 +5668,8 @@ const ThreeAssembly: React.FC<{
       if (item) {
         const start = new THREE.Vector3(...editor.startPosition);
         const direction = new THREE.Vector3(...editor.direction).normalize();
-        const position = start.addScaledVector(direction, editor.valueMm / SCENE_SCALE);
+        const moveValueMm = Number.isFinite(parsedValue) ? parsedValue : editor.valueMm;
+        const position = start.addScaledVector(direction, moveValueMm / SCENE_SCALE);
         onTransformRef.current(
           editor.itemId,
           [
@@ -5579,6 +5684,14 @@ const ThreeAssembly: React.FC<{
       }
     }
   };
+
+  useEffect(() => {
+    if (operationEditor?.kind !== 'length' || operationEditor.dragging !== false) return;
+    window.requestAnimationFrame(() => {
+      operationInputRef.current?.focus();
+      operationInputRef.current?.select();
+    });
+  }, [operationEditor?.kind, operationEditor?.itemId, operationEditor?.dragging]);
 
   useEffect(() => {
     const mount = mountRef.current;
@@ -6729,19 +6842,55 @@ const ThreeAssembly: React.FC<{
       const baseAxis = new THREE.Vector3(1, 0, 0).applyQuaternion(baseQuaternion).normalize();
       return new THREE.Quaternion().setFromUnitVectors(baseAxis, axis).multiply(baseQuaternion);
     };
+    const profileDrawPreviewAxisForSnap = (snap: ProfileDrawSnapPoint) => {
+      const worldAxes = [
+        new THREE.Vector3(1, 0, 0),
+        new THREE.Vector3(0, 1, 0),
+        new THREE.Vector3(0, 0, 1),
+      ];
+      if (snap.sideButtAtEnd && snap.normal) {
+        const normal = snap.normal.clone().normalize();
+        const closestAxis = worldAxes
+          .map((axis) => ({ axis, alignment: axis.dot(normal) }))
+          .sort((first, second) => Math.abs(second.alignment) - Math.abs(first.alignment))[0];
+        return closestAxis.axis.clone().multiplyScalar(closestAxis.alignment < 0 ? -1 : 1);
+      }
+
+      // The centre of an existing end face starts a new perpendicular member,
+      // never a parallel continuation. Pick the perpendicular world axis that
+      // is clearest in the current camera so the 40mm ghost communicates the
+      // same 90-degree joint that the following click will actually create.
+      const targetAxis = snap.targetAxis?.clone().normalize();
+      const candidates = targetAxis
+        ? worldAxes.filter((axis) => Math.abs(axis.dot(targetAxis)) < 0.15)
+        : worldAxes;
+      const projectedOrigin = snap.point.clone().project(camera);
+      return (candidates.length ? candidates : worldAxes)
+        .map((axis) => {
+          const projectedEnd = snap.point.clone().add(axis).project(camera);
+          const screenLength = Math.hypot(
+            projectedEnd.x - projectedOrigin.x,
+            projectedEnd.y - projectedOrigin.y,
+          );
+          return { axis, screenLength };
+        })
+        .sort((first, second) => second.screenLength - first.screenLength)[0].axis.clone();
+    };
     const profileDrawEffectiveAnchor = (
       axis: THREE.Vector3,
       quaternion = profileDrawQuaternionForAxis(axis),
+      anchor: THREE.Vector3 | null = profileDrawAnchor,
+      startSnap: ProfileDrawSnapPoint | null = profileDrawStartSnap,
     ) => {
-      if (!profileDrawAnchor) return null;
-      const normal = profileDrawStartSnap?.normal;
-      if (!normal) return profileDrawAnchor.clone();
+      if (!anchor) return null;
+      const normal = startSnap?.normal;
+      if (!normal) return anchor.clone();
       const template = profileDrawTemplateRef.current;
-      if (!template || template.kind !== 'profile') return profileDrawAnchor.clone();
+      if (!template || template.kind !== 'profile') return anchor.clone();
       const dimensions = profileDimensions(template);
       const localY = new THREE.Vector3(0, 1, 0).applyQuaternion(quaternion).normalize();
       const localZ = new THREE.Vector3(0, 0, 1).applyQuaternion(quaternion).normalize();
-      const effectiveAnchor = profileDrawAnchor.clone();
+      const effectiveAnchor = anchor.clone();
       // A centre end-face hotspot carries the next member across the target
       // face, so offset its centreline by half of the new cross-section. A
       // side hotspot instead uses the side face itself as the new member's
@@ -6751,12 +6900,12 @@ const ThreeAssembly: React.FC<{
           + Math.abs(localZ.dot(normal)) * dimensions.width / 2;
         effectiveAnchor.addScaledVector(normal, crossHalfExtent + 0.001);
       }
-      if (profileDrawStartSnap?.sideButtAtEnd && profileDrawStartSnap.targetEndDirection) {
+      if (startSnap?.sideButtAtEnd && startSnap.targetEndDirection) {
         // The side hotspot represents a perpendicular member whose end is
         // flush with the selected target end. Move its centreline back by its
         // own half-section along the target length; otherwise its body extends
         // past the corner even though the clicked side face is correct.
-        const endDirection = profileDrawStartSnap.targetEndDirection;
+        const endDirection = startSnap.targetEndDirection;
         const endHalfExtent = Math.abs(localY.dot(endDirection)) * dimensions.height / 2
           + Math.abs(localZ.dot(endDirection)) * dimensions.width / 2;
         effectiveAnchor.addScaledVector(endDirection, -endHalfExtent);
@@ -6856,14 +7005,20 @@ const ThreeAssembly: React.FC<{
           score: pixelsPerWorld < 2 ? -1 : Math.abs(projectedDistance) / Math.max(1, profileDrawPointerTravel),
         };
       }).sort((first, second) => (
-        Number(first.collides) - Number(second.collides)
-        // Starting at an existing member should naturally form a 90-degree
-        // frame corner. Keep parallel continuation available only when no
-        // perpendicular screen projection is usable.
-        || Number(second.preferredBySnap) - Number(first.preferredBySnap)
+        // A snapped structural start is always previewed as its physically
+        // intended 90-degree joint. Do not let a parallel direction win merely
+        // because its temporary collision score happens to be lower.
+        Number(second.preferredBySnap) - Number(first.preferredBySnap)
+        || Number(first.collides) - Number(second.collides)
         || second.score - first.score
       ));
-      const best = candidates.find((candidate) => !candidate.collides) || candidates[0];
+      const preferredCandidates = profileDrawStartSnap
+        ? candidates.filter((candidate) => candidate.preferredBySnap)
+        : candidates;
+      const best = preferredCandidates.find((candidate) => !candidate.collides)
+        || preferredCandidates[0]
+        || candidates.find((candidate) => !candidate.collides)
+        || candidates[0];
       if (!best || best.score < 0) return;
       profileDrawAxis.copy(best.axis);
       profileDrawSignedLength = best.signedLength;
@@ -6886,12 +7041,26 @@ const ThreeAssembly: React.FC<{
         // profile connection. Keep the sample near the cursor until the user
         // reaches a real profile or moves back to empty drawing space.
         const blockedByNonProfile = Boolean(contentHit && hitItem?.kind !== 'profile');
-        const pointerPoint = startSnap?.point || point;
         snapped = Boolean(startSnap);
         showProfileDrawContact(0, startSnap);
         showProfileDrawContact(1, null);
         setProfileDrawPreviewLength(0.4);
-        profileDrawPreview.position.copy(pointerPoint).addScaledVector(profileDrawAxis, 0.2);
+        if (startSnap) {
+          const previewAxis = profileDrawPreviewAxisForSnap(startSnap);
+          const previewQuaternion = profileDrawQuaternionForAxis(previewAxis);
+          const effectiveAnchor = profileDrawEffectiveAnchor(
+            previewAxis,
+            previewQuaternion,
+            startSnap.point,
+            startSnap,
+          ) || startSnap.point;
+          profileDrawAxis.copy(previewAxis);
+          profileDrawPreview.quaternion.copy(previewQuaternion);
+          profileDrawCurrentRotation.setFromQuaternion(previewQuaternion, 'XYZ');
+          profileDrawPreview.position.copy(effectiveAnchor).addScaledVector(previewAxis, 0.2);
+        } else {
+          profileDrawPreview.position.copy(point).addScaledVector(profileDrawAxis, 0.2);
+        }
         profileDrawPreview.visible = !blockedByNonProfile;
         setProfileDrawPreviewBlocked(false);
       } else {
@@ -7139,6 +7308,20 @@ const ThreeAssembly: React.FC<{
                 validLength: startLength,
                 validPosition: object.position.clone(),
               };
+              const editorPosition = getOperationEditorPosition(event.clientX, event.clientY);
+              const startLengthMm = Math.round(startLength * SCENE_SCALE);
+              setOperationEditor({
+                kind: 'length',
+                itemId: item.id,
+                valueMm: startLengthMm,
+                draftValue: String(startLengthMm),
+                x: editorPosition.x,
+                y: editorPosition.y,
+                fixedEnd: [fixedEnd.x, fixedEnd.y, fixedEnd.z],
+                axis: [axis.x, axis.y, axis.z],
+                side,
+                dragging: true,
+              });
               orbit.enabled = false;
               transform.enabled = false;
               renderer.domElement.setPointerCapture?.(event.pointerId);
@@ -7483,7 +7666,11 @@ const ThreeAssembly: React.FC<{
       const currentPoint = raycaster.ray.intersectPlane(resizePlane, new THREE.Vector3());
       if (!currentPoint) return;
       const delta = currentPoint.clone().sub(state.startPoint).dot(state.axis);
-      const nextLength = THREE.MathUtils.clamp(state.startLength + state.side * delta, 0.21, 30);
+      const nextLength = THREE.MathUtils.clamp(
+        state.startLength + state.side * delta,
+        MIN_PROFILE_LENGTH_MM / SCENE_SCALE,
+        MAX_PROFILE_LENGTH_MM / SCENE_SCALE,
+      );
       const nextPosition = state.fixedEnd.clone().addScaledVector(state.axis, state.side * nextLength / 2);
       const candidate: DIYSceneItem = {
         ...state.item,
@@ -7504,16 +7691,21 @@ const ThreeAssembly: React.FC<{
       state.object.scale.set(nextLength / state.startLength, 1, 1);
       syncProfileLengthHandles(lengthHandles, state.object, state.item, nextLength, nextPosition);
       const editorPosition = getOperationEditorPosition(event.clientX, event.clientY);
-      setOperationEditor({
+      const nextLengthMm = Math.round(nextLength * SCENE_SCALE);
+      setOperationEditor((current) => ({
         kind: 'length',
         itemId: state.item.id,
-        valueMm: Math.round(nextLength * SCENE_SCALE),
+        valueMm: nextLengthMm,
+        draftValue: current?.kind === 'length' && current.itemId === state.item.id && current.error
+          ? current.draftValue
+          : String(nextLengthMm),
         x: editorPosition.x,
         y: editorPosition.y,
         fixedEnd: [state.fixedEnd.x, state.fixedEnd.y, state.fixedEnd.z],
         axis: [state.axis.x, state.axis.y, state.axis.z],
         side: state.side,
-      });
+        dragging: true,
+      }));
       setSnapHint(null);
       event.preventDefault();
     };
@@ -7641,6 +7833,17 @@ const ThreeAssembly: React.FC<{
             Math.round(state.validPosition.z * SCENE_SCALE),
           ],
         );
+        setOperationEditor((current) => (
+          current?.kind === 'length' && current.itemId === state.item.id
+            ? {
+              ...current,
+              valueMm: Math.round(state.validLength * SCENE_SCALE),
+              draftValue: String(Math.round(state.validLength * SCENE_SCALE)),
+              dragging: false,
+              error: undefined,
+            }
+            : current
+        ));
         transformWasDragging = false;
         event.preventDefault();
         event.stopPropagation();
@@ -8350,16 +8553,16 @@ const ThreeAssembly: React.FC<{
               </div>
               <div className="flex items-center gap-1.5">
                 <input
-                  type="number"
+                  ref={operationInputRef}
+                  type="text"
+                  inputMode="numeric"
                   aria-label={operationEditor.kind === 'length' ? operationLabels.length : operationLabels.move}
                   data-testid="diy-operation-value"
-                  value={operationEditor.valueMm}
-                  min={operationEditor.kind === 'length' ? 21 : undefined}
-                  max={operationEditor.kind === 'length' ? 3000 : undefined}
-                  autoFocus={operationEditor.kind === 'length'}
+                  value={operationEditor.draftValue ?? String(operationEditor.valueMm)}
                   onChange={(event) => setOperationEditor((current) => current ? {
                     ...current,
-                    valueMm: Number(event.target.value) || 0,
+                    draftValue: event.target.value,
+                    error: undefined,
                   } : current)}
                   onKeyDown={(event) => {
                     if (event.key === 'Enter') applyOperationEditor();
@@ -8377,6 +8580,15 @@ const ThreeAssembly: React.FC<{
                   {operationLabels.apply}
                 </button>
               </div>
+              {operationEditor.error && (
+                <div
+                  role="alert"
+                  data-testid="diy-operation-error"
+                  className="mt-2 rounded-lg border border-red-200 bg-red-50 px-2 py-1.5 text-[9px] font-black leading-relaxed text-red-600"
+                >
+                  {operationEditor.error}
+                </div>
+              )}
             </>
           )}
         </div>
@@ -8575,7 +8787,9 @@ const getItemLabel = (item: DIYSceneItem, language: Language) => {
       : item.doorOverlay === 'inset' ? t.doorInsetOverlay : t.doorFullOverlay;
     return `${materialLabel} · ${item.width}×${item.height} · ${overlayLabel} · ${item.openingSide === 'right' ? t.doorRightOpen : t.doorLeftOpen}`;
   }
-  if (item.kind === 'shelf_support') return `${t.shelfSupport} · ${item.thickness || 0}mm · ${getShelfSupportFinishLabel(item, t)}`;
+  if (item.kind === 'shelf_support') return isBoard12ShelfSupport(item)
+    ? `${t.board12ShelfSupport} · ¥${WARDROBE_12MM_BOARD_SUPPORT_PRICE.toFixed(1)}`
+    : `${t.shelfSupport} · ${item.thickness || 0}mm · ${getShelfSupportFinishLabel(item, t)}`;
   if (item.kind === 'connector') return `${t.connector} · ${item.accessoryProfileSize || '2020'}`;
   if (item.kind === 'extruded_connector') return `${t.extrudedConnector} · ${item.accessoryProfileSize || '2020'}`;
   if (item.kind === 'l_connector') return `${t.lConnector} · ${item.accessoryProfileSize || '2020'}`;
@@ -8756,29 +8970,115 @@ const calculatePrice = (item: DIYSceneItem, user?: User | null) => {
   }
   if (item.kind === 'cabinet_door') return getCabinetDoorPricing(item, user).unitPrice;
   if (item.kind === 'shelf_support') {
-    return Number((getShelfSupportUnitPrice(item.thickness || 0, item.finish || 'oxidized') * quantity).toFixed(2));
+    const unitPrice = isBoard12ShelfSupport(item)
+      ? WARDROBE_12MM_BOARD_SUPPORT_PRICE
+      : getShelfSupportUnitPrice(item.thickness || 0, item.finish || 'oxidized');
+    return Number((unitPrice * quantity).toFixed(2));
   }
   if (item.kind === 'caster') return Number((getCasterEstimatedUnitPrice(item) * quantity).toFixed(1));
   if (item.kind === 'foot') return Number((FOOT_ESTIMATED_PRICE * quantity).toFixed(1));
-  if (item.kind === 'end_cap') return Number((getEndCapEstimatedUnitPrice(item) * quantity).toFixed(1));
+  if (item.kind === 'end_cap') return Number((getEndCapUnitPrice(item) * quantity).toFixed(1));
   const standardAccessoryPrice = getStandardAccessoryUnitPrice(item);
   return Number((((standardAccessoryPrice ?? item.accessoryPrice) || 0) * quantity).toFixed(1));
 };
 
-const NumberField: React.FC<{ label: string; value: number; min?: number; max?: number; step?: number; onChange: (value: number) => void }> = ({ label, value, min, max, step = 1, onChange }) => (
-  <label className="block">
-    <span className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1.5">{label}</span>
-    <input
-      type="number"
-      value={Number.isFinite(value) ? value : 0}
-      min={min}
-      max={max}
-      step={step}
-      onChange={(event) => onChange(Number(event.target.value) || 0)}
-      className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm font-bold text-slate-800 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
-    />
-  </label>
-);
+interface NumberFieldProps {
+  label: string;
+  value: number;
+  min?: number;
+  max?: number;
+  step?: number;
+  deferCommit?: boolean;
+  invalidMessage?: string;
+  onInvalid?: () => void;
+  onChange: (value: number) => void;
+}
+
+const NumberField: React.FC<NumberFieldProps> = ({
+  label,
+  value,
+  min,
+  max,
+  step = 1,
+  deferCommit = false,
+  invalidMessage,
+  onInvalid,
+  onChange,
+}) => {
+  const normalizedValue = Number.isFinite(value) ? value : 0;
+  const [draft, setDraft] = useState(String(normalizedValue));
+  const [editing, setEditing] = useState(false);
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    if (!deferCommit || (!editing && !error)) setDraft(String(normalizedValue));
+  }, [deferCommit, editing, error, normalizedValue]);
+
+  const commitDraft = () => {
+    if (!deferCommit) return;
+    const trimmed = draft.trim();
+    const parsed = Number(trimmed);
+    const invalid = trimmed === ''
+      || !Number.isFinite(parsed)
+      || (min !== undefined && parsed < min)
+      || (max !== undefined && parsed > max);
+    if (invalid) {
+      setError(invalidMessage || `${min ?? '-'} – ${max ?? '+'}`);
+      onInvalid?.();
+      return;
+    }
+    setError('');
+    setDraft(String(parsed));
+    onChange(parsed);
+  };
+
+  return (
+    <label className="block">
+      <span className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1.5">{label}</span>
+      <input
+        type="number"
+        value={deferCommit ? draft : normalizedValue}
+        min={min}
+        max={max}
+        step={step}
+        onFocus={() => setEditing(true)}
+        onBlur={() => {
+          setEditing(false);
+          commitDraft();
+        }}
+        onChange={(event) => {
+          if (deferCommit) {
+            setDraft(event.target.value);
+            setError('');
+          } else {
+            onChange(Number(event.target.value) || 0);
+          }
+        }}
+        onKeyDown={(event) => {
+          if (!deferCommit) return;
+          if (event.key === 'Enter') {
+            event.preventDefault();
+            // Blur is the single commit boundary, avoiding a duplicate submit
+            // while also letting a rejected scene update restore its real value.
+            event.currentTarget.blur();
+          }
+          if (event.key === 'Escape') {
+            setDraft(String(normalizedValue));
+            setError('');
+            event.currentTarget.blur();
+          }
+        }}
+        aria-invalid={Boolean(error)}
+        className={`w-full rounded-xl border bg-slate-50 px-3 py-2.5 text-sm font-bold text-slate-800 outline-none focus:ring-2 ${
+          error
+            ? 'border-red-400 focus:border-red-500 focus:ring-red-100'
+            : 'border-slate-200 focus:border-blue-500 focus:ring-blue-100'
+        }`}
+      />
+      {error && <span role="alert" className="mt-1.5 block text-[10px] font-black leading-relaxed text-red-600">{error}</span>}
+    </label>
+  );
+};
 
 const removeItemsWithOwnedEndTapping = (source: DIYSceneItem[], requestedIds: Set<string>) => {
   const removedProfileIds = new Set(source
@@ -8860,7 +9160,7 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({ language, onLanguageChange, u
 
   const selected = items.find((item) => item.id === selectedId) || null;
   const selectedFrameProfileIds = selectedIds.filter((id) => items.some((item) => item.id === id && item.kind === 'profile'));
-  const cabinetDoorOpening = useMemo(() => detectCabinetDoorOpening(
+  const cabinetDoorOpenings = useMemo(() => detectCabinetDoorOpenings(
     items,
     selectedFrameProfileIds.length >= 4 ? new Set(selectedFrameProfileIds) : undefined,
   ), [items, selectedFrameProfileIds.join('|')]);
@@ -9239,7 +9539,7 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({ language, onLanguageChange, u
       if (patch.colorId && (item.kind === 'caster' || item.kind === 'foot')) return item;
       const updated = { ...item, ...patch };
       return item.kind === 'end_cap' && patch.colorId
-        ? { ...updated, accessoryPrice: getEndCapEstimatedUnitPrice(updated) }
+        ? { ...updated, accessoryPrice: getEndCapUnitPrice(updated) }
         : updated;
     }), selectedIds[selectedIds.length - 1]);
     setSelectedIds((current) => current.filter((id) => items.some((item) => item.id === id)));
@@ -9279,21 +9579,28 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({ language, onLanguageChange, u
       return;
     }
     if (kind === 'cabinet_door') {
-      if (!cabinetDoorOpening) {
+      if (!cabinetDoorOpenings.length) {
         showNotice(t.doorNeedFrame);
         return;
       }
-      if (items.some((item) => item.kind === 'cabinet_door' && item.attachmentKey === cabinetDoorOpening.key)) {
+      const occupiedOpeningKeys = new Set(items
+        .filter((item) => item.kind === 'cabinet_door' && item.attachmentKey)
+        .map((item) => item.attachmentKey));
+      const availableOpenings = cabinetDoorOpenings.filter((opening) => !occupiedOpeningKeys.has(opening.key));
+      if (!availableOpenings.length) {
         showNotice(t.doorAlreadyAdded);
         return;
       }
-      const door = fitCabinetDoorToOpening(createItem('cabinet_door', items.length), cabinetDoorOpening);
-      if ((door.width || 0) > 1500 || (door.height || 0) > 3000) {
+      const doors = availableOpenings.map((opening, index) => fitCabinetDoorToOpening(
+        createItem('cabinet_door', items.length + index),
+        opening,
+      ));
+      if (doors.some((door) => (door.width || 0) > 1500 || (door.height || 0) > 3000)) {
         showNotice(t.doorSizeUnsupported);
         return;
       }
-      commit([...items, door], door.id);
-      showNotice(t.doorAdded);
+      commit([...items, ...doors], doors[0].id);
+      showNotice(`${t.doorAdded} · ${doors.length}${t.doorLeafUnit}`);
       return;
     }
     if (kind === 'end_cap') {
@@ -9319,7 +9626,12 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({ language, onLanguageChange, u
           height,
           thickness: 3,
           colorId: selected.colorId,
-          accessoryPrice: getEndCapEstimatedUnitPrice({ colorId: selected.colorId, quantity: 1 }),
+          accessoryPrice: getEndCapUnitPrice({
+            variantId: selected.variantId,
+            accessoryProfileSize: profileAccessorySeriesFromVariant(selected.variantId),
+            colorId: selected.colorId,
+            quantity: 1,
+          }),
           position: placement.position,
           rotation: placement.rotation,
           attachedEnd,
@@ -9342,11 +9654,23 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({ language, onLanguageChange, u
       showNotice(t.endCapInstalled);
       return;
     }
-    const accessorySeries = isConnectionAccessoryKind(kind)
+    let accessorySeries = isConnectionAccessoryKind(kind)
       ? (ACCESSORY_PROFILE_SIZES.includes(variantId as DIYAccessoryProfileSize)
         ? variantId as DIYAccessoryProfileSize
         : selectedAccessoryProfileSize)
       : undefined;
+    if (isConnectionAccessoryKind(kind)) {
+      const hasRequestedSeries = items.some((item) => (
+        item.kind === 'profile' && profileAccessorySeries(item) === accessorySeries
+      ));
+      if (!hasRequestedSeries) {
+        const inferredSeries = dominantAccessoryProfileSeries(items, getAvailableAccessorySizes(kind));
+        if (inferredSeries) {
+          accessorySeries = inferredSeries;
+          setSelectedAccessoryProfileSize(inferredSeries);
+        }
+      }
+    }
     if (isConnectionAccessoryKind(kind) && !ACCESSORY_PRICES[kind][accessorySeries!]) return;
     if (kind === 'connector' || kind === 'l_connector' || kind === 't_connector' || kind === 'tee_connector') {
       const template = createItem(kind, items.length, accessorySeries);
@@ -9659,6 +9983,8 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({ language, onLanguageChange, u
       const importedProfileIds = importedItems
         .filter((item) => item.kind === 'profile')
         .map((item) => item.id);
+      const importedAccessorySeries = dominantAccessoryProfileSeries(importedItems);
+      if (importedAccessorySeries) setSelectedAccessoryProfileSize(importedAccessorySeries);
       commit(importedItems, null);
       setMaycadReview({ source: result.sourceTitle || file.name, confidence: result.confidence, warnings: result.warnings });
       if (result.profileReviews.length) {
@@ -9685,10 +10011,13 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({ language, onLanguageChange, u
     maycadProfileReviewPrompt.entries.forEach((entry) => {
       entry.itemIds.forEach((itemId) => confirmedVariantByItemId.set(itemId, entry.variantId));
     });
-    commit(items.map((item) => {
+    const confirmedItems = items.map((item) => {
       const variantId = confirmedVariantByItemId.get(item.id);
       return variantId ? { ...item, variantId, name: variantId } : item;
-    }), null);
+    });
+    const confirmedAccessorySeries = dominantAccessoryProfileSeries(confirmedItems);
+    if (confirmedAccessorySeries) setSelectedAccessoryProfileSize(confirmedAccessorySeries);
+    commit(confirmedItems, null);
     const profileIds = maycadProfileReviewPrompt.profileIds;
     setMaycadProfileReviewPrompt(null);
     setMaycadReview((current) => current ? {
@@ -9837,6 +10166,7 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({ language, onLanguageChange, u
         };
         return { id: makeId(), product, quantity: item.quantity, config, totalPrice };
       }
+      const board12ShelfSupport = isBoard12ShelfSupport(item);
       const accessoryDefinition = {
         connector: { id: '1', code: 1, label: t.connector, imageKey: '1' },
         extruded_connector: { id: '2', code: 2, label: t.extrudedConnector, imageKey: '2' },
@@ -9854,7 +10184,9 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({ language, onLanguageChange, u
         foot: { id: 'diy-leveling-foot', code: 8, label: t.foot, imageKey: '8' },
         caster: { id: 'diy-threaded-caster', code: 0, label: t.caster, imageKey: '' },
         end_cap: { id: 'diy-profile-end-cap', code: 0, label: t.endCap, imageKey: '' },
-        shelf_support: { id: 'diy-shelf-support', code: 0, label: t.shelfSupport, imageKey: '' },
+        shelf_support: board12ShelfSupport
+          ? { id: 'diy-12mm-board-shelf-support', code: 0, label: t.board12ShelfSupport, imageKey: '' }
+          : { id: 'diy-shelf-support', code: 0, label: t.shelfSupport, imageKey: '' },
       }[item.kind as 'connector' | 'extruded_connector' | 'l_connector' | 't_connector' | 'hidden_connector' | 'tee_connector' | 'screw' | 'foot' | 'caster' | 'end_cap' | 'shelf_support'];
       const accessoryId = accessoryDefinition.id;
       const unitPrice = Number((totalPrice / Math.max(1, item.quantity)).toFixed(2));
@@ -9870,12 +10202,12 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({ language, onLanguageChange, u
         : undefined;
       const screwLengthMm = screwOrderSpec?.lengthMm;
       const screwThreadSize = screwOrderSpec?.threadSize;
-      const accessoryLengthMm = item.kind === 'shelf_support'
+      const accessoryLengthMm = item.kind === 'shelf_support' && !board12ShelfSupport
         ? Math.max(1, Math.round(item.thickness || 0))
         : undefined;
       const accessoryLineName = item.kind === 'screw'
         ? `${accessoryDefinition.label} · ${screwThreadSize}×${screwLengthMm}${screwOrderSpec?.includesElasticFastener ? ` + ${t.elasticFastener}` : ''}`
-        : item.kind === 'shelf_support'
+        : item.kind === 'shelf_support' && !board12ShelfSupport
           ? `${accessoryDefinition.label} · ${getShelfSupportFinishLabel(item, t)} · ${accessoryLengthMm}mm`
           : item.kind === 'caster'
             ? `${accessoryDefinition.label} · ${item.accessoryThreadSize || 'M8'} · ${item.hasBrake ? t.casterWithBrake : t.casterWithoutBrake}`
@@ -9894,7 +10226,8 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({ language, onLanguageChange, u
           colorMode: item.colorId === 'natural' ? 'natural' : 'colored',
           colorId: item.colorId,
           colorName: getDesignerColorName(item.colorId, language, item.kind),
-          finish: item.kind === 'shelf_support' ? (item.finish || 'oxidized') : undefined,
+          finish: item.kind === 'shelf_support' && !board12ShelfSupport ? (item.finish || 'oxidized') : undefined,
+          shelfSupportType: item.kind === 'shelf_support' ? (item.shelfSupportType || 'linear') : undefined,
           quantities: { [accessoryId]: item.quantity },
           totalQuantity: item.quantity,
           unitTotal: totalPrice,
@@ -10195,7 +10528,7 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({ language, onLanguageChange, u
                 <div className="grid grid-cols-2 gap-2 xl:grid-cols-1">
                   {paletteGroup.items.map((entry) => {
                     const Icon = entry.icon;
-                    const entryDisabled = entry.kind === 'cabinet_door' && !cabinetDoorOpening;
+                    const entryDisabled = entry.kind === 'cabinet_door' && !cabinetDoorOpenings.length;
                     const accessoryPrice = isConnectionAccessoryKind(entry.kind)
                       ? ACCESSORY_PRICES[entry.kind][selectedAccessoryProfileSize]
                       : undefined;
@@ -10205,7 +10538,7 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({ language, onLanguageChange, u
                         data-testid={`diy-add-${entry.kind}${'variantId' in entry && entry.variantId ? `-${entry.variantId}` : ''}`}
                         draggable={!entryDisabled}
                         disabled={entryDisabled}
-                        title={entry.kind === 'cabinet_door' ? (cabinetDoorOpening ? t.doorFrameReady : t.doorNeedFrame) : undefined}
+                        title={entry.kind === 'cabinet_door' ? (cabinetDoorOpenings.length ? t.doorFrameReady : t.doorNeedFrame) : undefined}
                         onDragStart={(event) => event.dataTransfer.setData('application/x-mengkaile-part', JSON.stringify({
                           kind: entry.kind,
                           variantId: isConnectionAccessoryKind(entry.kind)
@@ -10224,8 +10557,8 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({ language, onLanguageChange, u
                         <span className="min-w-0 flex-1">
                           <span className="block text-xs font-black text-slate-700">{entry.label}</span>
                           {entry.kind === 'cabinet_door' && (
-                            <span className={`mt-0.5 block text-[9px] font-bold ${cabinetDoorOpening ? 'text-emerald-600' : 'text-slate-400'}`}>
-                              {cabinetDoorOpening ? t.doorFrameReady : t.doorNeedFrame}
+                            <span className={`mt-0.5 block text-[9px] font-bold ${cabinetDoorOpenings.length ? 'text-emerald-600' : 'text-slate-400'}`}>
+                              {cabinetDoorOpenings.length ? `${t.doorFrameReady} · ${cabinetDoorOpenings.length}${t.doorLeafUnit}` : t.doorNeedFrame}
                             </span>
                           )}
                           {accessoryPrice && (
@@ -10346,6 +10679,7 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({ language, onLanguageChange, u
               move: t.moveDistance,
               connectionReady: t.connectionReady,
               apply: t.apply,
+              invalidLength: t.profileLengthInvalid,
             }}
             profileDrawTemplate={profileDrawTemplate}
             profileDrawLabels={{ hint: t.freeDrawHint, invalid: t.freeDrawOverlap, restore: t.restoreCursor }}
@@ -10413,7 +10747,7 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({ language, onLanguageChange, u
               if (!resized || resized.kind !== 'profile') return;
               const candidate = {
                 ...resized,
-                length: Math.min(3000, Math.max(21, length)),
+                length: Math.min(MAX_PROFILE_LENGTH_MM, Math.max(MIN_PROFILE_LENGTH_MM, length)),
                 position,
                 holes: (resized.holes || []).filter((hole) => hole.positionMm <= length - 5),
               };
@@ -10617,7 +10951,19 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({ language, onLanguageChange, u
                       {PROFILE_VARIANTS.map((variant) => <option key={variant.id} value={variant.id}>{variant.name}</option>)}
                     </select>
                   </label>
-                  <NumberField label={t.length} value={selected.length || 1000} min={21} max={3000} onChange={(length) => updateSelected({ length: Math.min(3000, Math.max(21, length)), holes: (selected.holes || []).filter((hole) => hole.positionMm <= length - 5) })} />
+                  <NumberField
+                    label={t.length}
+                    value={selected.length || 1000}
+                    min={MIN_PROFILE_LENGTH_MM}
+                    max={MAX_PROFILE_LENGTH_MM}
+                    deferCommit
+                    invalidMessage={t.profileLengthInvalid}
+                    onInvalid={() => showNotice(t.profileLengthInvalid)}
+                    onChange={(length) => updateSelected({
+                      length,
+                      holes: (selected.holes || []).filter((hole) => hole.positionMm <= length - 5),
+                    })}
+                  />
                 </>
               )}
 
@@ -10694,35 +11040,45 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({ language, onLanguageChange, u
 
               {selected.kind === 'shelf_support' && (
                 <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-                  <NumberField
-                    label={t.length}
-                    value={selected.thickness || 400}
-                    min={1}
-                    max={3000}
-                    onChange={(lengthMm) => updateSelected({
-                      thickness: lengthMm,
-                      accessoryPrice: getShelfSupportUnitPrice(lengthMm, selected.finish || 'oxidized'),
-                    })}
-                  />
-                  <label className="mt-3 block">
-                    <span className="diy-field-label">{t.shelfSupportFinish}</span>
-                    <select
-                      value={selected.finish || 'oxidized'}
-                      onChange={(event) => {
-                        const finish = event.target.value as ProfileFinish;
-                        updateSelected({
-                          finish,
-                          colorId: finish === 'oxidized' ? 'natural' : (selected.colorId === 'natural' ? 'silver' : selected.colorId),
-                          accessoryPrice: getShelfSupportUnitPrice(selected.thickness || 0, finish),
-                        });
-                      }}
-                      className="diy-select"
-                    >
-                      <option value="oxidized">{t.shelfSupportOxidized}</option>
-                      <option value="electrophoretic">{t.shelfSupportElectrophoretic}</option>
-                      <option value="powder">{t.shelfSupportPowder}</option>
-                    </select>
-                  </label>
+                  {isBoard12ShelfSupport(selected) ? (
+                    <div>
+                      <div className="text-[10px] font-black uppercase tracking-widest text-slate-400">{t.board12ShelfSupport}</div>
+                      <div className="mt-1 text-lg font-black text-slate-900">¥{WARDROBE_12MM_BOARD_SUPPORT_PRICE.toFixed(1)} / pcs</div>
+                      <div className="mt-1 text-[10px] font-bold leading-relaxed text-blue-700">12mm UV · 8 pcs / board</div>
+                    </div>
+                  ) : (
+                    <>
+                      <NumberField
+                        label={t.length}
+                        value={selected.thickness || 400}
+                        min={1}
+                        max={3000}
+                        onChange={(lengthMm) => updateSelected({
+                          thickness: lengthMm,
+                          accessoryPrice: getShelfSupportUnitPrice(lengthMm, selected.finish || 'oxidized'),
+                        })}
+                      />
+                      <label className="mt-3 block">
+                        <span className="diy-field-label">{t.shelfSupportFinish}</span>
+                        <select
+                          value={selected.finish || 'oxidized'}
+                          onChange={(event) => {
+                            const finish = event.target.value as ProfileFinish;
+                            updateSelected({
+                              finish,
+                              colorId: finish === 'oxidized' ? 'natural' : (selected.colorId === 'natural' ? 'silver' : selected.colorId),
+                              accessoryPrice: getShelfSupportUnitPrice(selected.thickness || 0, finish),
+                            });
+                          }}
+                          className="diy-select"
+                        >
+                          <option value="oxidized">{t.shelfSupportOxidized}</option>
+                          <option value="electrophoretic">{t.shelfSupportElectrophoretic}</option>
+                          <option value="powder">{t.shelfSupportPowder}</option>
+                        </select>
+                      </label>
+                    </>
+                  )}
                 </div>
               )}
 
@@ -10799,7 +11155,11 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({ language, onLanguageChange, u
                     {t.model} · {selected.variantId || selected.accessoryProfileSize || '2020'}<br />
                     {t.endCapTarget} · {selected.attachedEnd === 'right' ? t.rightEnd : t.leftEnd}
                   </div>
-                  <p className="mt-2 rounded-xl bg-amber-50 px-3 py-2 text-[10px] font-black text-amber-700">{t.estimatedPrice}：{currency}{getEndCapEstimatedUnitPrice(selected)} · {t.pricePending}</p>
+                  {getEndCapConfirmedProfileSize(selected) ? (
+                    <p className="mt-2 rounded-xl bg-blue-50 px-3 py-2 text-[10px] font-black text-blue-700">{t.confirmedPrice}：{currency}{getEndCapUnitPrice(selected)}</p>
+                  ) : (
+                    <p className="mt-2 rounded-xl bg-amber-50 px-3 py-2 text-[10px] font-black text-amber-700">{t.estimatedPrice}：{currency}{getEndCapUnitPrice(selected)} · {t.pricePending}</p>
+                  )}
                 </div>
               )}
 
@@ -10940,7 +11300,12 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({ language, onLanguageChange, u
                           ),
                         } : {}),
                         ...(selected.kind === 'end_cap' ? {
-                          accessoryPrice: getEndCapEstimatedUnitPrice({ colorId: color.id, quantity: selected.quantity }),
+                          accessoryPrice: getEndCapUnitPrice({
+                            variantId: selected.variantId,
+                            accessoryProfileSize: selected.accessoryProfileSize,
+                            colorId: color.id,
+                            quantity: selected.quantity,
+                          }),
                         } : {}),
                       })}
                       className={`flex min-w-0 items-center gap-2 rounded-xl border p-2 text-left transition ${selected.colorId === color.id ? 'border-blue-600 bg-blue-50 ring-2 ring-blue-100' : 'border-slate-200 bg-slate-50 hover:border-blue-300'}`}

@@ -20,6 +20,17 @@ type QuickQuoteProduct = 'profile' | 'aluminum_plate' | 'pegboard' | 'marine_boa
 type ProfileSection = 'natural' | 'colored';
 type FrameType = 'wood' | 'aluminum' | 'alu_wood';
 type MarineSpecId = 'marine_bbb_uv_film' | 'marine_bbb_plain';
+type QuickQuoteShippingMethod = Exclude<ShippingMethod, 'sf_collect'>;
+type ShippingSelection = 'auto' | QuickQuoteShippingMethod;
+
+interface ShippingOption {
+  method: QuickQuoteShippingMethod;
+  fee: number;
+  firstWeightKg: number;
+  firstFee: number;
+  nextFee: number;
+  overlengthFee: number;
+}
 
 interface ProfileRow {
   id: string;
@@ -141,7 +152,11 @@ const getProfileFinishByRow = (row: ProfileRow): 'oxidized' | 'electrophoretic' 
   return row.section === 'natural' ? 'electrophoretic' : 'powder';
 };
 
-const calcCheapestShippingByProvince = (province: string, totalWeightKg: number, hasOverlength: boolean) => {
+const calcShippingOptionsByProvince = (
+  province: string,
+  totalWeightKg: number,
+  hasOverlength: boolean
+): ShippingOption[] => {
   const overlengthFee = hasOverlength ? 20 : 0;
 
   const standardRate = SHIPPING_RATES[province] || { first: 18, next: 5 };
@@ -158,14 +173,32 @@ const calcCheapestShippingByProvince = (province: string, totalWeightKg: number,
       ? round1(annengRate.first)
       : round1(annengRate.first + Math.ceil(totalWeightKg - 15) * annengRate.next);
 
-  const options: Array<{ method: ShippingMethod; fee: number }> = [
-    { method: 'standard', fee: standard },
-    { method: 'sf', fee: sf },
-    { method: 'anneng', fee: anneng },
+  return [
+    {
+      method: 'standard',
+      fee: standard,
+      firstWeightKg: 1,
+      firstFee: standardRate.first,
+      nextFee: standardRate.next,
+      overlengthFee,
+    },
+    {
+      method: 'sf',
+      fee: sf,
+      firstWeightKg: 1,
+      firstFee: sfRate.first,
+      nextFee: sfRate.next,
+      overlengthFee,
+    },
+    {
+      method: 'anneng',
+      fee: anneng,
+      firstWeightKg: 15,
+      firstFee: annengRate.first,
+      nextFee: annengRate.next,
+      overlengthFee: 0,
+    },
   ];
-
-  const cheapest = options.reduce((best, current) => (current.fee < best.fee ? current : best), options[0]);
-  return { method: cheapest.method, fee: cheapest.fee, overlengthFee };
 };
 
 const QuickQuote: React.FC<{ language: Language; user?: User | null }> = ({ language, user }) => {
@@ -186,6 +219,7 @@ const QuickQuote: React.FC<{ language: Language; user?: User | null }> = ({ lang
 
   const [selectedProvince, setSelectedProvince] = useState('');
   const [selectedProduct, setSelectedProduct] = useState<QuickQuoteProduct>('profile');
+  const [shippingSelection, setShippingSelection] = useState<ShippingSelection>('auto');
 
   const [profileRows, setProfileRows] = useState<ProfileRow[]>([createProfileRow()]);
   const [hasChosenProfileColor, setHasChosenProfileColor] = useState(false);
@@ -322,19 +356,42 @@ const QuickQuote: React.FC<{ language: Language; user?: User | null }> = ({ lang
     const exactTotalWeightKg = profileSummary.totalWeightKg + marineBoardWeightKg;
     const totalWeightKg = round1(exactTotalWeightKg);
     const hasOverlength = profileRows.some((row) => row.length > 1500 && row.quantity > 0);
-    if (!selectedProvince || totalWeightKg <= 0) {
+    const options = selectedProvince
+      ? calcShippingOptionsByProvince(selectedProvince, exactTotalWeightKg, hasOverlength)
+      : [];
+    const cheapestOption = options.length > 0
+      ? options.reduce((best, current) => (current.fee < best.fee ? current : best), options[0])
+      : null;
+
+    if (!selectedProvince || totalWeightKg <= 0 || !cheapestOption) {
       return {
         method: null as ShippingMethod | null,
         fee: 0,
         overlengthFee: 0,
         totalWeightKg,
+        options,
+        cheapestMethod: cheapestOption?.method || null,
       };
     }
+
+    const selectedOption = shippingSelection === 'auto'
+      ? cheapestOption
+      : options.find((option) => option.method === shippingSelection) || cheapestOption;
+
     return {
-      ...calcCheapestShippingByProvince(selectedProvince, exactTotalWeightKg, hasOverlength),
+      method: selectedOption.method as ShippingMethod,
+      fee: selectedOption.fee,
+      overlengthFee: selectedOption.overlengthFee,
       totalWeightKg,
+      options,
+      cheapestMethod: cheapestOption.method,
     };
-  }, [marineBoardWeightKg, profileRows, profileSummary.totalWeightKg, selectedProvince]);
+  }, [marineBoardWeightKg, profileRows, profileSummary.totalWeightKg, selectedProvince, shippingSelection]);
+
+  const shippingMethods: QuickQuoteShippingMethod[] = ['standard', 'sf', 'anneng'];
+  const cheapestShippingOption = shippingSummary.options.find(
+    (option) => option.method === shippingSummary.cheapestMethod
+  );
 
   const frameCalculated = useMemo(() => {
     return frameRows.map((row) => {
@@ -736,7 +793,7 @@ const QuickQuote: React.FC<{ language: Language; user?: User | null }> = ({ lang
       <div className="bg-white border border-slate-100 rounded-3xl shadow-xl p-4 sm:p-6 md:p-8 space-y-6">
         <h2 className="text-2xl sm:text-3xl md:text-4xl font-black text-slate-900">{t.quickQuote}</h2>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <div>
             <label className="block text-xs font-black text-slate-500 mb-1">{t.qq_selectProvince}</label>
             <select
@@ -765,6 +822,31 @@ const QuickQuote: React.FC<{ language: Language; user?: User | null }> = ({ lang
                   {opt.label}
                 </option>
               ))}
+            </select>
+          </div>
+
+          <div>
+            <label className="block text-xs font-black text-slate-500 mb-1">{t.qq_shippingTierTitle}</label>
+            <select
+              value={shippingSelection}
+              onChange={(e) => setShippingSelection(e.target.value as ShippingSelection)}
+              className="w-full border border-slate-200 rounded-xl px-3 py-3 bg-slate-50"
+            >
+              <option value="auto">
+                {t.qq_autoCheapest}
+                {shippingSummary.cheapestMethod && cheapestShippingOption && shippingSummary.totalWeightKg > 0
+                  ? ` · ${SHIPPING_METHOD_NAMES[shippingSummary.cheapestMethod][language]} · ${currency}${cheapestShippingOption.fee.toFixed(1)}`
+                  : ''}
+              </option>
+              {shippingMethods.map((method) => {
+                const option = shippingSummary.options.find((item) => item.method === method);
+                return (
+                  <option key={method} value={method}>
+                    {SHIPPING_METHOD_NAMES[method][language]}
+                    {option && shippingSummary.totalWeightKg > 0 ? ` · ${currency}${option.fee.toFixed(1)}` : ''}
+                  </option>
+                );
+              })}
             </select>
           </div>
         </div>
@@ -974,7 +1056,7 @@ const QuickQuote: React.FC<{ language: Language; user?: User | null }> = ({ lang
             <div className="bg-blue-50 border border-blue-100 rounded-2xl p-4 text-sm space-y-1">
               <div className="font-bold text-blue-700">{t.qq_profileShippingNote}</div>
               <div className="text-slate-700">
-                {t.qq_cheapestCourier}:{' '}
+                {t.qq_selectedCourier}:{' '}
                 <span className="font-black">
                   {shippingSummary.method ? SHIPPING_METHOD_NAMES[shippingSummary.method][language] : '-'}
                 </span>
@@ -1010,7 +1092,7 @@ const QuickQuote: React.FC<{ language: Language; user?: User | null }> = ({ lang
           <div className="bg-blue-50 border border-blue-100 rounded-2xl p-4 text-sm space-y-1">
             <div className="font-bold text-blue-700">{t.qq_profileShippingNote}</div>
             <div className="text-slate-700">
-              {t.qq_cheapestCourier}:{' '}
+              {t.qq_selectedCourier}:{' '}
               <span className="font-black">
                 {shippingSummary.method ? SHIPPING_METHOD_NAMES[shippingSummary.method][language] : '-'}
               </span>
@@ -1155,7 +1237,7 @@ const QuickQuote: React.FC<{ language: Language; user?: User | null }> = ({ lang
 
               {categorySummary.shipping.method && (
                 <div className="border border-blue-100 rounded-2xl p-4 bg-blue-50 text-sm text-slate-700 flex flex-wrap gap-x-5 gap-y-1">
-                  <span>{t.qq_cheapestCourier}: <strong>{SHIPPING_METHOD_NAMES[categorySummary.shipping.method][language]}</strong></span>
+                  <span>{t.qq_selectedCourier}: <strong>{SHIPPING_METHOD_NAMES[categorySummary.shipping.method][language]}</strong></span>
                   <span>{t.qq_estimatedWeight}: <strong>{categorySummary.shipping.totalWeightKg.toFixed(1)}kg</strong></span>
                   <span>{t.qq_shippingFee}: <strong>{currency}{categorySummary.shipping.fee.toFixed(1)}</strong></span>
                 </div>

@@ -34,3 +34,12 @@ export const isVipMembership = (value: unknown): boolean => {
   const level = normalizeMembershipLevel(value);
   return level === 'vip' || level === 'vip_plus';
 };
+
+export const getAccessoryShippingWeightKg = (
+  membershipLevel: unknown,
+  hasAccessory: boolean,
+  orderAmount: number,
+): number => {
+  if (!hasAccessory || normalizeMembershipLevel(membershipLevel) === 'vip_plus') return 0;
+  return orderAmount < 30 ? 1 : 0;
+};

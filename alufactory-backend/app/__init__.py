@@ -9,11 +9,13 @@ from app.routes.cart import cart_bp
 from app.routes.orders import order_bp
 from app.routes.admin import admin_bp
 from app.routes.profiles import profile_bp
+from app.routes.accessories import accessory_bp
 from app.routes.payments import payment_bp
 from app.routes.ai_import import ai_import_bp
 from app.product_order_db import init_product_order_db
 from app.security import init_payload_encryption
 from app.profile_inventory import seed_profile_inventory
+from app.accessory_inventory import seed_accessory_inventory
 import os
 
 def create_app(config_name='development'):
@@ -51,6 +53,7 @@ def create_app(config_name='development'):
     app.register_blueprint(order_bp)
     app.register_blueprint(admin_bp)
     app.register_blueprint(profile_bp)
+    app.register_blueprint(accessory_bp)
     app.register_blueprint(payment_bp)
     # AI reconstruction stays off unless a future deployment explicitly opts
     # in after its provider and API keys are ready.
@@ -62,6 +65,7 @@ def create_app(config_name='development'):
         db.create_all()
         init_product_order_db(app.instance_path)
         seed_profile_inventory()
+        seed_accessory_inventory()
         
         # Auto-migrate: ensure all expected columns exist in orders table
         try:
