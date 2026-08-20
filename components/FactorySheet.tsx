@@ -12,7 +12,7 @@ import {
   isDiyScrewAccessory,
   summarizeDiyScrewCartItems,
 } from '../utils/cartAccessories';
-import { normalizeMembershipLevel } from '../utils/membership';
+import { getAccessoryShippingWeightKg } from '../utils/membership';
 
 interface FactorySheetProps {
   cart: CartItem[];
@@ -335,20 +335,21 @@ const FactorySheet: React.FC<FactorySheetProps> = ({ cart, user, language, order
   // 1. 先计算总重量（如果还没计算的话）
   const calculateTotalWeight = () => {
     let totalWeightKg = 0;
-    const isVipPlus = normalizeMembershipLevel(user?.membershipLevel) === 'vip_plus';
+    let hasAccessory = false;
+    let accessorySubtotal = 0;
     cart.forEach(item => {
       if (item.product.type === ProductType.PROFILE) {
         const cfg = item.config as ProfileConfig;
         const weightPerM = PROFILE_WEIGHTS[cfg.variantId!] || 0.6;
         totalWeightKg += weightPerM * (cfg.length / 1000) * item.quantity;
-      } else if (item.product.type === ProductType.ACCESSORY && isVipPlus) {
-        // VIP+ accessories do not contribute billable shipping weight.
-        totalWeightKg += 0;
+      } else if (item.product.type === ProductType.ACCESSORY) {
+        hasAccessory = true;
+        accessorySubtotal += Number(item.totalPrice) || 0;
       } else {
         totalWeightKg += 1 * item.quantity;
       }
     });
-    return totalWeightKg;
+    return totalWeightKg + getAccessoryShippingWeightKg(user, hasAccessory, accessorySubtotal);
   };
 
   // 2. 运费计算 — use passed-in values if available, otherwise auto-calculate cheapest
@@ -398,15 +399,18 @@ const FactorySheet: React.FC<FactorySheetProps> = ({ cart, user, language, order
     shippingLabel = SHIPPING_METHOD_NAMES[normalizedShippingMethod as ShippingMethod][language];
   }
 
-  const isVipPlusAccessoryOnlyOrder =
-    normalizeMembershipLevel(user?.membershipLevel) === 'vip_plus' &&
-    cart.length > 0 &&
-    cart.every((item) => item.product.type === ProductType.ACCESSORY);
+  const isAccessoryOnlyOrder =
+    cart.length > 0 && cart.every((item) => item.product.type === ProductType.ACCESSORY);
+  const accessorySubtotal = isAccessoryOnlyOrder
+    ? cart.reduce((sum, item) => sum + (Number(item.totalPrice) || 0), 0)
+    : 0;
+  const isConfirmedFreeAccessoryOnlyOrder =
+    isAccessoryOnlyOrder && getAccessoryShippingWeightKg(user, true, accessorySubtotal) === 0;
 
   // A missing address or an unexplained zero-fee order remains freight
-  // collect. VIP+ accessory-only orders are a confirmed free-shipping case,
-  // so retain the selected courier label with a ¥0 fee.
-  if (!activeAddress || (shippingFee <= 0 && !isVipPlusAccessoryOnlyOrder)) {
+  // collect. An authenticated VIP+ accessory order, or an accessory-only
+  // order reaching the ¥30 accessory threshold, is confirmed free shipping.
+  if (!activeAddress || (shippingFee <= 0 && !isConfirmedFreeAccessoryOnlyOrder)) {
     shippingFee = 0;
     shippingLabel = SHIPPING_METHOD_NAMES.sf_collect[language];
   }

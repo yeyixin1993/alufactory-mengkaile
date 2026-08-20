@@ -36,10 +36,16 @@ export const isVipMembership = (value: unknown): boolean => {
 };
 
 export const getAccessoryShippingWeightKg = (
-  membershipLevel: unknown,
+  user: { membershipLevel?: unknown } | null | undefined,
   hasAccessory: boolean,
-  orderAmount: number,
+  accessorySubtotal: number,
 ): number => {
-  if (!hasAccessory || normalizeMembershipLevel(membershipLevel) === 'vip_plus') return 0;
-  return orderAmount < 30 ? 1 : 0;
+  if (!hasAccessory) return 0;
+
+  // VIP+ free accessory freight is an account entitlement. A guest (or any
+  // user without an explicit VIP+ status) must continue through the normal
+  // accessory threshold instead of inheriting the zero-weight branch.
+  if (user && normalizeMembershipLevel(user.membershipLevel) === 'vip_plus') return 0;
+
+  return accessorySubtotal < 30 ? 1 : 0;
 };

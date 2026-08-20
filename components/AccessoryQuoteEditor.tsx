@@ -291,7 +291,7 @@ const AccessoryQuoteEditor: React.FC<{
   onUpdateItem: (item: CartItem) => void;
 }> = ({ language, product, user, initialItem, returnCartPath, onAddToCart, onUpdateItem }) => {
   const navigate = useNavigate();
-  const isVipPlus = normalizeMembershipLevel(user?.membershipLevel) === 'vip_plus';
+  const isVipPlus = Boolean(user) && normalizeMembershipLevel(user?.membershipLevel) === 'vip_plus';
 
   const seeded = (initialItem?.config || {}) as Partial<AccessoryConfig>;
 
