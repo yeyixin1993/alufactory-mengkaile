@@ -28,7 +28,7 @@ from app.profile_inventory import (
     seed_profile_inventory,
 )
 from app.accessory_inventory import (
-    ACCESSORY_COLORS,
+    ACCESSORY_FINISH_ID,
     apply_accessory_inventory_records,
     build_accessory_inventory_xlsx,
     parse_accessory_inventory_xlsx,
@@ -789,21 +789,22 @@ def import_profile_inventory():
 @admin_required
 def get_accessory_inventory_admin():
     seed_accessory_inventory()
-    rows = AccessoryInventory.query.order_by(
+    rows = AccessoryInventory.query.filter_by(color_id=ACCESSORY_FINISH_ID).order_by(
         AccessoryInventory.accessory_id.asc(),
         AccessoryInventory.profile_size.asc(),
-        AccessoryInventory.color_id.asc(),
     ).all()
     return jsonify({
         'inventory': [serialize_accessory_inventory(row) for row in rows],
-        'color_names': ACCESSORY_COLORS,
     }), 200
 
 
 @admin_bp.route('/accessory-inventory/<int:inventory_id>', methods=['PUT'])
 @admin_required
 def update_accessory_inventory(inventory_id):
-    row = AccessoryInventory.query.get(inventory_id)
+    row = AccessoryInventory.query.filter_by(
+        id=inventory_id,
+        color_id=ACCESSORY_FINISH_ID,
+    ).first()
     if not row:
         return jsonify({'error': 'Inventory row not found'}), 404
     data = request.get_json(silent=True) or {}
@@ -823,10 +824,9 @@ def update_accessory_inventory(inventory_id):
 @admin_required
 def export_accessory_inventory():
     seed_accessory_inventory()
-    rows = AccessoryInventory.query.order_by(
+    rows = AccessoryInventory.query.filter_by(color_id=ACCESSORY_FINISH_ID).order_by(
         AccessoryInventory.accessory_id.asc(),
         AccessoryInventory.profile_size.asc(),
-        AccessoryInventory.color_id.asc(),
     ).all()
     return send_file(
         build_accessory_inventory_xlsx(rows),

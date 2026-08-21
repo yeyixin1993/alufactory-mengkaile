@@ -307,7 +307,10 @@ class ProfileInventory(db.Model):
 
 
 class AccessoryInventory(db.Model):
-    """Finished accessory stock, tracked by SKU, compatible profile size and color."""
+    """Silver-white finished accessory stock, tracked by SKU and compatible profile size.
+
+    The legacy color column remains for schema compatibility and is fixed to ``natural``.
+    """
     __tablename__ = 'accessory_inventory'
     __table_args__ = (
         db.UniqueConstraint(

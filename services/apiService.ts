@@ -205,14 +205,12 @@ class ApiServiceClass {
   async getAccessoryInventory(): Promise<Array<{
     accessoryId: string;
     profileSize: string;
-    colorId: string;
     quantity: number;
   }>> {
     const data = await this.request('GET', '/accessories/inventory');
     return Array.isArray(data?.inventory) ? data.inventory.map((row: any) => ({
       accessoryId: String(row.accessory_id || ''),
       profileSize: String(row.profile_size || ''),
-      colorId: String(row.color_id || ''),
       quantity: Math.max(0, Number(row.quantity || 0)),
     })) : [];
   }

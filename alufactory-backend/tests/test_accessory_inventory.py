@@ -1,7 +1,7 @@
 from io import BytesIO
 
 from app import create_app
-from app.accessory_inventory import ACCESSORY_COLORS, build_accessory_inventory_xlsx
+from app.accessory_inventory import ACCESSORY_FINISH_ID, build_accessory_inventory_xlsx
 from app.models.user import AccessoryInventory, User, db
 
 
@@ -19,18 +19,26 @@ def test_accessory_inventory_admin_public_and_xlsx_roundtrip():
     with app.app_context():
         client = app.test_client()
         headers = _admin_headers(client)
+        db.session.add(AccessoryInventory(
+            accessory_id='1',
+            profile_size='2020',
+            color_id='red',
+            quantity=9,
+        ))
+        db.session.commit()
 
         admin_response = client.get('/api/admin/accessory-inventory', headers=headers)
         assert admin_response.status_code == 200
         payload = admin_response.get_json()
         inventory = payload['inventory']
-        assert payload['color_names'] == ACCESSORY_COLORS
+        assert 'color_names' not in payload
+        assert all('color_id' not in row and 'color_name' not in row for row in inventory)
         assert any(row['accessory_id'] == 'end_cap_2020' and row['profile_size'] == '2020' for row in inventory)
         assert any(row['accessory_id'] == 'end_cap_3030' and row['profile_size'] == '3030' for row in inventory)
 
         row = next(
             item for item in inventory
-            if item['accessory_id'] == '1' and item['profile_size'] == '2020' and item['color_id'] == 'red'
+            if item['accessory_id'] == '1' and item['profile_size'] == '2020'
         )
         updated = client.put(
             f"/api/admin/accessory-inventory/{row['id']}",
@@ -44,9 +52,13 @@ def test_accessory_inventory_admin_public_and_xlsx_roundtrip():
         assert public.status_code == 200
         public_row = next(
             item for item in public.get_json()['inventory']
-            if item['accessory_id'] == '1' and item['profile_size'] == '2020' and item['color_id'] == 'red'
+            if item['accessory_id'] == '1' and item['profile_size'] == '2020'
         )
         assert public_row['quantity'] == 37
+        assert 'color_id' not in public_row
+        assert AccessoryInventory.query.filter(
+            AccessoryInventory.color_id != ACCESSORY_FINISH_ID,
+        ).count() == 0
 
         exported = client.get('/api/admin/accessory-inventory/export', headers=headers)
         assert exported.status_code == 200

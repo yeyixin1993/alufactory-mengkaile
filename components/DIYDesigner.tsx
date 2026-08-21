@@ -156,6 +156,12 @@ interface DIYDesignerProps {
 const SCENE_SCALE = 100;
 const MIN_PROFILE_LENGTH_MM = 21;
 const MAX_PROFILE_LENGTH_MM = 3000;
+const PROFILE_CONTACT_TOLERANCE = 1.5 / SCENE_SCALE;
+const scenePositionToMm = (position: THREE.Vector3): Vec3 => [
+  Number((position.x * SCENE_SCALE).toFixed(1)),
+  Number((position.y * SCENE_SCALE).toFixed(1)),
+  Number((position.z * SCENE_SCALE).toFixed(1)),
+];
 const MIN_BOARD_AREA = 0.2;
 const ALUMINUM_PLATE_PRICE: Record<number, number> = { 1: 500, 2: 700, 3: 1000, 4: 1300, 5: 1600 };
 const PEGBOARD_PRICE: Record<number, number> = { 1: 780, 2: 1080, 3: 1380, 4: 1680, 5: 1980 };
@@ -3331,7 +3337,7 @@ const profileContact = (first: ProfileBox, second: ProfileBox): ProfileContact |
   const firstIntervals = profileWorldIntervals(first);
   const secondIntervals = profileWorldIntervals(second);
   const gaps = firstIntervals.map((interval, axisIndex) => intervalGap(interval, secondIntervals[axisIndex]));
-  if (Math.max(...gaps) > 0.015) return null;
+  if (Math.max(...gaps) > PROFILE_CONTACT_TOLERANCE) return null;
 
   const point = new THREE.Vector3();
   const size = new THREE.Vector3();
@@ -3523,7 +3529,7 @@ const profileAxisGap = (first: ProfileBox, second: ProfileBox): ProfileAxisGap |
   const gaps = firstIntervals.map((interval, axisIndex) => intervalGap(interval, secondIntervals[axisIndex]));
   const separatedAxes = gaps
     .map((gap, axisIndex) => ({ gap, axisIndex: axisIndex as 0 | 1 | 2 }))
-    .filter((entry) => entry.gap > 0.015);
+    .filter((entry) => entry.gap > PROFILE_CONTACT_TOLERANCE);
   if (separatedAxes.length !== 1) return null;
   const { gap: distance, axisIndex } = separatedAxes[0];
   if (distance > 12) return null;
@@ -5658,11 +5664,7 @@ const ThreeAssembly: React.FC<{
       onResizeProfileRef.current(
         editor.itemId,
         lengthMm,
-        [
-          Math.round(position.x * SCENE_SCALE),
-          Math.round(position.y * SCENE_SCALE),
-          Math.round(position.z * SCENE_SCALE),
-        ],
+        scenePositionToMm(position),
       );
     }
     if (
@@ -5678,11 +5680,7 @@ const ThreeAssembly: React.FC<{
         const position = start.addScaledVector(direction, moveValueMm / SCENE_SCALE);
         onTransformRef.current(
           editor.itemId,
-          [
-            Math.round(position.x * SCENE_SCALE),
-            Math.round(position.y * SCENE_SCALE),
-            Math.round(position.z * SCENE_SCALE),
-          ],
+          scenePositionToMm(position),
           item.rotation,
           undefined,
           false,
@@ -6224,7 +6222,7 @@ const ThreeAssembly: React.FC<{
         const negativeDistance = Math.max(0, targetBox.halfSizes[0] + selectedCenterAlongTarget - movingHalfAlongTarget);
         const positiveDistance = Math.max(0, targetBox.halfSizes[0] - selectedCenterAlongTarget - movingHalfAlongTarget);
         const offset = relationLineOffset(targetBox.axes[0], 0.22 + contactIndex * 0.1);
-        if (negativeDistance > 0.005) {
+        if (negativeDistance > PROFILE_CONTACT_TOLERANCE) {
           measurementWorld.push({
             id: `${selectedItem.id}:${targetItem.id}:negative-clearance`,
             kind: 'clearance',
@@ -6233,7 +6231,7 @@ const ThreeAssembly: React.FC<{
             end: targetBox.center.clone().addScaledVector(targetBox.axes[0], selectedCenterAlongTarget - movingHalfAlongTarget).add(offset),
           });
         }
-        if (positiveDistance > 0.005) {
+        if (positiveDistance > PROFILE_CONTACT_TOLERANCE) {
           measurementWorld.push({
             id: `${selectedItem.id}:${targetItem.id}:positive-clearance`,
             kind: 'clearance',
@@ -6379,7 +6377,7 @@ const ThreeAssembly: React.FC<{
       if (!object || !itemId) return;
       onTransformRef.current(
         itemId,
-        [Math.round(object.position.x * SCENE_SCALE), Math.round(object.position.y * SCENE_SCALE), Math.round(object.position.z * SCENE_SCALE)],
+        scenePositionToMm(object.position),
         [
           Math.round(THREE.MathUtils.radToDeg(object.rotation.x)),
           Math.round(THREE.MathUtils.radToDeg(object.rotation.y)),
@@ -7250,11 +7248,7 @@ const ThreeAssembly: React.FC<{
             const effectiveAnchor = profileDrawEffectiveAnchor(profileDrawAxis, profileDrawPreview.quaternion) || profileDrawAnchor;
             const center = effectiveAnchor.clone().addScaledVector(profileDrawAxis, direction * (length / SCENE_SCALE) / 2);
             onCommitProfileDrawRef.current({
-              position: [
-                Math.round(center.x * SCENE_SCALE),
-                Math.round(center.y * SCENE_SCALE),
-                Math.round(center.z * SCENE_SCALE),
-              ],
+              position: scenePositionToMm(center),
               rotation: [
                 Math.round(THREE.MathUtils.radToDeg(profileDrawCurrentRotation.x)),
                 Math.round(THREE.MathUtils.radToDeg(profileDrawCurrentRotation.y)),
@@ -7294,7 +7288,7 @@ const ThreeAssembly: React.FC<{
           const object = getTransformTarget();
           const itemId = object?.userData.itemId as string | undefined;
           const item = itemId ? itemsRef.current.find((entry) => entry.id === itemId) : undefined;
-          if (side && object && item?.kind === 'profile' && !rayHitsDifferentItem(event.clientX, event.clientY, itemId)) {
+          if (side && object && item?.kind === 'profile') {
             const startLength = profileDimensions(item).length;
             const axis = new THREE.Vector3(1, 0, 0).applyQuaternion(object.quaternion).normalize();
             const cameraDirection = camera.getWorldDirection(new THREE.Vector3()).normalize();
@@ -7681,20 +7675,13 @@ const ThreeAssembly: React.FC<{
       const candidate: DIYSceneItem = {
         ...state.item,
         length: Math.round(nextLength * SCENE_SCALE),
-        position: [
-          Math.round(nextPosition.x * SCENE_SCALE),
-          Math.round(nextPosition.y * SCENE_SCALE),
-          Math.round(nextPosition.z * SCENE_SCALE),
-        ],
+        position: scenePositionToMm(nextPosition),
       };
-      if (profileItemCollides(candidate, itemsRef.current)) {
-        setSnapHint(null);
-        return;
-      }
       state.validLength = nextLength;
       state.validPosition.copy(nextPosition);
       state.object.position.copy(nextPosition);
       state.object.scale.set(nextLength / state.startLength, 1, 1);
+      setLiveProfileInterference(state.object, profileItemCollides(candidate, itemsRef.current));
       syncProfileLengthHandles(lengthHandles, state.object, state.item, nextLength, nextPosition);
       const editorPosition = getOperationEditorPosition(event.clientX, event.clientY);
       const nextLengthMm = Math.round(nextLength * SCENE_SCALE);
@@ -7778,11 +7765,7 @@ const ThreeAssembly: React.FC<{
           const committedRotation = state.accessoryPlacement?.rotation || state.item.rotation;
           onTransformRef.current(
             state.item.id,
-            [
-              Math.round(state.validPosition.x * SCENE_SCALE),
-              Math.round(state.validPosition.y * SCENE_SCALE),
-              Math.round(state.validPosition.z * SCENE_SCALE),
-            ],
+            scenePositionToMm(state.validPosition),
             committedRotation,
             state.accessoryPlacement,
             state.duplicateOnCommit,
@@ -7833,11 +7816,7 @@ const ThreeAssembly: React.FC<{
         onResizeProfileRef.current(
           state.item.id,
           Math.round(state.validLength * SCENE_SCALE),
-          [
-            Math.round(state.validPosition.x * SCENE_SCALE),
-            Math.round(state.validPosition.y * SCENE_SCALE),
-            Math.round(state.validPosition.z * SCENE_SCALE),
-          ],
+          scenePositionToMm(state.validPosition),
         );
         setOperationEditor((current) => (
           current?.kind === 'length' && current.itemId === state.item.id
@@ -9233,9 +9212,8 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({ language, onLanguageChange, u
         tappingRight: hasRightCap ? true : candidate.tappingRight,
       };
     }
-    const changesProfileEnvelope = selected.kind === 'profile'
-      && (patch.length !== undefined || patch.variantId !== undefined);
-    if (changesProfileEnvelope && profileItemCollides(candidate, items)) return;
+    const changesProfileModel = selected.kind === 'profile' && patch.variantId !== undefined;
+    if (changesProfileModel && profileItemCollides(candidate, items)) return;
     commit(items.map((item) => item.id === selected.id ? candidate : item), selected.id);
   };
 
@@ -10758,7 +10736,6 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({ language, onLanguageChange, u
                 position,
                 holes: (resized.holes || []).filter((hole) => hole.positionMm <= length - 5),
               };
-              if (profileItemCollides(candidate, items)) return;
               commit(items.map((item) => item.id === id ? candidate : item), id);
             }}
             onRotateQuarterTurn={rotateItemQuarterTurn}

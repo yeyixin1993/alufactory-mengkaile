@@ -8,6 +8,6 @@ accessory_bp = Blueprint('accessories', __name__, url_prefix='/api/accessories')
 
 @accessory_bp.route('/inventory', methods=['GET'])
 def get_accessory_inventory():
-    """Public finished-accessory availability expressed as piece counts."""
+    """Public silver-white finished-accessory availability in piece counts."""
     seed_accessory_inventory()
     return jsonify({'inventory': public_accessory_stock()}), 200

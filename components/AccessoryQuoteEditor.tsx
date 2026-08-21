@@ -312,17 +312,21 @@ const AccessoryQuoteEditor: React.FC<{
   const [zoomPreview, setZoomPreview] = useState<{ src: string; alt: string } | null>(null);
   const [inventoryByAccessoryId, setInventoryByAccessoryId] = useState<Record<string, number>>({});
   const [inventoryLoaded, setInventoryLoaded] = useState(false);
-  const inventoryColorId = colorMode === 'natural' ? 'natural' : colorId;
 
   useEffect(() => {
     let active = true;
+    if (colorMode !== 'natural') {
+      setInventoryByAccessoryId({});
+      setInventoryLoaded(false);
+      return () => { active = false; };
+    }
     setInventoryLoaded(false);
     ApiService.getAccessoryInventory()
       .then((rows) => {
         if (!active) return;
         const next: Record<string, number> = {};
         rows.forEach((row) => {
-          if (row.profileSize === profileSize && row.colorId === inventoryColorId) {
+          if (row.profileSize === profileSize) {
             next[row.accessoryId] = row.quantity;
           }
         });
@@ -335,7 +339,7 @@ const AccessoryQuoteEditor: React.FC<{
         setInventoryLoaded(false);
       });
     return () => { active = false; };
-  }, [inventoryColorId, profileSize]);
+  }, [colorMode, profileSize]);
 
   const ui = useMemo(() => {
     if (language === 'cn') {
@@ -663,14 +667,14 @@ const AccessoryQuoteEditor: React.FC<{
                     <td className="p-2 border border-slate-100">¥{(colorMode === 'natural' ? p.natural : p.colored).toFixed(2)}</td>
                     <td className="p-2 border border-slate-100">¥{(colorMode === 'natural' ? p.naturalBulk : p.coloredBulk).toFixed(2)}</td>
                     <td className="p-2 border border-slate-100">
-                      {inventoryLoaded ? (
+                      {colorMode === 'natural' && inventoryLoaded ? (
                         <span
                           data-testid={`accessory-inventory-${def.id}`}
                           className={`font-black ${(inventoryByAccessoryId[def.id] || 0) > 0 ? 'text-emerald-700' : 'text-amber-700'}`}
                         >
                           {inventoryByAccessoryId[def.id] || 0} {ui.pieces}
                         </span>
-                      ) : <span className="text-slate-400">-</span>}
+                      ) : colorMode === 'natural' ? <span className="text-slate-400">-</span> : null}
                     </td>
                     <td className="p-2 border border-slate-100">
                       <input
