@@ -84,9 +84,11 @@ const findExportBlocks = (element: HTMLElement): HTMLElement[] => {
 type Html2Canvas = typeof import('html2canvas')['default'];
 
 const captureBlock = async (element: HTMLElement, html2canvas: Html2Canvas) => html2canvas(element, {
-  // 1.5x remains sharp for A4 text/QR codes while avoiding the memory and
-  // multi-minute render cost of dozens of separate 2x production cards.
-  scale: 1.5,
+  // Use an integer raster scale. Fractional scaling can place CJK fallback
+  // glyph baselines on half pixels in html2canvas, which makes text inside
+  // flex/overflow containers look lowered or clips part of a glyph in the
+  // downloaded PDF even though the live preview is correct.
+  scale: 2,
   useCORS: true,
   allowTaint: false,
   logging: false,

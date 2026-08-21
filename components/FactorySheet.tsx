@@ -420,7 +420,7 @@ const FactorySheet: React.FC<FactorySheetProps> = ({ cart, user, language, order
   //const finalTotal = baseTotal + shippingFee;
 
   return (
-    <div id={id} className="bg-white p-10 font-mono text-slate-900 w-[210mm] mx-auto shadow-none box-border border border-slate-100 flex flex-col gap-6">
+    <div id={id} className="bg-white p-10 font-sans antialiased leading-normal text-slate-900 w-[210mm] mx-auto shadow-none box-border border border-slate-100 flex flex-col gap-6">
       {/* Header */}
       <div data-pdf-block className="border-b-4 border-slate-900 pb-6 flex justify-between items-end">
         <div className="flex-1">
@@ -460,8 +460,8 @@ const FactorySheet: React.FC<FactorySheetProps> = ({ cart, user, language, order
           <div className="text-xs font-black text-slate-500 uppercase tracking-widest mb-2">{t.qq_profileMetersByModelColor || '型材米数汇总'}</div>
           <ul className="space-y-1.5 text-xs text-slate-700">
             {profileMetersSummary.map((row) => (
-              <li key={row.name} className="flex justify-between gap-3">
-                <span className="truncate">
+              <li key={row.name} className="flex items-start justify-between gap-3 leading-5">
+                <span className="min-w-0 break-words">
                   {row.name}
                   {(() => {
                     const model = String(row.name || '').split('·')[0].trim();
@@ -1084,7 +1084,7 @@ const FactorySheet: React.FC<FactorySheetProps> = ({ cart, user, language, order
         </div>
       )}
 
-      <div data-pdf-block className="mt-auto pt-16 pb-4 text-center text-[10px] text-slate-400 uppercase tracking-widest font-bold">
+      <div data-pdf-block className="mt-auto pt-4 pb-2 text-center text-[10px] leading-4 text-slate-400 uppercase tracking-widest font-bold">
          {t.generatedBy} · {dateStr} · {orderRef}
       </div>
     </div>

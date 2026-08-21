@@ -4346,7 +4346,11 @@ const createBoardObject = (item: DIYSceneItem, selected: boolean) => {
   return group;
 };
 
-const createCabinetDoorObject = (item: DIYSceneItem, selected: boolean) => {
+const createCabinetDoorObject = (
+  item: DIYSceneItem,
+  selected: boolean,
+  showInternalHardware = false,
+) => {
   const group = new THREE.Group();
   const width = Math.max(1, item.width || 496) / SCENE_SCALE;
   const height = Math.max(1, item.height || 1996) / SCENE_SCALE;
@@ -4392,16 +4396,18 @@ const createCabinetDoorObject = (item: DIYSceneItem, selected: boolean) => {
     emissive: new THREE.Color(selected ? '#0ea5e9' : '#000000'),
     emissiveIntensity: selected ? 0.24 : 0,
   });
-  getDoorHingePositions(item.height || 1996).forEach((positionMm) => {
-    const y = -height / 2 + positionMm / SCENE_SCALE;
-    const cup = new THREE.Mesh(new THREE.CylinderGeometry(0.065, 0.065, 0.05, 24), hardwareMaterial);
-    cup.rotation.x = Math.PI / 2;
-    cup.position.set(hingeX, y, hardwareZ);
-    const armLength = item.doorOverlay === 'full' ? 0.2 : item.doorOverlay === 'half' ? 0.14 : 0.08;
-    const arm = new THREE.Mesh(new THREE.BoxGeometry(armLength, 0.055, 0.045), hardwareMaterial);
-    arm.position.set(hingeX + (hingeOnLeft ? 1 : -1) * armLength / 2, y, hardwareZ);
-    group.add(cup, arm);
-  });
+  if (showInternalHardware) {
+    getDoorHingePositions(item.height || 1996).forEach((positionMm) => {
+      const y = -height / 2 + positionMm / SCENE_SCALE;
+      const cup = new THREE.Mesh(new THREE.CylinderGeometry(0.065, 0.065, 0.05, 24), hardwareMaterial);
+      cup.rotation.x = Math.PI / 2;
+      cup.position.set(hingeX, y, hardwareZ);
+      const armLength = item.doorOverlay === 'full' ? 0.2 : item.doorOverlay === 'half' ? 0.14 : 0.08;
+      const arm = new THREE.Mesh(new THREE.BoxGeometry(armLength, 0.055, 0.045), hardwareMaterial);
+      arm.position.set(hingeX + (hingeOnLeft ? 1 : -1) * armLength / 2, y, hardwareZ);
+      group.add(cup, arm);
+    });
+  }
   const handle = new THREE.Mesh(
     new THREE.CapsuleGeometry(0.035, Math.min(1.4, Math.max(0.35, height * 0.12)), 6, 14),
     new THREE.MeshStandardMaterial({ color: '#334155', metalness: 0.84, roughness: 0.2 }),
@@ -8136,7 +8142,8 @@ const ThreeAssembly: React.FC<{
     });
     const showMultiSelectionOutline = selectedIds.length > 1;
     items.forEach((item) => {
-      const showSelectionOutline = showMultiSelectionOutline && selectedSet.has(item.id);
+      const itemIsSelected = selectedSet.has(item.id);
+      const showSelectionOutline = showMultiSelectionOutline && itemIsSelected;
       const machiningEmphasis = selectedIds.length === 0
         ? 0.72
         : selectedSet.has(item.id)
@@ -8155,7 +8162,7 @@ const ThreeAssembly: React.FC<{
         : item.kind === 'plate' || item.kind === 'pegboard' || item.kind === 'marine_board'
           ? createBoardObject(item, showSelectionOutline)
           : item.kind === 'cabinet_door'
-            ? createCabinetDoorObject(item, showSelectionOutline)
+            ? createCabinetDoorObject(item, itemIsSelected, transparentProfiles)
           : createAccessoryObject(
             item,
             showSelectionOutline,

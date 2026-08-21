@@ -394,9 +394,113 @@ export const groupIdenticalProfileCartItems = (cart: CartItem[]): CartItem[] => 
   return result;
 };
 
+const FACTORY_PANEL_TYPES = new Set<ProductType>([
+  ProductType.ALUMINUM_PLATE,
+  ProductType.PEGBOARD,
+  ProductType.MARINE_BOARD,
+  ProductType.CABINET_DOOR,
+]);
+
+const normalizedNumberList = (value: unknown) => (
+  Array.isArray(value) ? value.map((entry) => Number(entry || 0)) : []
+);
+
+/**
+ * Physical cutting/finishing signature for panels and cabinet-door leaves.
+ * Designer positions and attachment ids are intentionally excluded because
+ * this key is used only by the final factory-sheet/PDF display projection.
+ */
+export const getFactoryPanelManufacturingGroupKey = (item: CartItem) => {
+  const config = (item.config || {}) as any;
+  if (!FACTORY_PANEL_TYPES.has(item.product.type) && !config.cabinetDoor) {
+    return `non-panel:${item.id}`;
+  }
+
+  return JSON.stringify({
+    productType: item.product.type,
+    productId: item.product.id,
+    cabinetDoor: Boolean(config.cabinetDoor),
+    doorMaterial: String(config.doorMaterial || ''),
+    width: Number(config.width || 0),
+    height: Number(config.height || 0),
+    thickness: Number(config.thickness || 0),
+    colorId: String(config.colorId || ''),
+    pegHolePattern: String(config.pegHolePattern || ''),
+    marineSpecId: String(config.marineSpecId || ''),
+    doorOverlay: String(config.doorOverlay || ''),
+    openingSide: String(config.openingSide || ''),
+    marginMm: Number(config.marginMm || 0),
+    hingeSide: String(config.hingeSide || ''),
+    hingePositionsMm: normalizedNumberList(config.hingePositionsMm || config.hingePositions),
+    hingeCount: Number(config.hingeCount || 0),
+    hingeUnitPrice: Number(config.hingeUnitPrice || 0),
+    frameThicknessMm: Number(config.frameThicknessMm || 0),
+    unitRate: Number(config.unitRate || 0),
+    unitPrice: Number(config.unitPrice ?? (Number(item.totalPrice || 0) / Math.max(1, Number(item.quantity || 0)))),
+  });
+};
+
+const mergeFactoryPanelDisplayRows = (existing: CartItem, incoming: CartItem): CartItem => {
+  const existingConfig = (existing.config || {}) as any;
+  const incomingConfig = (incoming.config || {}) as any;
+  const remarks = [...new Set([
+    ...(Array.isArray(existingConfig.remarks) ? existingConfig.remarks : []),
+    existingConfig.remark,
+    ...(Array.isArray(incomingConfig.remarks) ? incomingConfig.remarks : []),
+    incomingConfig.remark,
+  ].map((value) => String(value || '').trim()).filter(Boolean))];
+  return {
+    ...existing,
+    quantity: Number(existing.quantity || 0) + Number(incoming.quantity || 0),
+    totalPrice: Number((Number(existing.totalPrice || 0) + Number(incoming.totalPrice || 0)).toFixed(2)),
+    config: {
+      ...existingConfig,
+      diyPositions: appendVectorValues(existingConfig, incomingConfig, 'diyPosition', 'diyPositions'),
+      diyRotations: appendVectorValues(existingConfig, incomingConfig, 'diyRotation', 'diyRotations'),
+      remarks,
+      // Keep every installation/location note in the derived PDF row, but do
+      // not print one arbitrary note when multiple identical panels merge.
+      remark: remarks.length === 1 ? remarks[0] : undefined,
+    },
+  };
+};
+
+export const groupIdenticalFactoryPanelCartItems = (cart: CartItem[]): CartItem[] => {
+  const result: CartItem[] = [];
+  const groupedIndex = new Map<string, number>();
+
+  cart.forEach((item) => {
+    const config = (item.config || {}) as any;
+    if (!FACTORY_PANEL_TYPES.has(item.product.type) && !config.cabinetDoor) {
+      result.push(item);
+      return;
+    }
+    const key = getFactoryPanelManufacturingGroupKey(item);
+    const existingIndex = groupedIndex.get(key);
+    if (existingIndex === undefined) {
+      result.push({
+        ...item,
+        config: {
+          ...config,
+          diyPositions: appendVectorValues({}, config, 'diyPosition', 'diyPositions'),
+          diyRotations: appendVectorValues({}, config, 'diyRotation', 'diyRotations'),
+          remarks: String(config.remark || '').trim() ? [String(config.remark).trim()] : [],
+        },
+      });
+      groupedIndex.set(key, result.length - 1);
+      return;
+    }
+    result[existingIndex] = mergeFactoryPanelDisplayRows(result[existingIndex], item);
+  });
+
+  return result;
+};
+
 /** Compact display rows for the designer-derived factory sheet/PDF only. */
 export const groupFactoryDisplayCartItems = (cart: CartItem[]): CartItem[] => (
-  groupIdenticalProfileCartItems(groupDiyAccessoryCartItems(cart))
+  groupIdenticalFactoryPanelCartItems(
+    groupIdenticalProfileCartItems(groupDiyAccessoryCartItems(cart)),
+  )
 );
 
 export const summarizeDiyScrewCartItems = (cart: CartItem[]): DiyScrewCartSummaryRow[] => (
