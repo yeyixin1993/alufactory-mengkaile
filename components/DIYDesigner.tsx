@@ -17,7 +17,6 @@ import {
   Grid3X3,
   Hammer,
   Home,
-  Maximize2,
   MousePointer2,
   Move3D,
   Paintbrush,
@@ -150,12 +149,17 @@ interface DIYDesignerProps {
   language: Language;
   onLanguageChange: (language: Language) => void;
   user?: User | null;
-  onAddBatchToCart: (items: CartItem[]) => void;
+  cartItemCount: number;
+  onAddBatchToCart: (items: CartItem[], mode: 'append' | 'replace') => void;
 }
 
 const SCENE_SCALE = 100;
+const DEFAULT_ORBIT_MAX_DISTANCE = 55;
+const VIEW_FIT_PADDING = 1.22;
 const MIN_PROFILE_LENGTH_MM = 21;
 const MAX_PROFILE_LENGTH_MM = 3000;
+const CABINET_DOOR_PERIMETER_GAP_MM = 3;
+const CABINET_DOOR_ALUMINUM_DEPTH_MM = 18;
 const PROFILE_CONTACT_TOLERANCE = 1.5 / SCENE_SCALE;
 const scenePositionToMm = (position: THREE.Vector3): Vec3 => [
   Number((position.x * SCENE_SCALE).toFixed(1)),
@@ -305,7 +309,7 @@ const TEXT: Record<Language, Record<string, string>> = {
     doorRightOpen: '右开',
     doorAutoSize: '自动门尺寸',
     doorLeafUnit: '扇',
-    doorMarginHint: 'N列自动生成N扇门。全盖门之间留2mm缝隙；大弯门缩进各列型材内侧后，四周再留2mm。',
+    doorMarginHint: 'N列自动生成N扇门。全盖门外框四周留3mm，相邻门之间留3mm；大弯门缩进各列型材内侧后，四周留3mm。',
     doorAdded: '柜门已按每列框架自动生成',
     shelfSupport: '层板托', board12ShelfSupport: '12mm板专用层板托',
     shelfSupportFinish: '层板托截面/颜色',
@@ -399,6 +403,13 @@ const TEXT: Record<Language, Record<string, string>> = {
     loaded: '已从本地 JSON 读取设计',
     templateLoaded: '参数化柜体已生成，可继续编辑并审核孔位',
     cartAdded: '设计清单已加入购物车',
+    designImportConflictTitle: '当前设计已有内容',
+    designImportConflictPrompt: '要把文件中的零件添加到当前设计，还是覆盖当前设计？',
+    cartImportConflictTitle: '购物车已有商品',
+    cartImportConflictPrompt: '要在原购物车基础上添加当前设计，还是用当前设计覆盖原购物车？',
+    importAppend: '在原有基础上添加',
+    importReplace: '覆盖原有内容',
+    importCancelled: '已取消导入',
     dragHint: '左键拖动画布旋转视角；右键拖动画布上下左右平移，滚轮前后缩放。选中零件后，左键拖动坐标箭头移动；仅选中型材时可拖动黑色箭头改变长度。右键短按零件打开操作菜单。',
     delete: '删除',
     duplicate: '复制',
@@ -561,7 +572,7 @@ const TEXT: Record<Language, Record<string, string>> = {
     doorRightOpen: 'Right opening',
     doorAutoSize: 'Automatic door size',
     doorLeafUnit: ' leaves',
-    doorMarginHint: 'N bays create N door leaves. Full-overlay leaves keep a 2mm gap; inset leaves fit inside each bay and keep another 2mm perimeter gap.',
+    doorMarginHint: 'N bays create N door leaves. Full-overlay doors keep 3mm around the outer frame and 3mm between neighboring leaves; inset doors keep 3mm around each bay opening.',
     doorAdded: 'Cabinet doors auto-sized to each frame bay',
     shelfSupport: 'Shelf support', board12ShelfSupport: '12mm-board shelf support',
     shelfSupportFinish: 'Shelf-support finish',
@@ -655,6 +666,13 @@ const TEXT: Record<Language, Record<string, string>> = {
     loaded: 'Design loaded from local JSON',
     templateLoaded: 'Parametric cabinet generated; continue editing and review machining',
     cartAdded: 'Design parts added to cart',
+    designImportConflictTitle: 'This design already has parts',
+    designImportConflictPrompt: 'Add the imported parts to the current design, or replace the current design?',
+    cartImportConflictTitle: 'The cart already has items',
+    cartImportConflictPrompt: 'Add this design to the current cart, or replace the current cart with this design?',
+    importAppend: 'Add to existing',
+    importReplace: 'Replace existing',
+    importCancelled: 'Import cancelled',
     dragHint: 'Left-drag to orbit, right-drag to pan up/down/left/right, and use the wheel to zoom in/out. After selecting a part, left-drag an axis arrow to move it; black resize arrows appear for profiles only. Short right-click a part for its action menu.',
     delete: 'Delete',
     duplicate: 'Duplicate',
@@ -817,7 +835,7 @@ const TEXT: Record<Language, Record<string, string>> = {
     doorRightOpen: '右開き',
     doorAutoSize: '自動扉寸法',
     doorLeafUnit: '枚',
-    doorMarginHint: 'N列にはN枚の扉を生成します。全かぶせ扉同士は2mm、インセット扉は各列の形材内側から四周2mm空けます。',
+    doorMarginHint: 'N列にはN枚の扉を生成します。全かぶせ扉は外枠の四周を3mm、隣接扉間を3mm空け、インセット扉は各列の内寸から四周3mm空けます。',
     doorAdded: '各列の枠寸法に合わせて扉を自動生成しました',
     shelfSupport: '棚受け', board12ShelfSupport: '12mm板専用棚受け',
     shelfSupportFinish: '棚受けの断面・色',
@@ -911,6 +929,13 @@ const TEXT: Record<Language, Record<string, string>> = {
     loaded: 'ローカルJSONから設計を読み込みました',
     templateLoaded: 'パラメトリック棚を生成しました。加工位置を確認・編集してください',
     cartAdded: 'カートに追加しました',
+    designImportConflictTitle: '現在の設計にパーツがあります',
+    designImportConflictPrompt: '読み込むパーツを現在の設計に追加しますか、現在の設計を置き換えますか？',
+    cartImportConflictTitle: 'カートに商品があります',
+    cartImportConflictPrompt: '現在のカートにこの設計を追加しますか、カートをこの設計で置き換えますか？',
+    importAppend: '既存内容に追加',
+    importReplace: '既存内容を置換',
+    importCancelled: '読み込みをキャンセルしました',
     dragHint: '左ドラッグで視点回転、右ドラッグで上下左右へ平行移動、ホイールで前後ズームします。パーツ選択後は軸矢印を左ドラッグして移動します。黒い長さ変更矢印は形材を選択した場合だけ表示され、短い右クリックで操作メニューを開きます。',
     delete: '削除',
     duplicate: '複製',
@@ -1048,6 +1073,47 @@ const duplicateSceneItem = (item: DIYSceneItem): DIYSceneItem => {
   };
 };
 
+/**
+ * Appending the same saved design more than once must not reuse scene, hole,
+ * or relationship IDs. Re-key the incoming assembly as one connected batch so
+ * accessories and generated screws continue to point at the newly imported
+ * profiles rather than the profiles that were already on the canvas.
+ */
+const rekeyImportedDesignItems = (source: DIYSceneItem[]) => {
+  const itemIdMap = new Map(source.map((item) => [item.id, makeId()]));
+  const holeIdMap = new Map<string, string>();
+  source.forEach((item) => {
+    (item.holes || []).forEach((hole) => holeIdMap.set(hole.id, makeId()));
+  });
+  const allReferenceIds = [...itemIdMap.entries(), ...holeIdMap.entries()]
+    .sort(([left], [right]) => right.length - left.length);
+  const remapEmbeddedReferences = (value?: string) => {
+    if (!value) return value;
+    return allReferenceIds.reduce(
+      (current, [oldId, newId]) => current.split(oldId).join(newId),
+      value,
+    );
+  };
+
+  return source.map((item) => ({
+    ...item,
+    id: itemIdMap.get(item.id) || makeId(),
+    holes: (item.holes || []).map((hole) => ({
+      ...hole,
+      id: holeIdMap.get(hole.id) || makeId(),
+      jointKey: remapEmbeddedReferences(hole.jointKey),
+    })),
+    linkedProfileId: item.linkedProfileId
+      ? itemIdMap.get(item.linkedProfileId) || item.linkedProfileId
+      : undefined,
+    linkedHoleId: item.linkedHoleId
+      ? holeIdMap.get(item.linkedHoleId) || item.linkedHoleId
+      : undefined,
+    attachedProfileIds: item.attachedProfileIds?.map((profileId) => itemIdMap.get(profileId) || profileId),
+    attachmentKey: remapEmbeddedReferences(item.attachmentKey),
+  }));
+};
+
 const isBoard12ShelfSupport = (item: Pick<DIYSceneItem, 'kind' | 'shelfSupportType'>) => (
   item.kind === 'shelf_support' && item.shelfSupportType === 'board_12mm'
 );
@@ -1086,7 +1152,9 @@ const normalizeDesignItems = (source: DIYSceneItem[]) => source.map((item) => {
       doorMaterial: item.doorMaterial || 'aluminum',
       doorOverlay: item.doorOverlay || 'full',
       openingSide: item.openingSide || 'left',
-      thickness: item.doorMaterial === 'marine' ? (item.thickness || 18) : 2,
+      thickness: item.doorMaterial === 'marine'
+        ? (item.thickness || 18)
+        : CABINET_DOOR_ALUMINUM_DEPTH_MM,
       quantity: 1,
     } : {}),
     ...(item.kind === 'shelf_support' ? {
@@ -1463,7 +1531,7 @@ const createItem = (kind: DIYItemKind, index = 0, variantId?: string): DIYSceneI
       colorId: 'natural',
       width: 496,
       height: 1996,
-      thickness: 2,
+      thickness: CABINET_DOOR_ALUMINUM_DEPTH_MM,
       doorMaterial: 'aluminum',
       doorOverlay: 'full',
       openingSide: 'left',
@@ -2389,16 +2457,23 @@ const detectCabinetDoorOpenings = (
 };
 
 const cabinetDoorRenderedThickness = (item: DIYSceneItem) => (
-  item.doorMaterial === 'aluminum' ? 18 : item.doorMaterial === 'marine' ? Math.max(12, item.thickness || 18) : 2
+  item.doorMaterial === 'marine'
+    ? Math.max(12, item.thickness || 18)
+    : CABINET_DOOR_ALUMINUM_DEPTH_MM
 );
 
 const cabinetDoorBounds = (opening: CabinetDoorOpening, overlay: DIYDoorOverlay) => {
   if (overlay === 'full') {
+    const internalSeamHalf = CABINET_DOOR_PERIMETER_GAP_MM / 2;
     return {
-      left: opening.columnIndex === 0 ? opening.outer.left + 2 : opening.boundaryCenters.left + 1,
-      right: opening.columnIndex === opening.columnCount - 1 ? opening.outer.right - 2 : opening.boundaryCenters.right - 1,
-      bottom: opening.outer.bottom + 2,
-      top: opening.outer.top - 2,
+      left: opening.columnIndex === 0
+        ? opening.outer.left + CABINET_DOOR_PERIMETER_GAP_MM
+        : opening.boundaryCenters.left + internalSeamHalf,
+      right: opening.columnIndex === opening.columnCount - 1
+        ? opening.outer.right - CABINET_DOOR_PERIMETER_GAP_MM
+        : opening.boundaryCenters.right - internalSeamHalf,
+      bottom: opening.outer.bottom + CABINET_DOOR_PERIMETER_GAP_MM,
+      top: opening.outer.top - CABINET_DOOR_PERIMETER_GAP_MM,
     };
   }
   const base = overlay === 'half'
@@ -2410,10 +2485,10 @@ const cabinetDoorBounds = (opening: CabinetDoorOpening, overlay: DIYDoorOverlay)
     }
     : opening.inner;
   return {
-    left: base.left + 2,
-    right: base.right - 2,
-    bottom: base.bottom + 2,
-    top: base.top - 2,
+    left: base.left + CABINET_DOOR_PERIMETER_GAP_MM,
+    right: base.right - CABINET_DOOR_PERIMETER_GAP_MM,
+    bottom: base.bottom + CABINET_DOOR_PERIMETER_GAP_MM,
+    top: base.top - CABINET_DOOR_PERIMETER_GAP_MM,
   };
 };
 
@@ -2426,12 +2501,12 @@ const fitCabinetDoorToOpening = (item: DIYSceneItem, opening: CabinetDoorOpening
     : renderedThickness / 2 + 2;
   return {
     ...item,
-    width: Math.max(1, Math.round(bounds.right - bounds.left)),
-    height: Math.max(1, Math.round(bounds.top - bounds.bottom)),
+    width: Math.max(1, Number((bounds.right - bounds.left).toFixed(2))),
+    height: Math.max(1, Number((bounds.top - bounds.bottom).toFixed(2))),
     position: [
-      Math.round((bounds.left + bounds.right) / 2),
-      Math.round((bounds.bottom + bounds.top) / 2),
-      Math.round(opening.frontZ + frontOffset),
+      Number(((bounds.left + bounds.right) / 2).toFixed(2)),
+      Number(((bounds.bottom + bounds.top) / 2).toFixed(2)),
+      Number((opening.frontZ + frontOffset).toFixed(2)),
     ],
     rotation: [0, 0, 0],
     lockedPosition: true,
@@ -3068,6 +3143,57 @@ const accessoryPlacementCandidates = (
   // Keep completed two-profile joint candidates first so dense assemblies do
   // not lose their most useful hotspots when the visual marker pool is capped.
   return candidates;
+};
+
+// Full-width No.1/No.2 brackets probe several neighbouring half-module
+// origins to find a position where both legs touch their profiles without
+// entering either aluminum body. Those probe results describe one customer-
+// facing joint, not several distinct places to click. Keep the raw candidates
+// for geometry validation and attachment syncing, but expose one stable
+// representative per profile-pair/orientation in placement mode.
+const compactBracketPlacementCandidates = (
+  accessory: DIYSceneItem,
+  candidates: AccessoryPlacement[],
+  items: DIYSceneItem[],
+) => {
+  if (accessory.kind !== 'connector' && accessory.kind !== 'extruded_connector') return candidates;
+
+  const installedKeys = new Set(items
+    .filter((item) => item.kind === accessory.kind && item.attachmentKey)
+    .map((item) => item.attachmentKey as string));
+  const groups = new Map<string, AccessoryPlacement[]>();
+
+  candidates.forEach((candidate) => {
+    const targets = [...candidate.targetProfileIds].sort().join(':');
+    const rotation = candidate.rotation.map((value) => Math.round(value * 1000) / 1000).join(':');
+    const groupKey = `${targets}|${rotation}`;
+    const group = groups.get(groupKey) || [];
+    group.push(candidate);
+    groups.set(groupKey, group);
+  });
+
+  return [...groups.values()].map((group) => {
+    const installed = group.find((candidate) => installedKeys.has(candidate.key));
+    if (installed) return installed;
+    if (group.length === 1) return group[0];
+
+    // Pick the valid candidate nearest the centre of the probe set, rather
+    // than an arbitrary extreme corner. The key tie-break keeps the result
+    // stable across renders and repeated placement clicks.
+    return group.reduce((best, candidate) => {
+      const score = group.reduce(
+        (sum, other) => sum + candidate.position.distanceToSquared(other.position),
+        0,
+      );
+      const bestScore = group.reduce(
+        (sum, other) => sum + best.position.distanceToSquared(other.position),
+        0,
+      );
+      return score < bestScore || (score === bestScore && candidate.key.localeCompare(best.key) < 0)
+        ? candidate
+        : best;
+    }, group[0]);
+  });
 };
 
 const findAccessoryPlacement = (
@@ -3878,6 +4004,13 @@ const getActiveProfileFaces = (variantId = '2020'): Set<ProfileFace> => {
   if (variantId === '2020R' || variantId === '3030R') {
     return new Set<ProfileFace>(['bottom', 'left']);
   }
+  // 2047 is a 20×47 special section: its A face is the sealed 20mm edge,
+  // while the opposite 20mm edge and both 47mm faces retain their grooves.
+  // profileMachining.ts already exposes the same A-face rule for drilling.
+  if (variantId === '2047') {
+    active.delete('top');
+    return active;
+  }
   if (variantId.includes('N4')) return new Set<ProfileFace>();
   if (variantId.includes('N3')) return new Set<ProfileFace>(['bottom']);
   if (variantId.includes('N2-OPP')) return new Set<ProfileFace>(['right', 'left']);
@@ -4363,7 +4496,11 @@ const createCabinetDoorObject = (
   const materialKind: DIYItemKind = item.doorMaterial === 'marine'
     ? 'marine_board'
     : item.doorMaterial === 'pegboard' ? 'pegboard' : 'plate';
-  const panelThicknessMm = item.doorMaterial === 'marine' ? Math.max(12, item.thickness || 18) : 2;
+  const panelThicknessMm = item.doorMaterial === 'marine'
+    ? Math.max(12, item.thickness || 18)
+    : item.doorMaterial === 'pegboard'
+      ? CABINET_DOOR_ALUMINUM_DEPTH_MM
+      : 2;
   const panel = createBoardObject({
     ...item,
     kind: materialKind,
@@ -4374,7 +4511,7 @@ const createCabinetDoorObject = (
 
   if (item.doorMaterial === 'aluminum') {
     const frameWidth = Math.min(0.55, Math.max(0.16, Math.min(width, height) * 0.07));
-    const frameDepth = 18 / SCENE_SCALE;
+    const frameDepth = CABINET_DOOR_ALUMINUM_DEPTH_MM / SCENE_SCALE;
     const frameMaterial = makeMaterial(item.colorId, selected, 'profile');
     const addFrameBar = (barWidth: number, barHeight: number, x: number, y: number) => {
       const bar = new THREE.Mesh(new THREE.BoxGeometry(barWidth, barHeight, frameDepth), frameMaterial);
@@ -5467,6 +5604,7 @@ const ThreeAssembly: React.FC<{
   }, [renderErrorLabel]);
   const groupsRef = useRef<Map<string, THREE.Group>>(new Map());
   const lastFrameSignatureRef = useRef('');
+  const lastFrameItemIdsRef = useRef<string[]>([]);
   const itemsRef = useRef(items);
   const selectedIdsRef = useRef(selectedIds);
   const onSelectRef = useRef(onSelect);
@@ -5493,67 +5631,65 @@ const ThreeAssembly: React.FC<{
   const operationLabelsRef = useRef(operationLabels);
   const drillEditorLabelsRef = useRef(drillEditorLabels);
 
-  const frameAll = () => {
+  const fitContentToView = (requestedDirection: THREE.Vector3) => {
     const content = contentRef.current;
     const camera = cameraRef.current;
     const orbit = orbitRef.current;
     if (!content || !camera || !orbit) return;
     if (content.children.length === 0) {
       orbit.target.set(0, 4, 0);
-      camera.position.set(14, 11, 16);
+      const direction = requestedDirection.lengthSq() > 0.001
+        ? requestedDirection.clone().normalize()
+        : new THREE.Vector3(14, 11, 16).normalize();
+      camera.position.copy(orbit.target).add(direction.multiplyScalar(Math.sqrt(14 ** 2 + 11 ** 2 + 16 ** 2)));
+      camera.up.set(0, 1, 0);
       camera.near = 0.02;
       camera.far = 200;
+      orbit.maxDistance = DEFAULT_ORBIT_MAX_DISTANCE;
       camera.updateProjectionMatrix();
       orbit.update();
       return;
     }
     const bounds = new THREE.Box3().setFromObject(content);
+    if (bounds.isEmpty()) return;
     const sphere = bounds.getBoundingSphere(new THREE.Sphere());
     if (!Number.isFinite(sphere.radius) || sphere.radius <= 0) return;
-    const direction = camera.position.clone().sub(orbit.target);
+    const direction = requestedDirection.clone();
     if (direction.lengthSq() < 0.001) direction.set(1, 0.75, 1);
     direction.normalize();
     const verticalHalfFov = THREE.MathUtils.degToRad(camera.fov * 0.5);
     const horizontalHalfFov = Math.atan(Math.tan(verticalHalfFov) * Math.max(0.1, camera.aspect));
     const limitingHalfFov = Math.min(verticalHalfFov, horizontalHalfFov);
-    const distance = Math.max(4, (sphere.radius / Math.sin(limitingHalfFov)) * 1.22);
+    const distance = Math.max(4, (sphere.radius / Math.sin(limitingHalfFov)) * VIEW_FIT_PADDING);
+
+    // OrbitControls clamps the camera during update(). A fixed 55-unit cap
+    // silently pulled large or spatially separated imports back inside the
+    // content bounds after Frame all/Reset view had calculated a valid fit.
+    // Scale the manual zoom range from the complete assembly instead, leaving
+    // several fitted-view widths of extra zoom-out travel for inspection.
+    orbit.maxDistance = Math.max(
+      DEFAULT_ORBIT_MAX_DISTANCE,
+      distance * 4,
+      sphere.radius * 8,
+    );
     orbit.target.copy(sphere.center);
     camera.position.copy(sphere.center).add(direction.multiplyScalar(distance));
-    camera.near = Math.max(0.02, distance / 100);
-    camera.far = Math.max(200, distance * 20);
+    camera.up.set(0, 1, 0);
+    camera.near = 0.02;
+    camera.far = Math.max(200, orbit.maxDistance * 2, distance + sphere.radius * 4);
     camera.updateProjectionMatrix();
     orbit.update();
   };
 
-  const resetView = () => {
-    const content = contentRef.current;
+  const frameAll = () => {
     const camera = cameraRef.current;
     const orbit = orbitRef.current;
-    if (!content || !camera || !orbit) return;
-    const defaultDirection = new THREE.Vector3(14, 11, 16).normalize();
-    if (content.children.length === 0) {
-      orbit.target.set(0, 4, 0);
-      camera.position.copy(orbit.target).add(defaultDirection.multiplyScalar(Math.sqrt(14 ** 2 + 11 ** 2 + 16 ** 2)));
-      camera.near = 0.02;
-      camera.far = 200;
-      camera.updateProjectionMatrix();
-      orbit.update();
-      return;
-    }
-    const bounds = new THREE.Box3().setFromObject(content);
-    const sphere = bounds.getBoundingSphere(new THREE.Sphere());
-    if (!Number.isFinite(sphere.radius) || sphere.radius <= 0) return;
-    const verticalHalfFov = THREE.MathUtils.degToRad(camera.fov * 0.5);
-    const horizontalHalfFov = Math.atan(Math.tan(verticalHalfFov) * Math.max(0.1, camera.aspect));
-    const limitingHalfFov = Math.min(verticalHalfFov, horizontalHalfFov);
-    const distance = Math.max(4, (sphere.radius / Math.sin(limitingHalfFov)) * 1.22);
-    orbit.target.copy(sphere.center);
-    camera.position.copy(sphere.center).add(defaultDirection.multiplyScalar(distance));
-    camera.up.set(0, 1, 0);
-    camera.near = Math.max(0.02, distance / 100);
-    camera.far = Math.max(200, distance * 20);
-    camera.updateProjectionMatrix();
-    orbit.update();
+    if (!camera || !orbit) return;
+    fitContentToView(camera.position.clone().sub(orbit.target));
+  };
+
+  const resetView = () => {
+    fitContentToView(new THREE.Vector3(14, 11, 16));
   };
 
   useEffect(() => { itemsRef.current = items; }, [items]);
@@ -5702,7 +5838,9 @@ const ThreeAssembly: React.FC<{
     if (!mount) return;
     const scene = new THREE.Scene();
     scene.background = new THREE.Color('#eef3f8');
-    scene.fog = new THREE.Fog('#eef3f8', 28, 60);
+    // Large assemblies must keep their material contrast at every zoom level.
+    // Distance fog made profiles, panels, and accessories fade into the background.
+    scene.fog = null;
     const camera = new THREE.PerspectiveCamera(42, 1, 0.02, 200);
     camera.position.set(14, 11, 16);
     let renderer: THREE.WebGLRenderer;
@@ -5737,7 +5875,7 @@ const ThreeAssembly: React.FC<{
     orbit.mouseButtons.MIDDLE = THREE.MOUSE.PAN;
     orbit.mouseButtons.RIGHT = THREE.MOUSE.PAN;
     orbit.target.set(0, 4, 0);
-    orbit.maxDistance = 55;
+    orbit.maxDistance = DEFAULT_ORBIT_MAX_DISTANCE;
     orbit.minDistance = 0.75;
 
     const transform = new TransformControls(camera, renderer.domElement);
@@ -5745,12 +5883,12 @@ const ThreeAssembly: React.FC<{
     transform.setSize(0.78);
     const helper = transform.getHelper();
     scene.add(helper);
-    // TransformControls normally sits on the selected object's origin. A long
-    // profile can therefore lose its only movement handle when the customer
-    // zooms/pans to inspect an end. Attach it to a separate view-aware anchor;
-    // the actual item remains the movement/manufacturing authority.
+    // Keep movement controls on a scene-level anchor, but always align that
+    // anchor with the selected item's geometric centre. Profile length handles
+    // stay at the two ends, so the colored movement arrows cannot migrate onto
+    // and compete with a black resize handle for pointer input.
     const transformAnchor = new THREE.Object3D();
-    transformAnchor.name = 'view-aware-transform-anchor';
+    transformAnchor.name = 'transform-center-anchor';
     scene.add(transformAnchor);
     customizeTranslateGizmo(transform);
     // Translation is handled by the explicit left-button axis gesture below.
@@ -5759,30 +5897,10 @@ const ThreeAssembly: React.FC<{
     // same left drag remains camera orbit.
     transform.disconnect();
     const getTransformTarget = () => transform.object?.userData.targetObject as THREE.Group | undefined;
-    const viewCenterPointer = new THREE.Vector2(0, 0);
-    const updateViewAwareTransformAnchor = () => {
+    const updateTransformAnchor = () => {
       const target = getTransformTarget();
       if (!target) return;
-      if (freeMoveState?.object === target && freeMoveState.gizmoOffset) {
-        transformAnchor.position.copy(target.position).add(freeMoveState.gizmoOffset);
-        return;
-      }
-      const itemId = target.userData.itemId as string | undefined;
-      const item = itemId ? itemsRef.current.find((entry) => entry.id === itemId) : undefined;
-      if (item?.kind !== 'profile') {
-        target.getWorldPosition(transformAnchor.position);
-        return;
-      }
-      target.updateMatrixWorld(true);
-      const halfLength = profileDimensions(item).length / 2;
-      const start = target.localToWorld(new THREE.Vector3(-halfLength, 0, 0));
-      const end = target.localToWorld(new THREE.Vector3(halfLength, 0, 0));
-      const centerRay = new THREE.Raycaster();
-      centerRay.setFromCamera(viewCenterPointer, camera);
-      // Place the gizmo at the point on the selected profile nearest the
-      // current screen-center ray. It therefore remains available when a long
-      // profile is zoomed/panned to either end, while preserving world axes.
-      centerRay.ray.distanceSqToSegment(start, end, undefined, transformAnchor.position);
+      target.getWorldPosition(transformAnchor.position);
     };
     renderer.domElement.style.touchAction = 'none';
     const lengthHandles = createProfileLengthHandles();
@@ -6079,7 +6197,11 @@ const ThreeAssembly: React.FC<{
         }
         return;
       }
-      const candidates = accessoryPlacementCandidates(template, itemsRef.current)
+      const candidates = compactBracketPlacementCandidates(
+        template,
+        accessoryPlacementCandidates(template, itemsRef.current),
+        itemsRef.current,
+      )
         .slice(0, accessoryPlacementHighlightMeshes.length);
       const moduleSize = Number((template.accessoryProfileSize || '2020').slice(0, 2)) / SCENE_SCALE;
       const overlay = candidates.flatMap((placement, index) => {
@@ -6576,7 +6698,6 @@ const ThreeAssembly: React.FC<{
       snapPointerPosition?: THREE.Vector3 | null;
       snapSuppressed?: boolean;
       snapRearmAt?: number;
-      gizmoOffset?: THREE.Vector3;
       sourceAttachmentKey?: string;
       duplicateOnCommit: boolean;
     };
@@ -7381,7 +7502,6 @@ const ThreeAssembly: React.FC<{
                 snapPointerPosition: null,
                 snapSuppressed: false,
                 snapRearmAt: 0,
-                gizmoOffset: transformAnchor.position.clone().sub(selectedObject.position),
                 sourceAttachmentKey: item.lockedPosition ? item.attachmentKey : undefined,
                 duplicateOnCommit: event.shiftKey && item.kind === 'profile',
               };
@@ -7479,7 +7599,6 @@ const ThreeAssembly: React.FC<{
         state.moved = true;
         const nextPosition = state.startPosition.clone().add(movement);
         state.object.position.copy(nextPosition);
-        if (state.gizmoOffset) transformAnchor.position.copy(nextPosition).add(state.gizmoOffset);
         if (state.item.kind === 'profile') {
           const collisionItems = itemsRef.current;
           const tolerances = getProfileSnapTolerances(state.object.position, state.item);
@@ -7501,7 +7620,6 @@ const ThreeAssembly: React.FC<{
             state.startPosition.copy(releasedPosition);
             nextPosition.copy(releasedPosition);
             state.object.position.copy(releasedPosition);
-            if (state.gizmoOffset) transformAnchor.position.copy(releasedPosition).add(state.gizmoOffset);
             state.snapLock = null;
             state.snapPointerPosition = null;
             state.snapSuppressed = true;
@@ -7543,7 +7661,6 @@ const ThreeAssembly: React.FC<{
             state.snapLock = snap;
             nextPosition.copy(axialSnapPosition);
             state.object.position.copy(nextPosition);
-            if (state.gizmoOffset) transformAnchor.position.copy(nextPosition).add(state.gizmoOffset);
             showSnapVisual(snap, state.object, state.item);
           } else {
             state.snapLock = null;
@@ -8007,7 +8124,7 @@ const ThreeAssembly: React.FC<{
         profileDrawSignature = '';
       }
       orbit.update();
-      updateViewAwareTransformAnchor();
+      updateTransformAnchor();
       updateProfileRelationVisuals();
       updateAccessoryEditVisuals();
       updateAccessoryPlacementVisuals();
@@ -8180,18 +8297,24 @@ const ThreeAssembly: React.FC<{
     }
     syncProfileLengthHandles(lengthHandles, selectedIds.length === 1 ? selected : undefined, selectedIds.length === 1 ? selectedItem : undefined);
 
-    // Auto-fit only when scene membership changes. Property edits and 90°
-    // rotations preserve the customer's current zoom, orbit and camera target.
+    // Auto-fit only when scene membership gains a new item. Deleting one or
+    // more items (including cascaded accessories, caps, and linked screws)
+    // must preserve the customer's current zoom, orbit, and camera target.
+    // Property edits and 90° rotations already preserve the same view.
     const frameSignature = items.map((item) => item.id).join('|');
+    const previousItemIds = new Set(lastFrameItemIdsRef.current);
+    const addedSceneItem = items.some((item) => !previousItemIds.has(item.id));
     if (
       items.length > 0
       && frameSignature !== lastFrameSignatureRef.current
+      && addedSceneItem
       && !profileDrawTemplateRef.current
       && !accessoryPlacementTemplateRef.current
     ) {
       frameAll();
     }
     lastFrameSignatureRef.current = frameSignature;
+    lastFrameItemIdsRef.current = items.map((item) => item.id);
   }, [items, selectedId, selectedIds, showMachiningMarks, transparentProfiles, accessoryEditMode]);
 
   return (
@@ -8670,9 +8793,10 @@ const ThreeAssembly: React.FC<{
           onClick={frameAll}
           title={frameAllLabel}
           aria-label={frameAllLabel}
+          data-testid="diy-frame-all"
           className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white/95 px-3 py-2 text-[11px] font-black text-slate-700 shadow-lg backdrop-blur transition hover:border-blue-300 hover:text-blue-700"
         >
-          <Maximize2 className="h-4 w-4" />
+          <Box className="h-4 w-4" />
           <span className="hidden sm:inline">{frameAllLabel}</span>
         </button>
       </div>
@@ -8912,18 +9036,20 @@ const getCabinetDoorPricing = (item: DIYSceneItem, user?: User | null) => {
   const areaSqm = ((item.width || 0) * (item.height || 0)) / 1_000_000;
   const chargedArea = areaSqm > 0 && areaSqm < MIN_BOARD_AREA ? MIN_BOARD_AREA : areaSqm;
   const material = item.doorMaterial || 'aluminum';
-  const thickness = material === 'marine' ? Math.max(12, item.thickness || 18) : 2;
+  const materialThickness = material === 'marine' ? Math.max(12, item.thickness || 18) : 2;
+  const thickness = material === 'marine' ? materialThickness : CABINET_DOOR_ALUMINUM_DEPTH_MM;
   const unitRate = material === 'aluminum'
     ? (membership === 'vip_plus' ? VIP_PLUS_ALUMINUM_DOOR_PRICE : ALUMINUM_PLATE_PRICE[2])
     : material === 'pegboard'
       ? (membership === 'vip_plus' ? VIP_PLUS_PEGBOARD_DOOR_PRICE : PEGBOARD_PRICE[2])
-      : (MARINE_BOARD_PRICE[thickness] || 0) + (isMarineNaturalColor(item.colorId) ? 0 : MARINE_COLOR_SURCHARGE);
+      : (MARINE_BOARD_PRICE[materialThickness] || 0) + (isMarineNaturalColor(item.colorId) ? 0 : MARINE_COLOR_SURCHARGE);
   const hingeCount = getDoorHingePositions(item.height || 0).length;
   const hingeFee = hingeCount * DOOR_HINGE_UNIT_PRICE;
   return {
     areaSqm,
     chargedArea,
     thickness,
+    materialThickness,
     unitRate,
     hingeCount,
     hingeFee,
@@ -9108,7 +9234,16 @@ const removeItemsWithOwnedEndTapping = (source: DIYSceneItem[], requestedIds: Se
   });
 };
 
-const DIYDesigner: React.FC<DIYDesignerProps> = ({ language, onLanguageChange, user, onAddBatchToCart }) => {
+type ImportConflictChoice = 'append' | 'replace' | 'cancel';
+type ImportConflictTarget = 'design' | 'cart';
+
+const DIYDesigner: React.FC<DIYDesignerProps> = ({
+  language,
+  onLanguageChange,
+  user,
+  cartItemCount,
+  onAddBatchToCart,
+}) => {
   const t = TEXT[language];
   const navigate = useNavigate();
   const location = useLocation();
@@ -9139,10 +9274,12 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({ language, onLanguageChange, u
     profileIds: string[];
   } | null>(null);
   const [maycadTappingPrompt, setMaycadTappingPrompt] = useState<{ profileIds: string[] } | null>(null);
+  const [importConflictTarget, setImportConflictTarget] = useState<ImportConflictTarget | null>(null);
   const importRef = useRef<HTMLInputElement>(null);
   const excelImportRef = useRef<HTMLInputElement>(null);
   const maycadImportRef = useRef<HTMLInputElement>(null);
   const loadedTemplateTokenRef = useRef<string | null>(null);
+  const importConflictResolverRef = useRef<((choice: ImportConflictChoice) => void) | null>(null);
 
   const selected = items.find((item) => item.id === selectedId) || null;
   const selectedFrameProfileIds = selectedIds.filter((id) => items.some((item) => item.id === id && item.kind === 'profile'));
@@ -9188,6 +9325,40 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({ language, onLanguageChange, u
     setFuture([]);
     setItems(synchronized);
     setSelectedId(selection && synchronized.some((item) => item.id === selection) ? selection : null);
+  };
+
+  const requestImportConflictChoice = (target: ImportConflictTarget) => (
+    new Promise<ImportConflictChoice>((resolve) => {
+      importConflictResolverRef.current = resolve;
+      setImportConflictTarget(target);
+    })
+  );
+
+  const resolveImportConflict = (choice: ImportConflictChoice) => {
+    const resolver = importConflictResolverRef.current;
+    importConflictResolverRef.current = null;
+    setImportConflictTarget(null);
+    resolver?.(choice);
+  };
+
+  useEffect(() => () => {
+    importConflictResolverRef.current?.('cancel');
+    importConflictResolverRef.current = null;
+  }, []);
+
+  const applyImportedDesign = async (incoming: DIYSceneItem[]) => {
+    const choice = items.length
+      ? await requestImportConflictChoice('design')
+      : 'replace';
+    if (choice === 'cancel') {
+      showNotice(t.importCancelled);
+      return null;
+    }
+    const importedItems = choice === 'append'
+      ? rekeyImportedDesignItems(incoming)
+      : incoming;
+    commit(choice === 'append' ? [...items, ...importedItems] : importedItems, null);
+    return importedItems;
   };
 
   const updateSelected = (patch: Partial<DIYSceneItem>) => {
@@ -9657,7 +9828,13 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({ language, onLanguageChange, u
       }
     }
     if (isConnectionAccessoryKind(kind) && !ACCESSORY_PRICES[kind][accessorySeries!]) return;
-    if (kind === 'connector' || kind === 'l_connector' || kind === 't_connector' || kind === 'tee_connector') {
+    if (
+      kind === 'connector'
+      || kind === 'extruded_connector'
+      || kind === 'l_connector'
+      || kind === 't_connector'
+      || kind === 'tee_connector'
+    ) {
       const template = createItem(kind, items.length, accessorySeries);
       setAccessoryPlacementTemplate(template);
       setProfileDrawTemplate(null);
@@ -9909,7 +10086,7 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({ language, onLanguageChange, u
   const importJson = (file?: File) => {
     if (!file) return;
     const reader = new FileReader();
-    reader.onload = () => {
+    reader.onload = async () => {
       try {
         const parsed = JSON.parse(String(reader.result || '{}'));
         let importedItems: DIYSceneItem[] = [];
@@ -9922,8 +10099,9 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({ language, onLanguageChange, u
           ));
         }
         if (!importedItems.length) throw new Error(t.jsonImportUnsupported);
-        commit(importedItems, null);
-        showNotice(`${t.loaded} · ${importedItems.length}`);
+        const appliedItems = await applyImportedDesign(importedItems);
+        if (!appliedItems) return;
+        showNotice(`${t.loaded} · ${appliedItems.length}`);
       } catch (error) {
         console.warn('Unable to import DIY design', error);
         showNotice(`${t.jsonImportFailed}: ${String((error as any)?.message || error)}`);
@@ -9938,8 +10116,9 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({ language, onLanguageChange, u
       const production = parseProductionXlsx(await file.arrayBuffer());
       const importedItems = normalizeDesignItems(itemsFromProductionWorkbook(production));
       if (!importedItems.length) throw new Error('No supported parts found in workbook');
-      commit(importedItems, null);
-      showNotice(`${t.excelLoaded} · ${importedItems.length}`);
+      const appliedItems = await applyImportedDesign(importedItems);
+      if (!appliedItems) return;
+      showNotice(`${t.excelLoaded} · ${appliedItems.length}`);
     } catch (error) {
       console.warn('Unable to import DIY production workbook', error);
       showNotice(t.excelImportFailed);
@@ -9965,12 +10144,13 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({ language, onLanguageChange, u
           ? { ...item, tappingLeft: false, tappingRight: false }
           : item
       ));
-      const importedProfileIds = importedItems
+      const appliedItems = await applyImportedDesign(importedItems);
+      if (!appliedItems) return;
+      const importedProfileIds = appliedItems
         .filter((item) => item.kind === 'profile')
         .map((item) => item.id);
-      const importedAccessorySeries = dominantAccessoryProfileSeries(importedItems);
+      const importedAccessorySeries = dominantAccessoryProfileSeries(appliedItems);
       if (importedAccessorySeries) setSelectedAccessoryProfileSize(importedAccessorySeries);
-      commit(importedItems, null);
       setMaycadReview({ source: result.sourceTitle || file.name, confidence: result.confidence, warnings: result.warnings });
       if (result.profileReviews.length) {
         setMaycadProfileReviewPrompt({
@@ -9981,7 +10161,7 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({ language, onLanguageChange, u
         setMaycadTappingPrompt({ profileIds: importedProfileIds });
       }
       if (result.warnings.length) console.warn('MayCAD import review warnings:', result.warnings);
-      showNotice(`${t.maycadLoaded} · ${importedItems.length}${result.warnings.length ? ` · ⚠ ${result.warnings.length}` : ''}`);
+      showNotice(`${t.maycadLoaded} · ${appliedItems.length}${result.warnings.length ? ` · ⚠ ${result.warnings.length}` : ''}`);
     } catch (error) {
       console.warn('Unable to import MayCAD file', error);
       showNotice(`${t.maycadImportFailed}: ${String((error as any)?.message || error)}`);
@@ -10090,7 +10270,7 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({ language, onLanguageChange, u
           doorMaterial: item.doorMaterial || 'aluminum',
           doorOverlay: item.doorOverlay || 'full',
           openingSide: item.openingSide || 'left',
-          marginMm: 2,
+          marginMm: CABINET_DOOR_PERIMETER_GAP_MM,
           hingeSide: item.openingSide || 'left',
           hingePositions,
           hingePositionsMm: hingePositions,
@@ -10107,7 +10287,10 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({ language, onLanguageChange, u
           minAreaApplied: pricing.areaSqm > 0 && pricing.areaSqm < MIN_BOARD_AREA,
           pegHolePattern: item.doorMaterial === 'pegboard' ? 'ikea' : undefined,
           marineSpecId: item.doorMaterial === 'marine' ? 'marine_bbb_uv_film' : undefined,
-          frameThicknessMm: item.doorMaterial === 'aluminum' ? 18 : undefined,
+          materialThicknessMm: pricing.materialThickness,
+          frameThicknessMm: item.doorMaterial === 'aluminum' || item.doorMaterial === 'pegboard'
+            ? CABINET_DOOR_ALUMINUM_DEPTH_MM
+            : undefined,
           autoFitFrame: true,
           attachedProfileIds: item.attachedProfileIds,
           attachmentKey: item.attachmentKey,
@@ -10255,9 +10438,16 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({ language, onLanguageChange, u
     return groupDiyAccessoryCartItems(rawCartItems);
   };
 
-  const addDesignToCart = () => {
+  const addDesignToCart = async () => {
     if (!items.length) return;
-    onAddBatchToCart(toCartItems());
+    const choice = cartItemCount > 0
+      ? await requestImportConflictChoice('cart')
+      : 'append';
+    if (choice === 'cancel') {
+      showNotice(t.importCancelled);
+      return;
+    }
+    onAddBatchToCart(toCartItems(), choice);
     showNotice(t.cartAdded);
     window.setTimeout(() => navigate('/cart'), 450);
   };
@@ -10979,7 +11169,7 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({ language, onLanguageChange, u
                         const doorMaterial = event.target.value as DIYDoorMaterial;
                         updateSelected({
                           doorMaterial,
-                          thickness: doorMaterial === 'marine' ? 18 : 2,
+                          thickness: doorMaterial === 'marine' ? 18 : CABINET_DOOR_ALUMINUM_DEPTH_MM,
                           colorId: doorMaterial === 'marine' ? 'wood_natural' : 'natural',
                         });
                       }}
@@ -11463,6 +11653,58 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({ language, onLanguageChange, u
           </button>
         </aside>
       </div>
+      {importConflictTarget && (
+        <div
+          className="fixed inset-0 z-[200] flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-sm"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="diy-import-conflict-title"
+        >
+          <div className="w-full max-w-lg rounded-3xl border border-white/70 bg-white p-6 shadow-2xl">
+            <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-blue-50 text-blue-600">
+              {importConflictTarget === 'design'
+                ? <Upload className="h-6 w-6" />
+                : <ShoppingCart className="h-6 w-6" />}
+            </div>
+            <h2 id="diy-import-conflict-title" className="mt-4 text-xl font-black text-slate-950">
+              {importConflictTarget === 'design'
+                ? t.designImportConflictTitle
+                : t.cartImportConflictTitle}
+            </h2>
+            <p className="mt-2 text-sm font-bold leading-relaxed text-slate-600">
+              {importConflictTarget === 'design'
+                ? t.designImportConflictPrompt
+                : t.cartImportConflictPrompt}
+            </p>
+            <div className="mt-6 grid gap-3 sm:grid-cols-2">
+              <button
+                type="button"
+                data-testid="diy-import-append"
+                onClick={() => resolveImportConflict('append')}
+                className="rounded-2xl bg-blue-600 px-4 py-3.5 text-sm font-black text-white shadow-lg shadow-blue-600/20 transition hover:bg-blue-500"
+              >
+                {t.importAppend}
+              </button>
+              <button
+                type="button"
+                data-testid="diy-import-replace"
+                onClick={() => resolveImportConflict('replace')}
+                className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3.5 text-sm font-black text-red-600 transition hover:bg-red-100"
+              >
+                {t.importReplace}
+              </button>
+              <button
+                type="button"
+                data-testid="diy-import-cancel"
+                onClick={() => resolveImportConflict('cancel')}
+                className="rounded-2xl border border-slate-200 px-4 py-3 text-sm font-black text-slate-600 transition hover:bg-slate-50 sm:col-span-2"
+              >
+                {t.cancel}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
       {maycadProfileReviewPrompt && (
         <div className="fixed inset-0 z-[130] flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-sm">
           <div className="flex max-h-[88vh] w-full max-w-2xl flex-col rounded-3xl border border-white/70 bg-white p-6 shadow-2xl">

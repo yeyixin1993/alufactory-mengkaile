@@ -11,6 +11,7 @@
     "build": "vite build",
     "package:dist": "npm run build && node scripts/package-dist.mjs",
     "setup:git-hooks": "git config core.hooksPath .githooks",
+    "validate:diy-json": "node scripts/validate-mengkaile-diy-json.mjs",
     "preview": "vite preview"
   },
   "dependencies": {

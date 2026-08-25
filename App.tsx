@@ -2408,7 +2408,13 @@ const App: React.FC = () => {
           <Route path="/" element={<Catalog language={language} />} />
           <Route path="/diy-designer" element={(
             <React.Suspense fallback={<div className="min-h-[70vh] flex items-center justify-center text-slate-400 font-black">{language === 'cn' ? '正在加载 3D 设计器…' : language === 'jp' ? '3D デザイナーを読み込み中…' : 'Loading 3D designer…'}</div>}>
-              <DIYDesigner language={language} onLanguageChange={setLanguage} user={user} onAddBatchToCart={(items) => setCart(mergeCartItems(cart, items))} />
+              <DIYDesigner
+                language={language}
+                onLanguageChange={setLanguage}
+                user={user}
+                cartItemCount={cart.length}
+                onAddBatchToCart={(items, mode) => setCart(mergeCartItems(mode === 'replace' ? [] : cart, items))}
+              />
             </React.Suspense>
           )} />
           <Route path="/quick-quote" element={(
