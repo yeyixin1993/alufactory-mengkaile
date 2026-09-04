@@ -1444,6 +1444,22 @@ export const INITIAL_PRODUCTS: Product[] = [
     basePrice: 0,
     imageUrl: "/images/catalog/wardrobe.jpg",
   },
+  {
+    id: "p9",
+    type: ProductType.DISPLAY_RACK_3_0,
+    name: {
+      en: "3.0 Parametric Display Rack",
+      cn: "3.0参数化展示架",
+      jp: "3.0パラメトリック展示棚",
+    },
+    description: {
+      en: "A verified complete display-rack module with live dimensions and protected fixed hardware.",
+      cn: "经3.0母版验证的完整展架，可实时调尺寸并保护固定轨道与夹具参数。",
+      jp: "3.0基準モデルで検証済み。寸法をリアルタイム調整し、固定金具の仕様を保護します。",
+    },
+    basePrice: 0,
+    imageUrl: "/images/catalog/display-rack-3-0.png",
+  },
 ];
 
 export const PLATE_WIDTH = 2500;

@@ -10,6 +10,7 @@ export enum ProductType {
   MARINE_BOARD = 'MARINE_BOARD',
   CALLIGRAPHY_CABINET = 'CALLIGRAPHY_CABINET',
   WARDROBE = 'WARDROBE',
+  DISPLAY_RACK_3_0 = 'DISPLAY_RACK_3_0',
   ACCESSORY = 'ACCESSORY'
 }
 
@@ -60,6 +61,12 @@ export interface DrillHole {
   side: ProfileSide;
   positionMm: number;
   type: HoleType;
+  // Optional physical bore diameter retained by imported/parametric models.
+  // Ordinary manually placed holes continue to use the designer default.
+  diameterMm?: number;
+  // Process/pass-through holes such as linear-shaft passages must remain holes
+  // only and must never be interpreted as screw connection points.
+  suppressAutoFastener?: boolean;
   threadSize?: ThreadSize;
   // Optional fastener override for parametric joints. Ordinary manually added
   // holes continue to use the default hole-type-to-screw mapping.
@@ -130,6 +137,38 @@ export interface Rect {
 
 export interface PlateConfig {
   items: Rect[];
+}
+
+export type DesignSourceChannel =
+  | 'sketchup_plugin'
+  | 'parametric_template'
+  | 'maycad_scene'
+  | 'production_xlsx'
+  | 'designer_json'
+  | 'system_order'
+  | 'manual_designer'
+  | 'external_json'
+  | 'mixed'
+  | 'legacy_unspecified';
+
+/**
+ * Portable, non-secret provenance carried by design JSON, cart rows and order
+ * item configs. `self_declared` is intentional: authenticity can only become
+ * `server_verified` after a future authenticated website hand-off.
+ */
+export interface DesignSourceInfo {
+  schemaVersion: 1;
+  channel: DesignSourceChannel;
+  producerId: string;
+  producerVersion?: string;
+  documentId: string;
+  modelName?: string;
+  exportedAt?: string;
+  importedAt?: string;
+  sourceSummary?: string;
+  warningsCount?: number;
+  containedChannels: DesignSourceChannel[];
+  verification: 'local' | 'self_declared' | 'legacy_inferred' | 'server_verified';
 }
 
 export interface CartItem {

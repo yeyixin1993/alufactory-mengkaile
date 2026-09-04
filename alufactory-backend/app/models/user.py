@@ -210,6 +210,8 @@ class Order(db.Model):
     items = db.relationship('OrderItem', backref='order', lazy=True, cascade='all, delete-orphan')
     
     def to_dict(self, include_order_json=False):
+        from app.source_attribution import summarize_order_source
+
         result = {
             'id': self.id,
             'order_number': self.order_number,
@@ -225,6 +227,7 @@ class Order(db.Model):
             'items': [item.to_dict() for item in self.items],
             'created_at': to_east8_isoformat(self.created_at),
             'updated_at': to_east8_isoformat(self.updated_at),
+            'source_attribution': summarize_order_source(self),
         }
         # Safely access columns that may not exist in older DB schemas
         for attr in ('address_id', 'shipping_method', 'overlength_fee', 'tracking_number',

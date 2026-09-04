@@ -414,6 +414,10 @@
                         <h3>总收入</h3>
                         <div class="value" id="totalRevenue">¥0</div>
                     </div>
+                    <div class="stat-card">
+                        <h3>SketchUp 插件来源订单</h3>
+                        <div class="value" id="sketchupSourceOrders">0</div>
+                    </div>
                 </div>
                 <div class="analytics-grid">
                     <div class="analytics-card">
@@ -423,6 +427,11 @@
                     <div class="analytics-card">
                         <h3>彩色型材 Top 5（米）</h3>
                         <div id="topColorsChart">暂无彩色型材订单</div>
+                    </div>
+                    <div class="analytics-card">
+                        <h3>订单来源统计</h3>
+                        <div id="orderSourceSummary" style="margin-bottom:10px;color:#6b7280;font-size:13px;">暂无来源数据</div>
+                        <div id="orderSourceChart">暂无来源数据</div>
                     </div>
                 </div>
             </div>
@@ -1113,8 +1122,13 @@
                 document.getElementById('paidOrders').textContent = data.paid_orders;
                 document.getElementById('shippedOrders').textContent = data.shipped_orders;
                 document.getElementById('totalRevenue').textContent = '¥' + data.total_revenue.toFixed(2);
+                const sourceStatistics = data.source_statistics || {};
+                document.getElementById('sketchupSourceOrders').textContent = Number(sourceStatistics.sketchup_plugin_order_count || 0);
+                document.getElementById('orderSourceSummary').textContent =
+                    `已记录来源 ${Number(sourceStatistics.attributed_order_count || 0)} 单 · 官网验证 ${Number(sourceStatistics.server_verified_order_count || 0)} 单`;
                 renderMetricChart('monthlyRevenueChart', data.monthly_revenue || [], 'month', 'revenue', (value) => '¥' + Number(value).toFixed(2));
                 renderMetricChart('topColorsChart', data.top_profile_colors || [], 'color_name', 'meters', (value) => Number(value).toFixed(2) + ' m', '#8b5cf6');
+                renderMetricChart('orderSourceChart', sourceStatistics.breakdown || [], 'label', 'order_count', (value) => Number(value) + ' 单', '#0f766e');
             } catch (error) {
                 console.error('Error loading dashboard:', error);
             }

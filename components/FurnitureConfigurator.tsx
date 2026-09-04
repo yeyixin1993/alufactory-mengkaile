@@ -16,10 +16,11 @@ import {
   MAX_FURNITURE_PROFILE_MM,
   ParametricTemplatePayload,
 } from '../utils/parametricFurniture';
+import DisplayRackConfigurator from './DisplayRackConfigurator';
 
 interface FurnitureConfiguratorProps {
   language: Language;
-  type: ProductType.CALLIGRAPHY_CABINET | ProductType.WARDROBE;
+  type: ProductType.CALLIGRAPHY_CABINET | ProductType.WARDROBE | ProductType.DISPLAY_RACK_3_0;
 }
 
 const COPY = {
@@ -104,7 +105,10 @@ const openTemplateInDesigner = (payload: ParametricTemplatePayload) => {
   window.open(url, '_blank', 'noopener,noreferrer');
 };
 
-const FurnitureConfigurator: React.FC<FurnitureConfiguratorProps> = ({ language, type }) => {
+const StandardFurnitureConfigurator: React.FC<{
+  language: Language;
+  type: ProductType.CALLIGRAPHY_CABINET | ProductType.WARDROBE;
+}> = ({ language, type }) => {
   const copy = COPY[language];
   const isCalligraphy = type === ProductType.CALLIGRAPHY_CABINET;
   const [mode, setMode] = useState<'grid' | 'size'>('grid');
@@ -214,5 +218,11 @@ const FurnitureConfigurator: React.FC<FurnitureConfiguratorProps> = ({ language,
     </div>
   );
 };
+
+const FurnitureConfigurator: React.FC<FurnitureConfiguratorProps> = ({ language, type }) => (
+  type === ProductType.DISPLAY_RACK_3_0
+    ? <DisplayRackConfigurator language={language} />
+    : <StandardFurnitureConfigurator language={language} type={type} />
+);
 
 export default FurnitureConfigurator;

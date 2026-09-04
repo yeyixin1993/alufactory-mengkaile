@@ -35,6 +35,7 @@ from app.accessory_inventory import (
     seed_accessory_inventory,
     serialize_accessory_inventory,
 )
+from app.source_attribution import build_source_statistics
 
 admin_bp = Blueprint('admin', __name__, url_prefix='/api/admin')
 
@@ -686,7 +687,9 @@ def get_statistics():
         total_revenue = db.session.query(db.func.sum(Order.total_amount)).filter(
             Order.status.in_(PAID_ORDER_STATUSES)
         ).scalar() or 0
-        monthly_revenue, top_profile_colors = _monthly_revenue_and_color_usage(Order.query.all())
+        all_orders = Order.query.all()
+        monthly_revenue, top_profile_colors = _monthly_revenue_and_color_usage(all_orders)
+        source_statistics = build_source_statistics(all_orders)
         
         return jsonify({
             'total_users': total_users,
@@ -699,6 +702,7 @@ def get_statistics():
             'total_revenue': float(total_revenue),
             'monthly_revenue': monthly_revenue,
             'top_profile_colors': top_profile_colors,
+            'source_statistics': source_statistics,
         }), 200
     except Exception as e:
         import traceback

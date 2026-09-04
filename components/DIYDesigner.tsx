@@ -41,6 +41,7 @@ import {
 import ProfileVisualizer from './ProfileVisualizer';
 import {
   CartItem,
+  DesignSourceInfo,
   DrillHole,
   HoleType,
   Language,
@@ -78,6 +79,12 @@ import {
   type ParametricShelfSupportType,
   type ParametricTemplatePayload,
 } from '../utils/parametricFurniture';
+import {
+  createDesignSourceInfo,
+  designSourceFromDocument,
+  getDesignSourceLabel,
+  mergeDesignSourceInfo,
+} from '../utils/designSource';
 
 type DIYItemKind =
   | 'profile'
@@ -125,6 +132,8 @@ interface DIYSceneItem {
   tappingRight?: boolean;
   finish?: ProfileFinish;
   shelfSupportType?: ParametricShelfSupportType;
+  fixedReferenceId?: 'MODEL_REF_SK8_SUPPORT' | 'MODEL_REF_SHF8_SUPPORT';
+  shaftDiameterMm?: number;
   accessoryPrice?: number;
   accessoryProfileSize?: DIYAccessoryProfileSize;
   accessoryThreadSize?: DIYAccessoryThreadSize;
@@ -351,6 +360,10 @@ const TEXT: Record<Language, Record<string, string>> = {
     maycadImportFailed: 'MayCAD导入失败',
     jsonImportFailed: 'JSON读取失败',
     jsonImportUnsupported: 'JSON格式不支持，请选择设计器导出的JSON或系统订单导出的JSON',
+    sketchupImportReceiving: '正在接收 SketchUp 传来的设计',
+    sketchupImportLoaded: 'SketchUp 设计已直接导入',
+    sketchupImportFailed: 'SketchUp 直连导入失败，可改用“JSON → 导入 JSON”',
+    sketchupImportInvalid: 'SketchUp 直连参数无效，已停止导入',
     maycadSceneOnly: '请选择 MayCAD 导出的 .scene 文件。PDF、图片及其他格式暂不支持。',
     maycadImportScope: '目前仅导入铝型材和打孔记录；连接件、螺丝等配件导入正在开发中。',
     maycadProfileReviewTitle: '请确认未验证的型材型号',
@@ -402,6 +415,8 @@ const TEXT: Record<Language, Record<string, string>> = {
     saved: '设计 JSON 已下载到本机',
     loaded: '已从本地 JSON 读取设计',
     templateLoaded: '参数化柜体已生成，可继续编辑并审核孔位',
+    rackConnectionCheckPassed: '3.0展架连接自检通过',
+    rackConnectionCheckFailed: '3.0展架连接自检未通过',
     cartAdded: '设计清单已加入购物车',
     designImportConflictTitle: '当前设计已有内容',
     designImportConflictPrompt: '要把文件中的零件添加到当前设计，还是覆盖当前设计？',
@@ -614,6 +629,10 @@ const TEXT: Record<Language, Record<string, string>> = {
     maycadImportFailed: 'MayCAD import failed',
     jsonImportFailed: 'Unable to import JSON',
     jsonImportUnsupported: 'Unsupported JSON format. Choose a designer-export JSON or a system order-export JSON.',
+    sketchupImportReceiving: 'Receiving the design from SketchUp',
+    sketchupImportLoaded: 'SketchUp design imported directly',
+    sketchupImportFailed: 'Direct SketchUp import failed. Use JSON → Import JSON instead',
+    sketchupImportInvalid: 'Invalid SketchUp direct-import request',
     maycadSceneOnly: 'Choose a .scene file exported by MayCAD. PDF, images, and other formats are not currently supported.',
     maycadImportScope: 'Currently only aluminum profiles and drilling records are imported. Accessory import is under development.',
     maycadProfileReviewTitle: 'Confirm unverified profile models',
@@ -665,6 +684,8 @@ const TEXT: Record<Language, Record<string, string>> = {
     saved: 'Design JSON downloaded to this device',
     loaded: 'Design loaded from local JSON',
     templateLoaded: 'Parametric cabinet generated; continue editing and review machining',
+    rackConnectionCheckPassed: '3.0 rack connection check passed',
+    rackConnectionCheckFailed: '3.0 rack connection check failed',
     cartAdded: 'Design parts added to cart',
     designImportConflictTitle: 'This design already has parts',
     designImportConflictPrompt: 'Add the imported parts to the current design, or replace the current design?',
@@ -877,6 +898,10 @@ const TEXT: Record<Language, Record<string, string>> = {
     maycadImportFailed: 'MayCADの読み込みに失敗しました',
     jsonImportFailed: 'JSONの読み込みに失敗しました',
     jsonImportUnsupported: '未対応のJSON形式です。デザイナー出力JSONまたはシステム注文出力JSONを選択してください。',
+    sketchupImportReceiving: 'SketchUp から設計を受信しています',
+    sketchupImportLoaded: 'SketchUp の設計を直接読み込みました',
+    sketchupImportFailed: 'SketchUp の直接読み込みに失敗しました。「JSON → JSON読込」を使用してください',
+    sketchupImportInvalid: 'SketchUp の直接読み込みパラメータが無効です',
     maycadSceneOnly: 'MayCADから書き出した.sceneファイルを選択してください。PDF・画像・その他の形式は現在対応していません。',
     maycadImportScope: '現在読み込めるのはアルミ形材と穴あけ記録のみです。金具・ねじなどの部品読込は開発中です。',
     maycadProfileReviewTitle: '未検証の形材型番を確認してください',
@@ -928,6 +953,8 @@ const TEXT: Record<Language, Record<string, string>> = {
     saved: '設計JSONを端末に保存しました',
     loaded: 'ローカルJSONから設計を読み込みました',
     templateLoaded: 'パラメトリック棚を生成しました。加工位置を確認・編集してください',
+    rackConnectionCheckPassed: '3.0ラックの接続チェックに合格しました',
+    rackConnectionCheckFailed: '3.0ラックの接続チェックに合格しませんでした',
     cartAdded: 'カートに追加しました',
     designImportConflictTitle: '現在の設計にパーツがあります',
     designImportConflictPrompt: '読み込むパーツを現在の設計に追加しますか、現在の設計を置き換えますか？',
@@ -1118,7 +1145,17 @@ const isBoard12ShelfSupport = (item: Pick<DIYSceneItem, 'kind' | 'shelfSupportTy
   item.kind === 'shelf_support' && item.shelfSupportType === 'board_12mm'
 );
 
-const normalizeDesignItems = (source: DIYSceneItem[]) => source.map((item) => {
+const isFixedRackHardware = (item: Pick<DIYSceneItem, 'kind' | 'shelfSupportType'>) => (
+  item.kind === 'shelf_support'
+  && (
+    item.shelfSupportType === 'linear_shaft'
+    || item.shelfSupportType === 'shaft_support_sk8'
+    || item.shelfSupportType === 'shaft_support_shf8'
+    || item.shelfSupportType === 'drawer_slide_pair'
+  )
+);
+
+export const normalizeDesignItems = (source: DIYSceneItem[]) => source.map((item) => {
   const shelfSupportFinish: ProfileFinish = item.finish
     || (item.colorId === 'natural' ? 'oxidized' : 'powder');
   const connectionDimensions = isConnectionAccessoryKind(item.kind)
@@ -1162,7 +1199,9 @@ const normalizeDesignItems = (source: DIYSceneItem[]) => source.map((item) => {
       finish: shelfSupportFinish,
       accessoryPrice: isBoard12ShelfSupport(item)
         ? WARDROBE_12MM_BOARD_SUPPORT_PRICE
-        : getShelfSupportUnitPrice(item.thickness || 0, shelfSupportFinish),
+        : isFixedRackHardware(item)
+          ? Number(item.accessoryPrice || 0)
+          : getShelfSupportUnitPrice(item.thickness || 0, shelfSupportFinish),
     } : {}),
     holes: item.kind === 'profile'
       ? (item.holes || []).map((hole) => ({
@@ -1186,6 +1225,8 @@ const buildProductionData = (items: DIYSceneItem[], language: Language) => {
     thicknessMm: item.thickness,
     finish: item.finish,
     shelfSupportType: item.shelfSupportType,
+    fixedReferenceId: item.fixedReferenceId,
+    shaftDiameterMm: item.shaftDiameterMm,
     accessoryProfileSize: item.accessoryProfileSize,
     accessoryThreadSize: item.accessoryThreadSize,
     hasBrake: item.hasBrake,
@@ -1238,6 +1279,8 @@ const buildProductionData = (items: DIYSceneItem[], language: Language) => {
         physicalGrooveId: `P${getHolePhysicalGrooveIndex(hole, variantId) + 1}`,
         leftDistanceMm: hole.positionMm,
         rightDistanceMm: Math.max(0, length - hole.positionMm),
+        diameterMm: hole.diameterMm,
+        suppressAutoFastener: hole.suppressAutoFastener,
         holeType: hole.type,
         threadSize: hole.threadSize || '',
         fastenerHead: hole.fastenerHead,
@@ -1250,11 +1293,16 @@ const buildProductionData = (items: DIYSceneItem[], language: Language) => {
   return { parts, holes };
 };
 
-const buildDesignDocument = (items: DIYSceneItem[], language: Language) => ({
+const buildDesignDocument = (
+  items: DIYSceneItem[],
+  language: Language,
+  provenance: DesignSourceInfo,
+) => ({
   format: 'mengkaile-diy',
   schemaVersion: 2,
   savedAt: new Date().toISOString(),
   coordinateUnit: 'mm',
+  provenance,
   grooveConvention: {
     sourceOfTruth: 'physicalGrooveIndex',
     canonicalFaces: ['A', 'B'],
@@ -1301,11 +1349,17 @@ const mapSystemOrderProfileItemsToDesignerItems = (
     const threadSize = holeType === 'threaded' && VALID_THREAD_SIZES.has(threadSizeCandidate)
       ? threadSizeCandidate
       : undefined;
+    const rawDiameterMm = Number(rawHole?.diameterMm);
+    const diameterMm = Number.isFinite(rawDiameterMm) && rawDiameterMm > 0 && rawDiameterMm <= 100
+      ? Math.round(rawDiameterMm * 10) / 10
+      : undefined;
     return [{
       id: makeId(),
       side,
       type: holeType,
       threadSize,
+      diameterMm,
+      suppressAutoFastener: rawHole?.suppressAutoFastener === true,
       grooveIndex: physicalGrooveIndex,
       physicalGrooveIndex,
       positionMm: Math.min(length - 5, Math.max(5, Math.round(rawPosition * 10) / 10)),
@@ -1724,7 +1778,7 @@ const itemsFromProductionWorkbook = (production: ProductionWorkbookData): DIYSce
   const holes = kind === 'profile'
     ? production.holes
       .filter((hole) => hole.partId ? hole.partId === part.id : hole.partLine === part.line)
-      .map((hole) => {
+      .map<DrillHole>((hole) => {
         const side = (['A', 'B', 'C', 'D'].includes(hole.entryFace) ? hole.entryFace : 'A') as ProfileSide;
         const physicalGrooveIndex = Math.max(0, Number(hole.physicalGrooveId.match(/\d+/)?.[0] || 1) - 1);
         const type = (['through', 'countersunk', 'threaded'].includes(hole.holeType) ? hole.holeType : 'through') as HoleType;
@@ -1746,6 +1800,8 @@ const itemsFromProductionWorkbook = (production: ProductionWorkbookData): DIYSce
           fastenerHead,
           fastenerLengthMm: hole.fastenerLengthMm,
           fastenerDirection: hole.fastenerDirection === 'outward' ? 'outward' : undefined,
+          diameterMm: hole.diameterMm,
+          suppressAutoFastener: hole.suppressAutoFastener,
           grooveIndex: physicalGrooveToDisplay(side, physicalGrooveIndex, Math.max(1, getProfileGrooveCount(variantId, side))),
           physicalGrooveIndex,
         };
@@ -1779,7 +1835,16 @@ const itemsFromProductionWorkbook = (production: ProductionWorkbookData): DIYSce
     finish: (part.finish === 'oxidized' || part.finish === 'electrophoretic' || part.finish === 'powder')
       ? part.finish
       : base.finish,
-    shelfSupportType: part.shelfSupportType === 'board_12mm' ? 'board_12mm' : base.shelfSupportType,
+    shelfSupportType: (
+      ['linear', 'board_12mm', 'linear_shaft', 'shaft_support_sk8', 'shaft_support_shf8', 'drawer_slide_pair']
+        .includes(part.shelfSupportType || '')
+        ? part.shelfSupportType
+        : base.shelfSupportType
+    ) as ParametricShelfSupportType | undefined,
+    fixedReferenceId: (part.fixedReferenceId === 'MODEL_REF_SK8_SUPPORT' || part.fixedReferenceId === 'MODEL_REF_SHF8_SUPPORT')
+      ? part.fixedReferenceId
+      : base.fixedReferenceId,
+    shaftDiameterMm: part.shaftDiameterMm ?? base.shaftDiameterMm,
     colorId: workbookColorId(part, kind),
     quantity: Math.max(1, Math.round(part.quantity || 1)),
     position,
@@ -2023,6 +2088,7 @@ const profileDimensions = (item: DIYSceneItem) => {
 };
 
 const screwHeadForHole = (hole: DrillHole): DIYScrewHead | null => {
+  if (hole.suppressAutoFastener) return null;
   if (hole.fastenerHead) return hole.fastenerHead;
   if (hole.type === 'countersunk') return 'socket_cylinder';
   if (hole.type === 'through') return 'button_socket';
@@ -2644,7 +2710,7 @@ const accessoryPlacementCandidates = (
     // its two seating directions. Treat its physical thickness as an OBB and
     // reject any candidate whose body enters either profile. Touching the
     // profile face is allowed; positive volume overlap is not.
-    const dimensions = getAccessoryDimensions(accessory.kind, series);
+    const dimensions = getAccessoryDimensions(accessory.kind as DIYConnectionKind, series);
     const quaternion = new THREE.Quaternion().setFromEuler(new THREE.Euler(
       THREE.MathUtils.degToRad(rotation[0]),
       THREE.MathUtils.degToRad(rotation[1]),
@@ -2950,59 +3016,72 @@ const accessoryPlacementCandidates = (
     if (accessory.kind === 'connector') {
       const horizontalLength = Math.max(1, accessory.width || moduleSize * SCENE_SCALE) / SCENE_SCALE;
       const verticalLength = Math.max(1, accessory.height || moduleSize * SCENE_SCALE) / SCENE_SCALE;
-      if (availableAlong(firstBox, firstArm) + 1e-6 < horizontalLength) return;
-      if (availableAlong(secondBox, secondArm) + 1e-6 < verticalLength) return;
-
-      const localZ = new THREE.Vector3().crossVectors(firstArm, secondArm).normalize();
       const bracketDepth = moduleSize;
       const wallThickness = THREE.MathUtils.clamp(moduleSize * 0.18, 0.026, 0.06);
-      const axes = [firstArm, secondArm, localZ] as [THREE.Vector3, THREE.Vector3, THREE.Vector3];
       const halfModule = moduleSize / 2;
       const cornerOffsets = [-halfModule, 0, halfModule];
-      const placementRotation = accessoryPlacementRotation(firstArm, secondArm);
-      cornerOffsets.forEach((firstOffset) => {
-        cornerOffsets.forEach((secondOffset) => {
-          const origin = contact.point.clone()
-            .addScaledVector(firstArm, firstOffset)
-            .addScaledVector(secondArm, secondOffset);
-          const horizontalSeat: ProfileBox = {
-            center: origin.clone()
-              .addScaledVector(firstArm, horizontalLength / 2)
-              .addScaledVector(secondArm, wallThickness / 2),
-            axes,
-            halfSizes: [horizontalLength / 2, wallThickness / 2, bracketDepth / 2],
-          };
-          const verticalSeat: ProfileBox = {
-            center: origin.clone()
-              .addScaledVector(firstArm, wallThickness / 2)
-              .addScaledVector(secondArm, verticalLength / 2),
-            axes,
-            halfSizes: [wallThickness / 2, verticalLength / 2, bracketDepth / 2],
-          };
-          const installationInterferes = [horizontalSeat, verticalSeat].some((seat) => (
-            orientedBoxesOverlap(seat, firstBox, 0.001)
-            || orientedBoxesOverlap(seat, secondBox, 0.001)
-          ));
-          if (installationInterferes) return;
-          if (
-            orientedBoxesGap(horizontalSeat, firstBox) > 0.002
-            || orientedBoxesGap(verticalSeat, secondBox) > 0.002
-          ) return;
-          const targetIds = new Set(targetProfileIds);
-          const blockedByAnotherProfile = profiles.some((profile) => (
-            !targetIds.has(profile.id)
-            && (
-              orientedBoxesOverlap(horizontalSeat, profileBoxFromItem(profile), 0.001)
-              || orientedBoxesOverlap(verticalSeat, profileBoxFromItem(profile), 0.001)
-            )
-          ));
-          if (blockedByAnotherProfile) return;
-          candidates.push({
-            position: origin,
-            rotation: placementRotation,
-            targetProfileIds,
-            key: `${baseKey}:CAST-1:${firstOffset.toFixed(3)}:${secondOffset.toFixed(3)}`,
-            joint: true,
+      const validArmDirections = (box: ProfileBox, preferred: THREE.Vector3, requiredLength: number) => (
+        [preferred, preferred.clone().multiplyScalar(-1)]
+          .filter((direction, index) => (
+            availableAlong(box, direction) + 1e-6 >= requiredLength
+            && (index === 0 || availableAlong(box, preferred.clone().multiplyScalar(-1)) > moduleSize * 0.7)
+          ))
+      );
+      const firstDirections = validArmDirections(firstBox, firstArm, horizontalLength);
+      const secondDirections = validArmDirections(secondBox, secondArm, verticalLength);
+      firstDirections.forEach((candidateFirstArm, firstDirectionIndex) => {
+        secondDirections.forEach((candidateSecondArm, secondDirectionIndex) => {
+          const localZ = new THREE.Vector3().crossVectors(candidateFirstArm, candidateSecondArm).normalize();
+          const axes = [candidateFirstArm, candidateSecondArm, localZ] as [THREE.Vector3, THREE.Vector3, THREE.Vector3];
+          const placementRotation = accessoryPlacementRotation(candidateFirstArm, candidateSecondArm);
+          cornerOffsets.forEach((firstOffset) => {
+            cornerOffsets.forEach((secondOffset) => {
+              const origin = contact.point.clone()
+                .addScaledVector(candidateFirstArm, firstOffset)
+                .addScaledVector(candidateSecondArm, secondOffset);
+              const horizontalSeat: ProfileBox = {
+                center: origin.clone()
+                  .addScaledVector(candidateFirstArm, horizontalLength / 2)
+                  .addScaledVector(candidateSecondArm, wallThickness / 2),
+                axes,
+                halfSizes: [horizontalLength / 2, wallThickness / 2, bracketDepth / 2],
+              };
+              const verticalSeat: ProfileBox = {
+                center: origin.clone()
+                  .addScaledVector(candidateFirstArm, wallThickness / 2)
+                  .addScaledVector(candidateSecondArm, verticalLength / 2),
+                axes,
+                halfSizes: [wallThickness / 2, verticalLength / 2, bracketDepth / 2],
+              };
+              const installationInterferes = [horizontalSeat, verticalSeat].some((seat) => (
+                orientedBoxesOverlap(seat, firstBox, 0.001)
+                || orientedBoxesOverlap(seat, secondBox, 0.001)
+              ));
+              if (installationInterferes) return;
+              if (
+                orientedBoxesGap(horizontalSeat, firstBox) > 0.002
+                || orientedBoxesGap(verticalSeat, secondBox) > 0.002
+              ) return;
+              const targetIds = new Set(targetProfileIds);
+              const blockedByAnotherProfile = profiles.some((profile) => (
+                !targetIds.has(profile.id)
+                && (
+                  orientedBoxesOverlap(horizontalSeat, profileBoxFromItem(profile), 0.001)
+                  || orientedBoxesOverlap(verticalSeat, profileBoxFromItem(profile), 0.001)
+                )
+              ));
+              if (blockedByAnotherProfile) return;
+              const directionSuffix = firstDirectionIndex === 0 && secondDirectionIndex === 0
+                ? ''
+                : `:ALT-${firstDirectionIndex}-${secondDirectionIndex}`;
+              candidates.push({
+                position: origin,
+                rotation: placementRotation,
+                targetProfileIds,
+                key: `${baseKey}:CAST-1${directionSuffix}:${firstOffset.toFixed(3)}:${secondOffset.toFixed(3)}`,
+                joint: true,
+              });
+            });
           });
         });
       });
@@ -3290,12 +3369,18 @@ const syncAttachedAccessories = (source: DIYSceneItem[]) => source.map((item) =>
       attachmentKey: undefined,
     };
   }
+  const keepRackPrecision = item.autoGenerated
+    && (item.attachedProfileIds || []).length === 2
+    && (item.attachedProfileIds || []).every((id) => id.startsWith('display-rack-3-'));
+  const placementCoordinate = (value: number) => keepRackPrecision
+    ? Number((value * SCENE_SCALE).toFixed(3))
+    : Math.round(value * SCENE_SCALE);
   return {
     ...item,
     position: [
-      Math.round(placement.position.x * SCENE_SCALE),
-      Math.round(placement.position.y * SCENE_SCALE),
-      Math.round(placement.position.z * SCENE_SCALE),
+      placementCoordinate(placement.position.x),
+      placementCoordinate(placement.position.y),
+      placementCoordinate(placement.position.z),
     ] as Vec3,
     rotation: placement.rotation,
     attachedProfileIds: placement.targetProfileIds,
@@ -3647,6 +3732,398 @@ const drillTapJointPlan = (joint: AutoConnectionJoint): DrillTapJointPlan | null
       grooveIndex: Math.floor((grooveCount - 1) / 2),
     },
   };
+};
+
+type RackPhysicalConnection = {
+  joint: AutoConnectionJoint;
+  branchProfile: DIYSceneItem;
+  branchEnd: -1 | 1;
+  carrierProfile: DIYSceneItem;
+  carrierStationMm: number;
+  carrierThrough: boolean;
+};
+
+const rackProfileCarrierRank = (item: DIYSceneItem) => {
+  const axis = profileBoxFromItem(item).axes[0];
+  // Uprights are the first-choice carrier, followed by width rails and depth
+  // rails. This keeps the approved rack assembly direction deterministic.
+  return Math.abs(axis.y) * 100 + Math.abs(axis.x) * 10 + Math.abs(axis.z);
+};
+
+// Reduce pairwise box contacts to one real connection per profile end. A rail
+// endpoint may touch an upright and another rail at the same corner; treating
+// both contacts as independent creates exactly the duplicated hardware seen
+// in the reported model. Selecting one carrier for that endpoint removes the
+// false second joint before any hole or bracket is created.
+const displayRackPhysicalConnections = (source: DIYSceneItem[]): RackPhysicalConnection[] => {
+  const rackProfiles = source.filter((item) => (
+    item.kind === 'profile' && item.id.startsWith('display-rack-3-')
+  ));
+  const rackProfileIds = new Set(rackProfiles.map((item) => item.id));
+  const candidates = autoConnectionJoints(source).filter((joint) => (
+    rackProfileIds.has(joint.first.id) && rackProfileIds.has(joint.second.id)
+  )).flatMap((joint): RackPhysicalConnection[] => {
+    const moduleSize = Number(joint.series.slice(0, 2)) / SCENE_SCALE;
+    const firstEnd = profileEndpointSideAt(joint.firstBox, joint.contact.point, moduleSize);
+    const secondEnd = profileEndpointSideAt(joint.secondBox, joint.contact.point, moduleSize);
+    if (firstEnd === null && secondEnd === null) return [];
+
+    let branchProfile: DIYSceneItem;
+    let branchEnd: -1 | 1;
+    let carrierProfile: DIYSceneItem;
+    let carrierThrough = false;
+    if (firstEnd !== null && secondEnd === null) {
+      branchProfile = joint.first;
+      branchEnd = firstEnd;
+      carrierProfile = joint.second;
+      carrierThrough = true;
+    } else if (secondEnd !== null && firstEnd === null) {
+      branchProfile = joint.second;
+      branchEnd = secondEnd;
+      carrierProfile = joint.first;
+      carrierThrough = true;
+    } else {
+      const firstIsCarrier = rackProfileCarrierRank(joint.first) >= rackProfileCarrierRank(joint.second);
+      carrierProfile = firstIsCarrier ? joint.first : joint.second;
+      branchProfile = firstIsCarrier ? joint.second : joint.first;
+      branchEnd = (firstIsCarrier ? secondEnd : firstEnd) || 1;
+    }
+    const carrierBox = profileBoxFromItem(carrierProfile);
+    const carrierLengthMm = Math.max(20, carrierProfile.length || 1000);
+    const carrierStationMm = THREE.MathUtils.clamp(
+      joint.contact.point.clone().sub(carrierBox.center).dot(carrierBox.axes[0]) * SCENE_SCALE + carrierLengthMm / 2,
+      0,
+      carrierLengthMm,
+    );
+    return [{
+      joint,
+      branchProfile,
+      branchEnd,
+      carrierProfile,
+      carrierStationMm,
+      carrierThrough,
+    }];
+  });
+
+  const chosenByBranchEnd = new Map<string, RackPhysicalConnection>();
+  candidates
+    .sort((first, second) => {
+      const firstKey = `${first.branchProfile.id}:${first.branchEnd}`;
+      const secondKey = `${second.branchProfile.id}:${second.branchEnd}`;
+      if (firstKey !== secondKey) return firstKey.localeCompare(secondKey);
+      if (first.carrierThrough !== second.carrierThrough) return first.carrierThrough ? -1 : 1;
+      const carrierRank = rackProfileCarrierRank(second.carrierProfile) - rackProfileCarrierRank(first.carrierProfile);
+      if (Math.abs(carrierRank) > 0.1) return carrierRank;
+      return first.joint.key.localeCompare(second.joint.key);
+    })
+    .forEach((candidate) => {
+      const key = `${candidate.branchProfile.id}:${candidate.branchEnd}`;
+      if (!chosenByBranchEnd.has(key)) chosenByBranchEnd.set(key, candidate);
+    });
+  return Array.from(chosenByBranchEnd.values()).sort((first, second) => first.joint.key.localeCompare(second.joint.key));
+};
+
+const itemOrientedBox = (
+  item: DIYSceneItem,
+  dimensions: [number, number, number],
+  localOffset = new THREE.Vector3(),
+): ProfileBox => {
+  const quaternion = itemQuaternion(item);
+  return {
+    center: localOffset.applyQuaternion(quaternion).add(new THREE.Vector3(...item.position).multiplyScalar(1 / SCENE_SCALE)),
+    axes: [
+      new THREE.Vector3(1, 0, 0).applyQuaternion(quaternion).normalize(),
+      new THREE.Vector3(0, 1, 0).applyQuaternion(quaternion).normalize(),
+      new THREE.Vector3(0, 0, 1).applyQuaternion(quaternion).normalize(),
+    ],
+    halfSizes: dimensions.map((value) => Math.max(0.001, value / SCENE_SCALE / 2)) as [number, number, number],
+  };
+};
+
+const displayRackConnectionObstacles = (source: DIYSceneItem[]) => source.flatMap((item): ProfileBox[] => {
+  if (item.kind === 'marine_board' || item.kind === 'plate' || item.kind === 'pegboard') {
+    return [itemOrientedBox(item, [item.width || 1, item.height || 1, item.thickness || 1])];
+  }
+  if (item.kind === 'shelf_support' && item.shelfSupportType === 'drawer_slide_pair') {
+    const spacing = Math.max(40, item.width || 727) / SCENE_SCALE;
+    const railDimensions: [number, number, number] = [13, item.height || 45, item.length || item.thickness || 400];
+    return [-1, 1].map((side) => itemOrientedBox(item, railDimensions, new THREE.Vector3(side * spacing / 2, 0, 0)));
+  }
+  return [];
+});
+
+const connectorSeatBoxes = (placement: AccessoryPlacement): ProfileBox[] => {
+  const probe: DIYSceneItem = {
+    ...createItem('connector', 0, '3030'),
+    position: placement.position.toArray().map((value) => value * SCENE_SCALE) as Vec3,
+    rotation: placement.rotation,
+  };
+  const quaternion = itemQuaternion(probe);
+  const firstArm = new THREE.Vector3(1, 0, 0).applyQuaternion(quaternion).normalize();
+  const secondArm = new THREE.Vector3(0, 1, 0).applyQuaternion(quaternion).normalize();
+  const localZ = new THREE.Vector3(0, 0, 1).applyQuaternion(quaternion).normalize();
+  const origin = placement.position;
+  const moduleSize = 30 / SCENE_SCALE;
+  const wallThickness = THREE.MathUtils.clamp(moduleSize * 0.18, 0.026, 0.06);
+  const axes = [firstArm, secondArm, localZ] as [THREE.Vector3, THREE.Vector3, THREE.Vector3];
+  return [{
+    center: origin.clone().addScaledVector(firstArm, moduleSize / 2).addScaledVector(secondArm, wallThickness / 2),
+    axes,
+    halfSizes: [moduleSize / 2, wallThickness / 2, moduleSize / 2],
+  }, {
+    center: origin.clone().addScaledVector(firstArm, wallThickness / 2).addScaledVector(secondArm, moduleSize / 2),
+    axes,
+    halfSizes: [wallThickness / 2, moduleSize / 2, moduleSize / 2],
+  }];
+};
+
+type DisplayRackConnectionCheck = { valid: boolean; issues: string[] };
+
+const validateDisplayRackConnectionSystem = (source: DIYSceneItem[]): DisplayRackConnectionCheck => {
+  const issues: string[] = [];
+  const required = displayRackPhysicalConnections(source);
+  const requiredByJoint = new Map(required.map((connection) => [connection.joint.key, connection]));
+  const directHoles = source.flatMap((item) => item.kind === 'profile'
+    ? (item.holes || []).filter((hole) => hole.jointKey?.endsWith(':DRILL-TAP')).map((hole) => ({ item, hole }))
+    : []);
+  const connectors = source.filter((item) => (
+    item.kind === 'connector'
+    && item.autoGenerated
+    && (item.attachedProfileIds || []).length === 2
+    && (item.attachedProfileIds || []).every((id) => id.startsWith('display-rack-3-'))
+  ));
+  const directByJoint = new Map<string, typeof directHoles>();
+  directHoles.forEach((entry) => {
+    const key = entry.hole.jointKey!.replace(/:DRILL-TAP$/, '');
+    directByJoint.set(key, [...(directByJoint.get(key) || []), entry]);
+  });
+  const connectorByJoint = new Map<string, DIYSceneItem[]>();
+  connectors.forEach((connector) => {
+    const ids = [...(connector.attachedProfileIds || [])].sort();
+    if (ids.length !== 2) issues.push(`角码${connector.id}没有绑定两根型材`);
+    const key = ids.join(':JOINT:');
+    connectorByJoint.set(key, [...(connectorByJoint.get(key) || []), connector]);
+  });
+
+  required.forEach(({ joint }) => {
+    const directCount = directByJoint.get(joint.key)?.length || 0;
+    const connectorCount = connectorByJoint.get(joint.key)?.length || 0;
+    if (directCount + connectorCount !== 1) {
+      issues.push(`${joint.key}应且只能有一种连接，当前为${directCount}个直锁＋${connectorCount}个角码`);
+    }
+  });
+  directByJoint.forEach((rows, jointKey) => {
+    if (!requiredByJoint.has(jointKey)) issues.push(`${jointKey}不是当前展架需要的有效直锁连接`);
+    if (rows.length !== 1) issues.push(`${jointKey}存在${rows.length}个重复沉头孔`);
+    if (connectorByJoint.has(jointKey)) issues.push(`${jointKey}同时调用了直锁与角码`);
+    const connection = requiredByJoint.get(jointKey);
+    const plan = connection ? drillTapJointPlan(connection.joint) : null;
+    if (!plan) {
+      issues.push(`${jointKey}无法复核沉头孔与端面攻丝方向`);
+    } else {
+      const tapped = plan.tappedEnd < 0 ? plan.tappedProfile.tappingLeft : plan.tappedProfile.tappingRight;
+      if (!tapped) issues.push(`${jointKey}缺少与沉头孔对应的端面攻丝`);
+    }
+    rows.forEach(({ item, hole }) => {
+      const screws = source.filter((candidate) => (
+        candidate.kind === 'screw'
+        && candidate.linkedProfileId === item.id
+        && candidate.linkedHoleId === hole.id
+      ));
+      if (screws.length !== 1) issues.push(`${jointKey}的沉头孔没有唯一对应螺丝`);
+    });
+  });
+  connectorByJoint.forEach((rows, jointKey) => {
+    if (rows.length !== 1) issues.push(`${jointKey}存在${rows.length}个重复角码`);
+    if (!requiredByJoint.has(jointKey)) issues.push(`${jointKey}不是当前展架需要的有效角码连接`);
+  });
+  const connectorKeys = connectors.map((item) => item.attachmentKey).filter(Boolean);
+  if (new Set(connectorKeys).size !== connectorKeys.length) issues.push('存在重复的角码安装键');
+
+  const directCarrierStations = new Map<string, number>();
+  directByJoint.forEach((rows, jointKey) => {
+    if (!rows.length) return;
+    const connection = requiredByJoint.get(jointKey);
+    if (!connection) return;
+    const stationKey = `${connection.carrierProfile.id}:${Math.round(connection.carrierStationMm * 10)}`;
+    directCarrierStations.set(stationKey, (directCarrierStations.get(stationKey) || 0) + rows.length);
+  });
+  directCarrierStations.forEach((count, stationKey) => {
+    if (count > 1) issues.push(`${stationKey}同一承载截面存在${count}条重复直锁路径`);
+  });
+
+  const probe = createItem('connector', source.length, '3030');
+  const placementsByKey = new Map(accessoryPlacementCandidates(probe, source).map((placement) => [placement.key, placement]));
+  const obstacleBoxes = displayRackConnectionObstacles(source);
+  const checkedConnectorBoxes: { id: string; boxes: ProfileBox[] }[] = [];
+  connectors.forEach((connector) => {
+    const placement = connector.attachmentKey ? placementsByKey.get(connector.attachmentKey) : undefined;
+    if (!placement) {
+      issues.push(`角码${connector.id}没有可复核的双面贴合位置`);
+      return;
+    }
+    const actualPosition = new THREE.Vector3(...connector.position).multiplyScalar(1 / SCENE_SCALE);
+    if (actualPosition.distanceTo(placement.position) > 0.0001) {
+      issues.push(`角码${connector.id}没有精确贴合到目标型材`);
+    }
+    const boxes = connectorSeatBoxes(placement);
+    if (boxes.some((box) => obstacleBoxes.some((obstacle) => orientedBoxesOverlap(box, obstacle, 0.001)))) {
+      issues.push(`角码${connector.id}与板件或抽屉滑轨发生物理冲突`);
+    }
+    if (boxes.some((box) => checkedConnectorBoxes.some((checked) => (
+      checked.boxes.some((other) => orientedBoxesOverlap(box, other, 0.001))
+    )))) {
+      issues.push(`角码${connector.id}与其他连接配件发生物理冲突`);
+    }
+    checkedConnectorBoxes.push({ id: connector.id, boxes });
+  });
+
+  return { valid: issues.length === 0, issues };
+};
+
+// Build the approved mixed connection graph only after reducing false
+// pairwise contacts. Every branch receives one method, every carrier section
+// receives at most one direct screw path, and brackets are chosen only from
+// placements that are flush, profile-safe and clear of panels/slides/other
+// generated brackets.
+const withDisplayRackConnectionSystem = (source: DIYSceneItem[]) => {
+  const physicalConnections = displayRackPhysicalConnections(source);
+  if (!physicalConnections.length) return source;
+  const alreadyPrepared = source.some((item) => (
+    item.kind === 'profile' && (item.holes || []).some((hole) => hole.jointKey?.endsWith(':DRILL-TAP'))
+  )) || source.some((item) => item.kind === 'connector' && item.autoGenerated);
+  if (alreadyPrepared) return source;
+
+  const probe = createItem('connector', source.length, '3030');
+  const obstacleBoxes = displayRackConnectionObstacles(source);
+  const safeBracketPlacementsByJoint = new Map<string, { candidate: AccessoryPlacement; boxes: ProfileBox[] }[]>();
+  accessoryPlacementCandidates(probe, source).forEach((candidate) => {
+    if (!candidate.joint || candidate.targetProfileIds.length !== 2) return;
+    const boxes = connectorSeatBoxes(candidate);
+    if (boxes.some((box) => obstacleBoxes.some((obstacle) => orientedBoxesOverlap(box, obstacle, 0.001)))) return;
+    const jointKey = candidate.targetProfileIds.slice().sort().join(':JOINT:');
+    safeBracketPlacementsByJoint.set(
+      jointKey,
+      [...(safeBracketPlacementsByJoint.get(jointKey) || []), { candidate, boxes }],
+    );
+  });
+
+  const byCarrierStation = new Map<string, RackPhysicalConnection[]>();
+  physicalConnections.forEach((connection) => {
+    const key = `${connection.carrierProfile.id}:${Math.round(connection.carrierStationMm * 10)}`;
+    byCarrierStation.set(key, [...(byCarrierStation.get(key) || []), connection]);
+  });
+
+  const directPlans: DrillTapJointPlan[] = [];
+  const bracketConnections: RackPhysicalConnection[] = [];
+  const occupiedDrillStations = new Set<string>();
+  const occupiedTappedEnds = new Set<string>();
+  Array.from(byCarrierStation.entries()).sort(([first], [second]) => first.localeCompare(second)).forEach(([, group]) => {
+    const ranked = [...group].sort((first, second) => {
+      const firstNeedsDirect = (safeBracketPlacementsByJoint.get(first.joint.key)?.length || 0) === 0;
+      const secondNeedsDirect = (safeBracketPlacementsByJoint.get(second.joint.key)?.length || 0) === 0;
+      if (firstNeedsDirect !== secondNeedsDirect) return firstNeedsDirect ? -1 : 1;
+      const firstAxis = profileBoxFromItem(first.branchProfile).axes[0];
+      const secondAxis = profileBoxFromItem(second.branchProfile).axes[0];
+      const depthPriority = Math.abs(secondAxis.z) - Math.abs(firstAxis.z);
+      if (Math.abs(depthPriority) > 0.1) return depthPriority;
+      return first.joint.key.localeCompare(second.joint.key);
+    });
+    let directJointKey: string | null = null;
+    for (const connection of ranked) {
+      const plan = drillTapJointPlan(connection.joint);
+      if (!plan) continue;
+      const drillKey = `${plan.drilledProfile.id}:${Math.round(plan.hole.positionMm * 10)}`;
+      const tapKey = `${plan.tappedProfile.id}:${plan.tappedEnd}`;
+      if (occupiedDrillStations.has(drillKey) || occupiedTappedEnds.has(tapKey)) continue;
+      directPlans.push(plan);
+      occupiedDrillStations.add(drillKey);
+      occupiedTappedEnds.add(tapKey);
+      directJointKey = connection.joint.key;
+      break;
+    }
+    ranked.forEach((connection) => {
+      if (connection.joint.key !== directJointKey) bracketConnections.push(connection);
+    });
+  });
+
+  let prepared: DIYSceneItem[] = source.map((item) => {
+    if (item.kind !== 'profile') return item;
+    const drilled = directPlans.filter((plan) => plan.drilledProfile.id === item.id);
+    const tapped = directPlans.filter((plan) => plan.tappedProfile.id === item.id);
+    if (!drilled.length && !tapped.length) return item;
+    return {
+      ...item,
+      holes: [...(item.holes || []), ...drilled.map((plan) => plan.hole)],
+      tappingLeft: item.tappingLeft || tapped.some((plan) => plan.tappedEnd < 0),
+      tappingRight: item.tappingRight || tapped.some((plan) => plan.tappedEnd > 0),
+    };
+  });
+
+  const selectedConnectorBoxes: ProfileBox[] = [];
+  const usedPairs = new Set<string>();
+  const usedPlacementKeys = new Set<string>();
+  const connectors: DIYSceneItem[] = [];
+  bracketConnections.sort((first, second) => first.joint.key.localeCompare(second.joint.key)).forEach(({ joint }) => {
+    if (usedPairs.has(joint.key)) return;
+    const placement = (safeBracketPlacementsByJoint.get(joint.key) || [])
+      .filter(({ candidate }) => !usedPlacementKeys.has(candidate.key))
+      .filter(({ boxes }) => !boxes.some((box) => (
+        selectedConnectorBoxes.some((selected) => orientedBoxesOverlap(box, selected, 0.001))
+      )))
+      .sort((first, second) => first.candidate.key.localeCompare(second.candidate.key))[0];
+    if (!placement) return;
+    connectors.push({
+      ...createItem('connector', prepared.length + connectors.length, '3030'),
+      position: placement.candidate.position.toArray().map((value) => Number((value * SCENE_SCALE).toFixed(3))) as Vec3,
+      rotation: placement.candidate.rotation,
+      lockedPosition: true,
+      autoGenerated: true,
+      attachedProfileIds: placement.candidate.targetProfileIds,
+      attachmentKey: placement.candidate.key,
+      remark: '3.0展架自动连接：贴合两根3030型材的1号角码；与同节点直锁路径互斥',
+    });
+    selectedConnectorBoxes.push(...placement.boxes);
+    usedPairs.add(joint.key);
+    usedPlacementKeys.add(placement.candidate.key);
+  });
+  prepared = [...prepared, ...connectors];
+  return prepared;
+};
+
+// Kept as one callable pipeline so the product generator and regression
+// checks always run the same add-hardware, add-fastener, resnap and validation
+// sequence.
+export const completeDisplayRackConnectionSystem = (source: DIYSceneItem[]) => {
+  const items = syncAttachedAccessories(withAutoFilledScrews(withDisplayRackConnectionSystem(source)));
+  return { items, check: validateDisplayRackConnectionSystem(items) };
+};
+
+export const inspectDisplayRackConnectionCandidates = (source: DIYSceneItem[]) => {
+  const connections = displayRackPhysicalConnections(source);
+  const probe = createItem('connector', source.length, '3030');
+  const placements = accessoryPlacementCandidates(probe, source);
+  const obstacles = displayRackConnectionObstacles(source);
+  return connections.map((connection) => {
+    const targetIds = new Set([connection.joint.first.id, connection.joint.second.id]);
+    const pairPlacements = placements.filter((candidate) => (
+      candidate.targetProfileIds.length === 2
+      && candidate.targetProfileIds.every((id) => targetIds.has(id))
+    ));
+    const safePlacements = pairPlacements.filter((candidate) => (
+      !connectorSeatBoxes(candidate).some((box) => (
+        obstacles.some((obstacle) => orientedBoxesOverlap(box, obstacle, 0.001))
+      ))
+    ));
+    return {
+      jointKey: connection.joint.key,
+      branchProfileId: connection.branchProfile.id,
+      carrierProfileId: connection.carrierProfile.id,
+      carrierStationMm: connection.carrierStationMm,
+      candidateCount: pairPlacements.length,
+      safeCandidateCount: safePlacements.length,
+    };
+  });
 };
 
 const profileAxisGap = (first: ProfileBox, second: ProfileBox): ProfileAxisGap | null => {
@@ -4282,9 +4759,12 @@ const createProfileObject = (
     const addHoleMarker = (side: ProfileSide, isEntry: boolean) => {
       const markerType: HoleType = isEntry ? hole.type : 'through';
       const grooveRadius = cellSize * 0.13;
-      const innerRadius = markerType === 'threaded'
+      const specifiedRadius = hole.diameterMm
+        ? THREE.MathUtils.clamp((hole.diameterMm / SCENE_SCALE) / 2, 0.012, grooveRadius * 0.95)
+        : undefined;
+      const innerRadius = specifiedRadius ?? (markerType === 'threaded'
         ? Math.min(0.018, grooveRadius * 0.58)
-        : Math.min(0.021, grooveRadius * 0.7);
+        : Math.min(0.021, grooveRadius * 0.7));
       const outerRadius = markerType === 'countersunk'
         ? Math.max(grooveRadius * 1.28, Math.min(0.036, cellSize * 0.18))
         : grooveRadius * 0.88;
@@ -4729,12 +5209,124 @@ const createAccessoryObject = (
     }
     hitboxSize.set(capThickness + plugDepth + 0.12, profileHeight + 0.1, profileWidth + 0.1);
   } else if (item.kind === 'shelf_support') {
-    const width = Math.max(1, item.width || 14) / SCENE_SCALE;
-    const height = Math.max(1, item.height || 8) / SCENE_SCALE;
-    const depth = Math.max(1, item.thickness || 400) / SCENE_SCALE;
-    const body = new THREE.Mesh(new THREE.BoxGeometry(width, height, depth), material);
-    group.add(body);
-    hitboxSize.set(width + 0.1, height + 0.1, depth + 0.1);
+    if (item.shelfSupportType === 'drawer_slide_pair') {
+      const pairCenterDistance = Math.max(40, item.width || 727) / SCENE_SCALE;
+      const railHeight = Math.max(20, item.height || 45) / SCENE_SCALE;
+      const railLength = Math.max(100, item.length || item.thickness || 400) / SCENE_SCALE;
+      const railThickness = 13 / SCENE_SCALE;
+      const slideSteel = new THREE.MeshStandardMaterial({
+        color: '#aeb7c2',
+        metalness: 0.9,
+        roughness: 0.22,
+      });
+      [-1, 1].forEach((side) => {
+        const sideGroup = new THREE.Group();
+        sideGroup.position.x = side * pairCenterDistance / 2;
+        const outer = new THREE.Mesh(
+          new THREE.BoxGeometry(railThickness, railHeight, railLength),
+          slideSteel,
+        );
+        const middle = new THREE.Mesh(
+          new THREE.BoxGeometry(railThickness * 0.72, railHeight * 0.7, railLength * 0.88),
+          slideSteel.clone(),
+        );
+        middle.position.z = railLength * 0.035;
+        const inner = new THREE.Mesh(
+          new THREE.BoxGeometry(railThickness * 0.44, railHeight * 0.42, railLength * 0.76),
+          slideSteel.clone(),
+        );
+        inner.position.z = railLength * 0.07;
+        sideGroup.add(outer, middle, inner);
+        [-0.32, 0, 0.32].forEach((offset) => {
+          const mountingHole = new THREE.Mesh(
+            new THREE.TorusGeometry(0.022, 0.006, 8, 24),
+            darkMetal.clone(),
+          );
+          mountingHole.rotation.y = Math.PI / 2;
+          mountingHole.position.set(side * (railThickness / 2 + 0.003), 0, railLength * offset);
+          sideGroup.add(mountingHole);
+        });
+        group.add(sideGroup);
+      });
+      hitboxSize.set(pairCenterDistance + railThickness + 0.1, railHeight + 0.1, railLength + 0.1);
+    } else if (item.shelfSupportType === 'linear_shaft') {
+      const diameter = Math.max(1, item.shaftDiameterMm || item.width || 8) / SCENE_SCALE;
+      const shaftLength = Math.max(1, item.length || item.thickness || 400) / SCENE_SCALE;
+      const shaftMaterial = new THREE.MeshStandardMaterial({
+        color: '#eef2f6',
+        metalness: 0.92,
+        roughness: 0.16,
+      });
+      const shaft = new THREE.Mesh(
+        new THREE.CylinderGeometry(diameter / 2, diameter / 2, shaftLength, 32),
+        shaftMaterial,
+      );
+      shaft.rotation.z = Math.PI / 2;
+      group.add(shaft);
+      hitboxSize.set(shaftLength + 0.08, diameter + 0.1, diameter + 0.1);
+    } else if (
+      item.shelfSupportType === 'shaft_support_sk8'
+      || item.shelfSupportType === 'shaft_support_shf8'
+    ) {
+      const isSk8 = item.shelfSupportType === 'shaft_support_sk8';
+      const overallX = Math.max(1, item.thickness || (isSk8 ? 14 : 10)) / SCENE_SCALE;
+      const overallY = Math.max(1, item.width || (isSk8 ? 42 : 43)) / SCENE_SCALE;
+      const overallZ = Math.max(1, item.height || (isSk8 ? 32.8 : 24)) / SCENE_SCALE;
+      const boreRadius = Math.max(2, (item.shaftDiameterMm || 8) / 2) / SCENE_SCALE;
+      const baseHeight = isSk8 ? 0.065 : 0.055;
+      const base = new THREE.Mesh(
+        new THREE.BoxGeometry(overallX, baseHeight, overallZ),
+        material,
+      );
+      base.position.y = -overallY * 0.42;
+      group.add(base);
+      if (isSk8) {
+        const upright = new THREE.Mesh(
+          new THREE.BoxGeometry(overallX, overallY * 0.78, overallZ * 0.46),
+          material.clone(),
+        );
+        upright.position.set(0, -overallY * 0.17, 0);
+        group.add(upright);
+      } else {
+        const flange = new THREE.Mesh(
+          new THREE.BoxGeometry(overallX, overallY * 0.92, 0.06),
+          material.clone(),
+        );
+        flange.position.set(0, -overallY * 0.12, -overallZ * 0.34);
+        group.add(flange);
+      }
+      const sleeveLength = Math.max(overallX * 1.02, 0.1);
+      const sleeve = new THREE.Mesh(
+        new THREE.CylinderGeometry(boreRadius * 1.9, boreRadius * 1.9, sleeveLength, 28),
+        material.clone(),
+      );
+      sleeve.rotation.z = Math.PI / 2;
+      group.add(sleeve);
+      const bore = new THREE.Mesh(
+        new THREE.TorusGeometry(boreRadius, Math.max(0.006, boreRadius * 0.18), 8, 28),
+        darkMetal,
+      );
+      bore.rotation.y = Math.PI / 2;
+      group.add(bore);
+      const mountingZ = overallZ * 0.3;
+      [-1, 1].forEach((direction) => {
+        const mountingHole = new THREE.Mesh(
+          new THREE.TorusGeometry(0.025, 0.006, 8, 24),
+          darkMetal.clone(),
+        );
+        mountingHole.rotation.x = Math.PI / 2;
+        mountingHole.position.set(0, -overallY * 0.42 - baseHeight / 2 - 0.002, direction * mountingZ);
+        group.add(mountingHole);
+      });
+      hitboxSize.set(overallX + 0.12, overallY + 0.1, overallZ + 0.12);
+    } else {
+      const width = Math.max(1, item.width || 14) / SCENE_SCALE;
+      const height = Math.max(1, item.height || 8) / SCENE_SCALE;
+      const depth = Math.max(1, item.thickness || 400) / SCENE_SCALE;
+      const body = new THREE.Mesh(new THREE.BoxGeometry(width, height, depth), material);
+      group.add(body);
+      hitboxSize.set(width + 0.1, height + 0.1, depth + 0.1);
+    }
   } else if (item.kind === 'foot') {
     // MayCAD LVL_FOOT_1.44.002403: compact threaded stem, lock nut and a
     // shallow cup-shaped load-spreading foot. This replaces the unrelated
@@ -8899,6 +9491,14 @@ const getItemLabel = (item: DIYSceneItem, language: Language) => {
   }
   if (item.kind === 'shelf_support') return isBoard12ShelfSupport(item)
     ? `${t.board12ShelfSupport} · ¥${WARDROBE_12MM_BOARD_SUPPORT_PRICE.toFixed(1)}`
+    : item.shelfSupportType === 'drawer_slide_pair'
+      ? `三节滚珠抽屉滑轨 · 左右1套 · ${item.length || item.thickness || 0}mm`
+      : item.shelfSupportType === 'linear_shaft'
+      ? `Ø${item.shaftDiameterMm || 8}直线光轴 · ${item.length || item.thickness || 0}mm`
+      : item.shelfSupportType === 'shaft_support_sk8'
+        ? 'SK8单轴支座 · 固定库1:1'
+        : item.shelfSupportType === 'shaft_support_shf8'
+          ? 'SHF8法兰式支座 · 固定库1:1'
     : `${t.shelfSupport} · ${item.thickness || 0}mm · ${getShelfSupportFinishLabel(item, t)}`;
   if (item.kind === 'connector') return `${t.connector} · ${item.accessoryProfileSize || '2020'}`;
   if (item.kind === 'extruded_connector') return `${t.extrudedConnector} · ${item.accessoryProfileSize || '2020'}`;
@@ -8955,6 +9555,9 @@ const projectAccessorySpecKey = (item: DIYSceneItem) => JSON.stringify({
   profileSize: item.accessoryProfileSize || '',
   colorId: item.colorId || '',
   finish: item.finish || '',
+  shelfSupportType: item.shelfSupportType || '',
+  fixedReferenceId: item.fixedReferenceId || '',
+  shaftDiameterMm: Number(item.shaftDiameterMm || 0),
   width: Number(item.width || 0),
   height: Number(item.height || 0),
   thickness: Number(item.thickness || 0),
@@ -9084,7 +9687,9 @@ const calculatePrice = (item: DIYSceneItem, user?: User | null) => {
   if (item.kind === 'shelf_support') {
     const unitPrice = isBoard12ShelfSupport(item)
       ? WARDROBE_12MM_BOARD_SUPPORT_PRICE
-      : getShelfSupportUnitPrice(item.thickness || 0, item.finish || 'oxidized');
+      : isFixedRackHardware(item)
+        ? Number(item.accessoryPrice || 0)
+        : getShelfSupportUnitPrice(item.thickness || 0, item.finish || 'oxidized');
     return Number((unitPrice * quantity).toFixed(2));
   }
   if (item.kind === 'caster') return Number((getCasterEstimatedUnitPrice(item) * quantity).toFixed(1));
@@ -9248,6 +9853,9 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({
   const navigate = useNavigate();
   const location = useLocation();
   const [items, setItems] = useState<DIYSceneItem[]>([]);
+  const [designSource, setDesignSource] = useState<DesignSourceInfo>(() => (
+    createDesignSourceInfo('manual_designer')
+  ));
   const [selectedId, setSelectedIdState] = useState<string | null>(null);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [history, setHistory] = useState<DIYSceneItem[][]>([]);
@@ -9279,6 +9887,7 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({
   const excelImportRef = useRef<HTMLInputElement>(null);
   const maycadImportRef = useRef<HTMLInputElement>(null);
   const loadedTemplateTokenRef = useRef<string | null>(null);
+  const loadedSketchUpBridgeRef = useRef<string | null>(null);
   const importConflictResolverRef = useRef<((choice: ImportConflictChoice) => void) | null>(null);
 
   const selected = items.find((item) => item.id === selectedId) || null;
@@ -9346,7 +9955,7 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({
     importConflictResolverRef.current = null;
   }, []);
 
-  const applyImportedDesign = async (incoming: DIYSceneItem[]) => {
+  const applyImportedDesign = async (incoming: DIYSceneItem[], incomingSource: DesignSourceInfo) => {
     const choice = items.length
       ? await requestImportConflictChoice('design')
       : 'replace';
@@ -9358,6 +9967,9 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({
       ? rekeyImportedDesignItems(incoming)
       : incoming;
     commit(choice === 'append' ? [...items, ...importedItems] : importedItems, null);
+    setDesignSource(choice === 'append'
+      ? mergeDesignSourceInfo(designSource, incomingSource)
+      : incomingSource);
     return importedItems;
   };
 
@@ -10028,6 +10640,70 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({
   };
 
   useEffect(() => {
+    const parameters = new URLSearchParams(location.search);
+    const descriptor = parameters.get('apsImport');
+    if (!descriptor || loadedSketchUpBridgeRef.current === descriptor) return;
+    loadedSketchUpBridgeRef.current = descriptor;
+
+    const clearImportParameter = () => {
+      const remaining = new URLSearchParams(location.search);
+      remaining.delete('apsImport');
+      const search = remaining.toString();
+      navigate({
+        pathname: location.pathname,
+        search: search ? `?${search}` : '',
+      }, { replace: true });
+    };
+    const match = /^v1\.(\d{1,5})\.([a-f0-9]{48})$/.exec(descriptor);
+    const port = match ? Number(match[1]) : 0;
+    if (!match || !Number.isInteger(port) || port < 1024 || port > 65535) {
+      showNotice(t.sketchupImportInvalid);
+      clearImportParameter();
+      return;
+    }
+
+    const controller = new AbortController();
+    const timeout = window.setTimeout(() => controller.abort(), 30000);
+    showNotice(t.sketchupImportReceiving);
+    void (async () => {
+      try {
+        const response = await fetch(`http://127.0.0.1:${port}/aps-import/${match[2]}`, {
+          cache: 'no-store',
+          credentials: 'omit',
+          mode: 'cors',
+          referrerPolicy: 'no-referrer',
+          signal: controller.signal,
+        });
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        const parsed = await response.json();
+        if (parsed?.format !== 'mengkaile-diy' || Number(parsed?.schemaVersion) !== 2) {
+          throw new Error(t.jsonImportUnsupported);
+        }
+        if (!Array.isArray(parsed.items) || !parsed.items.length || parsed.items.length > 20000) {
+          throw new Error(t.jsonImportUnsupported);
+        }
+        const importedItems = normalizeDesignItems(parsed.items as DIYSceneItem[]);
+        if (!importedItems.length) throw new Error(t.jsonImportUnsupported);
+        const appliedItems = await applyImportedDesign(
+          importedItems,
+          designSourceFromDocument(parsed, 'sketchup_plugin'),
+        );
+        if (!appliedItems) return;
+        showNotice(`${t.sketchupImportLoaded} · ${appliedItems.length}`);
+      } catch (error) {
+        console.warn('Unable to import SketchUp design over the local bridge', error);
+        const reason = error instanceof DOMException && error.name === 'AbortError'
+          ? '30s timeout'
+          : String((error as any)?.message || error);
+        showNotice(`${t.sketchupImportFailed}: ${reason}`);
+      } finally {
+        window.clearTimeout(timeout);
+        clearImportParameter();
+      }
+    })();
+  }, [location.search]);
+
+  useEffect(() => {
     const token = new URLSearchParams(location.search).get('template');
     if (!token || loadedTemplateTokenRef.current === token) return;
     loadedTemplateTokenRef.current = token;
@@ -10038,22 +10714,42 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({
       const payload = JSON.parse(raw) as ParametricTemplatePayload;
       if (payload.schemaVersion !== 1 || !Array.isArray(payload.items) || !payload.items.length) return;
       const importedItems = normalizeDesignItems(payload.items as DIYSceneItem[]);
-      setItems(syncAttachedAccessories(withAutoFilledScrews(importedItems)));
+      const rackConnectionResult = payload.source === 'display_rack_3_0'
+        ? completeDisplayRackConnectionSystem(importedItems)
+        : null;
+      const completedItems = rackConnectionResult
+        ? rackConnectionResult.items
+        : syncAttachedAccessories(withAutoFilledScrews(importedItems));
+      if (payload.source === 'display_rack_3_0') {
+        const connectionCheck = rackConnectionResult!.check;
+        if (!connectionCheck.valid) {
+          console.warn('Display rack connection self-check failed', connectionCheck.issues);
+          showNotice(`${t.rackConnectionCheckFailed}：${connectionCheck.issues[0]}`);
+          return;
+        }
+      }
+      setItems(completedItems);
+      setDesignSource(createDesignSourceInfo('parametric_template', {
+        modelName: payload.source === 'display_rack_3_0' ? '叶总展示柜 3.0' : String(payload.source || '参数化产品'),
+        sourceSummary: `参数化模板：${String(payload.source || 'unknown')}`,
+      }));
       setHistory([]);
       setFuture([]);
       setSelectedIdState(null);
       setSelectedIds([]);
       window.localStorage.removeItem(storageKey);
-      showNotice(`${t.templateLoaded} · ${importedItems.length}`);
+      showNotice(payload.source === 'display_rack_3_0'
+        ? `${t.rackConnectionCheckPassed} · ${completedItems.length}`
+        : `${t.templateLoaded} · ${completedItems.length}`);
       navigate('/diy-designer', { replace: true });
     } catch (error) {
       console.warn('Unable to load parametric furniture template', error);
     }
-  }, [location.search, navigate, t.templateLoaded]);
+  }, [location.search, navigate, t.rackConnectionCheckFailed, t.rackConnectionCheckPassed, t.templateLoaded]);
 
   const save = () => {
     downloadTextFile(
-      JSON.stringify(buildDesignDocument(items, language), null, 2),
+      JSON.stringify(buildDesignDocument(items, language, designSource), null, 2),
       'application/json;charset=utf-8',
       `mengkaile-design-${new Date().toISOString().slice(0, 10)}.json`,
     );
@@ -10063,12 +10759,13 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({
   const load = () => importRef.current?.click();
 
   const exportJson = () => {
-    const document = buildDesignDocument(items, language);
+    const document = buildDesignDocument(items, language, designSource);
     downloadTextFile(
       JSON.stringify({
         format: document.format,
         schemaVersion: document.schemaVersion,
         exportedAt: new Date().toISOString(),
+        provenance: document.provenance,
         grooveConvention: document.grooveConvention,
         production: document.production,
       }, null, 2),
@@ -10099,7 +10796,14 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({
           ));
         }
         if (!importedItems.length) throw new Error(t.jsonImportUnsupported);
-        const appliedItems = await applyImportedDesign(importedItems);
+        const appliedItems = await applyImportedDesign(
+          importedItems,
+          designSourceFromDocument(
+            parsed,
+            Array.isArray(parsed?.order_json?.items) ? 'system_order' : 'designer_json',
+            { modelName: file.name },
+          ),
+        );
         if (!appliedItems) return;
         showNotice(`${t.loaded} · ${appliedItems.length}`);
       } catch (error) {
@@ -10116,7 +10820,10 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({
       const production = parseProductionXlsx(await file.arrayBuffer());
       const importedItems = normalizeDesignItems(itemsFromProductionWorkbook(production));
       if (!importedItems.length) throw new Error('No supported parts found in workbook');
-      const appliedItems = await applyImportedDesign(importedItems);
+      const appliedItems = await applyImportedDesign(
+        importedItems,
+        createDesignSourceInfo('production_xlsx', { modelName: file.name, importedAt: new Date().toISOString() }),
+      );
       if (!appliedItems) return;
       showNotice(`${t.excelLoaded} · ${appliedItems.length}`);
     } catch (error) {
@@ -10144,7 +10851,14 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({
           ? { ...item, tappingLeft: false, tappingRight: false }
           : item
       ));
-      const appliedItems = await applyImportedDesign(importedItems);
+      const appliedItems = await applyImportedDesign(
+        importedItems,
+        createDesignSourceInfo('maycad_scene', {
+          modelName: result.sourceTitle || file.name,
+          importedAt: new Date().toISOString(),
+          warningsCount: result.warnings.length,
+        }),
+      );
       if (!appliedItems) return;
       const importedProfileIds = appliedItems
         .filter((item) => item.kind === 'profile')
@@ -10335,6 +11049,14 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({
         return { id: makeId(), product, quantity: item.quantity, config, totalPrice };
       }
       const board12ShelfSupport = isBoard12ShelfSupport(item);
+      const fixedRackHardware = isFixedRackHardware(item);
+      const fixedRackAccessory = item.shelfSupportType === 'linear_shaft'
+        ? { id: 'diy-linear-shaft-d8', code: 0, label: 'Ø8直线光轴', imageKey: '' }
+        : item.shelfSupportType === 'drawer_slide_pair'
+          ? { id: 'diy-drawer-slide-pair', code: 0, label: '三节滚珠抽屉滑轨（一套左右）', imageKey: '' }
+        : item.shelfSupportType === 'shaft_support_sk8'
+          ? { id: 'diy-shaft-support-sk8', code: 0, label: 'SK8单轴支座', imageKey: '' }
+          : { id: 'diy-shaft-support-shf8', code: 0, label: 'SHF8法兰式支座', imageKey: '' };
       const accessoryDefinition = {
         connector: { id: '1', code: 1, label: t.connector, imageKey: '1' },
         extruded_connector: { id: '2', code: 2, label: t.extrudedConnector, imageKey: '2' },
@@ -10354,7 +11076,9 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({
         end_cap: { id: 'diy-profile-end-cap', code: 0, label: t.endCap, imageKey: '' },
         shelf_support: board12ShelfSupport
           ? { id: 'diy-12mm-board-shelf-support', code: 0, label: t.board12ShelfSupport, imageKey: '' }
-          : { id: 'diy-shelf-support', code: 0, label: t.shelfSupport, imageKey: '' },
+          : fixedRackHardware
+            ? fixedRackAccessory
+            : { id: 'diy-shelf-support', code: 0, label: t.shelfSupport, imageKey: '' },
       }[item.kind as 'connector' | 'extruded_connector' | 'l_connector' | 't_connector' | 'hidden_connector' | 'tee_connector' | 'screw' | 'foot' | 'caster' | 'end_cap' | 'shelf_support'];
       const accessoryId = accessoryDefinition.id;
       const unitPrice = Number((totalPrice / Math.max(1, item.quantity)).toFixed(2));
@@ -10371,10 +11095,18 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({
       const screwLengthMm = screwOrderSpec?.lengthMm;
       const screwThreadSize = screwOrderSpec?.threadSize;
       const accessoryLengthMm = item.kind === 'shelf_support' && !board12ShelfSupport
-        ? Math.max(1, Math.round(item.thickness || 0))
+        ? Math.max(1, Math.round(item.shelfSupportType === 'linear_shaft'
+          ? item.length || item.thickness || 0
+          : item.thickness || 0))
         : undefined;
       const accessoryLineName = item.kind === 'screw'
         ? `${accessoryDefinition.label} · ${screwThreadSize}×${screwLengthMm}${screwOrderSpec?.includesElasticFastener ? ` + ${t.elasticFastener}` : ''}`
+        : item.kind === 'shelf_support' && fixedRackHardware
+          ? item.shelfSupportType === 'drawer_slide_pair'
+            ? `${accessoryDefinition.label} · ${accessoryLengthMm}mm · 单侧间隙13mm`
+            : item.shelfSupportType === 'linear_shaft'
+            ? `${accessoryDefinition.label} · Ø${item.shaftDiameterMm || 8}×${accessoryLengthMm}mm`
+            : `${accessoryDefinition.label} · 固定库1:1`
         : item.kind === 'shelf_support' && !board12ShelfSupport
           ? `${accessoryDefinition.label} · ${getShelfSupportFinishLabel(item, t)} · ${accessoryLengthMm}mm`
           : item.kind === 'caster'
@@ -10394,7 +11126,7 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({
           colorMode: item.colorId === 'natural' ? 'natural' : 'colored',
           colorId: item.colorId,
           colorName: getDesignerColorName(item.colorId, language, item.kind),
-          finish: item.kind === 'shelf_support' && !board12ShelfSupport ? (item.finish || 'oxidized') : undefined,
+          finish: item.kind === 'shelf_support' && !board12ShelfSupport && !fixedRackHardware ? (item.finish || 'oxidized') : undefined,
           shelfSupportType: item.kind === 'shelf_support' ? (item.shelfSupportType || 'linear') : undefined,
           quantities: { [accessoryId]: item.quantity },
           totalQuantity: item.quantity,
@@ -10419,6 +11151,8 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({
           accessoryLengthMm,
           accessoryWidthMm: item.kind === 'shelf_support' ? item.width : undefined,
           accessoryHeightMm: item.kind === 'shelf_support' ? item.height : undefined,
+          fixedReferenceId: item.fixedReferenceId,
+          shaftDiameterMm: item.shaftDiameterMm,
           accessoryThreadSize: item.accessoryThreadSize,
           hasBrake: item.hasBrake,
           attachedEnd: item.attachedEnd,
@@ -10435,7 +11169,14 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({
         totalPrice,
       };
     });
-    return groupDiyAccessoryCartItems(rawCartItems);
+    const sourceTaggedItems = rawCartItems.map((item) => ({
+      ...item,
+      config: {
+        ...(item.config || {}),
+        designSource,
+      },
+    }));
+    return groupDiyAccessoryCartItems(sourceTaggedItems);
   };
 
   const addDesignToCart = async () => {
@@ -11060,6 +11801,22 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({
                   <div className="mt-1 text-xl font-black">{currency}{total.toFixed(1)}</div>
                 </div>
               </div>
+              <div className="mt-3 rounded-2xl border border-emerald-100 bg-emerald-50/70 px-3 py-2.5">
+                <div className="text-[9px] font-black uppercase tracking-widest text-emerald-700">
+                  {language === 'cn' ? '模型来源' : language === 'jp' ? 'モデル出所' : 'Design source'}
+                </div>
+                <div className="mt-1 text-xs font-black text-slate-800">{getDesignSourceLabel(designSource, language)}</div>
+                {(designSource.modelName || designSource.producerVersion) && (
+                  <div className="mt-0.5 truncate text-[10px] font-bold text-slate-500">
+                    {[designSource.modelName, designSource.producerVersion ? `v${designSource.producerVersion}` : ''].filter(Boolean).join(' · ')}
+                  </div>
+                )}
+                <div className="mt-1 text-[9px] font-bold text-slate-400">
+                  {designSource.verification === 'server_verified'
+                    ? (language === 'cn' ? '官网已验证' : language === 'jp' ? 'サーバー検証済み' : 'Server verified')
+                    : (language === 'cn' ? '本地来源记录' : language === 'jp' ? 'ローカル出所記録' : 'Local provenance record')}
+                </div>
+              </div>
               <div className="mt-4 max-h-[560px] space-y-1 overflow-auto pr-1">
                 {projectDisplayGroups.map((group, index) => {
                   const item = group.representative;
@@ -11219,6 +11976,16 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({
                       <div className="text-[10px] font-black uppercase tracking-widest text-slate-400">{t.board12ShelfSupport}</div>
                       <div className="mt-1 text-lg font-black text-slate-900">¥{WARDROBE_12MM_BOARD_SUPPORT_PRICE.toFixed(1)} / pcs</div>
                       <div className="mt-1 text-[10px] font-bold leading-relaxed text-blue-700">12mm UV · 8 pcs / board</div>
+                    </div>
+                  ) : isFixedRackHardware(selected) ? (
+                    <div>
+                      <div className="text-[10px] font-black uppercase tracking-widest text-slate-400">固定数据库构件</div>
+                      <div className="mt-1 text-lg font-black text-slate-900">{getItemLabel(selected, language)}</div>
+                      <div className="mt-2 text-[10px] font-bold leading-relaxed text-blue-700">
+                        {selected.shelfSupportType === 'linear_shaft'
+                          ? '直径固定，仅长度随产品宽度计算；禁止截面缩放。'
+                          : `数据库编号：${selected.fixedReferenceId || '已登记'}；1:1定尺，禁止拉伸。`}
+                      </div>
                     </div>
                   ) : (
                     <>
@@ -11453,7 +12220,7 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({
                 </div>
               )}
 
-              {selected.kind !== 'caster' && selected.kind !== 'foot' && <div>
+              {selected.kind !== 'caster' && selected.kind !== 'foot' && !isFixedRackHardware(selected) && <div>
                 <div className="mb-2 flex items-center gap-2"><Paintbrush className="h-4 w-4 text-blue-600" /><span className="diy-field-label !mb-0">{t.color}</span></div>
                 <div className="grid grid-cols-2 gap-2">
                   {(selected.kind === 'marine_board' || (selected.kind === 'cabinet_door' && selected.doorMaterial === 'marine') ? MARINE_BOARD_COLORS : PROFILE_COLORS).map((color) => (

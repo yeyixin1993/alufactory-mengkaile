@@ -21,6 +21,7 @@ import { preloadImages } from './utils/imagePreload';
 import { exportElementToPdf } from './utils/pdfExport';
 import { summarizeDiyScrewCartItems } from './utils/cartAccessories';
 import { isValidShippingPhone, normalizeShippingPhone } from './utils/shippingPhone';
+import { getDesignSourceLabel, normalizeDesignSourceInfo } from './utils/designSource';
 
 const DIYDesigner = React.lazy(() => import('./components/DIYDesigner'));
 const FactorySheetPreviewPage = React.lazy(() => import('./components/FactorySheetPreviewPage'));
@@ -1265,12 +1266,20 @@ const Cart: React.FC<{
             {cart.map(item => {
               const profileConfig = item.config as ProfileConfig;
               const colorDef = profileConfig?.colorId ? PROFILE_COLORS.find(c => c.id === profileConfig.colorId) : null;
+              const designSource = normalizeDesignSourceInfo((item.config as any)?.designSource);
 
               return (
                 <div key={item.id} className="bg-white p-8 rounded-[2.5rem] shadow-2xl border border-slate-100 flex flex-col group hover:border-blue-200 transition-all">
                   <div className="flex justify-between items-start">
                     <div className="flex-1">
                       <h4 className="font-black text-slate-800 text-2xl mb-1">{item.product.name[language]}</h4>
+                      {designSource && (
+                        <div className="mb-2 inline-flex max-w-full items-center gap-1.5 rounded-full border border-emerald-100 bg-emerald-50 px-2.5 py-1 text-[10px] font-black text-emerald-700">
+                          <span>{language === 'cn' ? '来源' : language === 'jp' ? '出所' : 'Source'}:</span>
+                          <span className="truncate">{getDesignSourceLabel(designSource, language)}</span>
+                          {designSource.modelName && <span className="truncate text-emerald-600/70">· {designSource.modelName}</span>}
+                        </div>
+                      )}
                       <div className="mt-1 flex items-center gap-2">
                         <span className="text-xs font-bold text-slate-500 uppercase">{t.quantity}:</span>
                         <input 
@@ -2083,7 +2092,9 @@ const ProductDetail: React.FC<{
               onAddToCart={onAddToCart}
               onUpdateItem={onUpdateCartItem}
             />
-          ) : product.type === ProductType.CALLIGRAPHY_CABINET || product.type === ProductType.WARDROBE ? (
+          ) : product.type === ProductType.CALLIGRAPHY_CABINET
+            || product.type === ProductType.WARDROBE
+            || product.type === ProductType.DISPLAY_RACK_3_0 ? (
             <FurnitureConfigurator
               language={language}
               type={product.type}

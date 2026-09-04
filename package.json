@@ -8,8 +8,12 @@
     "setup:local": "python3 -m venv alufactory-backend/.venv-local && alufactory-backend/.venv-local/bin/python -m pip install -r alufactory-backend/requirements.txt",
     "dev:local": "node scripts/dev-local.mjs",
     "test:local": "node scripts/test-local.mjs",
+    "test:display-rack-connections": "vite build --ssr scripts/verify-display-rack-connections.ts --outDir .verify-dist --emptyOutDir && node .verify-dist/verify-display-rack-connections.js",
+    "test:design-source-chain": "vite build --ssr scripts/verify-design-source-chain.ts --outDir .verify-source-dist --emptyOutDir && node .verify-source-dist/verify-design-source-chain.js",
+    "test:backend-source-attribution": "python scripts/verify_backend_source_attribution.py",
     "build": "vite build",
     "package:dist": "npm run build && node scripts/package-dist.mjs",
+    "package:handoff": "pwsh -NoProfile -File scripts/package-official-handoff.ps1",
     "setup:git-hooks": "git config core.hooksPath .githooks",
     "validate:diy-json": "node scripts/validate-mengkaile-diy-json.mjs",
     "preview": "vite preview"

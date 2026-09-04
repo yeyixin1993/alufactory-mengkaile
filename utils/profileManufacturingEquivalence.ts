@@ -64,6 +64,8 @@ const normalizeHoles = (
     side: rotateProfileSide(hole.side, quarterTurns),
     positionMm: Number(hole.positionMm || 0),
     type: hole.type,
+    diameterMm: Number(hole.diameterMm || 0),
+    suppressAutoFastener: Boolean(hole.suppressAutoFastener),
     threadSize: hole.threadSize || '',
     physicalGrooveIndex: getHolePhysicalGrooveIndex(hole, variantId),
     fastenerHead: hole.fastenerHead || '',

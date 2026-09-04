@@ -11,11 +11,10 @@ module Mengkaile
         'mengkaile_json_exporter/main'
       )
       extension.description = '把 SketchUp 铝型材装配导出为萌开了 3D DIY 设计器 JSON。'
-      extension.version = '1.0.0'
+      extension.version = '1.1.0'
       extension.creator = '萌开了'
       Sketchup.register_extension(extension, true)
       file_loaded(__FILE__)
     end
   end
 end
-
