@@ -227,7 +227,7 @@ const applyImportedEndTrim = (trim: MaycadEndTrim) => {
   if (trim.side < 0) {
     trim.item.holes = (trim.item.holes || []).map((hole) => ({
       ...hole,
-      positionMm: Math.round((hole.positionMm - trim.trimMm) * 10) / 10,
+      positionMm: Math.round(hole.positionMm - trim.trimMm),
     }));
   }
 };

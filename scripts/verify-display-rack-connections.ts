@@ -20,6 +20,45 @@ if (JSON.stringify(actualSlidePrices) !== JSON.stringify(expectedSlidePrices)) {
   throw new Error(`抽屉滑轨价格表不匹配：${JSON.stringify(actualSlidePrices)}`);
 }
 
+const normalizedLegacyMeasurements = normalizeDesignItems([
+  {
+    id: 'legacy-profile',
+    kind: 'profile',
+    name: '3030',
+    variantId: '3030',
+    length: 2000,
+    position: [0, 0, 0],
+    rotation: [0, 0, 0],
+    colorId: 'natural',
+    quantity: 1,
+    holes: [{
+      id: 'legacy-hole',
+      side: 'A',
+      positionMm: 1287.37,
+      type: 'through',
+      grooveIndex: 0,
+      physicalGrooveIndex: 0,
+    }],
+  },
+  {
+    id: 'legacy-board',
+    kind: 'marine_board',
+    name: 'Marine board',
+    width: 600.5,
+    height: 400.49,
+    thickness: 18,
+    position: [0, 0, 0],
+    rotation: [0, 0, 0],
+    colorId: 'wood_natural',
+    quantity: 1,
+  },
+] as never);
+if (normalizedLegacyMeasurements[0].holes?.[0]?.positionMm !== 1287
+    || normalizedLegacyMeasurements[1].width !== 601
+    || normalizedLegacyMeasurements[1].height !== 400) {
+  throw new Error('Legacy manufacturing measurements were not rounded to whole millimetres');
+}
+
 const cases = [
   DISPLAY_RACK_3_BASELINE,
   {
@@ -50,7 +89,18 @@ const cases = [
 ];
 
 cases.forEach((parameters, index) => {
+  const caseName = `case ${index + 1}`;
   const payload = buildDisplayRack3Template(parameters);
+  const fractionalHolePositions = payload.items
+    .filter((item) => item.kind === 'profile')
+    .flatMap((item) => item.holes || [])
+    .filter((hole) => !Number.isInteger(hole.positionMm));
+  const fractionalPanelDimensions = payload.items
+    .filter((item) => item.kind === 'marine_board')
+    .filter((item) => !Number.isInteger(item.width) || !Number.isInteger(item.height));
+  if (fractionalHolePositions.length || fractionalPanelDimensions.length) {
+    throw new Error(`${caseName}: manufacturing dimensions must be whole millimetres`);
+  }
   const expectedSlide = DISPLAY_RACK_COMPONENT_CATALOG.DRAWER_SLIDE_PAIR.lengthOptions
     .find((option) => option.lengthMm <= parameters.depthMm - 50)
     || DISPLAY_RACK_COMPONENT_CATALOG.DRAWER_SLIDE_PAIR.lengthOptions.at(-1)!;

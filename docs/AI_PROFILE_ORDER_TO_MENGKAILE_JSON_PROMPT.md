@@ -155,6 +155,7 @@ colorId 只能使用下列稳定 ID：
 【孔位与端面攻丝】
 
 - holes 是当前型材自身的加工数组。
+- positionMm 必须按四舍五入写成整数毫米；工厂不能执行小数毫米孔位。
 - positionMm 是从型材局部 -X 左端面开始、沿型材长度方向测量的距离，必须满足 5 <= positionMm <= length-5。
 - side 只能是 A、B、C、D。
 - type 只能是：through（通孔）、countersunk（沉头孔）、threaded（螺纹孔）。
@@ -181,7 +182,7 @@ colorId 只能使用下列稳定 ID：
 - 海洋板 kind="marine_board"。
 - 板材在 rotation=[0,0,0] 时位于自身局部 XY 平面，厚度沿局部 Z。
 - position 仍是板材中心。
-- width、height、thickness 都是 mm。
+- width、height、thickness 都是 mm；海洋板的 width 和 height 必须按四舍五入写成整数毫米。
 - 海洋板原色使用 colorId="wood_natural"；其他板材颜色使用上面的铝材 colorId。
 
 板材示例：

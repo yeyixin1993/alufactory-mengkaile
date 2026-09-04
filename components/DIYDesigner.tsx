@@ -1155,7 +1155,31 @@ const isFixedRackHardware = (item: Pick<DIYSceneItem, 'kind' | 'shelfSupportType
   )
 );
 
-export const normalizeDesignItems = (source: DIYSceneItem[]) => source.map((item) => {
+const normalizeManufacturingMeasurements = (source: DIYSceneItem[]) => source.map((item) => {
+  const profileLengthMm = Math.max(10, Math.round(Number(item.length || 1000)));
+  const maximumHolePositionMm = Math.max(5, profileLengthMm - 5);
+  const isMarineMaterial = item.kind === 'marine_board'
+    || (item.kind === 'cabinet_door' && item.doorMaterial === 'marine');
+  return {
+    ...item,
+    ...(isMarineMaterial ? {
+      width: Math.max(1, Math.round(Number(item.width || 1))),
+      height: Math.max(1, Math.round(Number(item.height || 1))),
+    } : {}),
+    holes: item.kind === 'profile'
+      ? (item.holes || []).map((hole) => ({
+        ...hole,
+        positionMm: THREE.MathUtils.clamp(
+          Math.round(Number(hole.positionMm || 0)),
+          5,
+          maximumHolePositionMm,
+        ),
+      }))
+      : item.holes,
+  };
+});
+
+export const normalizeDesignItems = (source: DIYSceneItem[]) => normalizeManufacturingMeasurements(source).map((item) => {
   const shelfSupportFinish: ProfileFinish = item.finish
     || (item.colorId === 'natural' ? 'oxidized' : 'powder');
   const connectionDimensions = isConnectionAccessoryKind(item.kind)
@@ -1363,7 +1387,7 @@ const mapSystemOrderProfileItemsToDesignerItems = (
       suppressAutoFastener: rawHole?.suppressAutoFastener === true,
       grooveIndex: physicalGrooveIndex,
       physicalGrooveIndex,
-      positionMm: Math.min(length - 5, Math.max(5, Math.round(rawPosition * 10) / 10)),
+      positionMm: Math.min(length - 5, Math.max(5, Math.round(rawPosition))),
     } satisfies DrillHole];
   });
 
@@ -9931,7 +9955,10 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({
   const currency = language === 'cn' ? '￥' : '$';
 
   const commit = (next: DIYSceneItem[], selection = selectedId) => {
-    const synchronized = syncLinkedScrews(syncAttachedAccessories(next));
+    const manufacturingReady = normalizeManufacturingMeasurements(next);
+    const synchronized = normalizeManufacturingMeasurements(
+      syncLinkedScrews(syncAttachedAccessories(manufacturingReady)),
+    );
     setHistory((current) => [...current.slice(-39), cloneItems(items)]);
     setFuture([]);
     setItems(synchronized);
@@ -10730,7 +10757,7 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({
           return;
         }
       }
-      setItems(completedItems);
+      setItems(normalizeManufacturingMeasurements(completedItems));
       setDesignSource(createDesignSourceInfo('parametric_template', {
         modelName: payload.source === 'display_rack_3_0' ? '叶总展示柜 3.0' : String(payload.source || '参数化产品'),
         sourceSummary: `参数化模板：${String(payload.source || 'unknown')}`,

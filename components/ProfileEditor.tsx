@@ -36,6 +36,11 @@ const MAX_PROFILE_LENGTH_MM = 3000;
 const PROFILE_VIP_DISCOUNT_PER_METER = 2;
 const PROFILE_VIP_PLUS_DISCOUNT_PER_METER = 4;
 
+const roundHolePositionsToWholeMm = (holes: DrillHole[] = []) => holes.map((hole) => ({
+  ...hole,
+  positionMm: Math.round(Number(hole.positionMm || 0)),
+}));
+
 const normalizeTappingForVariant = (
   variantId: string,
   tapping?: TappingConfig,
@@ -68,7 +73,7 @@ const ProfileEditor: React.FC<ProfileEditorProps> = ({ language, product, user, 
     initialConfig?.variantId || '2020',
     initialConfig?.tapping,
   ));
-  const [holes, setHoles] = useState<DrillHole[]>(initialConfig?.holes || []);
+  const [holes, setHoles] = useState<DrillHole[]>(() => roundHolePositionsToWholeMm(initialConfig?.holes || []));
   const [miterCut, setMiterCut] = useState<MiterCutConfig>(initialConfig?.miterCut || { left: { enabled: false, direction: 'up', side: 'AC' }, right: { enabled: false, direction: 'up', side: 'AC' } });
   const [showMiterCut, setShowMiterCut] = useState<boolean>(!!(initialConfig?.miterCut?.left?.enabled || initialConfig?.miterCut?.right?.enabled));
   const [remark, setRemark] = useState<string>(String(initialConfig?.remark || ''));
@@ -165,7 +170,7 @@ const ProfileEditor: React.FC<ProfileEditorProps> = ({ language, product, user, 
   };
 
   const addHole = () => {
-    const pos = parseFloat(newHolePos);
+    const pos = Math.round(parseFloat(newHolePos));
     if (!isNaN(pos) && pos >= 0 && pos < length) {
       setHoles([
         ...holes,
@@ -194,7 +199,7 @@ const ProfileEditor: React.FC<ProfileEditorProps> = ({ language, product, user, 
       .slice(0, 10)
       .map((raw) => raw.trim())
       .filter((raw) => raw !== '')
-      .map((raw) => Number(raw))
+      .map((raw) => Math.round(Number(raw)))
       .filter((num) => Number.isFinite(num) && num >= 0 && num < length);
 
     if (validPositions.length === 0) {
@@ -204,7 +209,7 @@ const ProfileEditor: React.FC<ProfileEditorProps> = ({ language, product, user, 
     const newItems: DrillHole[] = validPositions.map((pos) => ({
       id: Math.random().toString(36).substr(2, 9),
       side: selectedSide,
-      positionMm: Number(pos),
+      positionMm: pos,
       type: newHoleType,
       threadSize: newHoleType === 'threaded' ? threadSize : undefined,
       grooveIndex: selectedGrooveIndex,
@@ -240,7 +245,8 @@ const ProfileEditor: React.FC<ProfileEditorProps> = ({ language, product, user, 
   const addToBatch = () => {
     if (length <= MIN_PROFILE_LENGTH_MM) { alert(t.minLengthDangerous); return; }
     if (length > selectedColor.maxLength) { alert(t.maxLengthExceeded); return; }
-    const sortedHoles = [...holes].sort((a, b) => a.side.localeCompare(b.side) || a.positionMm - b.positionMm);
+    const sortedHoles = roundHolePositionsToWholeMm(holes)
+      .sort((a, b) => a.side.localeCompare(b.side) || a.positionMm - b.positionMm);
     // If miter cut toggle is off, pass no miter cut
     const effectiveMiterCut = showMiterCut ? miterCut : defaultMiterCut;
     const unitPrice = calculateItemUnitPrice(length, sortedHoles, tapping, effectiveMiterCut);
@@ -703,7 +709,7 @@ const ProfileEditor: React.FC<ProfileEditorProps> = ({ language, product, user, 
                         <td className="px-4 text-right">
                           <div className="flex gap-1 justify-end opacity-0 group-hover:opacity-100 transition-opacity">
                             <button onClick={() => duplicateDraftItem(item)} title={t.copy} className="p-2 text-slate-400 hover:text-emerald-600 hover:bg-white rounded-xl transition-all"><Copy className="w-4 h-4"/></button>
-                            <button onClick={() => { setEditingId(item.id); setVariantId(item.config.variantId); setLength(item.config.length); setHoles(item.config.holes); setTapping(normalizeTappingForVariant(item.config.variantId, item.config.tapping)); setFinish(item.config.finish); setColorId(item.config.colorId); setRemark(item.config.remark || ''); const mc = item.config.miterCut || { left: { enabled: false, direction: 'up', side: 'AC' }, right: { enabled: false, direction: 'up', side: 'AC' } }; setMiterCut(mc); setShowMiterCut(!!(mc.left?.enabled || mc.right?.enabled)); }} className="p-2 text-slate-400 hover:text-blue-600 hover:bg-white rounded-xl transition-all"><Pencil className="w-4 h-4"/></button>
+                            <button onClick={() => { setEditingId(item.id); setVariantId(item.config.variantId); setLength(item.config.length); setHoles(roundHolePositionsToWholeMm(item.config.holes)); setTapping(normalizeTappingForVariant(item.config.variantId, item.config.tapping)); setFinish(item.config.finish); setColorId(item.config.colorId); setRemark(item.config.remark || ''); const mc = item.config.miterCut || { left: { enabled: false, direction: 'up', side: 'AC' }, right: { enabled: false, direction: 'up', side: 'AC' } }; setMiterCut(mc); setShowMiterCut(!!(mc.left?.enabled || mc.right?.enabled)); }} className="p-2 text-slate-400 hover:text-blue-600 hover:bg-white rounded-xl transition-all"><Pencil className="w-4 h-4"/></button>
                             <button onClick={() => setDraftProfiles(draftProfiles.filter(x => x.id !== item.id))} className="p-2 text-slate-400 hover:text-red-500 hover:bg-white rounded-xl transition-all"><Trash2 className="w-4 h-4"/></button>
                           </div>
                         </td>

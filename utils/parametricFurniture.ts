@@ -132,7 +132,7 @@ const createHoles = (
 ): DrillHole[] => positions.map((positionMm) => ({
   id: id('hole'),
   side,
-  positionMm,
+  positionMm: Math.round(positionMm),
   type: options.type,
   threadSize: options.threadSize,
   fastenerHead: options.fastenerHead,
@@ -540,11 +540,10 @@ export const buildWardrobeTemplate = (
     const endX = boundaryXs[columnIndex + 1];
     const clearLength = Number((endX - startX - 20).toFixed(3));
     // Production board dimensions must be whole millimetres. Keep the
-    // surrounding frame centred at its exact parametric coordinates, but
-    // always round the cut board down so an equal-column division can never
-    // produce an oversize panel.
-    const boardLength = Math.max(1, Math.floor(clearLength - 2));
-    const boardDepth = Math.max(1, Math.floor(clearDepth - 2));
+    // surrounding frame centred at its exact parametric coordinates and use
+    // the factory-wide nearest-millimetre rule for each cut dimension.
+    const boardLength = Math.max(1, Math.round(clearLength - 2));
+    const boardDepth = Math.max(1, Math.round(clearDepth - 2));
     const boardCenterX = Number(((startX + endX) / 2).toFixed(3));
     const boardRemark = `衣柜${frameLabel}第${columnIndex + 1}/${columns}列12mm UV内嵌层板；相对四边2020框内净空长宽各减2mm，四周各留1mm缝隙`;
     const board = {

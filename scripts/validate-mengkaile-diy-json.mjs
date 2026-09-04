@@ -59,6 +59,10 @@ const profileIds = new Set();
   if (!finiteVec3(item.position)) errors.push(`${label}.position must contain three finite numbers.`);
   if (!finiteVec3(item.rotation)) errors.push(`${label}.rotation must contain three finite numbers.`);
   if (!Number.isInteger(item.quantity) || item.quantity < 1) errors.push(`${label}.quantity must be a positive integer.`);
+  if (item.kind === 'marine_board'
+      && (!Number.isInteger(item.width) || !Number.isInteger(item.height))) {
+    errors.push(`${label}.width and .height must be whole millimetres for marine board.`);
+  }
 
   if (item.kind !== 'profile') return;
   profileIds.add(item.id);
@@ -80,6 +84,8 @@ const profileIds = new Set();
     if (!HOLE_TYPES.has(hole.type)) errors.push(`${holeLabel}.type is unsupported.`);
     if (!Number.isFinite(hole.positionMm) || hole.positionMm < 5 || hole.positionMm > item.length - 5) {
       errors.push(`${holeLabel}.positionMm is outside the profile.`);
+    } else if (!Number.isInteger(hole.positionMm)) {
+      errors.push(`${holeLabel}.positionMm must be a whole millimetre.`);
     }
     if (!Number.isInteger(hole.physicalGrooveIndex) || hole.physicalGrooveIndex < 0) {
       errors.push(`${holeLabel}.physicalGrooveIndex must be a non-negative integer.`);
@@ -111,4 +117,3 @@ if (errors.length) {
 }
 
 console.log(`Validation passed: ${document.items.length} item(s), ${profileIds.size} profile(s), ${warnings.length} warning(s).`);
-

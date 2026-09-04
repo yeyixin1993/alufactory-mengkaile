@@ -621,8 +621,25 @@ const FactorySheet: React.FC<FactorySheetProps> = ({ cart, user, language, order
         {nonScrewDisplayCart.map((item, idx) => {
            const isProfile = item.product.type === ProductType.PROFILE;
             const isAccessory = item.product.type === ProductType.ACCESSORY;
-           const cfg = (item.config || {}) as any;
-           const profileCfg = cfg as ProfileConfig;
+           const rawCfg = (item.config || {}) as any;
+           const isMarineMaterial = item.product.type === ProductType.MARINE_BOARD
+             || rawCfg.doorMaterial === 'marine';
+           const cfg = {
+             ...rawCfg,
+             ...(isMarineMaterial ? {
+               width: Math.max(1, Math.round(Number(rawCfg.width || 1))),
+               height: Math.max(1, Math.round(Number(rawCfg.height || 1))),
+             } : {}),
+           } as any;
+           const profileCfg = {
+             ...cfg,
+             holes: Array.isArray(cfg.holes)
+               ? cfg.holes.map((hole: any) => ({
+                 ...hole,
+                 positionMm: Math.round(Number(hole.positionMm || 0)),
+               }))
+               : [],
+           } as ProfileConfig;
            const colorDef = isProfile ? PROFILE_COLORS.find(c => c.id === profileCfg.colorId) : null;
            
            // Correctly translate finish to Chinese terms as requested
