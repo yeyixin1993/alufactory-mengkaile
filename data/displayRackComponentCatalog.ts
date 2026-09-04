@@ -8,16 +8,22 @@ export interface FixedDisplayRackComponent {
   source: string;
   geometryStatus: 'source_exact_1_to_1' | 'parametric_by_length';
   scalePolicy: 'no_stretch' | 'length_only';
-  unitPriceStatus: 'pending';
+  unitPriceStatus: 'confirmed';
+  unitPriceCny?: number;
+  priceUnit: 'meter' | 'piece' | 'pair';
   pairConfiguration?: 'left_and_right';
   sideClearanceMm?: number;
   railHeightMm?: number;
-  availableLengthsMm?: readonly number[];
+  lengthOptions?: readonly {
+    lengthMm: number;
+    unitPriceCny: number;
+  }[];
 }
 
 // Fixed component records used by the approved 3.0 display-rack product.
 // Dimensions and identifiers mirror the verified SketchUp component library.
-// Prices remain explicitly pending instead of inventing order data.
+// Prices were confirmed by the site owner. All listed slide lengths remain
+// available to the configurator, BOM, cart and PDF flow.
 export const DISPLAY_RACK_COMPONENT_CATALOG = {
   SHAFT_8: {
     id: 'LINEAR_SHAFT_D8_G6',
@@ -28,7 +34,9 @@ export const DISPLAY_RACK_COMPONENT_CATALOG = {
     source: '叶总展示柜2026.9.1。3.0.skp',
     geometryStatus: 'parametric_by_length',
     scalePolicy: 'length_only',
-    unitPriceStatus: 'pending',
+    unitPriceStatus: 'confirmed',
+    unitPriceCny: 10,
+    priceUnit: 'meter',
   },
   SK8: {
     id: 'MODEL_REF_SK8_SUPPORT',
@@ -40,7 +48,9 @@ export const DISPLAY_RACK_COMPONENT_CATALOG = {
     source: '固定数据库／原模型组#119',
     geometryStatus: 'source_exact_1_to_1',
     scalePolicy: 'no_stretch',
-    unitPriceStatus: 'pending',
+    unitPriceStatus: 'confirmed',
+    unitPriceCny: 2,
+    priceUnit: 'piece',
   },
   SHF8: {
     id: 'MODEL_REF_SHF8_SUPPORT',
@@ -52,7 +62,9 @@ export const DISPLAY_RACK_COMPONENT_CATALOG = {
     source: '固定数据库／原模型组#51',
     geometryStatus: 'source_exact_1_to_1',
     scalePolicy: 'no_stretch',
-    unitPriceStatus: 'pending',
+    unitPriceStatus: 'confirmed',
+    unitPriceCny: 2,
+    priceUnit: 'piece',
   },
   DRAWER_SLIDE_PAIR: {
     id: 'DRAWER_SLIDE_PAIR_13MM',
@@ -62,10 +74,22 @@ export const DISPLAY_RACK_COMPONENT_CATALOG = {
     source: '插件既有抽屉规则：单侧安装间隙13mm；长度按柜深匹配标准规格',
     geometryStatus: 'parametric_by_length',
     scalePolicy: 'length_only',
-    unitPriceStatus: 'pending',
+    unitPriceStatus: 'confirmed',
+    priceUnit: 'pair',
     pairConfiguration: 'left_and_right',
     sideClearanceMm: 13,
     railHeightMm: 45,
-    availableLengthsMm: [700, 650, 600, 550, 500, 450, 400, 350, 300, 250],
+    lengthOptions: [
+      { lengthMm: 700, unitPriceCny: 42 },
+      { lengthMm: 650, unitPriceCny: 40 },
+      { lengthMm: 600, unitPriceCny: 38 },
+      { lengthMm: 550, unitPriceCny: 36 },
+      { lengthMm: 500, unitPriceCny: 34 },
+      { lengthMm: 450, unitPriceCny: 32 },
+      { lengthMm: 400, unitPriceCny: 30 },
+      { lengthMm: 350, unitPriceCny: 28 },
+      { lengthMm: 300, unitPriceCny: 26 },
+      { lengthMm: 250, unitPriceCny: 24 },
+    ],
   },
 } as const satisfies Record<string, FixedDisplayRackComponent>;

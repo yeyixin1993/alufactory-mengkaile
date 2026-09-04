@@ -180,10 +180,10 @@ const ALUMINUM_PLATE_PRICE: Record<number, number> = { 1: 500, 2: 700, 3: 1000, 
 const PEGBOARD_PRICE: Record<number, number> = { 1: 780, 2: 1080, 3: 1380, 4: 1680, 5: 1980 };
 const MARINE_BOARD_PRICE: Record<number, number> = { 12: 155, 18: 200 };
 const MARINE_COLOR_SURCHARGE = 100;
-const CASTER_ESTIMATED_BASE_PRICE = 18;
+const CASTER_BASE_UNIT_PRICE = 18;
 const CASTER_BRAKE_SURCHARGE = 4;
 const CASTER_THREAD_SURCHARGE: Record<DIYAccessoryThreadSize, number> = { M6: 0, M8: 0, M10: 2, M12: 4 };
-const FOOT_ESTIMATED_PRICE = 12;
+const FOOT_UNIT_PRICE = 10;
 const END_CAP_FALLBACK_ESTIMATED_PRICE = { natural: 6, colored: 8 };
 const DOOR_HINGE_UNIT_PRICE = 10;
 const VIP_PLUS_ALUMINUM_DOOR_PRICE = 420;
@@ -1045,8 +1045,8 @@ const makeId = () => `diy_${Date.now().toString(36)}_${Math.random().toString(36
 
 const cloneItems = (items: DIYSceneItem[]) => JSON.parse(JSON.stringify(items)) as DIYSceneItem[];
 
-function getCasterEstimatedUnitPrice(item: Pick<DIYSceneItem, 'accessoryThreadSize' | 'hasBrake'>) {
-  return CASTER_ESTIMATED_BASE_PRICE
+function getCasterUnitPrice(item: Pick<DIYSceneItem, 'accessoryThreadSize' | 'hasBrake'>) {
+  return CASTER_BASE_UNIT_PRICE
     + CASTER_THREAD_SURCHARGE[item.accessoryThreadSize || 'M8']
     + (item.hasBrake ? CASTER_BRAKE_SURCHARGE : 0);
 }
@@ -1171,7 +1171,7 @@ export const normalizeDesignItems = (source: DIYSceneItem[]) => source.map((item
       accessoryThreadSize: item.accessoryThreadSize || 'M8',
       hasBrake: Boolean(item.hasBrake),
       colorId: 'black',
-      accessoryPrice: getCasterEstimatedUnitPrice(item),
+      accessoryPrice: getCasterUnitPrice(item),
     } : {}),
     ...(item.kind === 'foot' ? {
       width: 40,
@@ -1179,7 +1179,7 @@ export const normalizeDesignItems = (source: DIYSceneItem[]) => source.map((item
       thickness: 40,
       accessoryThreadSize: 'M8' as DIYAccessoryThreadSize,
       colorId: 'natural',
-      accessoryPrice: FOOT_ESTIMATED_PRICE,
+      accessoryPrice: FOOT_UNIT_PRICE,
     } : {}),
     ...(item.kind === 'end_cap' ? {
       thickness: 3,
@@ -1227,6 +1227,7 @@ const buildProductionData = (items: DIYSceneItem[], language: Language) => {
     shelfSupportType: item.shelfSupportType,
     fixedReferenceId: item.fixedReferenceId,
     shaftDiameterMm: item.shaftDiameterMm,
+    accessoryPrice: item.accessoryPrice,
     accessoryProfileSize: item.accessoryProfileSize,
     accessoryThreadSize: item.accessoryThreadSize,
     hasBrake: item.hasBrake,
@@ -1698,7 +1699,7 @@ const createItem = (kind: DIYItemKind, index = 0, variantId?: string): DIYSceneI
       width: 40,
       height: 45,
       thickness: 40,
-      price: FOOT_ESTIMATED_PRICE,
+      price: FOOT_UNIT_PRICE,
     },
     caster: {
       name: 'Threaded-stem caster',
@@ -1706,7 +1707,7 @@ const createItem = (kind: DIYItemKind, index = 0, variantId?: string): DIYSceneI
       width: 50,
       height: 75,
       thickness: 45,
-      price: CASTER_ESTIMATED_BASE_PRICE,
+      price: CASTER_BASE_UNIT_PRICE,
     },
     end_cap: {
       name: 'Aluminum profile end cap',
@@ -1845,6 +1846,7 @@ const itemsFromProductionWorkbook = (production: ProductionWorkbookData): DIYSce
       ? part.fixedReferenceId
       : base.fixedReferenceId,
     shaftDiameterMm: part.shaftDiameterMm ?? base.shaftDiameterMm,
+    accessoryPrice: part.accessoryPrice ?? base.accessoryPrice,
     colorId: workbookColorId(part, kind),
     quantity: Math.max(1, Math.round(part.quantity || 1)),
     position,
@@ -9692,8 +9694,8 @@ const calculatePrice = (item: DIYSceneItem, user?: User | null) => {
         : getShelfSupportUnitPrice(item.thickness || 0, item.finish || 'oxidized');
     return Number((unitPrice * quantity).toFixed(2));
   }
-  if (item.kind === 'caster') return Number((getCasterEstimatedUnitPrice(item) * quantity).toFixed(1));
-  if (item.kind === 'foot') return Number((FOOT_ESTIMATED_PRICE * quantity).toFixed(1));
+  if (item.kind === 'caster') return Number((getCasterUnitPrice(item) * quantity).toFixed(1));
+  if (item.kind === 'foot') return Number((FOOT_UNIT_PRICE * quantity).toFixed(1));
   if (item.kind === 'end_cap') return Number((getEndCapUnitPrice(item) * quantity).toFixed(1));
   const standardAccessoryPrice = getStandardAccessoryUnitPrice(item);
   return Number((((standardAccessoryPrice ?? item.accessoryPrice) || 0) * quantity).toFixed(1));
@@ -11981,6 +11983,7 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({
                     <div>
                       <div className="text-[10px] font-black uppercase tracking-widest text-slate-400">固定数据库构件</div>
                       <div className="mt-1 text-lg font-black text-slate-900">{getItemLabel(selected, language)}</div>
+                      <div className="mt-1 text-sm font-black text-emerald-700">{t.confirmedPrice}：{currency}{Number(selected.accessoryPrice || 0).toFixed(2)}</div>
                       <div className="mt-2 text-[10px] font-bold leading-relaxed text-blue-700">
                         {selected.shelfSupportType === 'linear_shaft'
                           ? '直径固定，仅长度随产品宽度计算；禁止截面缩放。'
@@ -12037,7 +12040,7 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({
                         const accessoryThreadSize = event.target.value as DIYAccessoryThreadSize;
                         updateSelected({
                           accessoryThreadSize,
-                          accessoryPrice: getCasterEstimatedUnitPrice({ accessoryThreadSize, hasBrake: selected.hasBrake }),
+                          accessoryPrice: getCasterUnitPrice({ accessoryThreadSize, hasBrake: selected.hasBrake }),
                         });
                       }}
                       className="diy-select"
@@ -12053,7 +12056,7 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({
                         const hasBrake = event.target.value === 'brake';
                         updateSelected({
                           hasBrake,
-                          accessoryPrice: getCasterEstimatedUnitPrice({ accessoryThreadSize: selected.accessoryThreadSize, hasBrake }),
+                          accessoryPrice: getCasterUnitPrice({ accessoryThreadSize: selected.accessoryThreadSize, hasBrake }),
                         });
                       }}
                       className="diy-select"
@@ -12063,7 +12066,7 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({
                     </select>
                   </label>
                   <p className="mt-3 rounded-xl bg-white px-3 py-2 text-[10px] font-black text-slate-600">{t.fixedBlack}</p>
-                  <p className="mt-3 rounded-xl bg-amber-50 px-3 py-2 text-[10px] font-black text-amber-700">{t.estimatedPrice}：{currency}{getCasterEstimatedUnitPrice(selected)} · {t.pricePending}</p>
+                  <p className="mt-3 rounded-xl bg-emerald-50 px-3 py-2 text-[10px] font-black text-emerald-700">{t.confirmedPrice}：{currency}{getCasterUnitPrice(selected)}</p>
                 </div>
               )}
 
@@ -12082,7 +12085,7 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({
                   />
                   <p className="mt-3 rounded-xl bg-white px-3 py-2 text-[10px] font-black leading-relaxed text-slate-600">{t.footReferenceSpec}</p>
                   <p className="mt-2 rounded-xl bg-white px-3 py-2 text-[10px] font-black text-slate-600">{t.fixedGold}</p>
-                  <p className="mt-2 rounded-xl bg-amber-50 px-3 py-2 text-[10px] font-black text-amber-700">{t.estimatedPrice}：{currency}{FOOT_ESTIMATED_PRICE} · {t.pricePending}</p>
+                  <p className="mt-2 rounded-xl bg-emerald-50 px-3 py-2 text-[10px] font-black text-emerald-700">{t.confirmedPrice}：{currency}{FOOT_UNIT_PRICE}</p>
                 </div>
               )}
 
