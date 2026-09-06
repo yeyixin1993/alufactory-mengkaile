@@ -5,6 +5,7 @@ import { PROFILE_COLORS, getProfileColorPhotoSrc } from '../constants';
 import { ACCESSORY_BULK_THRESHOLD, END_CAP_PRICES } from '../utils/accessoryPricing';
 import { normalizeMembershipLevel } from '../utils/membership';
 import { ApiService } from '../services/apiService';
+import { SHOW_STOREFRONT_INVENTORY } from '../utils/storefrontFeatures';
 
 type AccessoryProfileSize = '1515' | '2020' | '3030' | '4040';
 type AccessoryColorMode = 'natural' | 'colored';
@@ -315,7 +316,7 @@ const AccessoryQuoteEditor: React.FC<{
 
   useEffect(() => {
     let active = true;
-    if (colorMode !== 'natural') {
+    if (!SHOW_STOREFRONT_INVENTORY || colorMode !== 'natural') {
       setInventoryByAccessoryId({});
       setInventoryLoaded(false);
       return () => { active = false; };
@@ -618,7 +619,7 @@ const AccessoryQuoteEditor: React.FC<{
                 <th className="p-2 border border-slate-200">{ui.image}</th>
                 <th className="p-2 border border-slate-200">{ui.unit}</th>
                 <th className="p-2 border border-slate-200">{ui.bulk}</th>
-                <th className="p-2 border border-slate-200">{ui.stock}</th>
+                {SHOW_STOREFRONT_INVENTORY && <th className="p-2 border border-slate-200">{ui.stock}</th>}
                 <th className="p-2 border border-slate-200">{ui.qty}</th>
                 <th className="p-2 border border-slate-200">{ui.subtotal}</th>
               </tr>
@@ -666,7 +667,7 @@ const AccessoryQuoteEditor: React.FC<{
                     </td>
                     <td className="p-2 border border-slate-100">¥{(colorMode === 'natural' ? p.natural : p.colored).toFixed(2)}</td>
                     <td className="p-2 border border-slate-100">¥{(colorMode === 'natural' ? p.naturalBulk : p.coloredBulk).toFixed(2)}</td>
-                    <td className="p-2 border border-slate-100">
+                    {SHOW_STOREFRONT_INVENTORY && <td className="p-2 border border-slate-100">
                       {colorMode === 'natural' && inventoryLoaded ? (
                         <span
                           data-testid={`accessory-inventory-${def.id}`}
@@ -675,7 +676,7 @@ const AccessoryQuoteEditor: React.FC<{
                           {inventoryByAccessoryId[def.id] || 0} {ui.pieces}
                         </span>
                       ) : colorMode === 'natural' ? <span className="text-slate-400">-</span> : null}
-                    </td>
+                    </td>}
                     <td className="p-2 border border-slate-100">
                       <input
                         type="number"

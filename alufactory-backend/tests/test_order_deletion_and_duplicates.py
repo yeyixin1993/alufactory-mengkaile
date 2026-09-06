@@ -116,6 +116,38 @@ class OrderDeletionAndDuplicateTest(unittest.TestCase):
         )
         self.assertEqual(pending_delete.status_code, 200, pending_delete.get_json())
 
+    def test_address_deletion_requires_owner_and_preserves_order_snapshot(self):
+        address = self.client.post(
+            f'/api/users/{self.user_id}/addresses', headers=self.headers,
+            json={'recipient_name': '测试客户', 'phone': '13900000001',
+                  'province': '上海', 'detail': '测试地址1号'},
+        )
+        self.assertEqual(address.status_code, 201)
+        address_id = address.get_json()['address']['id']
+        endpoint = f'/api/users/addresses/{address_id}'
+        order = self.client.post('/api/orders', headers=self.headers, json=self._order_payload())
+        self.assertEqual(order.status_code, 201)
+        order_id = order.get_json()['order']['id']
+        with self.app.app_context():
+            order_before = db.session.get(Order, order_id).to_dict()
+
+        other = self.client.post('/api/auth/register', json={
+            'username': 'other-address-user', 'phone': '13900000002', 'password': 'test-password',
+        })
+        self.assertEqual(other.status_code, 201)
+        other_headers = {'Authorization': f"Bearer {other.get_json()['access_token']}"}
+        self.assertEqual(self.client.delete(endpoint).status_code, 401)
+        self.assertEqual(self.client.delete(endpoint, headers=other_headers).status_code, 403)
+        with self.app.app_context():
+            self.assertIsNotNone(db.session.get(Address, address_id))
+
+        self.assertEqual(self.client.delete(endpoint, headers=self.headers).status_code, 200)
+        remaining = self.client.get(f'/api/users/{self.user_id}/addresses', headers=self.headers)
+        self.assertEqual(remaining.get_json()['addresses'], [])
+        with self.app.app_context():
+            self.assertEqual(db.session.get(Order, order_id).to_dict(), order_before)
+        self.assertEqual(self.client.delete(endpoint, headers=self.headers).status_code, 404)
+
     def test_optional_virtual_phone_is_validated_and_stored_canonically(self):
         address = self.client.post(
             f'/api/users/{self.user_id}/addresses',

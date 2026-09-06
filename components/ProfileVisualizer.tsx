@@ -5,6 +5,7 @@ import {
   getHoleDisplayGrooveIndex,
   getProfileGrooveCount,
   getProfileTapPortCountForSide,
+  physicalGrooveToDisplay,
   OPPOSITE_PROFILE_SIDE,
 } from '../utils/profileMachining';
 
@@ -164,6 +165,9 @@ const ProfileVisualizer: React.FC<ProfileVisualizerProps> = ({
     return (
       <div 
            key={`${side}-${index}`}
+           data-testid={`profile-tap-${side}-${index}`}
+           data-physical-port={index}
+           data-tapped={Boolean(isTapped)}
            className={`absolute ${side === 'left' ? 'left-2' : 'right-2'} -translate-y-1/2 flex flex-col items-center transition-transform ${
              interactive && !disabledForSide ? 'cursor-pointer hover:scale-110' : 'cursor-default'
            } ${isTapped ? 'opacity-100' : disabledForSide ? 'opacity-40' : 'opacity-20'}`}
@@ -210,7 +214,11 @@ const ProfileVisualizer: React.FC<ProfileVisualizerProps> = ({
       >
         {/* Tapping Indicators */}
         {Array.from({ length: tappingPortCount }, (_, i) => {
-          const pct = `${((i + 1) / (tappingPortCount + 1)) * 100}%`;
+          // Tapping arrays store physical ports, just like drilling stores
+          // physical grooves. Mirror only their display on the opposite face;
+          // clicks must continue toggling the original physical port i.
+          const displayIndex = physicalGrooveToDisplay(selectedSide, i, tappingPortCount);
+          const pct = `${((displayIndex + 1) / (tappingPortCount + 1)) * 100}%`;
           return (
             <React.Fragment key={`tap-${i}`}>
               {renderTapIndicator('left', i, pct)}
@@ -298,6 +306,7 @@ const ProfileVisualizer: React.FC<ProfileVisualizerProps> = ({
             return (
               <div
                 key={hole.id}
+                data-testid={`profile-hole-${hole.id}`}
                 className={`absolute -translate-y-1/2 transform -translate-x-1/2 group ${interactive ? 'cursor-pointer' : ''}`}
                 style={{ 
                   left: `${(hole.positionMm / length) * 100}%`,

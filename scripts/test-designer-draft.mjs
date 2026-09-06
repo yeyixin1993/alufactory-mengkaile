@@ -1,0 +1,21 @@
+import assert from 'node:assert/strict';
+import { build } from 'esbuild';
+const { outputFiles } = await build({ entryPoints: ['utils/designerDraft.ts'], bundle: true, platform: 'node', format: 'esm', write: false });
+const api = await import(`data:text/javascript;base64,${Buffer.from(outputFiles[0].text).toString('base64')}`);
+const data = new Map();
+const storage = { getItem: key => data.get(key) ?? null, setItem: (key, value) => data.set(key, value), removeItem: key => data.delete(key) };
+const key = api.designerDraftKey();
+const items = [{ id: 'profile', length: 501, position: [250.5, 10, 0], tappingLeft: true, holes: [{ id: 'hole', position: 40 }] },
+  { id: 'door', doorOverlay: 'half', doorPairSide: 'right', attachedProfileIds: ['profile'], colorId: 'natural' }];
+assert.deepEqual(api.readDesignerDraft(storage, key), []);
+api.writeDesignerDraft(storage, key, items);
+assert.deepEqual(api.readDesignerDraft(storage, key), items);
+assert.deepEqual(api.readDesignerDraft(storage, api.designerDraftKey('different-user')), []);
+api.writeDesignerDraft(storage, key, []);
+assert.equal(data.has(key), false);
+assert.throws(() => api.writeDesignerDraft({ setItem() { throw new Error('quota'); } }, key, items), /quota/);
+storage.setItem(key, '{bad json');
+assert.throws(() => api.readDesignerDraft(storage, key));
+storage.setItem(key, JSON.stringify({ items }));
+assert.throws(() => api.readDesignerDraft(storage, key), /Invalid/);
+console.log('PASS: local draft round-trip, account isolation, empty removal, quota and invalid-cache failures.');

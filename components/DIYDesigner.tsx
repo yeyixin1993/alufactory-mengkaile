@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
+import { designerDraftKey, readDesignerDraft, writeDesignerDraft } from '../utils/designerDraft';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { TransformControls } from 'three/addons/controls/TransformControls.js';
@@ -106,6 +107,8 @@ type DIYConnectionKind = 'connector' | 'extruded_connector' | 'hidden_connector'
 type DIYAutoConnectionMode = 'corner_bracket' | 'slot_connector' | 'drill_tap';
 type DIYDoorMaterial = 'aluminum' | 'marine' | 'pegboard';
 type DIYDoorOverlay = 'full' | 'half' | 'inset';
+type DIYDoorLeafMode = 'single' | 'double';
+type DIYDoorPairSide = 'left' | 'right';
 
 interface DIYSceneItem {
   id: string;
@@ -133,6 +136,8 @@ interface DIYSceneItem {
   autoAddedTapping?: boolean;
   doorMaterial?: DIYDoorMaterial;
   doorOverlay?: DIYDoorOverlay;
+  doorLeafMode?: DIYDoorLeafMode;
+  doorPairSide?: DIYDoorPairSide;
   openingSide?: 'left' | 'right';
   remark?: string;
   screwHead?: DIYScrewHead;
@@ -301,15 +306,23 @@ const TEXT: Record<Language, Record<string, string>> = {
     doorOverlay: '铰链覆盖方式',
     doorFullOverlay: '全盖（覆盖全部型材）',
     doorHalfOverlay: '半盖（覆盖一半型材）',
-    doorHalfUnavailable: '暂未开放',
     doorInsetOverlay: '大弯（内嵌，不盖型材）',
+    doorLeafMode: '开门形式',
+    doorSingleLeaf: '单开门',
+    doorDoubleLeaf: '对开门（左右各一扇）',
+    doorPairLeftLeaf: '对开左扇',
+    doorPairRightLeaf: '对开右扇',
     doorOpeningSide: '开门方向',
     doorHinge: '铰链',
     doorLeftOpen: '左开',
     doorRightOpen: '右开',
     doorAutoSize: '自动门尺寸',
     doorLeafUnit: '扇',
-    doorMarginHint: 'N列自动生成N扇门。全盖门外框四周留3mm，相邻门之间留3mm；大弯门缩进各列型材内侧后，四周留3mm。',
+    doorMarginHint: '仅修改当前门扇，可分别设置全盖、半盖或大弯。全盖与半盖等高；尺寸向下取整到毫米，周边至少留3mm，对开中缝3mm。',
+    backHome: '回到主页',
+    draftRestored: '已恢复此浏览器中保存的设计',
+    draftReadFailed: '无法读取本地设计缓存，请导入已保存的 JSON 备份。',
+    draftWriteFailed: '本地缓存保存失败，尚未离开设计器。请先下载设计 JSON 备份，并检查浏览器存储空间。',
     doorAdded: '柜门已按每列框架自动生成',
     shelfSupport: '层板托', board12ShelfSupport: '12mm板专用层板托',
     shelfSupportFinish: '层板托截面/颜色',
@@ -362,6 +375,11 @@ const TEXT: Record<Language, Record<string, string>> = {
     maycadConfirmProfiles: '确认这些型号',
     maycadProfileReviewApplied: '未验证型材的型号已确认',
     maycadTappingTitle: 'MayCAD 不包含攻丝信息',
+    jsonTappingTitle: '导入型材攻丝设置',
+    jsonTappingPrompt: '是否将本次 JSON 导入的所有型材两端全部设置为攻丝？也可以保留文件原有的攻丝设置，稍后逐根修改。',
+    jsonKeepTapping: '保留原有攻丝设置',
+    jsonTappingSkipped: '已保留 JSON 原有攻丝设置',
+    jsonTappingScope: '只影响本次导入的型材，不改变画布中原有型材和其他钻孔加工。',
     maycadTappingPrompt: 'MayCAD 没有攻丝选项，因此无法判断哪些端面需要攻丝。是否一键将本次导入的所有型材两端全部设置为攻丝？',
     maycadKeepNoTapping: '保持不攻丝',
     maycadTapAllBothEnds: '全部型材两端攻丝',
@@ -478,7 +496,12 @@ const TEXT: Record<Language, Record<string, string>> = {
     noCompatibleJoint: '未找到可用的同规格型材接点',
     accessoryPlacementHint: '紫色位置可安装；移入可预览，左键点击完成。Esc 恢复鼠标。',
     accessoryPlacementInvalid: '当前位置无法安装此配件',
-    accessoryPlacementSuccess: '配件添加成功，可继续选择紫色位置安装',
+    accessoryPlacementSuccess: '配件添加成功；已完成的位置不再显示紫色提示',
+    accessoryChooseFace: '选择安装面',
+    accessoryFace: '安装面',
+    accessoryFaceHint: '移入可预览，点选安装面后再确认添加。',
+    accessoryInstallFace: '添加此面',
+    accessoryCloseFaces: '关闭安装面选择',
     replaceAccessory: '手动更换配件',
     lockLocation: '锁定位置',
     unlockLocation: '解锁位置',
@@ -564,15 +587,23 @@ const TEXT: Record<Language, Record<string, string>> = {
     doorOverlay: 'Hinge overlay',
     doorFullOverlay: 'Full overlay (covers profiles)',
     doorHalfOverlay: 'Half overlay (covers half)',
-    doorHalfUnavailable: 'Temporarily unavailable',
     doorInsetOverlay: 'Large bend (inset)',
+    doorLeafMode: 'Door arrangement',
+    doorSingleLeaf: 'Single door',
+    doorDoubleLeaf: 'Pair doors (left + right)',
+    doorPairLeftLeaf: 'Pair left leaf',
+    doorPairRightLeaf: 'Pair right leaf',
     doorOpeningSide: 'Opening side',
     doorHinge: 'Hinge',
     doorLeftOpen: 'Left opening',
     doorRightOpen: 'Right opening',
     doorAutoSize: 'Automatic door size',
     doorLeafUnit: ' leaves',
-    doorMarginHint: 'N bays create N door leaves. Full-overlay doors keep 3mm around the outer frame and 3mm between neighboring leaves; inset doors keep 3mm around each bay opening.',
+    doorMarginHint: 'Edits affect only this leaf. Full and half overlay have equal height. Cut dimensions round down to whole mm, with at least 3mm perimeter clearance and a 3mm pair seam.',
+    backHome: 'Back to home',
+    draftRestored: 'Restored the design saved in this browser',
+    draftReadFailed: 'Could not read the local draft. Please import your saved design JSON backup.',
+    draftWriteFailed: 'Could not save the local draft. You are still in the designer. Download a design JSON backup and check browser storage.',
     doorAdded: 'Cabinet doors auto-sized to each frame bay',
     shelfSupport: 'Shelf support', board12ShelfSupport: '12mm-board shelf support',
     shelfSupportFinish: 'Shelf-support finish',
@@ -625,6 +656,11 @@ const TEXT: Record<Language, Record<string, string>> = {
     maycadConfirmProfiles: 'Confirm these models',
     maycadProfileReviewApplied: 'Unverified profile models confirmed',
     maycadTappingTitle: 'MayCAD has no tapping data',
+    jsonTappingTitle: 'Imported profile tapping',
+    jsonTappingPrompt: 'Tap both ends of every profile in this JSON import? You can also keep the file’s existing tapping settings and edit profiles individually later.',
+    jsonKeepTapping: 'Keep existing tapping',
+    jsonTappingSkipped: 'Existing JSON tapping settings preserved',
+    jsonTappingScope: 'Only profiles in this import are affected. Existing scene profiles and other drilling remain unchanged.',
     maycadTappingPrompt: 'MayCAD has no tapping option, so tapped ends cannot be identified. Apply tapping to both ends of every imported profile?',
     maycadKeepNoTapping: 'Keep untapped',
     maycadTapAllBothEnds: 'Tap both ends of all profiles',
@@ -741,7 +777,12 @@ const TEXT: Record<Language, Record<string, string>> = {
     noCompatibleJoint: 'No compatible profile joint was found',
     accessoryPlacementHint: 'Purple locations are installable. Hover to preview and left-click to place. Press Esc to restore the pointer.',
     accessoryPlacementInvalid: 'This accessory cannot be installed at the current position',
-    accessoryPlacementSuccess: 'Accessory added. Choose another purple location to continue',
+    accessoryPlacementSuccess: 'Accessory added. Completed positions no longer show a purple marker',
+    accessoryChooseFace: 'Choose mounting face',
+    accessoryFace: 'Face',
+    accessoryFaceHint: 'Hover to preview, select a face, then confirm installation.',
+    accessoryInstallFace: 'Install on this face',
+    accessoryCloseFaces: 'Close face selection',
     replaceAccessory: 'Replace accessory manually',
     lockLocation: 'Lock location',
     unlockLocation: 'Unlock location',
@@ -827,15 +868,23 @@ const TEXT: Record<Language, Record<string, string>> = {
     doorOverlay: 'ヒンジかぶせ方式',
     doorFullOverlay: '全かぶせ（形材全体を覆う）',
     doorHalfOverlay: '半かぶせ（形材半分を覆う）',
-    doorHalfUnavailable: '一時利用不可',
     doorInsetOverlay: '大曲げ（インセット）',
+    doorLeafMode: '扉の構成',
+    doorSingleLeaf: '片開き',
+    doorDoubleLeaf: '両開き（左右各1枚）',
+    doorPairLeftLeaf: '両開き左扉',
+    doorPairRightLeaf: '両開き右扉',
     doorOpeningSide: '開き方向',
     doorHinge: 'ヒンジ',
     doorLeftOpen: '左開き',
     doorRightOpen: '右開き',
     doorAutoSize: '自動扉寸法',
     doorLeafUnit: '枚',
-    doorMarginHint: 'N列にはN枚の扉を生成します。全かぶせ扉は外枠の四周を3mm、隣接扉間を3mm空け、インセット扉は各列の内寸から四周3mm空けます。',
+    doorMarginHint: '選択した扉のみ変更します。全かぶせと半かぶせは同じ高さです。寸法は整数mmに切り捨て、周囲は3mm以上、両開きの中央は3mm空けます。',
+    backHome: 'ホームに戻る',
+    draftRestored: 'このブラウザに保存された設計を復元しました',
+    draftReadFailed: 'ローカル設計を読み込めません。保存済みの設計JSONを読み込んでください。',
+    draftWriteFailed: '設計を保存できないため移動を中止しました。設計JSONを保存し、ブラウザの空き容量を確認してください。',
     doorAdded: '各列の枠寸法に合わせて扉を自動生成しました',
     shelfSupport: '棚受け', board12ShelfSupport: '12mm板専用棚受け',
     shelfSupportFinish: '棚受けの断面・色',
@@ -888,6 +937,11 @@ const TEXT: Record<Language, Record<string, string>> = {
     maycadConfirmProfiles: '型番を確定',
     maycadProfileReviewApplied: '未検証形材の型番を確定しました',
     maycadTappingTitle: 'MayCADにはタップ加工情報がありません',
+    jsonTappingTitle: '読み込んだ形材のタップ加工',
+    jsonTappingPrompt: '今回のJSONで読み込んだ全形材の両端にタップ加工を設定しますか？ファイルの既存設定を保持し、後から個別に変更することもできます。',
+    jsonKeepTapping: '既存のタップ設定を保持',
+    jsonTappingSkipped: 'JSONの既存タップ設定を保持しました',
+    jsonTappingScope: '今回読み込んだ形材のみが対象です。既存の形材や他の穴加工は変更されません。',
     maycadTappingPrompt: 'MayCADにはタップ加工の設定がないため、加工する端面を判別できません。読み込んだ全形材の両端に一括でタップ加工を設定しますか？',
     maycadKeepNoTapping: 'タップ加工なしのまま',
     maycadTapAllBothEnds: '全形材の両端をタップ加工',
@@ -1004,7 +1058,12 @@ const TEXT: Record<Language, Record<string, string>> = {
     noCompatibleJoint: '対応する同規格の形材接続点が見つかりません',
     accessoryPlacementHint: '紫色の位置に取付できます。カーソルを合わせて確認し、左クリックで確定します。Escで通常のマウスに戻ります。',
     accessoryPlacementInvalid: '現在の位置にはこの金具を取り付けできません',
-    accessoryPlacementSuccess: '金具を追加しました。別の紫色位置にも続けて取り付けできます',
+    accessoryPlacementSuccess: '金具を追加しました。取付済み位置の紫色表示は消えます',
+    accessoryChooseFace: '取付面を選択',
+    accessoryFace: '取付面',
+    accessoryFaceHint: 'ホバーでプレビュー。面を選択してから取り付けを確定します。',
+    accessoryInstallFace: 'この面に取り付け',
+    accessoryCloseFaces: '取付面の選択を閉じる',
     replaceAccessory: '金具を手動交換',
     lockLocation: '位置をロック',
     unlockLocation: '位置ロック解除',
@@ -1149,9 +1208,17 @@ const normalizeDesignItems = (source: DIYSceneItem[]) => source.map((item) => {
       accessoryPrice: getEndCapUnitPrice(item),
     } : {}),
     ...(item.kind === 'cabinet_door' ? {
+      width: Math.max(1, Math.floor(item.width || 496)),
+      height: Math.max(1, Math.floor(item.height || 1996)),
       doorMaterial: item.doorMaterial || 'aluminum',
       doorOverlay: item.doorOverlay || 'full',
-      openingSide: item.openingSide || 'left',
+      doorLeafMode: item.doorLeafMode || (item.attachmentKey?.includes(':DOUBLE:') ? 'double' : 'single'),
+      doorPairSide: item.doorPairSide
+        || (item.attachmentKey?.endsWith(':DOUBLE:right') ? 'right' : item.attachmentKey?.endsWith(':DOUBLE:left') ? 'left' : undefined),
+      openingSide: item.doorPairSide
+        || (item.attachmentKey?.endsWith(':DOUBLE:right') ? 'right' : item.attachmentKey?.endsWith(':DOUBLE:left') ? 'left' : undefined)
+        || item.openingSide
+        || 'left',
       thickness: item.doorMaterial === 'marine'
         ? (item.thickness || 18)
         : CABINET_DOOR_ALUMINUM_DEPTH_MM,
@@ -1193,6 +1260,8 @@ const buildProductionData = (items: DIYSceneItem[], language: Language) => {
     autoAddedTapping: item.autoAddedTapping,
     doorMaterial: item.doorMaterial,
     doorOverlay: item.doorOverlay,
+    doorLeafMode: item.doorLeafMode,
+    doorPairSide: item.doorPairSide,
     openingSide: item.openingSide,
     colorId: item.colorId,
     color: getSceneItemColorName(item, language),
@@ -1534,6 +1603,7 @@ const createItem = (kind: DIYItemKind, index = 0, variantId?: string): DIYSceneI
       thickness: CABINET_DOOR_ALUMINUM_DEPTH_MM,
       doorMaterial: 'aluminum',
       doorOverlay: 'full',
+      doorLeafMode: 'single',
       openingSide: 'left',
       quantity: 1,
       remark: '',
@@ -1771,6 +1841,12 @@ const itemsFromProductionWorkbook = (production: ProductionWorkbookData): DIYSce
     doorOverlay: (part.doorOverlay === 'half' || part.doorOverlay === 'inset' || part.doorOverlay === 'full')
       ? part.doorOverlay
       : base.doorOverlay,
+    doorLeafMode: part.doorLeafMode === 'double' || part.doorLeafMode === 'single'
+      ? part.doorLeafMode
+      : part.attachmentKey?.includes(':DOUBLE:') ? 'double' : base.doorLeafMode,
+    doorPairSide: part.doorPairSide === 'left' || part.doorPairSide === 'right'
+      ? part.doorPairSide
+      : part.attachmentKey?.endsWith(':DOUBLE:right') ? 'right' : part.attachmentKey?.endsWith(':DOUBLE:left') ? 'left' : undefined,
     openingSide: part.openingSide === 'right' || part.openingSide === 'left' ? part.openingSide : base.openingSide,
     length: part.lengthMm ?? base.length,
     width: part.widthMm ?? base.width,
@@ -2480,8 +2556,8 @@ const cabinetDoorBounds = (opening: CabinetDoorOpening, overlay: DIYDoorOverlay)
     ? {
       left: (opening.outer.left + opening.inner.left) / 2,
       right: (opening.outer.right + opening.inner.right) / 2,
-      bottom: (opening.outer.bottom + opening.inner.bottom) / 2,
-      top: (opening.outer.top + opening.inner.top) / 2,
+      bottom: opening.outer.bottom,
+      top: opening.outer.top,
     }
     : opening.inner;
   return {
@@ -2492,27 +2568,65 @@ const cabinetDoorBounds = (opening: CabinetDoorOpening, overlay: DIYDoorOverlay)
   };
 };
 
+const cabinetDoorLeafBounds = (
+  opening: CabinetDoorOpening,
+  overlay: DIYDoorOverlay,
+  leafMode: DIYDoorLeafMode,
+  pairSide?: DIYDoorPairSide,
+) => {
+  const bounds = cabinetDoorBounds(opening, overlay);
+  if (leafMode !== 'double' || !pairSide) return bounds;
+  // Both leaves share the opening's fixed centre even when their overlays differ.
+  const center = (opening.inner.left + opening.inner.right) / 2;
+  const seamHalf = CABINET_DOOR_PERIMETER_GAP_MM / 2;
+  return pairSide === 'left'
+    ? { ...bounds, right: center - seamHalf }
+    : { ...bounds, left: center + seamHalf };
+};
+
+const cabinetDoorOpeningAttachmentKey = (
+  opening: CabinetDoorOpening,
+  leafMode: DIYDoorLeafMode,
+  pairSide?: DIYDoorPairSide,
+) => leafMode === 'double' && pairSide
+  ? `${opening.key}:DOUBLE:${pairSide}`
+  : opening.key;
+
 const fitCabinetDoorToOpening = (item: DIYSceneItem, opening: CabinetDoorOpening): DIYSceneItem => {
   const overlay = item.doorOverlay || 'full';
-  const bounds = cabinetDoorBounds(opening, overlay);
+  const leafMode: DIYDoorLeafMode = item.doorLeafMode || (item.attachmentKey?.includes(':DOUBLE:') ? 'double' : 'single');
+  const pairSide: DIYDoorPairSide | undefined = leafMode === 'double'
+    ? item.doorPairSide || (item.attachmentKey?.endsWith(':DOUBLE:right') ? 'right' : 'left')
+    : undefined;
+  const bounds = cabinetDoorLeafBounds(opening, overlay, leafMode, pairSide);
+  const width = Math.max(1, Math.floor(bounds.right - bounds.left));
+  const height = Math.max(1, Math.floor(bounds.top - bounds.bottom));
+  // Keep the 3mm meeting seam exact; the sub-mm cutting remainder belongs
+  // at the outside edge, never between the paired leaves.
+  const centerX = pairSide === 'left' ? bounds.right - width / 2
+    : pairSide === 'right' ? bounds.left + width / 2
+      : (bounds.left + bounds.right) / 2;
   const renderedThickness = cabinetDoorRenderedThickness(item);
   const frontOffset = overlay === 'inset'
     ? -(renderedThickness / 2 + 2)
     : renderedThickness / 2 + 2;
   return {
     ...item,
-    width: Math.max(1, Number((bounds.right - bounds.left).toFixed(2))),
-    height: Math.max(1, Number((bounds.top - bounds.bottom).toFixed(2))),
+    width,
+    height,
     position: [
-      Number(((bounds.left + bounds.right) / 2).toFixed(2)),
+      centerX,
       Number(((bounds.bottom + bounds.top) / 2).toFixed(2)),
       Number((opening.frontZ + frontOffset).toFixed(2)),
     ],
     rotation: [0, 0, 0],
+    doorLeafMode: leafMode,
+    doorPairSide: pairSide,
+    openingSide: pairSide || item.openingSide || 'left',
     lockedPosition: true,
     autoGenerated: true,
     attachedProfileIds: opening.profileIds,
-    attachmentKey: opening.key,
+    attachmentKey: cabinetDoorOpeningAttachmentKey(opening, leafMode, pairSide),
     quantity: 1,
   };
 };
@@ -3196,6 +3310,20 @@ const compactBracketPlacementCandidates = (
   });
 };
 
+const availableAccessoryPlacementCandidates = (
+  accessory: DIYSceneItem,
+  items: DIYSceneItem[],
+) => {
+  const installedKeys = new Set(items
+    .filter((item) => item.kind === accessory.kind && item.attachmentKey)
+    .map((item) => item.attachmentKey as string));
+  return compactBracketPlacementCandidates(
+    accessory,
+    accessoryPlacementCandidates(accessory, items),
+    items,
+  ).filter((candidate) => !installedKeys.has(candidate.key));
+};
+
 const findAccessoryPlacement = (
   accessory: DIYSceneItem,
   items: DIYSceneItem[],
@@ -3229,7 +3357,9 @@ const syncAttachedAccessories = (source: DIYSceneItem[]) => source.map((item) =>
   }
   if (item.kind === 'cabinet_door' && item.lockedPosition) {
     const openings = detectCabinetDoorOpenings(source);
-    const opening = openings.find((candidate) => candidate.key === item.attachmentKey)
+    const opening = openings.find((candidate) => (
+      candidate.key === item.attachmentKey || item.attachmentKey?.startsWith(`${candidate.key}:DOUBLE:`)
+    ))
       || openings.find((candidate) => candidate.profileIds.every((profileId) => item.attachedProfileIds?.includes(profileId)));
     if (!opening) {
       return {
@@ -5389,6 +5519,40 @@ type AccessoryPlacementOverlay = {
   placement: AccessoryPlacement;
 };
 
+// Screen-space grouping changes hit targets only, never the physical solver.
+// Connected components retain all real faces, including XY/XZ/YZ at a corner.
+const groupAccessoryPlacementOverlays = (overlays: AccessoryPlacementOverlay[], spacing = 64) => {
+  const remaining = new Set(overlays);
+  const groups: Array<{ key: string; point: { x: number; y: number }; candidates: AccessoryPlacementOverlay[] }> = [];
+  for (const seed of [...overlays].sort((a, b) => a.key.localeCompare(b.key))) {
+    if (!remaining.delete(seed)) continue;
+    const candidates = [seed];
+    for (let i = 0; i < candidates.length; i++) {
+      for (const candidate of remaining) {
+        if (Math.hypot(candidate.point.x - candidates[i].point.x, candidate.point.y - candidates[i].point.y) < spacing) {
+          remaining.delete(candidate);
+          candidates.push(candidate);
+        }
+      }
+    }
+    candidates.sort((a, b) => a.key.localeCompare(b.key));
+    groups.push({ key: candidates.map(candidate => candidate.key).join('|'), candidates, point: {
+      x: candidates.reduce((sum, candidate) => sum + candidate.point.x, 0) / candidates.length,
+      y: candidates.reduce((sum, candidate) => sum + candidate.point.y, 0) / candidates.length,
+    } });
+  }
+  return groups;
+};
+
+const accessoryPlacementFaceLabel = (placement: AccessoryPlacement) => {
+  const normal = new THREE.Vector3(0, 0, 1).applyEuler(new THREE.Euler(
+    ...placement.rotation.map(THREE.MathUtils.degToRad) as Vec3,
+  ));
+  const values = [normal.x, normal.y, normal.z];
+  const axis = values.reduce((best, value, index) => Math.abs(value) > Math.abs(values[best]) ? index : best, 0);
+  return `${['YZ', 'XZ', 'XY'][axis]} · ${values[axis] >= 0 ? '+' : '−'}${['X', 'Y', 'Z'][axis]}`;
+};
+
 const ThreeAssembly: React.FC<{
   items: DIYSceneItem[];
   selectedId: string | null;
@@ -5455,7 +5619,7 @@ const ThreeAssembly: React.FC<{
   profileDrawTemplate: DIYSceneItem | null;
   profileDrawLabels: { hint: string; invalid: string; restore: string };
   accessoryPlacementTemplate: DIYSceneItem | null;
-  accessoryPlacementLabels: { hint: string; invalid: string; success: string; restore: string };
+  accessoryPlacementLabels: { hint: string; invalid: string; success: string; restore: string; chooseFace: string; face: string; faceHint: string; installFace: string; closeFaces: string };
   onSelect: (id: string | null, additive?: boolean) => void;
   onSelectionChange: (ids: string[]) => void;
   onTransform: (
@@ -5476,7 +5640,7 @@ const ThreeAssembly: React.FC<{
   onCancelDrillMode: () => void;
   onCommitProfileDraw: (draft: ProfileDrawCommit) => void;
   onExitProfileDraw: () => void;
-  onCommitAccessoryPlacement: (template: DIYSceneItem, placement: AccessoryPlacement) => void;
+  onCommitAccessoryPlacement: (template: DIYSceneItem, placement: AccessoryPlacement) => boolean;
   onExitAccessoryPlacement: () => void;
 }> = ({
   items,
@@ -5580,6 +5744,13 @@ const ThreeAssembly: React.FC<{
   } | null>(null);
   const [accessoryPlacementOverlay, setAccessoryPlacementOverlay] = useState<AccessoryPlacementOverlay[]>([]);
   const [hoveredAccessoryPlacementKey, setHoveredAccessoryPlacementKey] = useState<string | null>(null);
+  const [accessoryFaceChoice, setAccessoryFaceChoice] = useState<{ keys: string[]; point: { x: number; y: number } } | null>(null);
+  const [selectedAccessoryFaceKey, setSelectedAccessoryFaceKey] = useState<string | null>(null);
+  const accessoryPlacementGroups = useMemo(() => groupAccessoryPlacementOverlays(accessoryPlacementOverlay), [accessoryPlacementOverlay]);
+  const accessoryFaceChoices = accessoryFaceChoice
+    ? accessoryPlacementOverlay.filter(candidate => accessoryFaceChoice.keys.includes(candidate.key))
+      .sort((a, b) => a.key.localeCompare(b.key))
+    : [];
   const [accessoryPlacementMessage, setAccessoryPlacementMessage] = useState<{
     text: string;
     x: number;
@@ -5719,7 +5890,12 @@ const ThreeAssembly: React.FC<{
   useEffect(() => { profileDrawTemplateRef.current = profileDrawTemplate; }, [profileDrawTemplate]);
   useEffect(() => { onCommitProfileDrawRef.current = onCommitProfileDraw; }, [onCommitProfileDraw]);
   useEffect(() => { onExitProfileDrawRef.current = onExitProfileDraw; }, [onExitProfileDraw]);
-  useEffect(() => { accessoryPlacementTemplateRef.current = accessoryPlacementTemplate; }, [accessoryPlacementTemplate]);
+  useEffect(() => {
+    accessoryPlacementTemplateRef.current = accessoryPlacementTemplate;
+    setAccessoryFaceChoice(null);
+    setSelectedAccessoryFaceKey(null);
+    setHoveredAccessoryPlacementKey(null);
+  }, [accessoryPlacementTemplate]);
   useEffect(() => { onCommitAccessoryPlacementRef.current = onCommitAccessoryPlacement; }, [onCommitAccessoryPlacement]);
   useEffect(() => { onExitAccessoryPlacementRef.current = onExitAccessoryPlacement; }, [onExitAccessoryPlacement]);
   useEffect(() => { hoveredAccessoryPlacementKeyRef.current = hoveredAccessoryPlacementKey; }, [hoveredAccessoryPlacementKey]);
@@ -6197,11 +6373,7 @@ const ThreeAssembly: React.FC<{
         }
         return;
       }
-      const candidates = compactBracketPlacementCandidates(
-        template,
-        accessoryPlacementCandidates(template, itemsRef.current),
-        itemsRef.current,
-      )
+      const candidates = availableAccessoryPlacementCandidates(template, itemsRef.current)
         .slice(0, accessoryPlacementHighlightMeshes.length);
       const moduleSize = Number((template.accessoryProfileSize || '2020').slice(0, 2)) / SCENE_SCALE;
       const overlay = candidates.flatMap((placement, index) => {
@@ -6218,6 +6390,13 @@ const ThreeAssembly: React.FC<{
         return point ? [{ key: placement.key, point, placement }] : [];
       });
       accessoryPlacementHighlightMeshes.slice(candidates.length).forEach((mesh) => { mesh.visible = false; });
+      const groupedKeys = new Set(groupAccessoryPlacementOverlays(overlay)
+        .filter(group => group.candidates.length > 1)
+        .flatMap(group => group.candidates.map(candidate => candidate.key)));
+      candidates.forEach((candidate, index) => {
+        accessoryPlacementHighlightMeshes[index].visible = !groupedKeys.has(candidate.key)
+          || candidate.key === hoveredAccessoryPlacementKeyRef.current;
+      });
 
       const templateSignature = [template.kind, template.accessoryProfileSize, template.width, template.height, template.thickness].join(':');
       if (templateSignature !== accessoryPlacementTemplateSignature) {
@@ -7330,6 +7509,9 @@ const ThreeAssembly: React.FC<{
       hideSnapVisual();
       if (event.button === 2) rightPointerMoved = false;
       if (event.button === 0 && accessoryPlacementTemplateRef.current) {
+        setAccessoryFaceChoice(null);
+        setSelectedAccessoryFaceKey(null);
+        setHoveredAccessoryPlacementKey(null);
         pointerStart = { x: event.clientX, y: event.clientY, button: event.button };
         orbit.enabled = false;
         transform.enabled = false;
@@ -8317,6 +8499,24 @@ const ThreeAssembly: React.FC<{
     lastFrameItemIdsRef.current = items.map((item) => item.id);
   }, [items, selectedId, selectedIds, showMachiningMarks, transparentProfiles, accessoryEditMode]);
 
+  const installAccessoryFace = (candidate: AccessoryPlacementOverlay) => {
+    if (!accessoryPlacementTemplate) return;
+    const installed = onCommitAccessoryPlacementRef.current(accessoryPlacementTemplate, candidate.placement);
+    if (installed) {
+      setAccessoryPlacementOverlay(current => current.filter(entry => entry.key !== candidate.key));
+      setAccessoryFaceChoice(current => current ? { ...current, keys: current.keys.filter(key => key !== candidate.key) } : null);
+      setSelectedAccessoryFaceKey(null);
+      setHoveredAccessoryPlacementKey(null);
+      hoveredAccessoryPlacementKeyRef.current = null;
+    }
+    setAccessoryPlacementMessage({
+      text: installed ? accessoryPlacementLabels.success : accessoryPlacementLabels.invalid,
+      x: THREE.MathUtils.clamp(candidate.point.x, 120, Math.max(120, (mountRef.current?.clientWidth || 320) - 120)),
+      y: Math.max(32, candidate.point.y - 30),
+    });
+    window.setTimeout(() => setAccessoryPlacementMessage(null), 1500);
+  };
+
   return (
     <div
       className="relative h-[52vh] min-h-[380px] max-h-[620px] w-full bg-[#eef3f8] sm:h-[62vh] xl:h-full xl:min-h-0 xl:max-h-none"
@@ -8369,43 +8569,85 @@ const ThreeAssembly: React.FC<{
           {accessoryPlacementLabels.hint}
         </div>
       )}
-      {accessoryPlacementTemplate && accessoryPlacementOverlay.map((candidate) => (
+      {accessoryPlacementTemplate && accessoryPlacementGroups.filter(group => !group.candidates.some(candidate => accessoryFaceChoices.some(choice => choice.key === candidate.key))).map((group) => (
         <button
-          key={candidate.key}
+          key={group.key}
           type="button"
-          aria-label={accessoryPlacementLabels.hint}
-          data-testid="diy-accessory-placement-candidate"
+          aria-label={group.candidates.length > 1 ? `${accessoryPlacementLabels.chooseFace} · ${group.candidates.length}` : accessoryPlacementLabels.hint}
+          aria-haspopup={group.candidates.length > 1 ? 'dialog' : undefined}
+          data-testid={group.candidates.length > 1 ? 'diy-accessory-placement-cluster' : 'diy-accessory-placement-candidate'}
           onPointerDown={(event) => {
             event.preventDefault();
             event.stopPropagation();
           }}
           onPointerEnter={() => {
-            setHoveredAccessoryPlacementKey(candidate.key);
+            setHoveredAccessoryPlacementKey(group.candidates.length === 1 ? group.candidates[0].key : null);
             setAccessoryPlacementMessage(null);
           }}
-          onPointerLeave={() => setHoveredAccessoryPlacementKey((current) => current === candidate.key ? null : current)}
+          onPointerLeave={() => setHoveredAccessoryPlacementKey(selectedAccessoryFaceKey)}
           onClick={(event) => {
             event.preventDefault();
             event.stopPropagation();
-            onCommitAccessoryPlacementRef.current(accessoryPlacementTemplate, candidate.placement);
-            const rect = rendererRef.current?.domElement.getBoundingClientRect();
-            if (rect) {
-              setAccessoryPlacementMessage({
-                text: accessoryPlacementLabels.success,
-                x: THREE.MathUtils.clamp(event.clientX - rect.left, 120, Math.max(120, rect.width - 120)),
-                y: THREE.MathUtils.clamp(event.clientY - rect.top - 30, 32, Math.max(32, rect.height - 44)),
-              });
-              window.setTimeout(() => setAccessoryPlacementMessage(null), 1500);
+            if (group.candidates.length > 1) {
+              setAccessoryFaceChoice({ keys: group.candidates.map(candidate => candidate.key), point: group.point });
+              setSelectedAccessoryFaceKey(null);
+              setHoveredAccessoryPlacementKey(null);
+            } else {
+              installAccessoryFace(group.candidates[0]);
             }
           }}
-          className={`absolute z-[44] h-9 w-9 -translate-x-1/2 -translate-y-1/2 rounded-lg border-2 shadow-[0_0_0_7px_rgba(168,85,247,0.2)] transition ${
-            hoveredAccessoryPlacementKey === candidate.key
+          className={`absolute z-[44] flex h-11 w-11 items-center justify-center -translate-x-1/2 -translate-y-1/2 rounded-xl border-2 text-sm font-black text-white shadow-[0_0_0_7px_rgba(168,85,247,0.2)] transition ${
+            group.candidates.some(candidate => hoveredAccessoryPlacementKey === candidate.key)
               ? 'scale-125 border-cyan-100 bg-cyan-400/90 shadow-[0_0_0_9px_rgba(34,211,238,0.22)]'
               : 'border-purple-200 bg-purple-600/80 hover:scale-110 hover:bg-purple-500'
           }`}
-          style={{ left: candidate.point.x, top: candidate.point.y }}
-        />
+          style={{ left: group.point.x, top: group.point.y }}
+        >{group.candidates.length > 1 ? group.candidates.length : null}</button>
       ))}
+      {accessoryPlacementTemplate && accessoryFaceChoice && accessoryFaceChoices.length > 0 && (
+        <div
+          role="dialog"
+          aria-label={accessoryPlacementLabels.chooseFace}
+          data-testid="diy-accessory-face-picker"
+          onPointerDown={event => event.stopPropagation()}
+          onKeyDown={event => { if (event.key === 'Escape') { event.stopPropagation(); setAccessoryFaceChoice(null); setSelectedAccessoryFaceKey(null); setHoveredAccessoryPlacementKey(null); } }}
+          className="absolute z-[46] w-[280px] max-w-[calc(100%-24px)] rounded-2xl border border-purple-200 bg-white p-3 shadow-2xl"
+          style={{
+            left: THREE.MathUtils.clamp(accessoryFaceChoice.point.x + 28, 12, Math.max(12, (mountRef.current?.clientWidth || 320) - 292)),
+            top: THREE.MathUtils.clamp(accessoryFaceChoice.point.y - 40, 60, Math.max(60, (mountRef.current?.clientHeight || 380) - 320)),
+          }}
+        >
+          <div className="flex items-center justify-between gap-2">
+            <div className="text-sm font-black text-purple-900">{accessoryPlacementLabels.chooseFace} · {accessoryFaceChoices.length}</div>
+            <button type="button" aria-label={accessoryPlacementLabels.closeFaces} onClick={() => { setAccessoryFaceChoice(null); setSelectedAccessoryFaceKey(null); setHoveredAccessoryPlacementKey(null); }} className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-xl text-slate-500 hover:bg-slate-100">×</button>
+          </div>
+          <p className="mb-2 text-[11px] font-bold leading-relaxed text-slate-500">{accessoryPlacementLabels.faceHint}</p>
+          <div className="max-h-[168px] space-y-2 overflow-y-auto" onPointerLeave={() => setHoveredAccessoryPlacementKey(selectedAccessoryFaceKey)}>
+            {accessoryFaceChoices.map((candidate, index) => (
+              <button
+                key={candidate.key}
+                type="button"
+                data-testid="diy-accessory-face-option"
+                aria-pressed={selectedAccessoryFaceKey === candidate.key}
+                onPointerEnter={() => setHoveredAccessoryPlacementKey(candidate.key)}
+                onFocus={() => setHoveredAccessoryPlacementKey(candidate.key)}
+                onClick={() => { setSelectedAccessoryFaceKey(candidate.key); setHoveredAccessoryPlacementKey(candidate.key); }}
+                className={`block min-h-12 w-full rounded-xl border-2 px-3 py-2 text-left ${selectedAccessoryFaceKey === candidate.key ? 'border-cyan-500 bg-cyan-50' : 'border-slate-100 bg-slate-50 hover:border-cyan-300'}`}
+              >
+                <span className="block text-xs font-black text-slate-800">{accessoryPlacementLabels.face} {index + 1} · {accessoryPlacementFaceLabel(candidate.placement)}</span>
+                <span className="mt-1 block text-[10px] font-bold text-slate-500">{candidate.placement.targetProfileIds.map(id => items.find(item => item.id === id)).filter(Boolean).map(item => `${item!.variantId} · ${item!.length}mm`).join(' ↔ ')}</span>
+              </button>
+            ))}
+          </div>
+          <button
+            type="button"
+            data-testid="diy-accessory-face-install"
+            disabled={!accessoryFaceChoices.some(candidate => candidate.key === selectedAccessoryFaceKey)}
+            onClick={() => { const candidate = accessoryFaceChoices.find(choice => choice.key === selectedAccessoryFaceKey); if (candidate) installAccessoryFace(candidate); }}
+            className="mt-3 min-h-11 w-full rounded-xl bg-purple-600 px-3 py-2 text-sm font-black text-white hover:bg-purple-500 disabled:cursor-not-allowed disabled:bg-slate-200 disabled:text-slate-400"
+          >{accessoryPlacementLabels.installFace}</button>
+        </div>
+      )}
       {accessoryPlacementTemplate && accessoryPlacementMessage && (
         <div
           className={`pointer-events-none absolute z-[45] -translate-x-1/2 -translate-y-full whitespace-nowrap rounded-xl border bg-white/95 px-3 py-2 text-[11px] font-black shadow-xl backdrop-blur ${
@@ -8895,7 +9137,10 @@ const getItemLabel = (item: DIYSceneItem, language: Language) => {
     const overlayLabel = item.doorOverlay === 'half'
       ? t.doorHalfOverlay
       : item.doorOverlay === 'inset' ? t.doorInsetOverlay : t.doorFullOverlay;
-    return `${materialLabel} · ${item.width}×${item.height} · ${overlayLabel} · ${item.openingSide === 'right' ? t.doorRightOpen : t.doorLeftOpen}`;
+    const leafLabel = item.doorLeafMode === 'double'
+      ? item.doorPairSide === 'right' ? t.doorPairRightLeaf : t.doorPairLeftLeaf
+      : t.doorSingleLeaf;
+    return `${materialLabel} · ${item.width}×${item.height} · ${leafLabel} · ${overlayLabel} · ${item.openingSide === 'right' ? t.doorRightOpen : t.doorLeftOpen}`;
   }
   if (item.kind === 'shelf_support') return isBoard12ShelfSupport(item)
     ? `${t.board12ShelfSupport} · ¥${WARDROBE_12MM_BOARD_SUPPORT_PRICE.toFixed(1)}`
@@ -9192,6 +9437,22 @@ const NumberField: React.FC<NumberFieldProps> = ({
   );
 };
 
+const withImportedProfileEndTapping = (source: DIYSceneItem[], importedProfileIds: string[]) => {
+  const importedIds = new Set(importedProfileIds);
+  return source.map((item) => {
+    if (item.kind === 'profile' && importedIds.has(item.id)) {
+      return { ...item, tappingLeft: true, tappingRight: true };
+    }
+    // Tapping is now explicitly customer-requested, not owned by a removable cap.
+    if (item.kind === 'end_cap' && item.autoAddedTapping
+      && item.attachedProfileIds?.some((id) => importedIds.has(id))) {
+      return { ...item, autoAddedTapping: false };
+    }
+    return item;
+  });
+
+};
+
 const removeItemsWithOwnedEndTapping = (source: DIYSceneItem[], requestedIds: Set<string>) => {
   const removedProfileIds = new Set(source
     .filter((item) => requestedIds.has(item.id) && item.kind === 'profile')
@@ -9247,12 +9508,25 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({
   const t = TEXT[language];
   const navigate = useNavigate();
   const location = useLocation();
-  const [items, setItems] = useState<DIYSceneItem[]>([]);
+  // Pin ownership for this editor session; signing in must not overwrite
+  // another account's previously saved draft with the open guest scene.
+  const [draftKey] = useState(() => designerDraftKey(user?.id));
+  const [initialDraft] = useState(() => {
+    if (new URLSearchParams(location.search).has('template')) return { items: [] as DIYSceneItem[], failed: false };
+    try {
+      const restored = readDesignerDraft<DIYSceneItem>(window.localStorage, draftKey);
+      return { items: syncLinkedScrews(syncAttachedAccessories(normalizeDesignItems(restored))), failed: false };
+    } catch {
+      return { items: [] as DIYSceneItem[], failed: true };
+    }
+  });
+  const [items, setItems] = useState<DIYSceneItem[]>(initialDraft.items);
+  const [draftError, setDraftError] = useState(initialDraft.failed ? t.draftReadFailed : '');
   const [selectedId, setSelectedIdState] = useState<string | null>(null);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [history, setHistory] = useState<DIYSceneItem[][]>([]);
   const [future, setFuture] = useState<DIYSceneItem[][]>([]);
-  const [notice, setNotice] = useState('');
+  const [notice, setNotice] = useState(initialDraft.items.length ? t.draftRestored : '');
   const [holePosition, setHolePosition] = useState(100);
   const [holeSide, setHoleSide] = useState<ProfileSide>('A');
   const [previewSide, setPreviewSide] = useState<ProfileSide>('A');
@@ -9265,6 +9539,8 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({
   const [libraryProfileVariantId, setLibraryProfileVariantId] = useState('2020');
   const [accessoryPlacementTemplate, setAccessoryPlacementTemplate] = useState<DIYSceneItem | null>(null);
   const [selectedAccessoryProfileSize, setSelectedAccessoryProfileSize] = useState<DIYAccessoryProfileSize>('2020');
+  const [newDoorLeafMode, setNewDoorLeafMode] = useState<DIYDoorLeafMode>('single');
+  const [newDoorOverlay, setNewDoorOverlay] = useState<DIYDoorOverlay>('full');
   const [fileMenu, setFileMenu] = useState<'json' | 'excel' | null>(null);
   const [projectPanelCollapsed, setProjectPanelCollapsed] = useState(false);
   const [maycadImporting, setMaycadImporting] = useState(false);
@@ -9273,7 +9549,7 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({
     entries: Array<MaycadProfileReview & { variantId: string }>;
     profileIds: string[];
   } | null>(null);
-  const [maycadTappingPrompt, setMaycadTappingPrompt] = useState<{ profileIds: string[] } | null>(null);
+  const [importTappingPrompt, setImportTappingPrompt] = useState<{ source: 'json' | 'maycad'; profileIds: string[] } | null>(null);
   const [importConflictTarget, setImportConflictTarget] = useState<ImportConflictTarget | null>(null);
   const importRef = useRef<HTMLInputElement>(null);
   const excelImportRef = useRef<HTMLInputElement>(null);
@@ -9386,6 +9662,12 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({
     const changesProfileModel = selected.kind === 'profile' && patch.variantId !== undefined;
     if (changesProfileModel && profileItemCollides(candidate, items)) return;
     commit(items.map((item) => item.id === selected.id ? candidate : item), selected.id);
+  };
+
+  const updateSelectedDoor = (patch: Partial<DIYSceneItem>) => {
+    if (!selected || selected.kind !== 'cabinet_door') return;
+    // A pair describes geometry, not a linked property-edit selection.
+    updateSelected({ ...patch, ...(selected.doorPairSide ? { openingSide: selected.doorPairSide } : {}) });
   };
 
   const rotateItemQuarterTurn = (itemId: string, axisIndex: RotationAxisIndex) => {
@@ -9739,18 +10021,28 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({
         showNotice(t.doorNeedFrame);
         return;
       }
-      const occupiedOpeningKeys = new Set(items
+      const occupiedOpeningKeys = new Set<string>(items
         .filter((item) => item.kind === 'cabinet_door' && item.attachmentKey)
-        .map((item) => item.attachmentKey));
-      const availableOpenings = cabinetDoorOpenings.filter((opening) => !occupiedOpeningKeys.has(opening.key));
+        .map((item) => item.attachmentKey as string));
+      const availableOpenings = cabinetDoorOpenings.filter((opening) => ![...occupiedOpeningKeys].some((key) => (
+        key === opening.key || key.startsWith(`${opening.key}:DOUBLE:`)
+      )));
       if (!availableOpenings.length) {
         showNotice(t.doorAlreadyAdded);
         return;
       }
-      const doors = availableOpenings.map((opening, index) => fitCabinetDoorToOpening(
-        createItem('cabinet_door', items.length + index),
-        opening,
-      ));
+      const doors = availableOpenings.flatMap((opening, openingIndex) => {
+        const pairSides: Array<DIYDoorPairSide | undefined> = newDoorLeafMode === 'double'
+          ? ['left', 'right']
+          : [undefined];
+        return pairSides.map((doorPairSide, leafIndex) => fitCabinetDoorToOpening({
+          ...createItem('cabinet_door', items.length + openingIndex * pairSides.length + leafIndex),
+          doorOverlay: newDoorOverlay,
+          doorLeafMode: newDoorLeafMode,
+          doorPairSide,
+          openingSide: doorPairSide || 'left',
+        }, opening));
+      });
       if (doors.some((door) => (door.width || 0) > 1500 || (door.height || 0) > 3000)) {
         showNotice(t.doorSizeUnsupported);
         return;
@@ -9840,7 +10132,7 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({
       setProfileDrawTemplate(null);
       setDrillMode(false);
       setSelectedId(null);
-      if (!accessoryPlacementCandidates(template, items).length) showNotice(t.noCompatibleJoint);
+      if (!availableAccessoryPlacementCandidates(template, items).length) showNotice(t.noCompatibleJoint);
       return;
     }
     let item = createItem(kind, items.length, accessorySeries || variantId);
@@ -9872,6 +10164,12 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({
   };
 
   const commitAccessoryPlacement = (template: DIYSceneItem, placement: AccessoryPlacement) => {
+    const validPlacement = availableAccessoryPlacementCandidates(template, items).find(candidate => candidate.key === placement.key);
+    if (!validPlacement) {
+      showNotice(t.accessoryPlacementInvalid);
+      return false;
+    }
+    placement = validPlacement;
     const placed: DIYSceneItem = {
       ...createItem(template.kind, items.length, template.accessoryProfileSize || template.variantId),
       position: [
@@ -9907,6 +10205,7 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({
     }
     commit(next, null);
     showNotice(t.accessoryPlacementSuccess);
+    return true;
   };
 
   const installSelectedAccessory = () => {
@@ -10060,6 +10359,15 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({
     showNotice(t.saved);
   };
 
+  const returnHome = () => {
+    try {
+      writeDesignerDraft(window.localStorage, draftKey, normalizeDesignItems(items));
+      navigate('/');
+    } catch {
+      setDraftError(t.draftWriteFailed);
+    }
+  };
+
   const load = () => importRef.current?.click();
 
   const exportJson = () => {
@@ -10101,6 +10409,8 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({
         if (!importedItems.length) throw new Error(t.jsonImportUnsupported);
         const appliedItems = await applyImportedDesign(importedItems);
         if (!appliedItems) return;
+        const profileIds = appliedItems.filter((item) => item.kind === 'profile').map((item) => item.id);
+        setImportTappingPrompt(profileIds.length ? { source: 'json', profileIds } : null);
         showNotice(`${t.loaded} · ${appliedItems.length}`);
       } catch (error) {
         console.warn('Unable to import DIY design', error);
@@ -10133,7 +10443,7 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({
     }
     setMaycadImporting(true);
     setMaycadProfileReviewPrompt(null);
-    setMaycadTappingPrompt(null);
+    setImportTappingPrompt(null);
     showNotice(t.maycadImporting);
     try {
       const result = parseMaycadSceneXml(await file.text());
@@ -10158,7 +10468,7 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({
           profileIds: importedProfileIds,
         });
       } else if (importedProfileIds.length) {
-        setMaycadTappingPrompt({ profileIds: importedProfileIds });
+        setImportTappingPrompt({ source: 'maycad', profileIds: importedProfileIds });
       }
       if (result.warnings.length) console.warn('MayCAD import review warnings:', result.warnings);
       showNotice(`${t.maycadLoaded} · ${appliedItems.length}${result.warnings.length ? ` · ⚠ ${result.warnings.length}` : ''}`);
@@ -10189,26 +10499,21 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({
       ...current,
       warnings: current.warnings.filter((warning) => !warning.includes('请核对型材型号')),
     } : current);
-    if (profileIds.length) setMaycadTappingPrompt({ profileIds });
+    if (profileIds.length) setImportTappingPrompt({ source: 'maycad', profileIds });
     showNotice(`${t.maycadProfileReviewApplied} · ${confirmedVariantByItemId.size}`);
   };
 
   const applyTappingToAllImportedProfiles = () => {
-    if (!maycadTappingPrompt) return;
-    const importedIds = new Set(maycadTappingPrompt.profileIds);
-    commit(items.map((item) => (
-      item.kind === 'profile' && importedIds.has(item.id)
-        ? { ...item, tappingLeft: true, tappingRight: true }
-        : item
-    )), null);
-    const updatedCount = maycadTappingPrompt.profileIds.length;
-    setMaycadTappingPrompt(null);
+    if (!importTappingPrompt) return;
+    commit(withImportedProfileEndTapping(items, importTappingPrompt.profileIds), null);
+    const updatedCount = importTappingPrompt.profileIds.length;
+    setImportTappingPrompt(null);
     showNotice(`${t.maycadTappingApplied} · ${updatedCount}`);
   };
 
-  const keepImportedProfilesUntapped = () => {
-    setMaycadTappingPrompt(null);
-    showNotice(t.maycadTappingSkipped);
+  const keepImportedProfileTapping = () => {
+    showNotice(importTappingPrompt?.source === 'json' ? t.jsonTappingSkipped : t.maycadTappingSkipped);
+    setImportTappingPrompt(null);
   };
 
   const toCartItems = (): CartItem[] => {
@@ -10269,6 +10574,8 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({
           cabinetDoor: true,
           doorMaterial: item.doorMaterial || 'aluminum',
           doorOverlay: item.doorOverlay || 'full',
+          doorLeafMode: item.doorLeafMode || 'single',
+          doorPairSide: item.doorPairSide,
           openingSide: item.openingSide || 'left',
           marginMm: CABINET_DOOR_PERIMETER_GAP_MM,
           hingeSide: item.openingSide || 'left',
@@ -10542,8 +10849,10 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({
           <div>
             <h1 className="text-2xl font-black tracking-tight text-slate-950 sm:text-3xl">{t.title}</h1>
             <p className="mt-1 text-sm font-medium text-slate-500">{t.subtitle}</p>
+            {draftError && <p role="alert" className="mt-2 max-w-xl text-sm font-bold text-red-700">{draftError}</p>}
           </div>
           <div className="flex flex-wrap items-center gap-2">
+            <button type="button" data-testid="diy-return-home" onClick={returnHome} className="diy-toolbar-button gap-2"><Home className="h-4 w-4" />{t.backHome}</button>
             <label className="flex items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-2 py-1.5 text-[10px] font-black text-slate-500">
               <span className="hidden sm:inline">{t.language}</span>
               <select
@@ -10700,6 +11009,38 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({
                     </div>
                   </div>
                 )}
+                {paletteGroup.id === 'materials' && cabinetDoorOpenings.length > 0 && (
+                  <div className="mb-2 rounded-2xl border border-blue-100 bg-blue-50/70 p-2.5" data-testid="diy-new-door-options">
+                    <div className="grid grid-cols-2 gap-2">
+                      <label className="block">
+                        <span className="mb-1 block text-[8px] font-black uppercase tracking-widest text-blue-700">{t.doorLeafMode}</span>
+                        <select
+                          data-testid="diy-new-door-leaf-mode"
+                          value={newDoorLeafMode}
+                          onChange={(event) => setNewDoorLeafMode(event.target.value as DIYDoorLeafMode)}
+                          className="diy-select !py-2 !text-[10px]"
+                        >
+                          <option value="single">{t.doorSingleLeaf}</option>
+                          <option value="double">{t.doorDoubleLeaf}</option>
+                        </select>
+                      </label>
+                      <label className="block">
+                        <span className="mb-1 block text-[8px] font-black uppercase tracking-widest text-blue-700">{t.doorOverlay}</span>
+                        <select
+                          data-testid="diy-new-door-overlay"
+                          value={newDoorOverlay}
+                          onChange={(event) => setNewDoorOverlay(event.target.value as DIYDoorOverlay)}
+                          className="diy-select !py-2 !text-[10px]"
+                        >
+                          <option value="full">{t.doorFullOverlay}</option>
+                          <option value="half">{t.doorHalfOverlay}</option>
+                          <option value="inset">{t.doorInsetOverlay}</option>
+                        </select>
+                      </label>
+                    </div>
+                    <p className="mt-2 text-[9px] font-bold leading-relaxed text-blue-600">{t.doorMarginHint}</p>
+                  </div>
+                )}
                 <div className="grid grid-cols-2 gap-2 xl:grid-cols-1">
                   {paletteGroup.items.map((entry) => {
                     const Icon = entry.icon;
@@ -10733,7 +11074,9 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({
                           <span className="block text-xs font-black text-slate-700">{entry.label}</span>
                           {entry.kind === 'cabinet_door' && (
                             <span className={`mt-0.5 block text-[9px] font-bold ${cabinetDoorOpenings.length ? 'text-emerald-600' : 'text-slate-400'}`}>
-                              {cabinetDoorOpenings.length ? `${t.doorFrameReady} · ${cabinetDoorOpenings.length}${t.doorLeafUnit}` : t.doorNeedFrame}
+                              {cabinetDoorOpenings.length
+                                ? `${t.doorFrameReady} · ${cabinetDoorOpenings.length * (newDoorLeafMode === 'double' ? 2 : 1)}${t.doorLeafUnit}`
+                                : t.doorNeedFrame}
                             </span>
                           )}
                           {accessoryPrice && (
@@ -10864,6 +11207,11 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({
               invalid: t.accessoryPlacementInvalid,
               success: t.accessoryPlacementSuccess,
               restore: t.restoreCursor,
+              chooseFace: t.accessoryChooseFace,
+              face: t.accessoryFace,
+              faceHint: t.accessoryFaceHint,
+              installFace: t.accessoryInstallFace,
+              closeFaces: t.accessoryCloseFaces,
             }}
             onSelect={selectItem}
             onSelectionChange={setSelection}
@@ -11167,7 +11515,7 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({
                       value={selected.doorMaterial || 'aluminum'}
                       onChange={(event) => {
                         const doorMaterial = event.target.value as DIYDoorMaterial;
-                        updateSelected({
+                        updateSelectedDoor({
                           doorMaterial,
                           thickness: doorMaterial === 'marine' ? 18 : CABINET_DOOR_ALUMINUM_DEPTH_MM,
                           colorId: doorMaterial === 'marine' ? 'wood_natural' : 'natural',
@@ -11183,29 +11531,43 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({
                   {selected.doorMaterial === 'marine' && (
                     <label className="mt-3 block">
                       <span className="diy-field-label">{t.thickness}</span>
-                      <select value={selected.thickness || 18} onChange={(event) => updateSelected({ thickness: Number(event.target.value) })} className="diy-select">
+                      <select value={selected.thickness || 18} onChange={(event) => updateSelectedDoor({ thickness: Number(event.target.value) })} className="diy-select">
                         {[12, 18].map((value) => <option key={value} value={value}>{value}mm</option>)}
                       </select>
                     </label>
                   )}
                   <label className="mt-3 block">
                     <span className="diy-field-label">{t.doorOverlay}</span>
-                    <select data-testid="diy-door-overlay" value={selected.doorOverlay || 'full'} onChange={(event) => updateSelected({ doorOverlay: event.target.value as DIYDoorOverlay })} className="diy-select">
+                    <select data-testid="diy-door-overlay" value={selected.doorOverlay || 'full'} onChange={(event) => updateSelectedDoor({ doorOverlay: event.target.value as DIYDoorOverlay })} className="diy-select">
                       <option value="full">{t.doorFullOverlay}</option>
-                      <option value="half" disabled>{t.doorHalfOverlay} · {t.doorHalfUnavailable}</option>
+                      <option value="half">{t.doorHalfOverlay}</option>
                       <option value="inset">{t.doorInsetOverlay}</option>
                     </select>
                   </label>
+                  <div className="mt-3 rounded-xl border border-white bg-white px-3 py-2.5">
+                    <div className="text-[9px] font-black uppercase tracking-widest text-slate-400">{t.doorLeafMode}</div>
+                    <div className="mt-1 text-xs font-black text-slate-800">
+                      {selected.doorLeafMode === 'double'
+                        ? selected.doorPairSide === 'right' ? t.doorPairRightLeaf : t.doorPairLeftLeaf
+                        : t.doorSingleLeaf}
+                    </div>
+                  </div>
                   <label className="mt-3 block">
                     <span className="diy-field-label">{t.doorOpeningSide}</span>
-                    <select data-testid="diy-door-opening" value={selected.openingSide || 'left'} onChange={(event) => updateSelected({ openingSide: event.target.value as 'left' | 'right' })} className="diy-select">
+                    <select
+                      data-testid="diy-door-opening"
+                      value={selected.openingSide || 'left'}
+                      disabled={selected.doorLeafMode === 'double'}
+                      onChange={(event) => updateSelectedDoor({ openingSide: event.target.value as 'left' | 'right' })}
+                      className="diy-select disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-500"
+                    >
                       <option value="left">{t.doorLeftOpen}</option>
                       <option value="right">{t.doorRightOpen}</option>
                     </select>
                   </label>
                   <div className="mt-3 rounded-xl border border-white bg-white px-3 py-2.5">
                     <div className="text-[9px] font-black uppercase tracking-widest text-slate-400">{t.doorAutoSize}</div>
-                    <div className="mt-1 text-lg font-black text-slate-900">{Math.round(selected.width || 0)} × {Math.round(selected.height || 0)}mm</div>
+                    <div className="mt-1 text-lg font-black text-slate-900">{selected.width || 0} × {selected.height || 0}mm</div>
                     <div className="mt-1 text-[10px] font-bold text-blue-600">{getDoorHingePositions(selected.height || 0).length} × {t.doorHinge} · {currency}{DOOR_HINGE_UNIT_PRICE}</div>
                   </div>
                   <p className="mt-2 text-[10px] font-bold leading-relaxed text-blue-700">{t.doorMarginHint}</p>
@@ -11759,33 +12121,33 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({
           </div>
         </div>
       )}
-      {maycadTappingPrompt && (
+      {importTappingPrompt && (
         <div className="fixed inset-0 z-[120] flex items-center justify-center bg-slate-950/55 p-4 backdrop-blur-sm">
-          <div className="w-full max-w-lg rounded-3xl border border-white/70 bg-white p-6 shadow-2xl">
+          <div role="dialog" aria-modal="true" aria-labelledby="import-tapping-title" data-testid="diy-import-tapping-dialog" className="w-full max-w-lg rounded-3xl border border-white/70 bg-white p-6 shadow-2xl">
             <div className="flex items-center gap-2 text-amber-600">
               <Wrench className="h-5 w-5" />
-              <span className="text-[10px] font-black uppercase tracking-[0.2em]">MayCAD</span>
+              <span className="text-[10px] font-black uppercase tracking-[0.2em]">{importTappingPrompt.source === 'json' ? 'JSON' : 'MayCAD'}</span>
             </div>
-            <h2 className="mt-3 text-xl font-black text-slate-950">{t.maycadTappingTitle}</h2>
-            <p className="mt-3 text-sm font-bold leading-relaxed text-slate-600">{t.maycadTappingPrompt}</p>
+            <h2 id="import-tapping-title" className="mt-3 text-xl font-black text-slate-950">{importTappingPrompt.source === 'json' ? t.jsonTappingTitle : t.maycadTappingTitle}</h2>
+            <p className="mt-3 text-sm font-bold leading-relaxed text-slate-600">{importTappingPrompt.source === 'json' ? t.jsonTappingPrompt : t.maycadTappingPrompt}</p>
             <div className="mt-3 rounded-2xl border border-blue-100 bg-blue-50 px-4 py-3 text-xs font-black leading-relaxed text-blue-800">
-              {t.maycadImportScope}
+              {importTappingPrompt.source === 'json' ? t.jsonTappingScope : t.maycadImportScope}
             </div>
             <div className="mt-4 rounded-2xl bg-amber-50 px-4 py-3 text-xs font-black text-amber-800">
-              {maycadTappingPrompt.profileIds.length} {t.profileParts}
+              {importTappingPrompt.profileIds.length} {t.profileParts}
             </div>
             <div className="mt-6 grid grid-cols-1 gap-3 sm:grid-cols-2">
               <button
                 type="button"
-                data-testid="maycad-keep-untapped"
-                onClick={keepImportedProfilesUntapped}
+                data-testid={importTappingPrompt.source === 'json' ? 'json-keep-tapping' : 'maycad-keep-untapped'}
+                onClick={keepImportedProfileTapping}
                 className="rounded-2xl border border-slate-200 px-4 py-3 text-sm font-black text-slate-600 transition hover:bg-slate-50"
               >
-                {t.maycadKeepNoTapping}
+                {importTappingPrompt.source === 'json' ? t.jsonKeepTapping : t.maycadKeepNoTapping}
               </button>
               <button
                 type="button"
-                data-testid="maycad-tap-all-both-ends"
+                data-testid={`${importTappingPrompt.source}-tap-all-both-ends`}
                 onClick={applyTappingToAllImportedProfiles}
                 className="rounded-2xl bg-amber-500 px-4 py-3 text-sm font-black text-white shadow-lg shadow-amber-500/20 transition hover:bg-amber-400"
               >

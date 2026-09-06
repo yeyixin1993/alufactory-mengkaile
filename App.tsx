@@ -835,6 +835,8 @@ const Cart: React.FC<{
   );
   const [isEditingAddress, setIsEditingAddress] = useState<Address | null | 'new'>(null);
   const [selectedCourier, setSelectedCourier] = useState<ShippingMethod | 'auto'>('auto');
+  const [deletingAddressId, setDeletingAddressId] = useState<string | null>(null);
+  const [addressDeleteError, setAddressDeleteError] = useState('');
   const [include304Screws, setInclude304Screws] = useState(false);
   const [includeLabelService, setIncludeLabelService] = useState(false);
 
@@ -843,10 +845,35 @@ const Cart: React.FC<{
   const selectedAddress = addresses.find(a => a.id === selectedAddressId) || null;
 
   useEffect(() => {
-    if (addresses.length > 0 && !selectedAddressId) {
-      setSelectedAddressId(addresses[0].id);
+    if (!addresses.some(address => address.id === selectedAddressId)) {
+      setSelectedAddressId(addresses.find(address => address.isDefault)?.id || addresses[0]?.id || null);
     }
   }, [addresses, selectedAddressId]);
+
+  const handleDeleteAddress = async (address: Address) => {
+    if (!user || deletingAddressId || !addresses.some(entry => entry.id === address.id)) return;
+    const prompt = language === 'cn'
+      ? `确定删除收货地址“${address.recipient_name} · ${address.phone}”吗？已生成订单中的地址不会改变。`
+      : language === 'jp'
+        ? `配送先「${address.recipient_name} · ${address.phone}」を削除しますか？作成済み注文の住所は変更されません。`
+        : `Delete shipping address “${address.recipient_name} · ${address.phone}”? Existing orders will keep their address.`;
+    if (!window.confirm(prompt)) return;
+    setDeletingAddressId(address.id);
+    setAddressDeleteError('');
+    try {
+      const updatedUser = await ApiService.deleteAddress(address.id);
+      // DELETE has succeeded even if the subsequent profile refresh is unavailable.
+      updateUser(updatedUser || { ...user, addresses: addresses.filter(entry => entry.id !== address.id) });
+      setIsEditingAddress(current => current && current !== 'new' && current.id === address.id ? null : current);
+    } catch (error) {
+      setAddressDeleteError(language === 'cn'
+        ? '地址删除失败，请重试。'
+        : language === 'jp' ? '住所を削除できませんでした。もう一度お試しください。' : 'Could not delete this address. Please try again.');
+      console.error('Failed to delete cart address:', error);
+    } finally {
+      setDeletingAddressId(null);
+    }
+  };
 
   // Check if any profile item exceeds 1.4m (1500mm)
   const hasOverlength = cart.some(item => {
@@ -1234,7 +1261,7 @@ const Cart: React.FC<{
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-10">
         <div className="lg:col-span-2 space-y-8">
           <div className="flex justify-between items-center bg-white p-5 rounded-[2rem] shadow-xl border border-slate-100">
-            <Link to="/" className="flex items-center gap-2 text-blue-600 font-black px-5 py-3 rounded-2xl hover:bg-blue-50 transition-all text-sm"><ArrowLeft className="w-4 h-4"/> {language === 'cn' ? '返回首页' : language === 'jp' ? 'ホームに戻る' : 'Back to Home'}</Link>
+            <Link to="/" className="flex items-center gap-2 text-blue-600 font-black px-5 py-3 rounded-2xl hover:bg-blue-50 transition-all text-sm"><ArrowLeft className="w-4 h-4"/> {language === 'cn' ? '返回添加其他材料' : language === 'jp' ? '戻って他の材料を追加' : 'Back to add other materials'}</Link>
             <div className="flex gap-2">
               <button onClick={() => openFactorySheetPreview({ cart, user, language, showPrice: true, address: selectedAddress || undefined, shippingMethod: SHIPPING_METHOD_NAMES[activeCourier][language], shippingFee, include304Screws, includeLabelService, labelFee, overlengthFee })} className="flex items-center gap-2 text-slate-700 font-bold px-5 py-3 rounded-2xl border border-slate-200 hover:bg-slate-50 transition-all text-sm"><Eye className="w-4 h-4"/> {t.preview}</button>
               {user?.role === 'admin' && (
@@ -1246,15 +1273,19 @@ const Cart: React.FC<{
           <div className="bg-white p-10 rounded-[2.5rem] border border-slate-100 shadow-2xl">
              <div className="flex justify-between items-center mb-8">
                <h3 className="text-2xl font-black flex items-center gap-3 text-slate-800"><MapPin className="w-7 h-7 text-blue-600"/>{t.shippingAddress}</h3>
-               <button onClick={handleAddNewAddress} className="bg-blue-50 text-blue-600 px-4 py-2 rounded-xl text-sm font-black hover:bg-blue-100 transition-all">{t.addNew}</button>
+               <button onClick={handleAddNewAddress} disabled={Boolean(deletingAddressId)} className="bg-blue-50 text-blue-600 px-4 py-2 rounded-xl text-sm font-black hover:bg-blue-100 transition-all disabled:opacity-50">{t.addNew}</button>
              </div>
+             {addressDeleteError && <p role="alert" className="mb-4 text-sm font-bold text-red-600">{addressDeleteError}</p>}
              <div className="space-y-4">
                {addresses.map(addr => (
                  <div key={addr.id} onClick={() => setSelectedAddressId(addr.id)} className={`p-6 rounded-[2rem] border-2 cursor-pointer relative group transition-all duration-300 ${selectedAddressId === addr.id ? 'border-blue-500 bg-blue-50/50 shadow-lg shadow-blue-500/10' : 'border-slate-100 hover:border-slate-200 hover:bg-slate-50'}`}>
                    {selectedAddressId === addr.id && <div className="absolute top-6 right-6 bg-blue-600 p-1.5 rounded-full text-white shadow-xl animate-in zoom-in"><CheckCircle className="w-5 h-5"/></div>}
                    <div className="font-black text-slate-900 text-xl mb-1">{addr.recipient_name} · {addr.phone}</div>
                    <div className="text-sm text-slate-500 leading-relaxed">{addr.province} {addr.detail}</div>
-                   <button onClick={(e) => { e.stopPropagation(); setIsEditingAddress(addr); }} className="mt-4 flex items-center gap-1.5 text-xs font-black text-blue-600 bg-white border border-blue-100 px-3 py-1.5 rounded-xl hover:bg-blue-600 hover:text-white transition-all"><Pencil className="w-3 h-3"/>{t.edit}</button>
+                   <div className="mt-4 flex flex-wrap gap-2">
+                     <button type="button" disabled={Boolean(deletingAddressId)} onClick={(e) => { e.stopPropagation(); setIsEditingAddress(addr); }} className="flex items-center gap-1.5 text-xs font-black text-blue-600 bg-white border border-blue-100 px-3 py-1.5 rounded-xl hover:bg-blue-600 hover:text-white transition-all disabled:opacity-50"><Pencil className="w-3 h-3"/>{t.edit}</button>
+                     <button type="button" data-testid={`cart-delete-address-${addr.id}`} disabled={Boolean(deletingAddressId)} aria-busy={deletingAddressId === addr.id} onClick={(e) => { e.stopPropagation(); void handleDeleteAddress(addr); }} className="flex items-center gap-1.5 text-xs font-black text-red-600 bg-white border border-red-100 px-3 py-1.5 rounded-xl hover:bg-red-600 hover:text-white transition-all disabled:cursor-wait disabled:opacity-50"><Trash2 className="w-3 h-3"/>{t.remove}</button>
+                   </div>
                  </div>
                ))}
                {addresses.length === 0 && <p className="text-slate-400 italic text-sm text-center py-6 bg-slate-50 rounded-3xl">{t.noAddress}{t.addNewAddress}</p>}

@@ -15,6 +15,8 @@ export interface ProductionWorkbookData {
     autoAddedTapping?: boolean;
     doorMaterial?: string;
     doorOverlay?: string;
+    doorLeafMode?: string;
+    doorPairSide?: string;
     openingSide?: string;
     lengthMm?: number;
     widthMm?: number;
@@ -264,6 +266,8 @@ export const buildProductionXlsx = (production: ProductionWorkbookData) => {
     part.autoAddedTapping === undefined ? '' : part.autoAddedTapping ? '是' : '否',
     part.doorMaterial === 'marine' ? '海洋板门' : part.doorMaterial === 'pegboard' ? '铝洞洞板门' : part.doorMaterial === 'aluminum' ? '铝柜门' : '',
     part.doorOverlay === 'half' ? '半盖' : part.doorOverlay === 'inset' ? '大弯（不盖型材）' : part.doorOverlay === 'full' ? '全盖' : '',
+    part.doorLeafMode === 'double' ? '对开门' : part.doorLeafMode === 'single' ? '单开门' : '',
+    part.doorPairSide === 'right' ? '右扇' : part.doorPairSide === 'left' ? '左扇' : '',
     part.openingSide === 'right' ? '右开' : part.openingSide === 'left' ? '左开' : '', part.remark,
   ]);
   const holeRows = production.holes.map((hole) => [
@@ -282,9 +286,9 @@ export const buildProductionXlsx = (production: ProductionWorkbookData) => {
     {
       name: '零件明细',
       title: '萌开了 3D DIY 零件明细',
-      headers: ['序号', '零件ID', '类型', '型号', '适配型材规格', '长度mm', '宽度mm', '高度mm', '厚度mm', '截面/表面档位', '层板托类型', '颜色', '颜色ID', '数量', '洞洞板孔型', '位置XYZ(mm)', '旋转XYZ(°)', '左端攻丝孔数', '右端攻丝孔数', '螺丝头型', '关联型材ID', '关联孔ID', '自动生成', '位置锁定', '连接型材ID', '连接关系ID', '配件螺纹规格', '带刹车', '端盖端面', '端盖自动攻丝', '柜门材料', '柜门覆盖方式', '柜门开向', '备注'],
+      headers: ['序号', '零件ID', '类型', '型号', '适配型材规格', '长度mm', '宽度mm', '高度mm', '厚度mm', '截面/表面档位', '层板托类型', '颜色', '颜色ID', '数量', '洞洞板孔型', '位置XYZ(mm)', '旋转XYZ(°)', '左端攻丝孔数', '右端攻丝孔数', '螺丝头型', '关联型材ID', '关联孔ID', '自动生成', '位置锁定', '连接型材ID', '连接关系ID', '配件螺纹规格', '带刹车', '端盖端面', '端盖自动攻丝', '柜门材料', '柜门覆盖方式', '柜门形式', '对开门扇位', '柜门开向', '备注'],
       rows: partRows,
-      widths: [8, 25, 14, 14, 16, 12, 12, 12, 12, 18, 16, 15, 14, 9, 14, 20, 20, 15, 15, 14, 25, 25, 12, 12, 38, 38, 16, 12, 12, 16, 14, 16, 12, 38],
+      widths: [8, 25, 14, 14, 16, 12, 12, 12, 12, 18, 16, 15, 14, 9, 14, 20, 20, 15, 15, 14, 25, 25, 12, 12, 38, 38, 16, 12, 12, 16, 14, 16, 12, 12, 12, 38],
     },
     {
       name: '打孔明细',
@@ -455,6 +459,8 @@ export const parseProductionXlsx = (content: ArrayBuffer): ProductionWorkbookDat
       autoAddedTapping: record['端盖自动攻丝'] ? record['端盖自动攻丝'] === '是' : undefined,
       doorMaterial: record['柜门材料'] === '海洋板门' ? 'marine' : record['柜门材料'] === '铝洞洞板门' ? 'pegboard' : record['柜门材料'] === '铝柜门' ? 'aluminum' : record['柜门材料'] || undefined,
       doorOverlay: record['柜门覆盖方式'] === '半盖' ? 'half' : (record['柜门覆盖方式'] || '').includes('大弯') ? 'inset' : record['柜门覆盖方式'] === '全盖' ? 'full' : record['柜门覆盖方式'] || undefined,
+      doorLeafMode: record['柜门形式'] === '对开门' ? 'double' : record['柜门形式'] === '单开门' ? 'single' : undefined,
+      doorPairSide: record['对开门扇位'] === '右扇' ? 'right' : record['对开门扇位'] === '左扇' ? 'left' : undefined,
       openingSide: record['柜门开向'] === '右开' ? 'right' : record['柜门开向'] === '左开' ? 'left' : record['柜门开向'] || undefined,
       lengthMm: optionalNumber(record['长度mm']),
       widthMm: optionalNumber(record['宽度mm']),

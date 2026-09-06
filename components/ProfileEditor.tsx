@@ -10,6 +10,7 @@ import { Plus, Trash2, List, ShoppingCart, Pencil, X, Hammer, Settings2, Copy } 
 import ProfileVisualizer from './ProfileVisualizer';
 import ProfileSectionGuide from './ProfileSectionGuide';
 import { ApiService } from '../services/apiService';
+import { SHOW_STOREFRONT_INVENTORY } from '../utils/storefrontFeatures';
 
 interface ProfileEditorProps {
   language: Language;
@@ -115,6 +116,7 @@ const ProfileEditor: React.FC<ProfileEditorProps> = ({ language, product, user, 
 
   useEffect(() => {
     let active = true;
+    if (!SHOW_STOREFRONT_INVENTORY) return;
     setInventoryLoaded(false);
     ApiService.getProfileInventory()
       .then((rows) => {
@@ -350,7 +352,7 @@ const ProfileEditor: React.FC<ProfileEditorProps> = ({ language, product, user, 
           </div>
         </div>
 
-        {inventoryLoaded && inventoryMeters !== null && (
+        {SHOW_STOREFRONT_INVENTORY && inventoryLoaded && inventoryMeters !== null && (
           <div
             data-testid="profile-inventory-meters"
             className={`mb-8 rounded-2xl border px-4 py-3 text-sm font-black ${inventoryMeters > 0 ? 'border-emerald-200 bg-emerald-50 text-emerald-800' : 'border-amber-200 bg-amber-50 text-amber-800'}`}
