@@ -61,6 +61,7 @@ export interface FinishedFurnitureQuote {
   pricingModel: 'component_total' | 'display_rack_3_0';
   totalPriceCny?: number;
   priceBreakdown?: Record<string, number>;
+  parameters?: Record<string, number | string>;
 }
 
 export const DIY_TEMPLATE_STORAGE_PREFIX = 'mengkaile_diy_template_v1:';

@@ -1355,6 +1355,7 @@ const normalizeFinishedFurnitureQuote = (value: unknown): FinishedFurnitureQuote
     pricingModel: quote.pricingModel as FinishedFurnitureQuote['pricingModel'],
     ...(Number.isFinite(Number(quote.totalPriceCny)) ? { totalPriceCny: Number(quote.totalPriceCny) } : {}),
     ...(quote.priceBreakdown && typeof quote.priceBreakdown === 'object' ? { priceBreakdown: quote.priceBreakdown } : {}),
+    ...(quote.parameters && typeof quote.parameters === 'object' ? { parameters: quote.parameters } : {}),
   };
 };
 
@@ -10789,7 +10790,8 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({
         }
       }
       setItems(normalizeManufacturingMeasurements(completedItems));
-      setFinishedFurnitureQuote(normalizeFinishedFurnitureQuote(payload.finishedFurniture));
+      const templateQuote = normalizeFinishedFurnitureQuote(payload.finishedFurniture);
+      setFinishedFurnitureQuote(templateQuote ? { ...templateQuote, parameters: { ...payload.summary } } : null);
       setDesignSource(createDesignSourceInfo('parametric_template', {
         modelName: payload.source === 'display_rack_3_0' ? '叶总展示柜 3.0' : String(payload.source || '参数化产品'),
         sourceSummary: `参数化模板：${String(payload.source || 'unknown')}`,
@@ -11245,7 +11247,7 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({
     const targetTotal = Number(total.toFixed(1));
     const sourceTotal = groupedItems.reduce((sum, item) => sum + Math.max(0, Number(item.totalPrice || 0)), 0);
     let allocatedTotal = 0;
-    return groupedItems.map((item, itemIndex) => {
+    const productionItems = groupedItems.map((item, itemIndex) => {
       const isLastItem = itemIndex === groupedItems.length - 1;
       const weight = sourceTotal > 0
         ? Math.max(0, Number(item.totalPrice || 0)) / sourceTotal
@@ -11292,6 +11294,27 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({
         },
       };
     });
+    const finishedProduct = INITIAL_PRODUCTS.find((product) => product.id === finishedFurnitureQuote.productId);
+    if (!finishedProduct) return productionItems;
+    return [{
+      id: makeId(),
+      product: finishedProduct,
+      quantity: 1,
+      totalPrice: targetTotal,
+      config: {
+        type: 'finished_furniture',
+        unitPrice: targetTotal,
+        finishedFurnitureCategory: finishedFurnitureQuote.category,
+        finishedFurnitureSource: finishedFurnitureQuote.source,
+        finishedFurnitureProductId: finishedFurnitureQuote.productId,
+        finishedFurnitureTotalCny: targetTotal,
+        finishedFurnitureQuote,
+        parametricSummary: finishedFurnitureQuote.parameters || {},
+        productionItems,
+        designSource,
+        hideComponentPrice: true,
+      },
+    }];
   };
 
   const addDesignToCart = async () => {

@@ -13,6 +13,7 @@ import {
   summarizeDiyScrewCartItems,
 } from '../utils/cartAccessories';
 import { getAccessoryShippingWeightKg } from '../utils/membership';
+import { expandFinishedFurnitureCartItems } from '../utils/finishedFurnitureCart';
 
 interface FactorySheetProps {
   cart: CartItem[];
@@ -115,13 +116,14 @@ const resolveBoardColorLabel = (cfg: any, language: Language, productType?: Prod
 const FactorySheet: React.FC<FactorySheetProps> = ({ cart, user, language, orderRef, dateStr, id, showPrice = true, address, shippingMethod, shippingFee: passedShippingFee, include304Screws = false, includeLabelService = false, labelFee: passedLabelFee, overlengthFee: passedOverlengthFee }) => {
   const t = TRANSLATIONS[language];
   const currency = getCurrency(language);
+  const productionCart = React.useMemo(() => expandFinishedFurnitureCartItems(cart), [cart]);
  
 // Summarize profiles for a sheet: length, model, color, finish, tap, quantity, remarks
   const profileSummary = React.useMemo(() => {
     type Row = { length: string; model: string; color: string; section: string; tap: string; quantity: number; remark: string; key: string; miter: string };
     const map = new Map<string, Row>();
 
-    groupFactoryDisplayCartItems(cart).forEach(item => {
+    groupFactoryDisplayCartItems(productionCart).forEach(item => {
       if (item.product.type !== ProductType.PROFILE) return;
 
       const cfg = item.config as ProfileConfig;
@@ -222,7 +224,7 @@ const FactorySheet: React.FC<FactorySheetProps> = ({ cart, user, language, order
     });
 
     return Array.from(map.values());
-  }, [cart, language, t]);
+  }, [productionCart, language, t]);
 
   // Use passed address or fallback to default user address
   const activeAddress = address || user?.addresses.find(a => a.isDefault) || user?.addresses[0];
@@ -230,8 +232,8 @@ const FactorySheet: React.FC<FactorySheetProps> = ({ cart, user, language, order
   const userPhone = activeAddress?.phone || user?.id || '-';
 
   const baseTotal = cart.reduce((acc, i) => acc + i.totalPrice, 0);
-  const displayCart = React.useMemo(() => groupFactoryDisplayCartItems(cart), [cart]);
-  const diyScrewRows = React.useMemo(() => summarizeDiyScrewCartItems(cart), [cart]);
+  const displayCart = React.useMemo(() => groupFactoryDisplayCartItems(productionCart), [productionCart]);
+  const diyScrewRows = React.useMemo(() => summarizeDiyScrewCartItems(productionCart), [productionCart]);
   const showAnyDiyScrewPrice = showPrice && diyScrewRows.some((row) => !row.hideComponentPrice);
   const hasDiyScrewRows = diyScrewRows.length > 0;
   const nonScrewDisplayCart = React.useMemo(
@@ -242,7 +244,7 @@ const FactorySheet: React.FC<FactorySheetProps> = ({ cart, user, language, order
   const profileMetersSummary = React.useMemo(() => {
     const meterMap = new Map<string, number>();
 
-    cart.forEach((item) => {
+    productionCart.forEach((item) => {
       if (item.product.type !== ProductType.PROFILE) return;
       const cfg = item.config as ProfileConfig;
       const lengthMm = Number(cfg.length) || 0;
@@ -268,10 +270,10 @@ const FactorySheet: React.FC<FactorySheetProps> = ({ cart, user, language, order
     return Array.from(meterMap.entries())
       .map(([name, meters]) => ({ name, meters }))
       .sort((a, b) => b.meters - a.meters);
-  }, [cart, language, t.finishOxidized, t.finishPowder, t.finishElectrophoretic]);
+  }, [productionCart, language, t.finishOxidized, t.finishPowder, t.finishElectrophoretic]);
 
   const profileHoleTotals = React.useMemo(() => {
-    return cart.reduce(
+    return productionCart.reduce(
       (acc, item) => {
         if (item.product.type !== ProductType.PROFILE) return acc;
         const cfg = item.config as ProfileConfig;
@@ -287,14 +289,14 @@ const FactorySheet: React.FC<FactorySheetProps> = ({ cart, user, language, order
       },
       { through: 0, countersunk: 0 }
     );
-  }, [cart]);
+  }, [productionCart]);
 
   // Explicit DIY screw rows already carry customer-confirmed quantities and
   // prices. They replace (rather than stack with) the legacy per-hole add-on.
   const effectiveInclude304Screws = include304Screws && !hasDiyScrewRows;
   const screwPlan = React.useMemo(
-    () => calculateScrewPlan(cart, effectiveInclude304Screws),
-    [cart, effectiveInclude304Screws],
+    () => calculateScrewPlan(productionCart, effectiveInclude304Screws),
+    [productionCart, effectiveInclude304Screws],
   );
   const diyScrewByModel = React.useMemo(() => {
     const map = new Map<string, { socketCylinder: number; buttonSocket: number; flatSocket: number }>();
@@ -321,7 +323,7 @@ const FactorySheet: React.FC<FactorySheetProps> = ({ cart, user, language, order
   }, [screwPlan.models]);
 
   const labelProfileCount = React.useMemo(() => {
-    return cart.reduce((sum, item) => {
+    return productionCart.reduce((sum, item) => {
       if (item.product.type !== ProductType.PROFILE) return sum;
       const cfg = item.config as ProfileConfig;
       if (includeLabelService || cfg.labelService) {
@@ -329,7 +331,7 @@ const FactorySheet: React.FC<FactorySheetProps> = ({ cart, user, language, order
       }
       return sum;
     }, 0);
-  }, [cart, includeLabelService]);
+  }, [productionCart, includeLabelService]);
 
   const labelFee = typeof passedLabelFee === 'number' ? passedLabelFee : labelProfileCount;
 
@@ -337,7 +339,7 @@ const FactorySheet: React.FC<FactorySheetProps> = ({ cart, user, language, order
   const calculateTotalWeight = () => {
     let totalWeightKg = 0;
     let hasAccessory = false;
-    cart.forEach(item => {
+    productionCart.forEach(item => {
       if (item.product.type === ProductType.PROFILE) {
         const cfg = item.config as ProfileConfig;
         const weightPerM = PROFILE_WEIGHTS[cfg.variantId!] || 0.6;
@@ -352,7 +354,7 @@ const FactorySheet: React.FC<FactorySheetProps> = ({ cart, user, language, order
   };
 
   // 2. 运费计算 — use passed-in values if available, otherwise auto-calculate cheapest
-  const hasOverlength = cart.some(item => {
+  const hasOverlength = productionCart.some(item => {
     if (item.product.type === ProductType.PROFILE) {
       const cfg = item.config as ProfileConfig;
       return cfg.length > 1500;

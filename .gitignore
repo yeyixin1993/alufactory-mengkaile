@@ -12,6 +12,7 @@ dist
 dist-ssr
 .verify-dist
 .verify-source-dist
+.verify-furniture-cart-dist
 *.local
 
 # Editor directories and files
