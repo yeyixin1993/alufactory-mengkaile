@@ -12527,19 +12527,12 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({
               <div className="rounded-2xl bg-slate-950 p-4 text-white">
                 <div className="text-[10px] font-black uppercase tracking-widest text-slate-400">
                   {finishedFurnitureQuote
-                    ? (language === 'cn' ? '成品家具总价' : language === 'jp' ? '完成家具合計' : 'Finished-furniture total')
+                    ? (language === 'cn' ? '一口价' : language === 'jp' ? '一律価格' : 'Fixed price')
                     : t.total}
                 </div>
                 <div className="mt-1 text-2xl font-black">
                   {currency}{(finishedFurnitureQuote ? total : calculatePrice(selected, user)).toFixed(1)}
                 </div>
-                {finishedFurnitureQuote && (
-                  <div className="mt-1 text-[9px] font-bold text-slate-400">
-                    {language === 'cn'
-                      ? '保留材料明细，不显示单项材料价格'
-                      : language === 'jp' ? '材料明細を保持し、単品価格は非表示' : 'Material details remain visible; component prices are hidden'}
-                  </div>
-                )}
               </div>
               </div>
             </>
