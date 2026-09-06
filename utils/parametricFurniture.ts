@@ -50,7 +50,17 @@ export interface ParametricTemplatePayload {
   source: ParametricFurnitureSource;
   createdAt: string;
   summary: Record<string, number | string>;
+  finishedFurniture: FinishedFurnitureQuote;
   items: ParametricSceneItem[];
+}
+
+export interface FinishedFurnitureQuote {
+  category: 'finished_furniture';
+  source: ParametricFurnitureSource;
+  productId: 'p7' | 'p8' | 'p9';
+  pricingModel: 'component_total' | 'display_rack_3_0';
+  totalPriceCny?: number;
+  priceBreakdown?: Record<string, number>;
 }
 
 export const DIY_TEMPLATE_STORAGE_PREFIX = 'mengkaile_diy_template_v1:';
@@ -380,6 +390,12 @@ export const buildCalligraphyCabinetTemplate = (
     schemaVersion: 1,
     source: 'calligraphy_cabinet',
     createdAt: new Date().toISOString(),
+    finishedFurniture: {
+      category: 'finished_furniture',
+      source: 'calligraphy_cabinet',
+      productId: 'p7',
+      pricingModel: 'component_total',
+    },
     summary: {
       columns,
       layers,
@@ -750,6 +766,12 @@ export const buildWardrobeTemplate = (
     schemaVersion: 1,
     source: 'wardrobe',
     createdAt: new Date().toISOString(),
+    finishedFurniture: {
+      category: 'finished_furniture',
+      source: 'wardrobe',
+      productId: 'p8',
+      pricingModel: 'component_total',
+    },
     summary: {
       lengthMm,
       widthMm,

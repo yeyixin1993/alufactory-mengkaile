@@ -10,9 +10,15 @@ import {
   Sparkles,
 } from 'lucide-react';
 import type { Language } from '../types';
+import {
+  MARINE_BOARD_COLORS,
+  MARINE_BOARD_ORIGINAL_ORDER_NAME,
+  PROFILE_COLORS,
+} from '../constants';
 import { DIY_TEMPLATE_STORAGE_PREFIX } from '../utils/parametricFurniture';
 import {
   buildDisplayRack3Template,
+  calculateDisplayRack3Price,
   calculateDisplayRack3Layout,
   DISPLAY_RACK_3_BASELINE,
   DISPLAY_RACK_3_LIMITS,
@@ -37,6 +43,9 @@ const COPY = {
     levels: '层板与抽屉数量',
     upperLevels: '上部层板数量',
     lowerLevels: '下部抽屉层数',
+    colors: '外观颜色',
+    profileColor: '型材颜色',
+    marineBoardColor: '海洋板颜色',
     trackLayout: '上部层板高度布置',
     auto: '自动安全均分',
     custom: '逐层自定义',
@@ -52,7 +61,15 @@ const COPY = {
     shafts: 'Ø8光轴',
     supports: 'SK8 + SHF8',
     drawerSlides: '抽屉滑轨套装',
-    total: '固定产品与配件合计',
+    total: '材料与配件数量',
+    quote: '成品家具总价',
+    basePrice: '本色标准款',
+    sizeFee: '定制尺寸服务费',
+    upperAdjustment: '展示层板调整',
+    lowerAdjustment: '抽屉调整',
+    profileColorFee: '彩色型材',
+    boardColorFee: '彩色海洋板',
+    pricingHint: '材料明细会完整生成；成品家具按整件报价，不显示单项材料价格。',
     valid: '组合可生成',
     invalid: '当前组合不可生成',
     generate: '生成完整展架并进入3D设计器',
@@ -69,6 +86,9 @@ const COPY = {
     levels: 'Shelf and drawer counts',
     upperLevels: 'Upper shelf count',
     lowerLevels: 'Lower drawer count',
+    colors: 'Finish colors',
+    profileColor: 'Profile color',
+    marineBoardColor: 'Marine-board color',
     trackLayout: 'Upper-shelf height layout',
     auto: 'Automatic safe spacing',
     custom: 'Set every level',
@@ -84,7 +104,15 @@ const COPY = {
     shafts: 'Ø8 shafts',
     supports: 'SK8 + SHF8',
     drawerSlides: 'Drawer-slide sets',
-    total: 'Fixed product and accessories',
+    total: 'Materials and accessories',
+    quote: 'Finished-furniture total',
+    basePrice: 'Natural standard model',
+    sizeFee: 'Custom-size service',
+    upperAdjustment: 'Display-shelf adjustment',
+    lowerAdjustment: 'Drawer adjustment',
+    profileColorFee: 'Colored profiles',
+    boardColorFee: 'Colored marine board',
+    pricingHint: 'The full material list is generated. Finished furniture is quoted as one product without component prices.',
     valid: 'Ready to generate',
     invalid: 'This combination cannot be generated',
     generate: 'Generate complete rack in 3D designer',
@@ -101,6 +129,9 @@ const COPY = {
     levels: '棚板・引出し数',
     upperLevels: '上部棚板数',
     lowerLevels: '下部引出し数',
+    colors: '仕上げ色',
+    profileColor: '形材カラー',
+    marineBoardColor: 'マリンボードカラー',
     trackLayout: '上部棚板高さ配置',
     auto: '安全間隔で自動配置',
     custom: '各段を個別指定',
@@ -116,7 +147,15 @@ const COPY = {
     shafts: 'Ø8軸',
     supports: 'SK8 + SHF8',
     drawerSlides: '引出しレールセット',
-    total: '固定製品・部品合計',
+    total: '材料・部品数',
+    quote: '完成家具合計',
+    basePrice: '標準ナチュラル仕様',
+    sizeFee: '特注寸法サービス',
+    upperAdjustment: '展示棚板調整',
+    lowerAdjustment: '引出し調整',
+    profileColorFee: 'カラー形材',
+    boardColorFee: 'カラーマリンボード',
+    pricingHint: '材料明細はすべて生成します。完成家具は一式価格とし、材料ごとの価格は表示しません。',
     valid: '生成できます',
     invalid: '現在の組合せでは生成できません',
     generate: '完成棚を生成して3Dデザイナーへ',
@@ -289,6 +328,8 @@ const DisplayRackConfigurator: React.FC<DisplayRackConfiguratorProps> = ({ langu
   const [baseCabinetHeightMm, setBaseCabinetHeightMm] = useState<number>(DISPLAY_RACK_3_BASELINE.baseCabinetHeightMm);
   const [upperLevels, setUpperLevels] = useState<number>(DISPLAY_RACK_3_BASELINE.upperLevels);
   const [lowerLevels, setLowerLevels] = useState<number>(DISPLAY_RACK_3_BASELINE.lowerLevels);
+  const [profileColorId, setProfileColorId] = useState('natural');
+  const [marineBoardColorId, setMarineBoardColorId] = useState('wood_natural');
   const [trackLayoutMode, setTrackLayoutMode] = useState<'auto' | 'custom'>('auto');
   const [trackHeightsMm, setTrackHeightsMm] = useState<number[]>(() => (
     calculateDisplayRack3Layout({ ...DISPLAY_RACK_3_BASELINE, trackLayoutMode: 'auto' }).upperTierHeightsMm
@@ -301,10 +342,13 @@ const DisplayRackConfigurator: React.FC<DisplayRackConfiguratorProps> = ({ langu
     baseCabinetHeightMm,
     upperLevels,
     lowerLevels,
+    profileColorId,
+    marineBoardColorId,
     trackLayoutMode,
     trackHeightsMm: trackLayoutMode === 'custom' ? trackHeightsMm : undefined,
-  }), [baseCabinetHeightMm, depthMm, heightMm, lowerLevels, trackHeightsMm, trackLayoutMode, upperLevels, widthMm]);
+  }), [baseCabinetHeightMm, depthMm, heightMm, lowerLevels, marineBoardColorId, profileColorId, trackHeightsMm, trackLayoutMode, upperLevels, widthMm]);
   const validation = useMemo(() => validateDisplayRack3Parameters(parameters), [parameters]);
+  const price = useMemo(() => calculateDisplayRack3Price(parameters), [parameters]);
 
   const automaticLayoutFor = (overrides: Partial<DisplayRack3Parameters> = {}) => {
     const candidate = validateDisplayRack3Parameters({ ...parameters, ...overrides, trackLayoutMode: 'auto', trackHeightsMm: undefined });
@@ -329,6 +373,8 @@ const DisplayRackConfigurator: React.FC<DisplayRackConfiguratorProps> = ({ langu
     setBaseCabinetHeightMm(DISPLAY_RACK_3_BASELINE.baseCabinetHeightMm);
     setUpperLevels(DISPLAY_RACK_3_BASELINE.upperLevels);
     setLowerLevels(DISPLAY_RACK_3_BASELINE.lowerLevels);
+    setProfileColorId('natural');
+    setMarineBoardColorId('wood_natural');
     setTrackLayoutMode('auto');
     setTrackHeightsMm(calculateDisplayRack3Layout({ ...DISPLAY_RACK_3_BASELINE, trackLayoutMode: 'auto' }).upperTierHeightsMm);
   };
@@ -338,7 +384,8 @@ const DisplayRackConfigurator: React.FC<DisplayRackConfiguratorProps> = ({ langu
     panels: 1 + lowerLevels * 5 + upperLevels * 2,
     shafts: upperLevels,
     supports: upperLevels * 5,
-    total: 15 + lowerLevels * 7 + upperLevels * 12,
+    drawerSlides: lowerLevels,
+    total: 15 + lowerLevels * 8 + upperLevels * 12,
   };
 
   return (
@@ -374,6 +421,28 @@ const DisplayRackConfigurator: React.FC<DisplayRackConfiguratorProps> = ({ langu
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <RangeNumberControl label={copy.upperLevels} value={upperLevels} {...DISPLAY_RACK_3_LIMITS.upperLevels} unit="" onChange={changeUpperLevels} />
               <RangeNumberControl label={copy.lowerLevels} value={lowerLevels} {...DISPLAY_RACK_3_LIMITS.lowerLevels} unit="" onChange={setLowerLevels} />
+            </div>
+          </section>
+
+          <section>
+            <h4 className="mb-3 text-sm font-black text-slate-900">{copy.colors}</h4>
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <label className="rounded-2xl border border-slate-200 bg-white p-3 text-[11px] font-black text-slate-700 shadow-sm">
+                <span className="mb-2 block">{copy.profileColor}</span>
+                <select value={profileColorId} onChange={(event) => setProfileColorId(event.target.value)} className="h-10 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-sm font-bold text-slate-900 outline-none focus:border-blue-500">
+                  {PROFILE_COLORS.map((color) => <option key={color.id} value={color.id}>{color.name[language]}</option>)}
+                </select>
+              </label>
+              <label className="rounded-2xl border border-slate-200 bg-white p-3 text-[11px] font-black text-slate-700 shadow-sm">
+                <span className="mb-2 block">{copy.marineBoardColor}</span>
+                <select value={marineBoardColorId} onChange={(event) => setMarineBoardColorId(event.target.value)} className="h-10 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-sm font-bold text-slate-900 outline-none focus:border-blue-500">
+                  {MARINE_BOARD_COLORS.map((color) => (
+                    <option key={color.id} value={color.id}>
+                      {color.id === 'wood_natural' ? MARINE_BOARD_ORIGINAL_ORDER_NAME[language] : color.name[language]}
+                    </option>
+                  ))}
+                </select>
+              </label>
             </div>
           </section>
 
@@ -451,6 +520,19 @@ const DisplayRackConfigurator: React.FC<DisplayRackConfiguratorProps> = ({ langu
               ))}
             </div>
             <div className="mt-2 rounded-xl bg-slate-950 px-4 py-3 text-white"><div className="text-[9px] font-black uppercase tracking-widest text-slate-400">{copy.total}</div><div className="mt-1 flex items-end justify-between gap-3"><strong className="text-2xl">{counts.total}</strong><span className="text-[10px] font-bold text-slate-300">{widthMm} × {heightMm} × {depthMm}mm</span></div></div>
+            <div className="mt-3 rounded-2xl bg-blue-600 p-4 text-white shadow-lg shadow-blue-600/20">
+              <div className="text-[9px] font-black uppercase tracking-widest text-blue-100">{copy.quote}</div>
+              <div className="mt-1 text-3xl font-black">¥{price.totalPriceCny.toFixed(0)}</div>
+              <div className="mt-3 space-y-1.5 border-t border-white/20 pt-3 text-[10px] font-bold text-blue-50">
+                <div className="flex justify-between gap-3"><span>{copy.basePrice}</span><span>¥{price.baselinePriceCny}</span></div>
+                {price.dimensionCustomizationFeeCny !== 0 && <div className="flex justify-between gap-3"><span>{copy.sizeFee}</span><span>+¥{price.dimensionCustomizationFeeCny}</span></div>}
+                {price.upperLevelAdjustmentCny !== 0 && <div className="flex justify-between gap-3"><span>{copy.upperAdjustment}</span><span>{price.upperLevelAdjustmentCny > 0 ? '+' : '-'}¥{Math.abs(price.upperLevelAdjustmentCny)}</span></div>}
+                {price.lowerLevelAdjustmentCny !== 0 && <div className="flex justify-between gap-3"><span>{copy.lowerAdjustment}</span><span>{price.lowerLevelAdjustmentCny > 0 ? '+' : '-'}¥{Math.abs(price.lowerLevelAdjustmentCny)}</span></div>}
+                {price.profileColorSurchargeCny !== 0 && <div className="flex justify-between gap-3"><span>{copy.profileColorFee}</span><span>+¥{price.profileColorSurchargeCny}</span></div>}
+                {price.marineBoardColorSurchargeCny !== 0 && <div className="flex justify-between gap-3"><span>{copy.boardColorFee}</span><span>+¥{price.marineBoardColorSurchargeCny}</span></div>}
+              </div>
+              <p className="mt-3 text-[9px] font-bold leading-relaxed text-blue-100">{copy.pricingHint}</p>
+            </div>
           </div>
         </aside>
       </div>

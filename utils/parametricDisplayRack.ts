@@ -11,6 +11,16 @@ export const DISPLAY_RACK_3_BASELINE = {
   lowerLevels: 5,
 } as const;
 
+export const DISPLAY_RACK_3_PRICE_RULES = {
+  baselinePriceCny: 4500,
+  coloredProfileSurchargeCny: 500,
+  coloredMarineBoardSurchargeCny: 400,
+  dimensionStepMm: 100,
+  dimensionStepFeeCny: 80,
+  upperLevelDeltaCny: 100,
+  lowerLevelDeltaCny: 200,
+} as const;
+
 export const DISPLAY_RACK_3_LIMITS = {
   widthMm: { min: 400, max: 1500, step: 1 },
   heightMm: { min: 1500, max: 3000, step: 1 },
@@ -45,9 +55,64 @@ export interface DisplayRack3Parameters {
   baseCabinetHeightMm: number;
   upperLevels: number;
   lowerLevels: number;
+  profileColorId?: string;
+  marineBoardColorId?: string;
   trackLayoutMode?: 'auto' | 'custom';
   trackHeightsMm?: number[];
 }
+
+export interface DisplayRack3PriceBreakdown {
+  baselinePriceCny: number;
+  dimensionCustomizationFeeCny: number;
+  upperLevelAdjustmentCny: number;
+  lowerLevelAdjustmentCny: number;
+  profileColorSurchargeCny: number;
+  marineBoardColorSurchargeCny: number;
+  totalPriceCny: number;
+}
+
+export const calculateDisplayRack3Price = (
+  parameters: Pick<DisplayRack3Parameters, 'widthMm' | 'heightMm' | 'depthMm' | 'upperLevels' | 'lowerLevels' | 'profileColorId' | 'marineBoardColorId'>,
+): DisplayRack3PriceBreakdown => {
+  const maximumDimensionDeviationMm = Math.max(
+    Math.abs(parameters.widthMm - DISPLAY_RACK_3_BASELINE.widthMm),
+    Math.abs(parameters.heightMm - DISPLAY_RACK_3_BASELINE.heightMm),
+    Math.abs(parameters.depthMm - DISPLAY_RACK_3_BASELINE.depthMm),
+  );
+  const dimensionSteps = maximumDimensionDeviationMm > 0
+    ? Math.ceil(maximumDimensionDeviationMm / DISPLAY_RACK_3_PRICE_RULES.dimensionStepMm)
+    : 0;
+  const dimensionCustomizationFeeCny = dimensionSteps * DISPLAY_RACK_3_PRICE_RULES.dimensionStepFeeCny;
+  const upperLevelAdjustmentCny = (
+    parameters.upperLevels - DISPLAY_RACK_3_BASELINE.upperLevels
+  ) * DISPLAY_RACK_3_PRICE_RULES.upperLevelDeltaCny;
+  const lowerLevelAdjustmentCny = (
+    parameters.lowerLevels - DISPLAY_RACK_3_BASELINE.lowerLevels
+  ) * DISPLAY_RACK_3_PRICE_RULES.lowerLevelDeltaCny;
+  const profileColorSurchargeCny = parameters.profileColorId && parameters.profileColorId !== 'natural'
+    ? DISPLAY_RACK_3_PRICE_RULES.coloredProfileSurchargeCny
+    : 0;
+  const marineBoardColorSurchargeCny = parameters.marineBoardColorId
+    && parameters.marineBoardColorId !== 'wood_natural'
+    && parameters.marineBoardColorId !== 'natural'
+    ? DISPLAY_RACK_3_PRICE_RULES.coloredMarineBoardSurchargeCny
+    : 0;
+  const totalPriceCny = DISPLAY_RACK_3_PRICE_RULES.baselinePriceCny
+    + dimensionCustomizationFeeCny
+    + upperLevelAdjustmentCny
+    + lowerLevelAdjustmentCny
+    + profileColorSurchargeCny
+    + marineBoardColorSurchargeCny;
+  return {
+    baselinePriceCny: DISPLAY_RACK_3_PRICE_RULES.baselinePriceCny,
+    dimensionCustomizationFeeCny,
+    upperLevelAdjustmentCny,
+    lowerLevelAdjustmentCny,
+    profileColorSurchargeCny,
+    marineBoardColorSurchargeCny,
+    totalPriceCny,
+  };
+};
 
 export interface DisplayRack3Layout extends DisplayRack3Parameters {
   dividerHeightMm: number;
@@ -326,6 +391,8 @@ export const buildDisplayRack3Template = (
   } = layout;
   const id = createIdFactory(`display-rack-3-${width}x${height}x${depth}`);
   const items: ParametricSceneItem[] = [];
+  const profileColorId = parameters.profileColorId || 'natural';
+  const marineBoardColorId = parameters.marineBoardColorId || 'wood_natural';
   const shaftHeights = layout.upperTierHeightsMm.map((tier) => round(tier + FIXED.shaftLevelOffsetMm));
 
   [15, width - 15].forEach((widthStation, index) => {
@@ -590,6 +657,12 @@ export const buildDisplayRack3Template = (
     });
   });
 
+  items.forEach((item) => {
+    if (item.kind === 'profile') item.colorId = profileColorId;
+    if (item.kind === 'marine_board') item.colorId = marineBoardColorId;
+  });
+  const price = calculateDisplayRack3Price(parameters);
+
   if (items.filter((item) => item.kind === 'profile').length !== layout.counts.profiles
       || items.filter((item) => item.kind === 'marine_board').length !== layout.counts.panels
       || items.filter((item) => item.shelfSupportType === 'linear_shaft').length !== layout.counts.shafts
@@ -603,6 +676,14 @@ export const buildDisplayRack3Template = (
     schemaVersion: 1,
     source: 'display_rack_3_0',
     createdAt: new Date().toISOString(),
+    finishedFurniture: {
+      category: 'finished_furniture',
+      source: 'display_rack_3_0',
+      productId: 'p9',
+      pricingModel: 'display_rack_3_0',
+      totalPriceCny: price.totalPriceCny,
+      priceBreakdown: { ...price },
+    },
     summary: {
       template: 'YEZONG_DISPLAY_RACK_3_0',
       widthMm: width,
@@ -611,6 +692,9 @@ export const buildDisplayRack3Template = (
       baseCabinetHeightMm,
       upperLevels,
       lowerLevels,
+      profileColorId,
+      marineBoardColorId,
+      totalPriceCny: price.totalPriceCny,
       trackLayoutMode: layout.trackLayoutMode || 'auto',
       profileCount: layout.counts.profiles,
       panelCount: layout.counts.panels,

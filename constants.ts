@@ -1419,6 +1419,7 @@ export const INITIAL_PRODUCTS: Product[] = [
   {
     id: "p7",
     type: ProductType.CALLIGRAPHY_CABINET,
+    category: "finished_furniture",
     name: {
       en: "IKEA TROFAST Cabinet",
       cn: "宜家舒法特柜子",
@@ -1435,6 +1436,7 @@ export const INITIAL_PRODUCTS: Product[] = [
   {
     id: "p8",
     type: ProductType.WARDROBE,
+    category: "finished_furniture",
     name: { en: "Wardrobe", cn: "衣柜", jp: "ワードローブ" },
     description: {
       en: "Custom wardrobe solutions.",
@@ -1447,6 +1449,7 @@ export const INITIAL_PRODUCTS: Product[] = [
   {
     id: "p9",
     type: ProductType.DISPLAY_RACK_3_0,
+    category: "finished_furniture",
     name: {
       en: "3.0 Parametric Display Rack",
       cn: "3.0参数化展示架",

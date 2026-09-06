@@ -76,6 +76,7 @@ import {
   DIY_TEMPLATE_STORAGE_PREFIX,
   getShelfSupportUnitPrice,
   WARDROBE_12MM_BOARD_SUPPORT_PRICE,
+  type FinishedFurnitureQuote,
   type ParametricShelfSupportType,
   type ParametricTemplatePayload,
 } from '../utils/parametricFurniture';
@@ -1322,12 +1323,14 @@ const buildDesignDocument = (
   items: DIYSceneItem[],
   language: Language,
   provenance: DesignSourceInfo,
+  finishedFurniture?: FinishedFurnitureQuote | null,
 ) => ({
   format: 'mengkaile-diy',
   schemaVersion: 2,
   savedAt: new Date().toISOString(),
   coordinateUnit: 'mm',
   provenance,
+  ...(finishedFurniture ? { finishedFurniture } : {}),
   grooveConvention: {
     sourceOfTruth: 'physicalGrooveIndex',
     canonicalFaces: ['A', 'B'],
@@ -1337,6 +1340,23 @@ const buildDesignDocument = (
   items: normalizeDesignItems(items),
   production: buildProductionData(items, language),
 });
+
+const normalizeFinishedFurnitureQuote = (value: unknown): FinishedFurnitureQuote | null => {
+  if (!value || typeof value !== 'object') return null;
+  const quote = value as Partial<FinishedFurnitureQuote>;
+  if (quote.category !== 'finished_furniture') return null;
+  if (!['calligraphy_cabinet', 'wardrobe', 'display_rack_3_0'].includes(String(quote.source))) return null;
+  if (!['p7', 'p8', 'p9'].includes(String(quote.productId))) return null;
+  if (!['component_total', 'display_rack_3_0'].includes(String(quote.pricingModel))) return null;
+  return {
+    category: 'finished_furniture',
+    source: quote.source as FinishedFurnitureQuote['source'],
+    productId: quote.productId as FinishedFurnitureQuote['productId'],
+    pricingModel: quote.pricingModel as FinishedFurnitureQuote['pricingModel'],
+    ...(Number.isFinite(Number(quote.totalPriceCny)) ? { totalPriceCny: Number(quote.totalPriceCny) } : {}),
+    ...(quote.priceBreakdown && typeof quote.priceBreakdown === 'object' ? { priceBreakdown: quote.priceBreakdown } : {}),
+  };
+};
 
 const VALID_PROFILE_SIDES = new Set<ProfileSide>(['A', 'B', 'C', 'D']);
 const VALID_HOLE_TYPES = new Set<HoleType>(['through', 'countersunk', 'threaded']);
@@ -9882,6 +9902,7 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({
   const [designSource, setDesignSource] = useState<DesignSourceInfo>(() => (
     createDesignSourceInfo('manual_designer')
   ));
+  const [finishedFurnitureQuote, setFinishedFurnitureQuote] = useState<FinishedFurnitureQuote | null>(null);
   const [selectedId, setSelectedIdState] = useState<string | null>(null);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [history, setHistory] = useState<DIYSceneItem[][]>([]);
@@ -9949,7 +9970,11 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({
     if (!id) return;
     setSelection(selectedIds.includes(id) ? selectedIds.filter((entry) => entry !== id) : [...selectedIds, id]);
   };
-  const total = useMemo(() => items.reduce((sum, item) => sum + calculatePrice(item, user), 0), [items, user]);
+  const componentTotal = useMemo(() => items.reduce((sum, item) => sum + calculatePrice(item, user), 0), [items, user]);
+  const total = finishedFurnitureQuote?.pricingModel === 'display_rack_3_0'
+    && Number.isFinite(finishedFurnitureQuote.totalPriceCny)
+    ? Number(finishedFurnitureQuote.totalPriceCny)
+    : componentTotal;
   const projectDisplayGroups = useMemo(() => groupProjectItemsForDisplay(items), [items]);
   const collidingProfileIds = useMemo(() => findCollidingProfileIds(items), [items]);
   const currency = language === 'cn' ? '￥' : '$';
@@ -9984,7 +10009,11 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({
     importConflictResolverRef.current = null;
   }, []);
 
-  const applyImportedDesign = async (incoming: DIYSceneItem[], incomingSource: DesignSourceInfo) => {
+  const applyImportedDesign = async (
+    incoming: DIYSceneItem[],
+    incomingSource: DesignSourceInfo,
+    incomingFinishedFurniture: FinishedFurnitureQuote | null = null,
+  ) => {
     const choice = items.length
       ? await requestImportConflictChoice('design')
       : 'replace';
@@ -9999,6 +10028,7 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({
     setDesignSource(choice === 'append'
       ? mergeDesignSourceInfo(designSource, incomingSource)
       : incomingSource);
+    setFinishedFurnitureQuote(choice === 'append' ? null : incomingFinishedFurniture);
     return importedItems;
   };
 
@@ -10716,6 +10746,7 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({
         const appliedItems = await applyImportedDesign(
           importedItems,
           designSourceFromDocument(parsed, 'sketchup_plugin'),
+          normalizeFinishedFurnitureQuote(parsed.finishedFurniture),
         );
         if (!appliedItems) return;
         showNotice(`${t.sketchupImportLoaded} · ${appliedItems.length}`);
@@ -10758,6 +10789,7 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({
         }
       }
       setItems(normalizeManufacturingMeasurements(completedItems));
+      setFinishedFurnitureQuote(normalizeFinishedFurnitureQuote(payload.finishedFurniture));
       setDesignSource(createDesignSourceInfo('parametric_template', {
         modelName: payload.source === 'display_rack_3_0' ? '叶总展示柜 3.0' : String(payload.source || '参数化产品'),
         sourceSummary: `参数化模板：${String(payload.source || 'unknown')}`,
@@ -10778,7 +10810,7 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({
 
   const save = () => {
     downloadTextFile(
-      JSON.stringify(buildDesignDocument(items, language, designSource), null, 2),
+      JSON.stringify(buildDesignDocument(items, language, designSource, finishedFurnitureQuote), null, 2),
       'application/json;charset=utf-8',
       `mengkaile-design-${new Date().toISOString().slice(0, 10)}.json`,
     );
@@ -10788,13 +10820,14 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({
   const load = () => importRef.current?.click();
 
   const exportJson = () => {
-    const document = buildDesignDocument(items, language, designSource);
+    const document = buildDesignDocument(items, language, designSource, finishedFurnitureQuote);
     downloadTextFile(
       JSON.stringify({
         format: document.format,
         schemaVersion: document.schemaVersion,
         exportedAt: new Date().toISOString(),
         provenance: document.provenance,
+        ...(document.finishedFurniture ? { finishedFurniture: document.finishedFurniture } : {}),
         grooveConvention: document.grooveConvention,
         production: document.production,
       }, null, 2),
@@ -10832,6 +10865,7 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({
             Array.isArray(parsed?.order_json?.items) ? 'system_order' : 'designer_json',
             { modelName: file.name },
           ),
+          normalizeFinishedFurnitureQuote(parsed.finishedFurniture),
         );
         if (!appliedItems) return;
         showNotice(`${t.loaded} · ${appliedItems.length}`);
@@ -11205,7 +11239,59 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({
         designSource,
       },
     }));
-    return groupDiyAccessoryCartItems(sourceTaggedItems);
+    const groupedItems = groupDiyAccessoryCartItems(sourceTaggedItems);
+    if (!finishedFurnitureQuote) return groupedItems;
+
+    const targetTotal = Number(total.toFixed(1));
+    const sourceTotal = groupedItems.reduce((sum, item) => sum + Math.max(0, Number(item.totalPrice || 0)), 0);
+    let allocatedTotal = 0;
+    return groupedItems.map((item, itemIndex) => {
+      const isLastItem = itemIndex === groupedItems.length - 1;
+      const weight = sourceTotal > 0
+        ? Math.max(0, Number(item.totalPrice || 0)) / sourceTotal
+        : 1 / Math.max(1, groupedItems.length);
+      const allocatedItemPrice = isLastItem
+        ? Number((targetTotal - allocatedTotal).toFixed(1))
+        : Number((targetTotal * weight).toFixed(1));
+      allocatedTotal = Number((allocatedTotal + allocatedItemPrice).toFixed(1));
+      const config = { ...(item.config || {}) } as any;
+      const lines = Array.isArray(config.lines) ? config.lines : [];
+      if (lines.length) {
+        const lineSourceTotal = lines.reduce((sum: number, line: any) => sum + Math.max(0, Number(line?.subtotal || 0)), 0);
+        let allocatedLines = 0;
+        config.lines = lines.map((line: any, lineIndex: number) => {
+          const isLastLine = lineIndex === lines.length - 1;
+          const lineWeight = lineSourceTotal > 0
+            ? Math.max(0, Number(line?.subtotal || 0)) / lineSourceTotal
+            : 1 / lines.length;
+          const subtotal = isLastLine
+            ? Number((allocatedItemPrice - allocatedLines).toFixed(1))
+            : Number((allocatedItemPrice * lineWeight).toFixed(1));
+          allocatedLines = Number((allocatedLines + subtotal).toFixed(1));
+          return {
+            ...line,
+            unitPrice: Number((subtotal / Math.max(1, Number(line?.quantity || 1))).toFixed(2)),
+            subtotal,
+          };
+        });
+        config.unitTotal = allocatedItemPrice;
+      } else if ('unitPrice' in config) {
+        config.unitPrice = Number((allocatedItemPrice / Math.max(1, item.quantity)).toFixed(2));
+      }
+      return {
+        ...item,
+        totalPrice: allocatedItemPrice,
+        config: {
+          ...config,
+          finishedFurnitureCategory: finishedFurnitureQuote.category,
+          finishedFurnitureSource: finishedFurnitureQuote.source,
+          finishedFurnitureProductId: finishedFurnitureQuote.productId,
+          finishedFurnitureTotalCny: targetTotal,
+          finishedFurnitureQuote,
+          hideComponentPrice: true,
+        },
+      };
+    });
   };
 
   const addDesignToCart = async () => {
@@ -12439,8 +12525,21 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({
               )}
 
               <div className="rounded-2xl bg-slate-950 p-4 text-white">
-                <div className="text-[10px] font-black uppercase tracking-widest text-slate-400">{t.total}</div>
-                <div className="mt-1 text-2xl font-black">{currency}{calculatePrice(selected, user).toFixed(1)}</div>
+                <div className="text-[10px] font-black uppercase tracking-widest text-slate-400">
+                  {finishedFurnitureQuote
+                    ? (language === 'cn' ? '成品家具总价' : language === 'jp' ? '完成家具合計' : 'Finished-furniture total')
+                    : t.total}
+                </div>
+                <div className="mt-1 text-2xl font-black">
+                  {currency}{(finishedFurnitureQuote ? total : calculatePrice(selected, user)).toFixed(1)}
+                </div>
+                {finishedFurnitureQuote && (
+                  <div className="mt-1 text-[9px] font-bold text-slate-400">
+                    {language === 'cn'
+                      ? '保留材料明细，不显示单项材料价格'
+                      : language === 'jp' ? '材料明細を保持し、単品価格は非表示' : 'Material details remain visible; component prices are hidden'}
+                  </div>
+                )}
               </div>
               </div>
             </>

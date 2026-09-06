@@ -17,6 +17,7 @@ export enum ProductType {
 export interface Product {
   id: string;
   type: ProductType;
+  category?: 'finished_furniture';
   name: Record<Language, string>;
   description: Record<Language, string>;
   basePrice: number;

@@ -2,6 +2,8 @@ import {
   DISPLAY_RACK_3_BASELINE,
   DISPLAY_RACK_3_LIMITS,
   buildDisplayRack3Template,
+  calculateDisplayRack3Price,
+  type DisplayRack3Parameters,
 } from '../utils/parametricDisplayRack';
 import {
   completeDisplayRackConnectionSystem,
@@ -18,6 +20,38 @@ const actualSlidePrices = DISPLAY_RACK_COMPONENT_CATALOG.DRAWER_SLIDE_PAIR.lengt
   .map((option) => [option.lengthMm, option.unitPriceCny]);
 if (JSON.stringify(actualSlidePrices) !== JSON.stringify(expectedSlidePrices)) {
   throw new Error(`抽屉滑轨价格表不匹配：${JSON.stringify(actualSlidePrices)}`);
+}
+
+const assertRackPrice = (overrides: Partial<DisplayRack3Parameters>, expected: number, label: string) => {
+  const actual = calculateDisplayRack3Price({ ...DISPLAY_RACK_3_BASELINE, ...overrides }).totalPriceCny;
+  if (actual !== expected) throw new Error(`${label}价格应为¥${expected}，实际为¥${actual}`);
+};
+assertRackPrice({}, 4500, '标准本色展架');
+assertRackPrice({ profileColorId: 'black' }, 5000, '彩色型材展架');
+assertRackPrice({ marineBoardColorId: 'marine_black' }, 4900, '彩色海洋板展架');
+assertRackPrice({ profileColorId: 'black', marineBoardColorId: 'marine_black' }, 5400, '全彩色展架');
+assertRackPrice({ widthMm: DISPLAY_RACK_3_BASELINE.widthMm + 1 }, 4580, '1mm尺寸定制');
+assertRackPrice({ widthMm: DISPLAY_RACK_3_BASELINE.widthMm + 100 }, 4580, '100mm尺寸定制');
+assertRackPrice({ widthMm: DISPLAY_RACK_3_BASELINE.widthMm + 101 }, 4660, '101mm尺寸定制');
+assertRackPrice({
+  widthMm: DISPLAY_RACK_3_BASELINE.widthMm + 100,
+  heightMm: DISPLAY_RACK_3_BASELINE.heightMm - 100,
+  depthMm: DISPLAY_RACK_3_BASELINE.depthMm + 100,
+}, 4580, '多维度100mm范围定制');
+assertRackPrice({ upperLevels: 4 }, 4600, '增加展示层板');
+assertRackPrice({ upperLevels: 2 }, 4400, '减少展示层板');
+assertRackPrice({ lowerLevels: 6 }, 4700, '增加抽屉');
+assertRackPrice({ lowerLevels: 4 }, 4300, '减少抽屉');
+
+const coloredPayload = buildDisplayRack3Template({
+  ...DISPLAY_RACK_3_BASELINE,
+  profileColorId: 'black',
+  marineBoardColorId: 'marine_black',
+});
+if (coloredPayload.finishedFurniture.totalPriceCny !== 5400
+    || coloredPayload.items.some((item) => item.kind === 'profile' && item.colorId !== 'black')
+    || coloredPayload.items.some((item) => item.kind === 'marine_board' && item.colorId !== 'marine_black')) {
+  throw new Error('展架颜色选择或成品家具报价没有正确写入参数化模板');
 }
 
 const normalizedLegacyMeasurements = normalizeDesignItems([
