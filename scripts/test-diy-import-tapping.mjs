@@ -36,6 +36,8 @@ for (const format of ['design', 'order', 'boards', 'cancel', 'invalid']) {
     normalizeDesignItems: items => items,
     mapSystemOrderProfileItemsToDesignerItems: items => items,
     createItem: () => ({}),
+    designSourceFromDocument: () => ({}),
+    normalizeFinishedFurnitureQuote: () => null,
     applyImportedDesign: async incoming => {
       importedOnce = true;
       // Append imports remap IDs; the prompt must use the result, not input IDs.

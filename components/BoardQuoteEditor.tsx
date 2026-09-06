@@ -224,8 +224,12 @@ const BoardQuoteEditor: React.FC<BoardQuoteEditorProps> = ({ language, product, 
     : getProfileColorPhotoSrc(colorId);
   const defaultWidth = (isPegboard || isDoor) ? 500 : 0;
   const defaultHeight = (isPegboard || isDoor) ? 2000 : 0;
-  const [width, setWidth] = useState<number>(initialCfg.width || defaultWidth);
-  const [height, setHeight] = useState<number>(initialCfg.height || defaultHeight);
+  const [width, setWidth] = useState<number>(isMarineBoard
+    ? Math.round(Number(initialCfg.width || defaultWidth))
+    : initialCfg.width || defaultWidth);
+  const [height, setHeight] = useState<number>(isMarineBoard
+    ? Math.round(Number(initialCfg.height || defaultHeight))
+    : initialCfg.height || defaultHeight);
   const [quantity, setQuantity] = useState<number>(initialItem?.quantity || initialCfg.quantity || 1);
   const [openingSide, setOpeningSide] = useState<'left' | 'right'>(initialCfg.openingSide === 'right' ? 'right' : 'left');
 
@@ -249,8 +253,10 @@ const BoardQuoteEditor: React.FC<BoardQuoteEditorProps> = ({ language, product, 
   const hasRangeError = widthOutOfRange || heightOutOfRange || pegboardShapeInvalid;
 
   const calc = useMemo(() => {
-    const w = Math.min(maxWidth, Math.max(0, Number(width) || 0));
-    const h = Math.min(maxHeight, Math.max(0, Number(height) || 0));
+    const rawW = Math.min(maxWidth, Math.max(0, Number(width) || 0));
+    const rawH = Math.min(maxHeight, Math.max(0, Number(height) || 0));
+    const w = isMarineBoard ? Math.round(rawW) : rawW;
+    const h = isMarineBoard ? Math.round(rawH) : rawH;
     const qty = Math.max(1, Number(quantity) || 1);
     const areaSqm = (w * h) / 1_000_000;
     const chargedArea = areaSqm > 0 && areaSqm < MIN_BOARD_CHARGE_AREA_SQM ? MIN_BOARD_CHARGE_AREA_SQM : areaSqm;
@@ -390,8 +396,12 @@ const BoardQuoteEditor: React.FC<BoardQuoteEditorProps> = ({ language, product, 
             type="number"
             min={minWidth}
             max={maxWidth}
+            step={1}
             value={width}
-            onChange={(e) => setWidth(Number(e.target.value) || 0)}
+            onChange={(e) => {
+              const value = Number(e.target.value) || 0;
+              setWidth(isMarineBoard ? Math.round(value) : value);
+            }}
             className="w-full border border-slate-200 rounded-xl px-4 py-3 outline-none bg-slate-50 font-black text-slate-700"
           />
         </div>
@@ -402,8 +412,12 @@ const BoardQuoteEditor: React.FC<BoardQuoteEditorProps> = ({ language, product, 
             type="number"
             min={minHeight}
             max={maxHeight}
+            step={1}
             value={height}
-            onChange={(e) => setHeight(Number(e.target.value) || 0)}
+            onChange={(e) => {
+              const value = Number(e.target.value) || 0;
+              setHeight(isMarineBoard ? Math.round(value) : value);
+            }}
             className="w-full border border-slate-200 rounded-xl px-4 py-3 outline-none bg-slate-50 font-black text-slate-700"
           />
         </div>

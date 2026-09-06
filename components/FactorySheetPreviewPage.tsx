@@ -8,6 +8,7 @@ import { buildOrderPdfFilename, formatEast8Date } from '../utils/orderFormatting
 import { calculateScrewPlan } from '../utils/screwCalculator';
 import { exportElementToPdf } from '../utils/pdfExport';
 import { hasDiyScrewCartItems } from '../utils/cartAccessories';
+import { expandFinishedFurnitureCartItems } from '../utils/finishedFurnitureCart';
 
 /**
  * Standalone preview page – rendered in a new browser window.
@@ -58,10 +59,11 @@ const FactorySheetPreviewPage: React.FC = () => {
   const t = TRANSLATIONS[language];
   const dateStr = formatEast8Date(new Date());
   const orderRef = React.useMemo(() => Math.random().toString(36).substr(2, 6).toUpperCase(), []);
-  const hasDiyScrews = React.useMemo(() => hasDiyScrewCartItems(cart), [cart]);
+  const productionCart = React.useMemo(() => expandFinishedFurnitureCartItems(cart), [cart]);
+  const hasDiyScrews = React.useMemo(() => hasDiyScrewCartItems(productionCart), [productionCart]);
   const screwFee = React.useMemo(
-    () => calculateScrewPlan(cart, !!include304Screws && !hasDiyScrews).totalFee,
-    [cart, include304Screws, hasDiyScrews],
+    () => calculateScrewPlan(productionCart, !!include304Screws && !hasDiyScrews).totalFee,
+    [productionCart, include304Screws, hasDiyScrews],
   );
   const totalAmount = cart.reduce((sum, item) => sum + (item.totalPrice || 0), 0) + (shippingFee || 0) + screwFee + (labelFee || 0);
   const fileBaseName = buildOrderPdfFilename({

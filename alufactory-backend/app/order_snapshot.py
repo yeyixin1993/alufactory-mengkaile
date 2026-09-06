@@ -56,7 +56,14 @@ def build_order_json(order):
 
 
 def fingerprint_order_json(order_json):
-    canonical = json.dumps(order_json, ensure_ascii=False, sort_keys=True, separators=(',', ':'))
+    # Provenance belongs in the review/audit snapshot, but its export UUID and
+    # timestamps must not make an otherwise identical repeat order appear new.
+    fingerprint_payload = _json_safe(order_json)
+    for item in fingerprint_payload.get('items', []) if isinstance(fingerprint_payload, dict) else []:
+        config = item.get('config') if isinstance(item, dict) else None
+        if isinstance(config, dict):
+            config.pop('designSource', None)
+    canonical = json.dumps(fingerprint_payload, ensure_ascii=False, sort_keys=True, separators=(',', ':'))
     return hashlib.sha256(canonical.encode('utf-8')).hexdigest()
 
 

@@ -18,6 +18,7 @@ export interface DiyScrewCartSummaryRow {
   colorName: string;
   quantity: number;
   totalPrice: number;
+  hideComponentPrice: boolean;
 }
 
 const uniqueScrewReferences = (references: ScrewReference[]) => {
@@ -527,6 +528,7 @@ export const summarizeDiyScrewCartItems = (cart: CartItem[]): DiyScrewCartSummar
       colorName: String(config.colorName || ''),
       quantity,
       totalPrice: Number(item.totalPrice || config.unitTotal || 0),
+      hideComponentPrice: Boolean(config.hideComponentPrice),
     }];
   })
 );

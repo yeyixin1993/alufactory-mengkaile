@@ -10,6 +10,7 @@ const root = fileURLToPath(new URL('../', import.meta.url));
 const names = ['normalizeDesignItems', 'detectCabinetDoorOpenings', 'cabinetDoorBounds',
   'cabinetDoorLeafBounds', 'fitCabinetDoorToOpening', 'syncAttachedAccessories',
   'availableAccessoryPlacementCandidates', 'groupAccessoryPlacementOverlays', 'accessoryPlacementFaceLabel', 'createItem'];
+const privateNames = names.filter(name => name !== 'normalizeDesignItems');
 const result = await build({
   absWorkingDir: root,
   stdin: { contents: `export { ${names.join(', ')} } from './components/DIYDesigner.tsx';
@@ -19,7 +20,7 @@ const result = await build({
   bundle: true, platform: 'node', format: 'cjs', write: false,
   plugins: [{ name: 'expose-designer-geometry', setup(builder) {
     builder.onLoad({ filter: /components\/DIYDesigner\.tsx$/ }, async ({ path }) => ({
-      contents: `${await readFile(path, 'utf8')}\nexport { ${names.join(', ')} };`, loader: 'tsx',
+      contents: `${await readFile(path, 'utf8')}\nexport { ${privateNames.join(', ')} };`, loader: 'tsx',
       resolveDir: fileURLToPath(new URL('../components/', import.meta.url)),
     }));
   } }],

@@ -375,6 +375,7 @@
                 <div class="nav-item" onclick="switchTab('orders_marine_board')">📦 海洋板订单管理</div>
                 <div class="nav-item" onclick="switchTab('orders_calligraphy_cabinet')">📦 宜家舒法特柜子订单管理</div>
                 <div class="nav-item" onclick="switchTab('orders_wardrobe')">📦 衣柜订单管理</div>
+                <div class="nav-item" onclick="switchTab('orders_display_rack')">📦 展示架订单管理</div>
                 <div class="nav-item" onclick="switchTab('orders_accessory')">📦 配件订单管理</div>
                 <div class="nav-item logout-btn" onclick="logout()">🚪 退出</div>
             </nav>
@@ -414,6 +415,10 @@
                         <h3>总收入</h3>
                         <div class="value" id="totalRevenue">¥0</div>
                     </div>
+                    <div class="stat-card">
+                        <h3>SketchUp 插件来源订单</h3>
+                        <div class="value" id="sketchupSourceOrders">0</div>
+                    </div>
                 </div>
                 <div class="analytics-grid">
                     <div class="analytics-card">
@@ -423,6 +428,11 @@
                     <div class="analytics-card">
                         <h3>彩色型材 Top 5（米）</h3>
                         <div id="topColorsChart">暂无彩色型材订单</div>
+                    </div>
+                    <div class="analytics-card">
+                        <h3>订单来源统计</h3>
+                        <div id="orderSourceSummary" style="margin-bottom:10px;color:#6b7280;font-size:13px;">暂无来源数据</div>
+                        <div id="orderSourceChart">暂无来源数据</div>
                     </div>
                 </div>
             </div>
@@ -785,6 +795,7 @@
             'orders_marine_board': { category: 'marine_board', title: '海洋板订单管理' },
             'orders_calligraphy_cabinet': { category: 'calligraphy_cabinet', title: '宜家舒法特柜子订单管理' },
             'orders_wardrobe': { category: 'wardrobe', title: '衣柜订单管理' },
+            'orders_display_rack': { category: 'display_rack', title: '展示架订单管理' },
             'orders_accessory': { category: 'accessory', title: '配件订单管理' }
         };
 
@@ -898,6 +909,7 @@
                 'orders_marine_board': '海洋板订单管理',
                 'orders_calligraphy_cabinet': '宜家舒法特柜子订单管理',
                 'orders_wardrobe': '衣柜订单管理',
+                'orders_display_rack': '展示架订单管理',
                 'orders_accessory': '配件订单管理'
             };
             document.getElementById('pageTitle').textContent = titles[tab];
@@ -948,6 +960,25 @@
                     <th>颜色/模式</th>
                     <th>配件明细</th>
                     <th>小计</th>
+                    <th>任务进度</th>
+                    <th>日期</th>
+                `;
+                return;
+            }
+
+            if (category === 'display_rack') {
+                head.innerHTML = `
+                    <th>订单号</th>
+                    <th>用户名</th>
+                    <th>客户</th>
+                    <th>数量</th>
+                    <th>整体尺寸</th>
+                    <th>地柜高度</th>
+                    <th>展示层板</th>
+                    <th>抽屉</th>
+                    <th>型材颜色</th>
+                    <th>海洋板颜色</th>
+                    <th>一口价</th>
                     <th>任务进度</th>
                     <th>日期</th>
                 `;
@@ -1113,8 +1144,13 @@
                 document.getElementById('paidOrders').textContent = data.paid_orders;
                 document.getElementById('shippedOrders').textContent = data.shipped_orders;
                 document.getElementById('totalRevenue').textContent = '¥' + data.total_revenue.toFixed(2);
+                const sourceStatistics = data.source_statistics || {};
+                document.getElementById('sketchupSourceOrders').textContent = Number(sourceStatistics.sketchup_plugin_order_count || 0);
+                document.getElementById('orderSourceSummary').textContent =
+                    `已记录来源 ${Number(sourceStatistics.attributed_order_count || 0)} 单 · 官网验证 ${Number(sourceStatistics.server_verified_order_count || 0)} 单`;
                 renderMetricChart('monthlyRevenueChart', data.monthly_revenue || [], 'month', 'revenue', (value) => '¥' + Number(value).toFixed(2));
                 renderMetricChart('topColorsChart', data.top_profile_colors || [], 'color_name', 'meters', (value) => Number(value).toFixed(2) + ' m', '#8b5cf6');
+                renderMetricChart('orderSourceChart', sourceStatistics.breakdown || [], 'label', 'order_count', (value) => Number(value) + ' 单', '#0f766e');
             } catch (error) {
                 console.error('Error loading dashboard:', error);
             }
@@ -1551,6 +1587,43 @@
                             </select>
                           `
                         : '-';
+
+                    if (activeCategory === 'display_rack') {
+                        const quote = cfg && typeof cfg.finishedFurnitureQuote === 'object' ? cfg.finishedFurnitureQuote : {};
+                        const quoteParameters = quote && typeof quote.parameters === 'object' ? quote.parameters : {};
+                        const summary = cfg && typeof cfg.parametricSummary === 'object' ? cfg.parametricSummary : {};
+                        const parameters = { ...quoteParameters, ...summary };
+                        const widthMm = Number(parameters.widthMm || 0);
+                        const heightMm = Number(parameters.heightMm || 0);
+                        const depthMm = Number(parameters.depthMm || 0);
+                        const baseHeightMm = Number(parameters.baseCabinetHeightMm || 0);
+                        const upperLevels = Number(parameters.upperLevels || 0);
+                        const lowerLevels = Number(parameters.lowerLevels || 0);
+                        const profileColorId = String(parameters.profileColorId || 'natural');
+                        const boardColorId = String(parameters.marineBoardColorId || 'wood_natural');
+                        const profileColorText = profileColorId === 'natural' ? '银白' : profileColorId;
+                        const boardColorText = boardColorId === 'wood_natural' ? '原色' : boardColorId;
+                        const dimensionText = widthMm > 0 && heightMm > 0 && depthMm > 0
+                            ? `${widthMm} × ${heightMm} × ${depthMm}mm`
+                            : '-';
+
+                        row.innerHTML = `
+                            <td>${escapeHtml(order.order_number || sourceOrderId || '-')}</td>
+                            <td>${escapeHtml(userName)}</td>
+                            <td>${escapeHtml(order.recipient_name || '-')}</td>
+                            <td>${quantity}</td>
+                            <td>${escapeHtml(dimensionText)}</td>
+                            <td>${baseHeightMm > 0 ? escapeHtml(baseHeightMm + 'mm') : '-'}</td>
+                            <td>${upperLevels > 0 ? escapeHtml(upperLevels + '层') : '-'}</td>
+                            <td>${lowerLevels > 0 ? escapeHtml(lowerLevels + '层') : '-'}</td>
+                            <td>${escapeHtml(profileColorText)}</td>
+                            <td>${escapeHtml(boardColorText)}</td>
+                            <td>¥${itemSubtotal.toFixed(2)}</td>
+                            <td>${taskProgressControl}</td>
+                            <td>${date}</td>
+                        `;
+                        return;
+                    }
 
                     if (activeCategory === 'accessory') {
                         const sizeText = (cfg && (cfg.size || cfg.variantId || cfg.model)) || order.item_thickness || '-';

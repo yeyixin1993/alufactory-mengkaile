@@ -3,12 +3,13 @@
 require 'sketchup.rb'
 require 'json'
 require 'time'
+require 'securerandom'
 
 module Mengkaile
   module JsonExporter
     extend self
 
-    VERSION = '1.0.0'
+    VERSION = '1.1.0'
     MM_PER_INCH = 25.4
     ATTRIBUTE_DICTIONARIES = [
       'Mengkaile',
@@ -509,17 +510,34 @@ module Mengkaile
       walk_entities(model.entities, Geom::Transformation.new, [], [], records, warnings)
       origin_shift = records.empty? ? [0.0, 0.0, 0.0] : translate_records_to_origin(records)
       items = records.map { |record| record[:item] }
+      exported_at = Time.now.utc.iso8601
+      model_name = File.basename(model.path.to_s.empty? ? 'Untitled.skp' : model.path.to_s)
+      document_id = SecureRandom.uuid
 
       {
         'format' => 'mengkaile-diy',
         'schemaVersion' => 2,
-        'savedAt' => Time.now.utc.iso8601,
+        'savedAt' => exported_at,
         'coordinateUnit' => 'mm',
+        # Portable source information. It is deliberately self-declared until
+        # a future authenticated website hand-off can apply a server signature.
+        'provenance' => {
+          'schemaVersion' => 1,
+          'channel' => 'sketchup_plugin',
+          'producerId' => 'mengkaile.sketchup.exporter',
+          'producerVersion' => VERSION,
+          'documentId' => document_id,
+          'modelName' => model_name,
+          'exportedAt' => exported_at,
+          'containedChannels' => ['sketchup_plugin'],
+          'verification' => 'self_declared'
+        },
         'source' => {
           'application' => 'SketchUp',
           'exporter' => 'MengkaileJsonExporter',
           'exporterVersion' => VERSION,
-          'modelName' => File.basename(model.path.to_s.empty? ? 'Untitled.skp' : model.path.to_s),
+          'documentId' => document_id,
+          'modelName' => model_name,
           'axisConversion' => 'SketchUp X/Y/Z -> Mengkaile X/Z/-Y basis; output X=width, Y=height, Z=depth',
           'originShiftMm' => origin_shift
         },

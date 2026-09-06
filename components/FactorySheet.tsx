@@ -13,6 +13,7 @@ import {
   summarizeDiyScrewCartItems,
 } from '../utils/cartAccessories';
 import { getAccessoryShippingWeightKg } from '../utils/membership';
+import { expandFinishedFurnitureCartItems } from '../utils/finishedFurnitureCart';
 
 interface FactorySheetProps {
   cart: CartItem[];
@@ -115,13 +116,14 @@ const resolveBoardColorLabel = (cfg: any, language: Language, productType?: Prod
 const FactorySheet: React.FC<FactorySheetProps> = ({ cart, user, language, orderRef, dateStr, id, showPrice = true, address, shippingMethod, shippingFee: passedShippingFee, include304Screws = false, includeLabelService = false, labelFee: passedLabelFee, overlengthFee: passedOverlengthFee }) => {
   const t = TRANSLATIONS[language];
   const currency = getCurrency(language);
+  const productionCart = React.useMemo(() => expandFinishedFurnitureCartItems(cart), [cart]);
  
 // Summarize profiles for a sheet: length, model, color, finish, tap, quantity, remarks
   const profileSummary = React.useMemo(() => {
     type Row = { length: string; model: string; color: string; section: string; tap: string; quantity: number; remark: string; key: string; miter: string };
     const map = new Map<string, Row>();
 
-    groupFactoryDisplayCartItems(cart).forEach(item => {
+    groupFactoryDisplayCartItems(productionCart).forEach(item => {
       if (item.product.type !== ProductType.PROFILE) return;
 
       const cfg = item.config as ProfileConfig;
@@ -222,7 +224,7 @@ const FactorySheet: React.FC<FactorySheetProps> = ({ cart, user, language, order
     });
 
     return Array.from(map.values());
-  }, [cart, language, t]);
+  }, [productionCart, language, t]);
 
   // Use passed address or fallback to default user address
   const activeAddress = address || user?.addresses.find(a => a.isDefault) || user?.addresses[0];
@@ -230,8 +232,9 @@ const FactorySheet: React.FC<FactorySheetProps> = ({ cart, user, language, order
   const userPhone = activeAddress?.phone || user?.id || '-';
 
   const baseTotal = cart.reduce((acc, i) => acc + i.totalPrice, 0);
-  const displayCart = React.useMemo(() => groupFactoryDisplayCartItems(cart), [cart]);
-  const diyScrewRows = React.useMemo(() => summarizeDiyScrewCartItems(cart), [cart]);
+  const displayCart = React.useMemo(() => groupFactoryDisplayCartItems(productionCart), [productionCart]);
+  const diyScrewRows = React.useMemo(() => summarizeDiyScrewCartItems(productionCart), [productionCart]);
+  const showAnyDiyScrewPrice = showPrice && diyScrewRows.some((row) => !row.hideComponentPrice);
   const hasDiyScrewRows = diyScrewRows.length > 0;
   const nonScrewDisplayCart = React.useMemo(
     () => displayCart.filter((item) => !isDiyScrewAccessory(item)),
@@ -241,7 +244,7 @@ const FactorySheet: React.FC<FactorySheetProps> = ({ cart, user, language, order
   const profileMetersSummary = React.useMemo(() => {
     const meterMap = new Map<string, number>();
 
-    cart.forEach((item) => {
+    productionCart.forEach((item) => {
       if (item.product.type !== ProductType.PROFILE) return;
       const cfg = item.config as ProfileConfig;
       const lengthMm = Number(cfg.length) || 0;
@@ -267,10 +270,10 @@ const FactorySheet: React.FC<FactorySheetProps> = ({ cart, user, language, order
     return Array.from(meterMap.entries())
       .map(([name, meters]) => ({ name, meters }))
       .sort((a, b) => b.meters - a.meters);
-  }, [cart, language, t.finishOxidized, t.finishPowder, t.finishElectrophoretic]);
+  }, [productionCart, language, t.finishOxidized, t.finishPowder, t.finishElectrophoretic]);
 
   const profileHoleTotals = React.useMemo(() => {
-    return cart.reduce(
+    return productionCart.reduce(
       (acc, item) => {
         if (item.product.type !== ProductType.PROFILE) return acc;
         const cfg = item.config as ProfileConfig;
@@ -286,14 +289,14 @@ const FactorySheet: React.FC<FactorySheetProps> = ({ cart, user, language, order
       },
       { through: 0, countersunk: 0 }
     );
-  }, [cart]);
+  }, [productionCart]);
 
   // Explicit DIY screw rows already carry customer-confirmed quantities and
   // prices. They replace (rather than stack with) the legacy per-hole add-on.
   const effectiveInclude304Screws = include304Screws && !hasDiyScrewRows;
   const screwPlan = React.useMemo(
-    () => calculateScrewPlan(cart, effectiveInclude304Screws),
-    [cart, effectiveInclude304Screws],
+    () => calculateScrewPlan(productionCart, effectiveInclude304Screws),
+    [productionCart, effectiveInclude304Screws],
   );
   const diyScrewByModel = React.useMemo(() => {
     const map = new Map<string, { socketCylinder: number; buttonSocket: number; flatSocket: number }>();
@@ -320,7 +323,7 @@ const FactorySheet: React.FC<FactorySheetProps> = ({ cart, user, language, order
   }, [screwPlan.models]);
 
   const labelProfileCount = React.useMemo(() => {
-    return cart.reduce((sum, item) => {
+    return productionCart.reduce((sum, item) => {
       if (item.product.type !== ProductType.PROFILE) return sum;
       const cfg = item.config as ProfileConfig;
       if (includeLabelService || cfg.labelService) {
@@ -328,7 +331,7 @@ const FactorySheet: React.FC<FactorySheetProps> = ({ cart, user, language, order
       }
       return sum;
     }, 0);
-  }, [cart, includeLabelService]);
+  }, [productionCart, includeLabelService]);
 
   const labelFee = typeof passedLabelFee === 'number' ? passedLabelFee : labelProfileCount;
 
@@ -336,7 +339,7 @@ const FactorySheet: React.FC<FactorySheetProps> = ({ cart, user, language, order
   const calculateTotalWeight = () => {
     let totalWeightKg = 0;
     let hasAccessory = false;
-    cart.forEach(item => {
+    productionCart.forEach(item => {
       if (item.product.type === ProductType.PROFILE) {
         const cfg = item.config as ProfileConfig;
         const weightPerM = PROFILE_WEIGHTS[cfg.variantId!] || 0.6;
@@ -351,7 +354,7 @@ const FactorySheet: React.FC<FactorySheetProps> = ({ cart, user, language, order
   };
 
   // 2. 运费计算 — use passed-in values if available, otherwise auto-calculate cheapest
-  const hasOverlength = cart.some(item => {
+  const hasOverlength = productionCart.some(item => {
     if (item.product.type === ProductType.PROFILE) {
       const cfg = item.config as ProfileConfig;
       return cfg.length > 1500;
@@ -557,7 +560,7 @@ const FactorySheet: React.FC<FactorySheetProps> = ({ cart, user, language, order
             </div>
             <div className="flex items-center gap-5 text-xs font-bold">
               <span>{t.quantity}: {diyScrewRows.reduce((sum, row) => sum + row.quantity, 0)}</span>
-              {showPrice && <span>{currency}{diyScrewRows.reduce((sum, row) => sum + row.totalPrice, 0).toFixed(1)}</span>}
+              {showAnyDiyScrewPrice && <span>{currency}{diyScrewRows.filter((row) => !row.hideComponentPrice).reduce((sum, row) => sum + row.totalPrice, 0).toFixed(1)}</span>}
             </div>
           </div>
           <div className="p-4">
@@ -576,7 +579,7 @@ const FactorySheet: React.FC<FactorySheetProps> = ({ cart, user, language, order
                   <th className="border border-cyan-100 p-2">{language === 'cn' ? '长度' : language === 'jp' ? '長さ' : 'Length'}</th>
                   <th className="border border-cyan-100 p-2">{t.color}</th>
                   <th className="border border-cyan-100 p-2 text-right">{t.quantity}</th>
-                  {showPrice && <th className="border border-cyan-100 p-2 text-right">{language === 'cn' ? '小计' : language === 'jp' ? '小計' : 'Subtotal'}</th>}
+                  {showAnyDiyScrewPrice && <th className="border border-cyan-100 p-2 text-right">{language === 'cn' ? '小计' : language === 'jp' ? '小計' : 'Subtotal'}</th>}
                 </tr>
               </thead>
               <tbody>
@@ -606,7 +609,7 @@ const FactorySheet: React.FC<FactorySheetProps> = ({ cart, user, language, order
                       <td className="border border-slate-100 p-2">{row.screwLengthMm ? `${row.screwLengthMm}mm` : '-'}</td>
                       <td className="border border-slate-100 p-2">{colorName}</td>
                       <td className="border border-slate-100 p-2 text-right font-black">{row.quantity}</td>
-                      {showPrice && <td className="border border-slate-100 p-2 text-right font-bold">{currency}{row.totalPrice.toFixed(1)}</td>}
+                      {showAnyDiyScrewPrice && <td className="border border-slate-100 p-2 text-right font-bold">{row.hideComponentPrice ? '' : `${currency}${row.totalPrice.toFixed(1)}`}</td>}
                     </tr>
                   );
                 })}
@@ -621,8 +624,26 @@ const FactorySheet: React.FC<FactorySheetProps> = ({ cart, user, language, order
         {nonScrewDisplayCart.map((item, idx) => {
            const isProfile = item.product.type === ProductType.PROFILE;
             const isAccessory = item.product.type === ProductType.ACCESSORY;
-           const cfg = (item.config || {}) as any;
-           const profileCfg = cfg as ProfileConfig;
+           const rawCfg = (item.config || {}) as any;
+           const showComponentPrice = showPrice && !rawCfg.hideComponentPrice;
+           const isMarineMaterial = item.product.type === ProductType.MARINE_BOARD
+             || rawCfg.doorMaterial === 'marine';
+           const cfg = {
+             ...rawCfg,
+             ...(isMarineMaterial ? {
+               width: Math.max(1, Math.round(Number(rawCfg.width || 1))),
+               height: Math.max(1, Math.round(Number(rawCfg.height || 1))),
+             } : {}),
+           } as any;
+           const profileCfg = {
+             ...cfg,
+             holes: Array.isArray(cfg.holes)
+               ? cfg.holes.map((hole: any) => ({
+                 ...hole,
+                 positionMm: Math.round(Number(hole.positionMm || 0)),
+               }))
+               : [],
+           } as ProfileConfig;
            const colorDef = isProfile ? PROFILE_COLORS.find(c => c.id === profileCfg.colorId) : null;
            
            // Correctly translate finish to Chinese terms as requested
@@ -652,7 +673,7 @@ const FactorySheet: React.FC<FactorySheetProps> = ({ cart, user, language, order
                 </div>
                 <div className="flex items-center gap-6">
                   <div className="bg-white/20 px-3 py-1 rounded font-bold uppercase text-xs">{t.quantity}: {isAccessory ? Number(cfg?.totalQuantity || item.quantity) : item.quantity}</div>
-                  {showPrice && <div className="font-black text-xl">{currency}{item.totalPrice.toFixed(1)}</div>}
+                  {showComponentPrice && <div className="font-black text-xl">{currency}{item.totalPrice.toFixed(1)}</div>}
                 </div>
              </div>
              
@@ -807,7 +828,7 @@ const FactorySheet: React.FC<FactorySheetProps> = ({ cart, user, language, order
                             <div><span className="text-slate-400">{language === 'cn' ? '适配型号' : language === 'jp' ? '適合型番' : 'Fit Model'}:</span> <span className="font-black">{fitModel}</span></div>
                             <div><span className="text-slate-400">{language === 'cn' ? '颜色' : language === 'jp' ? '色' : 'Color'}:</span> <span className="font-black">{colorModeText}</span></div>
                             <div><span className="text-slate-400">{language === 'cn' ? '总数量' : language === 'jp' ? '総数量' : 'Total Qty'}:</span> <span className="font-black">{totalQty}</span></div>
-                            <div><span className="text-slate-400">{language === 'cn' ? '小计' : language === 'jp' ? '小計' : 'Subtotal'}:</span> <span className="font-black">{currency}{Number(cfg?.unitTotal || item.totalPrice || 0).toFixed(1)}</span></div>
+                            {showComponentPrice && <div><span className="text-slate-400">{language === 'cn' ? '小计' : language === 'jp' ? '小計' : 'Subtotal'}:</span> <span className="font-black">{currency}{Number(cfg?.unitTotal || item.totalPrice || 0).toFixed(1)}</span></div>}
                           </div>
                         </div>
 
@@ -867,7 +888,7 @@ const FactorySheet: React.FC<FactorySheetProps> = ({ cart, user, language, order
                                     <div className="min-w-0 flex-1 text-xs">
                                       <div className="font-black text-slate-800 whitespace-normal break-words leading-snug" title={lineName}>{lineName}</div>
                                       <div className="text-slate-500">{language === 'cn' ? '数量' : language === 'jp' ? '数量' : 'Qty'}: {qty}</div>
-                                      <div className="text-slate-700 font-bold">{language === 'cn' ? '小计' : language === 'jp' ? '小計' : 'Subtotal'}: {currency}{subtotal.toFixed(1)}</div>
+                                      {showComponentPrice && <div className="text-slate-700 font-bold">{language === 'cn' ? '小计' : language === 'jp' ? '小計' : 'Subtotal'}: {currency}{subtotal.toFixed(1)}</div>}
                                     </div>
                                   </div>
                                 );
@@ -901,7 +922,7 @@ const FactorySheet: React.FC<FactorySheetProps> = ({ cart, user, language, order
                       {item.product.type === ProductType.MARINE_BOARD && (
                         <div><span className="text-slate-400">{language === 'cn' ? '海洋板规格' : language === 'jp' ? '海洋板仕様' : 'Marine Spec'}:</span> <span className="font-black">{cfg.marineSpecName || (cfg.marineSpecId === 'marine_bbb_plain' ? (language === 'cn' ? 'BBB素板' : language === 'jp' ? 'BBB素板' : 'BBB plain board') : (language === 'cn' ? 'BBB两面UV清漆+覆膜' : language === 'jp' ? 'BBB両面UVクリア+フィルム' : 'BBB double-side UV varnish + film'))}</span></div>
                       )}
-                      <div><span className="text-slate-400">{language === 'cn' ? '单价' : language === 'jp' ? '単価' : 'Unit Price'}:</span> <span className="font-black">{currency}{Number(cfg.unitPrice || (item.totalPrice / Math.max(1, item.quantity))).toFixed(1)}</span></div>
+                      {showComponentPrice && <div><span className="text-slate-400">{language === 'cn' ? '单价' : language === 'jp' ? '単価' : 'Unit Price'}:</span> <span className="font-black">{currency}{Number(cfg.unitPrice || (item.totalPrice / Math.max(1, item.quantity))).toFixed(1)}</span></div>}
                       <div><span className="text-slate-400">{language === 'cn' ? '面积' : language === 'jp' ? '面積' : 'Area'}:</span> <span className="font-black">{Number(cfg.areaSqm || 0).toFixed(3)}㎡</span></div>
                     </div>
                     {cfg.openingSide && (

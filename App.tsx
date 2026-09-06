@@ -21,6 +21,11 @@ import { preloadImages } from './utils/imagePreload';
 import { exportElementToPdf } from './utils/pdfExport';
 import { summarizeDiyScrewCartItems } from './utils/cartAccessories';
 import { isValidShippingPhone, normalizeShippingPhone } from './utils/shippingPhone';
+import { getDesignSourceLabel, normalizeDesignSourceInfo } from './utils/designSource';
+import {
+  expandFinishedFurnitureCartItems,
+  isFinishedFurnitureCartItem,
+} from './utils/finishedFurnitureCart';
 
 const DIYDesigner = React.lazy(() => import('./components/DIYDesigner'));
 const FactorySheetPreviewPage = React.lazy(() => import('./components/FactorySheetPreviewPage'));
@@ -807,6 +812,53 @@ const AddressModal: React.FC<{
   );
 };
 
+const getFinishedFurnitureParameterRows = (item: CartItem, language: Language) => {
+  if (!isFinishedFurnitureCartItem(item)) return [];
+  const config = (item.config || {}) as any;
+  const summary = config.parametricSummary && typeof config.parametricSummary === 'object'
+    ? config.parametricSummary
+    : {};
+  const source = String(config.finishedFurnitureSource || '');
+  const text = {
+    size: language === 'cn' ? '成品尺寸' : language === 'jp' ? '完成寸法' : 'Overall size',
+    baseHeight: language === 'cn' ? '地柜高度' : language === 'jp' ? '下台高さ' : 'Base height',
+    columns: language === 'cn' ? '列数' : language === 'jp' ? '列数' : 'Columns',
+    layers: language === 'cn' ? '层数' : language === 'jp' ? '段数' : 'Layers',
+    shelves: language === 'cn' ? '展示层板' : language === 'jp' ? '展示棚板' : 'Display shelves',
+    drawers: language === 'cn' ? '抽屉' : language === 'jp' ? '引出し' : 'Drawers',
+    profileColor: language === 'cn' ? '型材颜色' : language === 'jp' ? '形材カラー' : 'Profile color',
+    boardColor: language === 'cn' ? '海洋板颜色' : language === 'jp' ? 'マリンボードカラー' : 'Marine-board color',
+  };
+  const rows: Array<{ label: string; value: string }> = [];
+  const dimensionValues = source === 'display_rack_3_0'
+    ? [summary.widthMm, summary.depthMm, summary.heightMm]
+    : source === 'wardrobe'
+      ? [summary.lengthMm, summary.widthMm, summary.heightMm]
+      : [summary.lengthMm, summary.depthMm, summary.heightMm];
+  if (dimensionValues.every((value) => Number.isFinite(Number(value)))) {
+    rows.push({ label: text.size, value: `${dimensionValues.map((value) => Number(value)).join(' × ')}mm` });
+  }
+  if (Number.isFinite(Number(summary.baseCabinetHeightMm))) rows.push({ label: text.baseHeight, value: `${Number(summary.baseCabinetHeightMm)}mm` });
+  if (Number.isFinite(Number(summary.columns))) rows.push({ label: text.columns, value: String(Number(summary.columns)) });
+  if (Number.isFinite(Number(summary.layers))) rows.push({ label: text.layers, value: String(Number(summary.layers)) });
+  if (Number.isFinite(Number(summary.storageLayers))) rows.push({ label: text.layers, value: String(Number(summary.storageLayers)) });
+  if (Number.isFinite(Number(summary.upperLevels))) rows.push({ label: text.shelves, value: String(Number(summary.upperLevels)) });
+  if (Number.isFinite(Number(summary.lowerLevels))) rows.push({ label: text.drawers, value: String(Number(summary.lowerLevels)) });
+  if (summary.profileColorId) {
+    rows.push({
+      label: text.profileColor,
+      value: PROFILE_COLORS.find((color) => color.id === summary.profileColorId)?.name?.[language] || String(summary.profileColorId),
+    });
+  }
+  if (summary.marineBoardColorId) {
+    rows.push({
+      label: text.boardColor,
+      value: getMarineBoardOrderColorName(String(summary.marineBoardColorId), language),
+    });
+  }
+  return rows;
+};
+
 const Cart: React.FC<{ 
   cart: CartItem[], 
   language: Language, 
@@ -839,6 +891,7 @@ const Cart: React.FC<{
   const [addressDeleteError, setAddressDeleteError] = useState('');
   const [include304Screws, setInclude304Screws] = useState(false);
   const [includeLabelService, setIncludeLabelService] = useState(false);
+  const productionCart = React.useMemo(() => expandFinishedFurnitureCartItems(cart), [cart]);
 
   const printRef = useRef<HTMLDivElement>(null);
   const addresses = user?.addresses || [];
@@ -876,7 +929,7 @@ const Cart: React.FC<{
   };
 
   // Check if any profile item exceeds 1.4m (1500mm)
-  const hasOverlength = cart.some(item => {
+  const hasOverlength = productionCart.some(item => {
     if (item.product.type === ProductType.PROFILE) {
       const cfg = item.config as ProfileConfig;
       return cfg.length > 1500;
@@ -887,7 +940,7 @@ const Cart: React.FC<{
   // Calculate total profile weight
   const totalProfileWeightKg = React.useMemo(() => {
     let w = 0;
-    cart.forEach(item => {
+    productionCart.forEach(item => {
       if (item.product.type === ProductType.PROFILE) {
         const cfg = item.config as ProfileConfig;
         const weightPerM = PROFILE_WEIGHTS[cfg.variantId!] || 0.6;
@@ -895,11 +948,11 @@ const Cart: React.FC<{
       }
     });
     return w;
-  }, [cart]);
+  }, [productionCart]);
 
   const totalMarineBoardWeightKg = React.useMemo(() => {
     let w = 0;
-    cart.forEach(item => {
+    productionCart.forEach(item => {
       if (item.product.type === ProductType.MARINE_BOARD) {
         const cfg = (item.config || {}) as { thickness?: number; width?: number; height?: number; areaSqm?: number };
         const thickness = Number(cfg.thickness || 0);
@@ -911,7 +964,7 @@ const Cart: React.FC<{
       }
     });
     return w;
-  }, [cart]);
+  }, [productionCart]);
 
   const totalItemAmount = React.useMemo(
     () => cart.reduce((sum, item) => sum + (Number(item.totalPrice) || 0), 0),
@@ -919,9 +972,9 @@ const Cart: React.FC<{
   );
 
   const accessoryShippingWeightKg = React.useMemo(() => {
-    const hasAccessory = cart.some(item => item.product.type === ProductType.ACCESSORY);
+    const hasAccessory = productionCart.some(item => item.product.type === ProductType.ACCESSORY);
     return getAccessoryShippingWeightKg(user, hasAccessory, totalItemAmount);
-  }, [cart, totalItemAmount, user]);
+  }, [productionCart, totalItemAmount, user]);
 
   const totalWeightKg = totalProfileWeightKg + totalMarineBoardWeightKg + accessoryShippingWeightKg;
 
@@ -974,19 +1027,19 @@ const Cart: React.FC<{
 
   const activeCourier: ShippingMethod = selectedCourier === 'auto' ? shippingOptions.cheapest : selectedCourier;
   const activeShipping = shippingOptions[activeCourier];
-  const diyScrewCartRows = React.useMemo(() => summarizeDiyScrewCartItems(cart), [cart]);
+  const diyScrewCartRows = React.useMemo(() => summarizeDiyScrewCartItems(productionCart), [productionCart]);
   const hasDiyScrewCartRows = diyScrewCartRows.length > 0;
   useEffect(() => {
     if (hasDiyScrewCartRows && include304Screws) setInclude304Screws(false);
   }, [hasDiyScrewCartRows, include304Screws]);
   const screwPlan = React.useMemo(
-    () => calculateScrewPlan(cart, include304Screws && !hasDiyScrewCartRows),
-    [cart, include304Screws, hasDiyScrewCartRows],
+    () => calculateScrewPlan(productionCart, include304Screws && !hasDiyScrewCartRows),
+    [productionCart, include304Screws, hasDiyScrewCartRows],
   );
   const screwFee = screwPlan.totalFee;
   const labelProfileCount = React.useMemo(
-    () => cart.reduce((sum, item) => sum + (item.product.type === ProductType.PROFILE ? (Number(item.quantity) || 0) : 0), 0),
-    [cart]
+    () => productionCart.reduce((sum, item) => sum + (item.product.type === ProductType.PROFILE ? (Number(item.quantity) || 0) : 0), 0),
+    [productionCart]
   );
   const labelFee = includeLabelService ? labelProfileCount : 0;
 
@@ -1296,12 +1349,22 @@ const Cart: React.FC<{
             {cart.map(item => {
               const profileConfig = item.config as ProfileConfig;
               const colorDef = profileConfig?.colorId ? PROFILE_COLORS.find(c => c.id === profileConfig.colorId) : null;
+              const designSource = normalizeDesignSourceInfo((item.config as any)?.designSource);
+              const isFinishedFurniture = isFinishedFurnitureCartItem(item);
+              const finishedFurnitureParameters = getFinishedFurnitureParameterRows(item, language);
 
               return (
                 <div key={item.id} className="bg-white p-8 rounded-[2.5rem] shadow-2xl border border-slate-100 flex flex-col group hover:border-blue-200 transition-all">
                   <div className="flex justify-between items-start">
                     <div className="flex-1">
                       <h4 className="font-black text-slate-800 text-2xl mb-1">{item.product.name[language]}</h4>
+                      {designSource && (
+                        <div className="mb-2 inline-flex max-w-full items-center gap-1.5 rounded-full border border-emerald-100 bg-emerald-50 px-2.5 py-1 text-[10px] font-black text-emerald-700">
+                          <span>{language === 'cn' ? '来源' : language === 'jp' ? '出所' : 'Source'}:</span>
+                          <span className="truncate">{getDesignSourceLabel(designSource, language)}</span>
+                          {designSource.modelName && <span className="truncate text-emerald-600/70">· {designSource.modelName}</span>}
+                        </div>
+                      )}
                       <div className="mt-1 flex items-center gap-2">
                         <span className="text-xs font-bold text-slate-500 uppercase">{t.quantity}:</span>
                         <input 
@@ -1321,6 +1384,21 @@ const Cart: React.FC<{
                       </div>
                     </div>
                   </div>
+                  {isFinishedFurniture && (
+                    <div className="mt-8 border-t border-slate-100 pt-8">
+                      <div className="mb-3 text-xs font-black uppercase tracking-widest text-slate-400">
+                        {language === 'cn' ? '三维参数' : language === 'jp' ? '3Dパラメータ' : '3D parameters'}
+                      </div>
+                      <div className="grid grid-cols-1 gap-2 text-xs font-bold sm:grid-cols-2 lg:grid-cols-3">
+                        {finishedFurnitureParameters.map((parameter) => (
+                          <div key={`${parameter.label}:${parameter.value}`} className="rounded-xl bg-slate-50 px-3 py-2.5 text-slate-700">
+                            <span className="text-slate-400">{parameter.label}：</span>
+                            <span className="font-black text-slate-900">{parameter.value}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                   {item.product.type === ProductType.PROFILE && (
                     <div className="mt-8 pt-8 border-t border-slate-100">
                       <div className="flex flex-wrap gap-2 mb-6">
@@ -1481,7 +1559,7 @@ const Cart: React.FC<{
                       })()}
                     </div>
                   )}
-                  {item.product.type !== ProductType.PROFILE && item.product.type !== ProductType.ACCESSORY && (
+                  {!isFinishedFurniture && item.product.type !== ProductType.PROFILE && item.product.type !== ProductType.ACCESSORY && (
                     <div className="mt-8 pt-8 border-t border-slate-100">
                       {(() => {
                         const cfg: any = item.config || {};
@@ -2114,7 +2192,9 @@ const ProductDetail: React.FC<{
               onAddToCart={onAddToCart}
               onUpdateItem={onUpdateCartItem}
             />
-          ) : product.type === ProductType.CALLIGRAPHY_CABINET || product.type === ProductType.WARDROBE ? (
+          ) : product.type === ProductType.CALLIGRAPHY_CABINET
+            || product.type === ProductType.WARDROBE
+            || product.type === ProductType.DISPLAY_RACK_3_0 ? (
             <FurnitureConfigurator
               language={language}
               type={product.type}

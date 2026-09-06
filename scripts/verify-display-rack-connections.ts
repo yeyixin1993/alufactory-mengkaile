@@ -1,0 +1,181 @@
+import {
+  DISPLAY_RACK_3_BASELINE,
+  DISPLAY_RACK_3_LIMITS,
+  buildDisplayRack3Template,
+  calculateDisplayRack3Price,
+  type DisplayRack3Parameters,
+} from '../utils/parametricDisplayRack';
+import {
+  completeDisplayRackConnectionSystem,
+  inspectDisplayRackConnectionCandidates,
+  normalizeDesignItems,
+} from '../components/DIYDesigner';
+import { DISPLAY_RACK_COMPONENT_CATALOG } from '../data/displayRackComponentCatalog';
+
+const expectedSlidePrices = [
+  [700, 42], [650, 40], [600, 38], [550, 36], [500, 34],
+  [450, 32], [400, 30], [350, 28], [300, 26], [250, 24],
+];
+const actualSlidePrices = DISPLAY_RACK_COMPONENT_CATALOG.DRAWER_SLIDE_PAIR.lengthOptions
+  .map((option) => [option.lengthMm, option.unitPriceCny]);
+if (JSON.stringify(actualSlidePrices) !== JSON.stringify(expectedSlidePrices)) {
+  throw new Error(`抽屉滑轨价格表不匹配：${JSON.stringify(actualSlidePrices)}`);
+}
+
+const assertRackPrice = (overrides: Partial<DisplayRack3Parameters>, expected: number, label: string) => {
+  const actual = calculateDisplayRack3Price({ ...DISPLAY_RACK_3_BASELINE, ...overrides }).totalPriceCny;
+  if (actual !== expected) throw new Error(`${label}价格应为¥${expected}，实际为¥${actual}`);
+};
+assertRackPrice({}, 4500, '标准本色展架');
+assertRackPrice({ profileColorId: 'black' }, 5000, '彩色型材展架');
+assertRackPrice({ marineBoardColorId: 'marine_black' }, 4900, '彩色海洋板展架');
+assertRackPrice({ profileColorId: 'black', marineBoardColorId: 'marine_black' }, 5400, '全彩色展架');
+assertRackPrice({ widthMm: DISPLAY_RACK_3_BASELINE.widthMm + 1 }, 4580, '1mm尺寸定制');
+assertRackPrice({ widthMm: DISPLAY_RACK_3_BASELINE.widthMm + 100 }, 4580, '100mm尺寸定制');
+assertRackPrice({ widthMm: DISPLAY_RACK_3_BASELINE.widthMm + 101 }, 4660, '101mm尺寸定制');
+assertRackPrice({ baseCabinetHeightMm: DISPLAY_RACK_3_BASELINE.baseCabinetHeightMm + 1 }, 4580, '地柜高度1mm定制');
+assertRackPrice({ baseCabinetHeightMm: DISPLAY_RACK_3_BASELINE.baseCabinetHeightMm + 101 }, 4660, '地柜高度101mm定制');
+assertRackPrice({
+  widthMm: DISPLAY_RACK_3_BASELINE.widthMm + 100,
+  heightMm: DISPLAY_RACK_3_BASELINE.heightMm - 100,
+  depthMm: DISPLAY_RACK_3_BASELINE.depthMm + 100,
+  baseCabinetHeightMm: DISPLAY_RACK_3_BASELINE.baseCabinetHeightMm - 100,
+}, 4580, '多维度100mm范围定制');
+assertRackPrice({ upperLevels: 4 }, 4600, '增加展示层板');
+assertRackPrice({ upperLevels: 2 }, 4400, '减少展示层板');
+assertRackPrice({ lowerLevels: 6 }, 4700, '增加抽屉');
+assertRackPrice({ lowerLevels: 4 }, 4300, '减少抽屉');
+
+const coloredPayload = buildDisplayRack3Template({
+  ...DISPLAY_RACK_3_BASELINE,
+  profileColorId: 'black',
+  marineBoardColorId: 'marine_black',
+});
+if (coloredPayload.finishedFurniture.totalPriceCny !== 5400
+    || coloredPayload.items.some((item) => item.kind === 'profile' && item.colorId !== 'black')
+    || coloredPayload.items.some((item) => item.kind === 'marine_board' && item.colorId !== 'marine_black')) {
+  throw new Error('展架颜色选择或成品家具报价没有正确写入参数化模板');
+}
+
+const normalizedLegacyMeasurements = normalizeDesignItems([
+  {
+    id: 'legacy-profile',
+    kind: 'profile',
+    name: '3030',
+    variantId: '3030',
+    length: 2000,
+    position: [0, 0, 0],
+    rotation: [0, 0, 0],
+    colorId: 'natural',
+    quantity: 1,
+    holes: [{
+      id: 'legacy-hole',
+      side: 'A',
+      positionMm: 1287.37,
+      type: 'through',
+      grooveIndex: 0,
+      physicalGrooveIndex: 0,
+    }],
+  },
+  {
+    id: 'legacy-board',
+    kind: 'marine_board',
+    name: 'Marine board',
+    width: 600.5,
+    height: 400.49,
+    thickness: 18,
+    position: [0, 0, 0],
+    rotation: [0, 0, 0],
+    colorId: 'wood_natural',
+    quantity: 1,
+  },
+] as never);
+if (normalizedLegacyMeasurements[0].holes?.[0]?.positionMm !== 1287
+    || normalizedLegacyMeasurements[1].width !== 601
+    || normalizedLegacyMeasurements[1].height !== 400) {
+  throw new Error('Legacy manufacturing measurements were not rounded to whole millimetres');
+}
+
+const cases = [
+  DISPLAY_RACK_3_BASELINE,
+  {
+    ...DISPLAY_RACK_3_BASELINE,
+    widthMm: DISPLAY_RACK_3_LIMITS.widthMm.min,
+    heightMm: DISPLAY_RACK_3_LIMITS.heightMm.min,
+    depthMm: DISPLAY_RACK_3_LIMITS.depthMm.min,
+    baseCabinetHeightMm: DISPLAY_RACK_3_LIMITS.baseCabinetHeightMm.min,
+    upperLevels: DISPLAY_RACK_3_LIMITS.upperLevels.min,
+    lowerLevels: DISPLAY_RACK_3_LIMITS.lowerLevels.min,
+  },
+  {
+    ...DISPLAY_RACK_3_BASELINE,
+    widthMm: DISPLAY_RACK_3_LIMITS.widthMm.max,
+    heightMm: DISPLAY_RACK_3_LIMITS.heightMm.max,
+    depthMm: DISPLAY_RACK_3_LIMITS.depthMm.max,
+    baseCabinetHeightMm: DISPLAY_RACK_3_BASELINE.baseCabinetHeightMm,
+    upperLevels: DISPLAY_RACK_3_LIMITS.upperLevels.max,
+    lowerLevels: DISPLAY_RACK_3_LIMITS.lowerLevels.max,
+  },
+  {
+    ...DISPLAY_RACK_3_BASELINE,
+    heightMm: 2000,
+    baseCabinetHeightMm: 850,
+    upperLevels: 3,
+    lowerLevels: 5,
+  },
+];
+
+cases.forEach((parameters, index) => {
+  const caseName = `case ${index + 1}`;
+  const payload = buildDisplayRack3Template(parameters);
+  const fractionalHolePositions = payload.items
+    .filter((item) => item.kind === 'profile')
+    .flatMap((item) => item.holes || [])
+    .filter((hole) => !Number.isInteger(hole.positionMm));
+  const fractionalPanelDimensions = payload.items
+    .filter((item) => item.kind === 'marine_board')
+    .filter((item) => !Number.isInteger(item.width) || !Number.isInteger(item.height));
+  if (fractionalHolePositions.length || fractionalPanelDimensions.length) {
+    throw new Error(`${caseName}: manufacturing dimensions must be whole millimetres`);
+  }
+  const expectedSlide = DISPLAY_RACK_COMPONENT_CATALOG.DRAWER_SLIDE_PAIR.lengthOptions
+    .find((option) => option.lengthMm <= parameters.depthMm - 50)
+    || DISPLAY_RACK_COMPONENT_CATALOG.DRAWER_SLIDE_PAIR.lengthOptions.at(-1)!;
+  const pricingIssues: string[] = [];
+  payload.items.forEach((item) => {
+    if (item.shelfSupportType === 'linear_shaft') {
+      const expectedPrice = Number(((item.length || 0) / 1000 * 10).toFixed(2));
+      if (item.accessoryPrice !== expectedPrice) pricingIssues.push(`${item.name}: expected ¥${expectedPrice}, got ¥${item.accessoryPrice}`);
+    }
+    if (item.shelfSupportType === 'shaft_support_sk8' && item.accessoryPrice !== 2) {
+      pricingIssues.push(`${item.name}: expected ¥2, got ¥${item.accessoryPrice}`);
+    }
+    if (item.shelfSupportType === 'shaft_support_shf8' && item.accessoryPrice !== 2) {
+      pricingIssues.push(`${item.name}: expected ¥2, got ¥${item.accessoryPrice}`);
+    }
+    if (item.shelfSupportType === 'drawer_slide_pair'
+      && (item.length !== expectedSlide.lengthMm || item.accessoryPrice !== expectedSlide.unitPriceCny)) {
+      pricingIssues.push(`${item.name}: expected ${expectedSlide.lengthMm}mm/¥${expectedSlide.unitPriceCny}, got ${item.length}mm/¥${item.accessoryPrice}`);
+    }
+  });
+  const normalized = normalizeDesignItems(payload.items as never);
+  const { items, check } = completeDisplayRackConnectionSystem(normalized);
+  const connectorCount = items.filter((item) => item.kind === 'connector' && item.autoGenerated).length;
+  const directHoleCount = items.reduce((count, item) => (
+    count + (item.holes || []).filter((hole) => hole.jointKey?.endsWith(':DRILL-TAP')).length
+  ), 0);
+  console.log(JSON.stringify({ case: index + 1, valid: check.valid, connectorCount, directHoleCount, pricingIssues, issues: check.issues }));
+  if (!check.valid) {
+    const missingKeys = new Set(check.issues.filter((issue) => issue.includes('当前为0个直锁＋0个角码')).map((issue) => issue.split('应且只能')[0]));
+    console.log(JSON.stringify(inspectDisplayRackConnectionCandidates(normalized).filter((row) => missingKeys.has(row.jointKey))));
+    const missingIds = new Set(Array.from(missingKeys).flatMap((key) => key.split(':JOINT:')));
+    console.log(JSON.stringify(normalized.filter((item) => missingIds.has(item.id)).map((item) => ({
+      id: item.id,
+      name: item.name,
+      position: item.position,
+      rotation: item.rotation,
+      length: item.length,
+    }))));
+  }
+  if (!check.valid || pricingIssues.length > 0) process.exitCode = 1;
+});

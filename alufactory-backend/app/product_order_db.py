@@ -16,6 +16,7 @@ CATEGORY_LABELS = {
     'marine_board': '海洋板订单管理',
     'calligraphy_cabinet': '宜家舒法特柜子订单管理',
     'wardrobe': '衣柜订单管理',
+    'display_rack': '展示架订单管理',
     'accessory': '配件订单管理',
 }
 
@@ -269,6 +270,32 @@ def _extract_item_detail_payload(category_code: str, item_config) -> Dict[str, O
         gap_text = '/'.join([f"{float(g):.0f}mm" for g in hinge_gaps if _to_positive_float(g) is not None]) or '-'
         remark = f'铰链{hinge_count}个；上{top_offset:.0f}mm，下{bottom_offset:.0f}mm；间距{gap_text}'
 
+    if category_code == 'display_rack':
+        summary = config.get('parametricSummary') if isinstance(config.get('parametricSummary'), dict) else {}
+        quote = config.get('finishedFurnitureQuote') if isinstance(config.get('finishedFurnitureQuote'), dict) else {}
+        quote_parameters = quote.get('parameters') if isinstance(quote.get('parameters'), dict) else {}
+        parameters = {**quote_parameters, **summary}
+        width = _to_positive_float(parameters.get('widthMm')) or width
+        height = _to_positive_float(parameters.get('heightMm')) or height
+        depth = _to_positive_float(parameters.get('depthMm'))
+        if depth is not None:
+            thickness = f'{depth:g}mm'
+        profile_color = _pick_first_non_empty(parameters.get('profileColorId'), 'natural')
+        board_color = _pick_first_non_empty(parameters.get('marineBoardColorId'), 'wood_natural')
+        color = f'型材 {profile_color}；海洋板 {board_color}'
+        detail_parts = []
+        base_height = _to_positive_float(parameters.get('baseCabinetHeightMm'))
+        upper_levels = _to_positive_float(parameters.get('upperLevels'))
+        lower_levels = _to_positive_float(parameters.get('lowerLevels'))
+        if base_height is not None:
+            detail_parts.append(f'地柜高{base_height:g}mm')
+        if upper_levels is not None:
+            detail_parts.append(f'展示层板{int(upper_levels)}层')
+        if lower_levels is not None:
+            detail_parts.append(f'抽屉{int(lower_levels)}层')
+        if detail_parts:
+            remark = '；'.join(detail_parts)
+
     sketch_svg = _build_sketch_svg(category_code, width, height, opening_side, hinge_positions)
 
     if category_code == 'accessory':
@@ -331,6 +358,8 @@ def classify_order_item(product_type: str, product_name: str, product_id: str) -
         return 'calligraphy_cabinet'
     if 'wardrobe' in ptype or '衣柜' in pname or pid == 'p8':
         return 'wardrobe'
+    if 'display_rack_3_0' in ptype or '参数化展示架' in pname or '3.0展示架' in pname or pid == 'p9':
+        return 'display_rack'
     if ptype == 'accessory' or '配件' in pname or 'connector' in pname or pid == 'accessory':
         return 'accessory'
     if ptype == 'pegboard' or '洞洞板' in pname or pid == 'p1':

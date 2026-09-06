@@ -1,0 +1,50 @@
+{
+  "format": "mengkaile-diy",
+  "schemaVersion": 2,
+  "savedAt": "2026-09-04T12:00:00.000Z",
+  "coordinateUnit": "mm",
+  "provenance": {
+    "schemaVersion": 1,
+    "channel": "sketchup_plugin",
+    "producerId": "lona.aluminum-profile-splitter",
+    "producerVersion": "2.43.1",
+    "documentId": "handoff-example-20260904-001",
+    "modelName": "官网升级交付测试模型.skp",
+    "exportedAt": "2026-09-04T12:00:00.000Z",
+    "containedChannels": [
+      "sketchup_plugin"
+    ],
+    "verification": "self_declared"
+  },
+  "source": {
+    "exporter": "AluminumProfileSplitter",
+    "exporterVersion": "2.43.1",
+    "producerId": "lona.aluminum-profile-splitter",
+    "documentId": "handoff-example-20260904-001",
+    "modelName": "官网升级交付测试模型.skp"
+  },
+  "sourceSummary": "官网升级交付包的最小来源链路测试文件",
+  "warnings": [],
+  "items": [
+    {
+      "id": "profile-handoff-001",
+      "kind": "profile",
+      "name": "3030",
+      "variantId": "3030",
+      "position": [
+        15,
+        500,
+        15
+      ],
+      "rotation": [
+        0,
+        90,
+        0
+      ],
+      "length": 1000,
+      "colorId": "natural",
+      "quantity": 1,
+      "holes": []
+    }
+  ]
+}
