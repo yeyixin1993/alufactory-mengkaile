@@ -33,10 +33,13 @@ assertRackPrice({ profileColorId: 'black', marineBoardColorId: 'marine_black' },
 assertRackPrice({ widthMm: DISPLAY_RACK_3_BASELINE.widthMm + 1 }, 4580, '1mm尺寸定制');
 assertRackPrice({ widthMm: DISPLAY_RACK_3_BASELINE.widthMm + 100 }, 4580, '100mm尺寸定制');
 assertRackPrice({ widthMm: DISPLAY_RACK_3_BASELINE.widthMm + 101 }, 4660, '101mm尺寸定制');
+assertRackPrice({ baseCabinetHeightMm: DISPLAY_RACK_3_BASELINE.baseCabinetHeightMm + 1 }, 4580, '地柜高度1mm定制');
+assertRackPrice({ baseCabinetHeightMm: DISPLAY_RACK_3_BASELINE.baseCabinetHeightMm + 101 }, 4660, '地柜高度101mm定制');
 assertRackPrice({
   widthMm: DISPLAY_RACK_3_BASELINE.widthMm + 100,
   heightMm: DISPLAY_RACK_3_BASELINE.heightMm - 100,
   depthMm: DISPLAY_RACK_3_BASELINE.depthMm + 100,
+  baseCabinetHeightMm: DISPLAY_RACK_3_BASELINE.baseCabinetHeightMm - 100,
 }, 4580, '多维度100mm范围定制');
 assertRackPrice({ upperLevels: 4 }, 4600, '增加展示层板');
 assertRackPrice({ upperLevels: 2 }, 4400, '减少展示层板');

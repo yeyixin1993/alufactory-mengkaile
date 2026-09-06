@@ -72,12 +72,13 @@ export interface DisplayRack3PriceBreakdown {
 }
 
 export const calculateDisplayRack3Price = (
-  parameters: Pick<DisplayRack3Parameters, 'widthMm' | 'heightMm' | 'depthMm' | 'upperLevels' | 'lowerLevels' | 'profileColorId' | 'marineBoardColorId'>,
+  parameters: Pick<DisplayRack3Parameters, 'widthMm' | 'heightMm' | 'depthMm' | 'baseCabinetHeightMm' | 'upperLevels' | 'lowerLevels' | 'profileColorId' | 'marineBoardColorId'>,
 ): DisplayRack3PriceBreakdown => {
   const maximumDimensionDeviationMm = Math.max(
     Math.abs(parameters.widthMm - DISPLAY_RACK_3_BASELINE.widthMm),
     Math.abs(parameters.heightMm - DISPLAY_RACK_3_BASELINE.heightMm),
     Math.abs(parameters.depthMm - DISPLAY_RACK_3_BASELINE.depthMm),
+    Math.abs(parameters.baseCabinetHeightMm - DISPLAY_RACK_3_BASELINE.baseCabinetHeightMm),
   );
   const dimensionSteps = maximumDimensionDeviationMm > 0
     ? Math.ceil(maximumDimensionDeviationMm / DISPLAY_RACK_3_PRICE_RULES.dimensionStepMm)
