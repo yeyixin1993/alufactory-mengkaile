@@ -95,10 +95,6 @@
     "en": "From aluminum to home.",
     "jp": "アルミから、暮らしへ。"
   },
-  "上海至绘艺术品有限公司 / 铝合金全制程制造与家居应用": {
-    "en": "Shanghai Zhihui Artworks Co., Ltd. / Integrated aluminum manufacturing for the home",
-    "jp": "上海至絵芸術品有限公司 / アルミの一貫製造と住空間への応用"
-  },
   "拥有20多年经验，生产基地位于山东临沂，拥有 30,000 多平方米生产车间。公司以艺术品装裱用实木线条、铝合金线条为基础，延伸至极简铝合金家居的成品与半成品制造。": {
     "en": "Over 20 years of experience, with a production base in Linyi, Shandong and over 30,000 m² of workshops. Starting with solid-wood and aluminum picture-frame mouldings, we have expanded into minimalist aluminum furniture and components.",
     "jp": "20年以上の経験を持ち、山東省臨沂の生産拠点に30,000㎡以上の工場を構えています。額装用の無垢材・アルミ製モールディングを基盤に、ミニマルなアルミ家具の完成品・半製品へと事業を広げています。"
@@ -199,37 +195,13 @@
     "en": "Complete photographed color-sample set with labels",
     "jp": "色名付きカラーサンプル集合写真"
   },
-  "截面对比：左侧切口为铝材本色，右侧切口与表面同色": {
-    "en": "Cut ends: natural aluminum on the left, matching color on the right",
-    "jp": "切断面比較：左はアルミ素地、右は表面と同色"
-  },
-  "截面本色 / 截面彩色": {
-    "en": "Natural vs. colored cut ends",
-    "jp": "切断面：素地とカラー"
-  },
-  "截面本色：": {
-    "en": "Natural ends: ",
-    "jp": "切断面が素地："
-  },
-  "型材表面为所选颜色，切口保留铝材银白本色，如图左。": {
-    "en": "The surface uses your selected color; the cut end stays silver aluminum, as shown on the left.",
-    "jp": "表面は選択色、切断面はアルミ本来の銀白色です（写真左）。"
-  },
-  "截面彩色（截面同色）：": {
-    "en": "Colored (matching) ends: ",
-    "jp": "切断面がカラー（同色）："
-  },
-  "型材表面与切口均为所选颜色，如图右。": {
-    "en": "Both the surface and cut end use your selected color, as shown on the right.",
-    "jp": "表面と切断面を同じ選択色に仕上げます（写真右）。"
-  },
-  "价格表中的“彩色 · 截面同色”即截面彩色。选型时请同时确认表面颜色和切口处理。": {
-    "en": "“Colored · Matching ends” in the price table means colored cut ends. Confirm both the surface color and cut-end finish when ordering.",
-    "jp": "価格表の「カラー・切断面：同色」は、切断面も着色した仕様です。表面色と切断面の仕上げを合わせてご確認ください。"
-  },
   "屏幕与打印颜色仅供参考，实际以确认色样为准。颜色及截面处理的可选组合，以网站配置器为准。": {
     "en": "Screen and print colors are references only; approved physical samples take priority. Available color and cut-end combinations are shown in the website configurator.",
     "jp": "画面・印刷の色は参考です。承認済み実物サンプルを優先し、色と切断面処理の組合せはサイトでご確認ください。"
+  },
+  "截面处理备注：型材可选截面本色（切口保留铝材银白本色）或截面彩色（表面与切口均为所选颜色，价格表称「截面同色」）。": {
+    "en": "Cut-end note: choose natural ends (silver aluminum at the cut) or matching ends (same color as the surface, labeled \"matching ends\" in the price table).",
+    "jp": "切断面処理メモ：素地（切断面はアルミ本来の銀白色）または同色（表面と同じ色、価格表では「断面同色」）を選択できます。"
   },
   "铝型材 / 15与20系列": {
     "en": "Profiles / 15 & 20 series",
@@ -382,6 +354,270 @@
   "海洋板原色 · 人民币元 / ㎡": {
     "en": "Natural marine plywood · CNY / m²",
     "jp": "マリン合板・ナチュラル · 元 / ㎡"
+  },
+  "海洋板家具": {
+    "en": "Marine plywood furniture",
+    "jp": "マリン合板家具"
+  },
+  "海洋板家具，2026 上海摩登展。": {
+    "en": "Marine plywood furniture, Shanghai Maison 2026.",
+    "jp": "マリン合板家具、上海メゾン2026。"
+  },
+  "展会上精选样品：从层凳、收纳到桌椅与展示架。以俄罗斯桦木多层板为基材，色彩与造型都有更多可能。": {
+    "en": "Show samples, from tiered stools and storage to tables, chairs and display stands. Built on Russian birch plywood, with a wider range of colors and forms.",
+    "jp": "展覧会の精选サンプル：段重ねスツール、収納からテーブル・チェア・展示スタンドまで。ロシア産バーチ合板を基材に、色彩と形の可能性を広げます。"
+  },
+  "海洋板家具 · 2026 摩登展样品价 · 人民币元": {
+    "en": "Marine plywood furniture · 2026 Maison show sample prices · CNY",
+    "jp": "マリン合板家具・2026メゾン展出展価格・元"
+  },
+  "图": {
+    "en": "Photo",
+    "jp": "写真"
+  },
+  "规格 mm": {
+    "en": "Size mm",
+    "jp": "サイズ mm"
+  },
+  "材质": {
+    "en": "Material",
+    "jp": "素材"
+  },
+  "颜色": {
+    "en": "Color",
+    "jp": "色"
+  },
+  "零售价": {
+    "en": "Retail",
+    "jp": "通常価格"
+  },
+  "会员价": {
+    "en": "Member",
+    "jp": "会員価格"
+  },
+  "备注": {
+    "en": "Note",
+    "jp": "備考"
+  },
+  "俄罗斯桦木多层板": {
+    "en": "Russian birch plywood",
+    "jp": "ロシア産バーチ合板"
+  },
+  "俄罗斯桦木多层板 + 桦木实木腿": {
+    "en": "Russian birch plywood + solid birch legs",
+    "jp": "ロシア産バーチ合板 + 桦材無垢脚"
+  },
+  "北美黑胡桃面 + 桦木实木腿": {
+    "en": "Black walnut top + solid birch legs",
+    "jp": "ブラックウォルナット天板 + 桦材無垢脚"
+  },
+  "俄罗斯桦木多层板 + 不锈钢腿": {
+    "en": "Russian birch plywood + stainless steel legs",
+    "jp": "ロシア産バーチ合板 + ステンレス脚"
+  },
+  "俄罗斯桦木多层板 + 桦木实木腿 + 桦木实木腿": {
+    "en": "Russian birch plywood + solid birch legs",
+    "jp": "ロシア産バーチ合板 + 桦材無垢脚"
+  },
+  "全桦木腿 + 拼面": {
+    "en": "Solid birch legs + patterned top",
+    "jp": "桦材無垢脚 + 寄せ木天板"
+  },
+  "海洋板拼色 + 桦木实木腿": {
+    "en": "Marine plywood color-blocked + solid birch legs",
+    "jp": "マリン合板色分け + 桦材無垢脚"
+  },
+  "海洋板 + 桦木实木腿": {
+    "en": "Marine plywood + solid birch legs",
+    "jp": "マリン合板 + 桦材無垢脚"
+  },
+  "俄罗斯桦木多层板 + 北美黑胡桃木拼条": {
+    "en": "Russian birch plywood + black walnut accents",
+    "jp": "ロシア産バーチ合板 + ブラックウォルナット"
+  },
+  "俄罗斯桦木多层板 + 北美黑胡桃木": {
+    "en": "Russian birch plywood + black walnut",
+    "jp": "ロシア産バーチ合板 + ブラックウォルナット"
+  },
+  "北美黑胡桃木": {
+    "en": "Black walnut",
+    "jp": "ブラックウォルナット"
+  },
+  "胡桃色 / 柚木色": {
+    "en": "Walnut / teak",
+    "jp": "ウォルナット / チーク"
+  },
+  "胡桃色 / 柚木色 / 樱桃色": {
+    "en": "Walnut / teak / cherry",
+    "jp": "ウォルナット / チーク / チェリー"
+  },
+  "原木色": {
+    "en": "Natural wood",
+    "jp": "ナチュラル"
+  },
+  "彩色桦芯": {
+    "en": "Colorful birch core",
+    "jp": "カラーバーチ芯"
+  },
+  "原色": {
+    "en": "Natural",
+    "jp": "ナチュラル"
+  },
+  "黑色": {
+    "en": "Black",
+    "jp": "ブラック"
+  },
+  "清漆": {
+    "en": "Clear coat",
+    "jp": "クリア塗装"
+  },
+  "原木 + 拼色": {
+    "en": "Natural + color-blocked",
+    "jp": "ナチュラル + 色分け"
+  },
+  "原木 + 绿松石拼色": {
+    "en": "Natural + turquoise",
+    "jp": "ナチュラル + ターコイズ"
+  },
+  "可定做": {
+    "en": "Made to order",
+    "jp": "別注可"
+  },
+  "2026 摩登展": {
+    "en": "Maison 2026",
+    "jp": "メゾン2026"
+  },
+  "9#层凳": {
+    "en": "9# Tiered Stool",
+    "jp": "9# 段重ねスツール"
+  },
+  "三屉收纳盒": {
+    "en": "3-Drawer Box",
+    "jp": "3段収納ボックス"
+  },
+  "小收纳柜": {
+    "en": "Small Storage",
+    "jp": "小型収納キャビネット"
+  },
+  "托盘": {
+    "en": "Tray",
+    "jp": "トレー"
+  },
+  "手机托": {
+    "en": "Phone Tray",
+    "jp": "スマホスタンド"
+  },
+  "茶托": {
+    "en": "Tea Tray",
+    "jp": "茶托"
+  },
+  "抽纸盒": {
+    "en": "Tissue Box",
+    "jp": "ティッシュケース"
+  },
+  "磁吸抽纸盒": {
+    "en": "Magnetic Tissue Box",
+    "jp": "マグネットティッシュケース"
+  },
+  "置物架": {
+    "en": "Display Stand",
+    "jp": "ディスプレイスタンド"
+  },
+  "马年画框": {
+    "en": "Year-of-Horse Frame",
+    "jp": "午年フレーム"
+  },
+  "马年A3画框": {
+    "en": "Year-of-Horse A3 Frame",
+    "jp": "午年A3フレーム"
+  },
+  "10#边柜": {
+    "en": "10# Sideboard",
+    "jp": "10# サイドボード"
+  },
+  "工艺展示木板（大）": {
+    "en": "Process Display Board (Large)",
+    "jp": "工程見本板（大）"
+  },
+  "工艺展示木板（小）": {
+    "en": "Process Display Board (Small)",
+    "jp": "工程見本板（小）"
+  },
+  "方木表": {
+    "en": "Square Clock",
+    "jp": "角型時計"
+  },
+  "圆木表": {
+    "en": "Round Clock",
+    "jp": "丸型時計"
+  },
+  "长方木表": {
+    "en": "Rectangle Clock",
+    "jp": "長方形時計"
+  },
+  "小木盒": {
+    "en": "Small Box",
+    "jp": "小木箱"
+  },
+  "大木盒": {
+    "en": "Large Box",
+    "jp": "大木箱"
+  },
+  "logo支架": {
+    "en": "ALUMEN Logo Stand",
+    "jp": "ALUMEN ロゴスタンド"
+  },
+  "蚂蚁椅": {
+    "en": "Ant Chair",
+    "jp": "アントチェア"
+  },
+  "5#衣架": {
+    "en": "5# Coat Rack",
+    "jp": "5# コートラック"
+  },
+  "木牌": {
+    "en": "Wood Sign",
+    "jp": "木製サイン"
+  },
+  "圆桌": {
+    "en": "Round Table",
+    "jp": "丸テーブル"
+  },
+  "样板（原木）": {
+    "en": "Sample (Natural)",
+    "jp": "サンプル（ナチュラル）"
+  },
+  "样板（多色）": {
+    "en": "Sample (Multi-color)",
+    "jp": "サンプル（マルチカラー）"
+  },
+  "样板（黑色）": {
+    "en": "Sample (Black)",
+    "jp": "サンプル（ブラック）"
+  },
+  "8#长方凳": {
+    "en": "8# Long Stool",
+    "jp": "8# 長形スツール"
+  },
+  "咖啡托盘": {
+    "en": "Coffee Tray",
+    "jp": "コーヒートレー"
+  },
+  "5#长条凳": {
+    "en": "5# Long Bench",
+    "jp": "5# ロングベンチ"
+  },
+  "拼色椅子": {
+    "en": "Color-Block Chair",
+    "jp": "色分けチェア"
+  },
+  "四瓣凳": {
+    "en": "Four-Petal Stool",
+    "jp": "四弁スツール"
+  },
+  "三瓣椅": {
+    "en": "Three-Petal Chair",
+    "jp": "三弁チェア"
   },
   "BBB 素板": {
     "en": "BBB unfinished",
@@ -547,14 +783,6 @@
     "en": "Metal frame",
     "jp": "金属額"
   },
-  "收藏与装裱，原画册案例图片": {
-    "en": "Collection and framing, original catalog example",
-    "jp": "原画冊のコレクション額装例"
-  },
-  "收藏与装裱": {
-    "en": "Collections & framing",
-    "jp": "コレクションと額装"
-  },
   "实木框样，原画册案例图片": {
     "en": "Solid-wood samples, original catalog example",
     "jp": "原画冊の無垢材額サンプル"
@@ -571,29 +799,29 @@
     "en": "Custom details / Bring design to life through structure and color.",
     "jp": "カスタムの細部 / 構造と色でデザインを形に。"
   },
-  "定制支架，原画册案例图片": {
-    "en": "Custom stand, original catalog example",
-    "jp": "原画冊の特注スタンド例"
+  "每根单独包装，无铝屑，原画册案例图片": {
+    "en": "Each profile individually wrapped, no aluminum chips, original catalog example",
+    "jp": "原画冊の一本ずつ包装でアルミ屑なし例"
   },
-  "定制支架": {
-    "en": "Custom stand",
-    "jp": "特注スタンド"
+  "每根单独包装，无铝屑": {
+    "en": "Each profile individually wrapped, no chips",
+    "jp": "一本ずつ包装、アルミ屑なし"
   },
-  "彩色型材样品，原画册案例图片": {
-    "en": "Colored profile samples, original catalog example",
-    "jp": "原画冊のカラープロファイルサンプル"
+  "彩色铝型材，原画册案例图片": {
+    "en": "Colored aluminum profiles, original catalog example",
+    "jp": "原画冊のカラーアルミプロファイル例"
   },
-  "彩色型材样品": {
-    "en": "Colored profile samples",
-    "jp": "カラープロファイルサンプル"
+  "彩色铝型材": {
+    "en": "Colored aluminum profiles",
+    "jp": "カラーアルミプロファイル"
   },
-  "型材连接细节，原画册案例图片": {
-    "en": "Profile connection detail, original catalog example",
-    "jp": "原画冊のプロファイル接続部"
+  "打孔精准无毛刺，原画册案例图片": {
+    "en": "Precision drilling, no burrs, original catalog example",
+    "jp": "原画冊の精密な穴あけ・バリなし例"
   },
-  "型材连接细节": {
-    "en": "Profile connection detail",
-    "jp": "プロファイル接続の細部"
+  "打孔精准无毛刺": {
+    "en": "Precision drilling, no burrs",
+    "jp": "正確な穴あけ、バリなし"
   },
   "让定制，融入日常。": {
     "en": "Make custom part of daily life.",
@@ -858,5 +1086,117 @@
   "20多年经验 · 铝合金表面处理专家 · 为设计赋予色彩": {
     "en": "Over 20 years of experience · Aluminum finishing specialists · Color for design",
     "jp": "20年以上の経験 · アルミ表面処理の専門家 · デザインに彩りを"
+  },
+  "名称": {
+    "en": "Item",
+    "jp": "名称"
+  },
+  "VIP+ 会员价": {
+    "en": "VIP+ Member price",
+    "jp": "VIP+会員価格"
+  },
+  "海洋板家具 VIP+ 会员价": {
+    "en": "Marine plywood furniture · VIP+ member prices",
+    "jp": "マリン合板家具・VIP+会員価格"
+  },
+  "海洋板家具，VIP+ 专属会员价。": {
+    "en": "Marine plywood furniture — exclusive VIP+ member prices.",
+    "jp": "マリン合板家具、VIP+専属会員価格。"
+  },
+  "下方海洋板家具所列会员价为 VIP+ 专属价，普通页面不展示。会员价同步于萌开了家居小程序与淘宝店；非 VIP+ 用户请以本画册零售价为准。": {
+    "en": "Member prices shown here are VIP+-exclusive and are not shown on the regular page. They are mirrored in the Mengkaile mini program and Taobao shop; non-VIP+ buyers should follow the retail prices in this catalog.",
+    "jp": "ここの会員価格はVIP+専属で、一般ページには表示されません。会員価格は「萌開了家居」ミニプログラムと淘宝店舗と同額です。VIP+以外のお客様は本カタログの通常価格をご参照ください。"
+  },
+  "VIP+ 专属价": {
+    "en": "VIP+ Exclusive",
+    "jp": "VIP+専属価格"
+  },
+  "海洋板家具 · 2026 摩登展 VIP+ 会员价 · 人民币元": {
+    "en": "Marine plywood furniture · VIP+ member prices, 2026 Maison show · CNY",
+    "jp": "マリン合板家具・2026メゾン展 VIP+会員価格・元"
+  },
+  "本页仅适用于已登录的 VIP+ 账户；下单时以该账号当前资格及网站报价为准。VIP+ 会员价为表列零售价的 VIP+ 优惠价。": {
+    "en": "This page is for logged-in VIP+ accounts only; prices at checkout follow the account eligibility and website quote. VIP+ member prices are the VIP+ discounted prices of the retail prices listed above.",
+    "jp": "本ページはログイン中のVIP+アカウント専用です。ご注文時は当アカウントの資格とウェブサイトの見積りに従います。VIP+会員価格は上記通常価格のVIP+優待価格です。"
+  },
+  "所有价格为 2026 上海摩登展期间样品价，面向零售买家。展品多为小批量，可按要求定做尺寸与颜色；具体货期请通过微信或淘宝确认。": {
+    "en": "Prices are the retail sample prices from the 2026 Shanghai Maison show, for retail buyers. Most pieces are small-batch and can be made to custom sizes and colors; please confirm lead times via WeChat or Taobao.",
+    "jp": "価格は2026上海メゾン展の出展サンプル小売価格（小売向け）です。展示品は小ロット中心で、サイズ・色は別注可能。納期はWeChatまたは淘宝でご確認ください。"
+  },
+  "展品 3 件": {
+    "en": "3 pcs on display",
+    "jp": "展示品 3 点"
+  },
+  "各 1 件": {
+    "en": "1 pc each",
+    "jp": "各 1 点"
+  },
+  "各 1 块": {
+    "en": "1 pc each",
+    "jp": "各 1 枚"
+  },
+  "锯齿工艺": {
+    "en": "jigsaw-cut edge",
+    "jp": "鋸目仕上げ"
+  },
+  "600×400（座面）": {
+    "en": "600×400 (seat)",
+    "jp": "600×400（座面）"
+  },
+  "约 320×320×450": {
+    "en": "Approx. 320×320×450",
+    "jp": "約 320×320×450"
+  },
+  "约 350×350×780": {
+    "en": "Approx. 350×350×780",
+    "jp": "約 350×350×780"
+  },
+  "铝合金包覆木皮框": {
+    "en": "Aluminum-wrapped wood-veneer frame",
+    "jp": "アルミ包覆木製突板枠"
+  },
+  "铝合金包覆木皮框，原画册案例图片": {
+    "en": "Aluminum-wrapped wood-veneer frame, original catalog example",
+    "jp": "アルミ包覆木製突板枠、原画冊の事例画像"
+  },
+  "铝合金全制程制造与家居应用": {
+    "en": "Integrated aluminum manufacturing for the home",
+    "jp": "アルミの一貫製造と住空間への応用"
+  },
+  "进口俄罗斯桦木多层板": {
+    "en": "Imported Russian birch plywood",
+    "jp": "輸入ロシア産バーチ合板"
+  },
+  "进口俄罗斯桦木多层板 + 桦木实木腿": {
+    "en": "Imported Russian birch plywood + solid birch legs",
+    "jp": "輸入ロシア産バーチ合板 + 桦材無垢脚"
+  },
+  "进口俄罗斯桦木多层板 + 不锈钢腿": {
+    "en": "Imported Russian birch plywood + stainless steel legs",
+    "jp": "輸入ロシア産バーチ合板 + ステンレス脚"
+  },
+  "进口俄罗斯桦木多层板 + 北美黑胡桃木": {
+    "en": "Imported Russian birch plywood + North American black walnut",
+    "jp": "輸入ロシア産バーチ合板 + 北米ブラックウォルナット"
+  },
+  "进口俄罗斯桦木多层板 + 北美黑胡桃木拼条": {
+    "en": "Imported Russian birch plywood + black walnut inlay",
+    "jp": "輸入ロシア産バーチ合板 + ブラックウォルナット象嵌"
+  },
+  "北美黑胡桃面": {
+    "en": "Black walnut top",
+    "jp": "ブラックウォルナット天板"
+  },
+  "自然涂饰": {
+    "en": "Natural finish",
+    "jp": "ナチュラル仕上げ"
+  },
+  "样板（黑色 / 锯齿）": {
+    "en": "Sample (black / jigsaw-cut)",
+    "jp": "サンプル（ブラック / 鋸目）"
+  },
+  "——": {
+    "en": "—",
+    "jp": "—"
   }
 }
