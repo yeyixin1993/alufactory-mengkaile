@@ -29,6 +29,7 @@ import {
 
 const DIYDesigner = React.lazy(() => import('./components/DIYDesigner'));
 const FactorySheetPreviewPage = React.lazy(() => import('./components/FactorySheetPreviewPage'));
+const PrintableCatalog = React.lazy(() => import('./components/PrintableCatalog'));
 const QuickQuote = React.lazy(() => import('./components/QuickQuote'));
 
 const COLOR_SWATCH_IMAGE_URLS = [
@@ -565,6 +566,7 @@ const Catalog: React.FC<{ language: Language }> = ({ language }) => {
           <ChevronRight className="w-5 h-5" />
         </Link>
       </div>
+      <Link to="/catalog" className="mb-8 flex items-center justify-between gap-4 rounded-2xl bg-white border border-slate-200 p-5 text-slate-800 hover:border-emerald-700"><span><b>{language === 'cn' ? '产品与价格画册 2026' : language === 'jp' ? '2026 製品・価格カタログ（中国語）' : '2026 Product & Price Catalog (Chinese)'}</b><span className="block mt-1 text-sm text-slate-500">{language === 'cn' ? '在线浏览 · 打印或保存 PDF · 下载离线 HTML' : 'Browse online · Print or save PDF · Download HTML'}</span></span><FileDown className="w-6 h-6 shrink-0" /></Link>
       {/*<h2 className="text-5xl font-black text-slate-900 mb-12 tracking-tight">{t.catalog}</h2>*/}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
         {INITIAL_PRODUCTS.map(product => (
@@ -2486,6 +2488,7 @@ const App: React.FC = () => {
 
         <Routes>
           <Route path="/" element={<Catalog language={language} />} />
+          <Route path="/catalog" element={<React.Suspense fallback={<div className="p-12 text-center">正在加载画册…</div>}><PrintableCatalog user={user} language={language} /></React.Suspense>} />
           <Route path="/diy-designer" element={(
             <React.Suspense fallback={<div className="min-h-[70vh] flex items-center justify-center text-slate-400 font-black">{language === 'cn' ? '正在加载 3D 设计器…' : language === 'jp' ? '3D デザイナーを読み込み中…' : 'Loading 3D designer…'}</div>}>
               <DIYDesigner

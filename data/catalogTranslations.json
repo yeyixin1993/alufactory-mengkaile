@@ -1,0 +1,862 @@
+{
+  "萌开了家居 / ALUMEN": {
+    "en": "MENGKAILE HOME / ALUMEN",
+    "jp": "萌開了ホーム / ALUMEN"
+  },
+  "产品与价格画册 ·": {
+    "en": "Product & Price Catalog · ",
+    "jp": "製品・価格カタログ · "
+  },
+  "标准零售价 · 人民币元 / 米": {
+    "en": "Retail prices · CNY / m",
+    "jp": "標準価格 · 人民元 / m"
+  },
+  "型号": {
+    "en": "Model",
+    "jp": "型番"
+  },
+  "截面图": {
+    "en": "Section",
+    "jp": "断面図"
+  },
+  "壁厚 mm": {
+    "en": "Wall mm",
+    "jp": "肉厚 mm"
+  },
+  "喷砂氧化银白": {
+    "en": "Sandblasted anodized silver",
+    "jp": "サンドブラスト・アルマイト銀白"
+  },
+  "彩色": {
+    "en": "Colored",
+    "jp": "カラー"
+  },
+  "截面本色": {
+    "en": "Natural ends",
+    "jp": "切断面：素地"
+  },
+  "截面同色": {
+    "en": "Matching ends",
+    "jp": "切断面：同色"
+  },
+  "截面图待补": {
+    "en": "Diagram pending",
+    "jp": "断面図準備中"
+  },
+  "（不含螺丝）": {
+    "en": "(screws excluded)",
+    "jp": "（ねじ別売）"
+  },
+  "10号螺丝 ·": {
+    "en": "No.10 Screw · ",
+    "jp": "10番ねじ · "
+  },
+  "10号配件 ·": {
+    "en": "No.10 Part · ",
+    "jp": "10番部品 · "
+  },
+  "配件": {
+    "en": "Accessory",
+    "jp": "部品"
+  },
+  "规格": {
+    "en": "Size",
+    "jp": "規格"
+  },
+  "本色": {
+    "en": "Natural",
+    "jp": "素地色"
+  },
+  "本色批量": {
+    "en": "Natural bulk",
+    "jp": "素地色・まとめ買い"
+  },
+  "彩色配件批量价 · 元 / 件 · 同一明细 ≥": {
+    "en": "Colored accessory bulk · CNY / pc · Same line ≥",
+    "jp": "カラー部品まとめ買い · 元 / 個 · 同一明細 ≥"
+  },
+  "件": {
+    "en": " pcs",
+    "jp": " 個"
+  },
+  "萌开了家居原画册首页": {
+    "en": "Original Mengkaile catalog cover",
+    "jp": "萌開了ホーム原画冊表紙"
+  },
+  "萌开了家居画册2026原版完整首页": {
+    "en": "Complete original cover of the 2026 Mengkaile Home catalog",
+    "jp": "萌開了ホーム2026年版の表紙全体"
+  },
+  "关于我们": {
+    "en": "About us",
+    "jp": "会社紹介"
+  },
+  "从铝材，到家居成品。": {
+    "en": "From aluminum to home.",
+    "jp": "アルミから、暮らしへ。"
+  },
+  "上海至绘艺术品有限公司 / 铝合金全制程制造与家居应用": {
+    "en": "Shanghai Zhihui Artworks Co., Ltd. / Integrated aluminum manufacturing for the home",
+    "jp": "上海至絵芸術品有限公司 / アルミの一貫製造と住空間への応用"
+  },
+  "拥有20多年经验，生产基地位于山东临沂，拥有 30,000 多平方米生产车间。公司以艺术品装裱用实木线条、铝合金线条为基础，延伸至极简铝合金家居的成品与半成品制造。": {
+    "en": "Over 20 years of experience, with a production base in Linyi, Shandong and over 30,000 m² of workshops. Starting with solid-wood and aluminum picture-frame mouldings, we have expanded into minimalist aluminum furniture and components.",
+    "jp": "20年以上の経験を持ち、山東省臨沂の生産拠点に30,000㎡以上の工場を構えています。額装用の無垢材・アルミ製モールディングを基盤に、ミニマルなアルミ家具の完成品・半製品へと事業を広げています。"
+  },
+  "从熔铸、挤压到表面处理与精密加工，将材料、色彩和成品制造衔接在一起，为不同的设计需求提供铝应用方案。": {
+    "en": "From casting and extrusion to finishing and precision machining, we connect materials, color and finished products to meet different design needs.",
+    "jp": "鋳造・押出から表面処理・精密加工まで、素材と色、製品づくりをつなぎ、多様なデザインに応えます。"
+  },
+  "公司画册中的数控加工设备": {
+    "en": "CNC equipment from the company catalog",
+    "jp": "会社画冊掲載のCNC加工設備"
+  },
+  "材料与成形": {
+    "en": "Material & forming",
+    "jp": "素材と成形"
+  },
+  "熔铸、挤压，形成不同用途的铝合金线条与型材。": {
+    "en": "Casting and extrusion create aluminum mouldings and profiles for different applications.",
+    "jp": "鋳造・押出により、用途に合わせたアルミモールディングとプロファイルを製造します。"
+  },
+  "表面与色彩": {
+    "en": "Surface & color",
+    "jp": "表面と色"
+  },
+  "阳极氧化、电泳、喷涂、木纹转印、水性烤漆，以及喷砂、拉丝与抛光。": {
+    "en": "Anodizing, electrophoretic coating, spraying, wood-grain transfer, water-based baked finishes, sandblasting, brushing and polishing.",
+    "jp": "アルマイト、電着塗装、吹付塗装、木目転写、水性焼付塗装、サンドブラスト、ヘアライン、研磨に対応。"
+  },
+  "加工与成品": {
+    "en": "Machining & products",
+    "jp": "加工と製品"
+  },
+  "CNC 加工、钻孔、铣槽与攻牙，连接家居成品及半成品制造。": {
+    "en": "CNC machining, drilling, milling and tapping for finished furniture and components.",
+    "jp": "CNC加工、穴あけ、溝加工、タップ加工から家具の完成品・半製品まで。"
+  },
+  "画册导览": {
+    "en": "In this catalog",
+    "jp": "目次"
+  },
+  "工艺与色彩": {
+    "en": "Finishes & colors",
+    "jp": "加工と色"
+  },
+  "铝型材规格与价格": {
+    "en": "Aluminum profiles & prices",
+    "jp": "アルミプロファイル・価格"
+  },
+  "板材与铝框门": {
+    "en": "Panels & framed doors",
+    "jp": "パネル・アルミ枠扉"
+  },
+  "连接配件与阶梯价格": {
+    "en": "Connectors & volume prices",
+    "jp": "接続部品・数量別価格"
+  },
+  "家居应用与选购联系": {
+    "en": "Home applications & ordering",
+    "jp": "使用例・ご注文"
+  },
+  "金属的线条，生活的色彩。": {
+    "en": "Metal lines. Everyday color.",
+    "jp": "金属のライン、暮らしの色。"
+  },
+  "从画册中的阳极氧化与水性喷漆工艺，到可以按尺寸选购的型材和板材，让材质与空间一起表达。": {
+    "en": "Anodized and water-based painted finishes, with profiles and panels made to your dimensions. Let materials express your space.",
+    "jp": "アルマイトと水性塗装の仕上げを、サイズ指定のプロファイルやパネルに。素材で空間を表現します。"
+  },
+  "原画册阳极氧化彩色型材": {
+    "en": "Anodized colored profiles from the original catalog",
+    "jp": "原画冊のカラーアルマイト材"
+  },
+  "阳极氧化": {
+    "en": "Anodizing",
+    "jp": "アルマイト"
+  },
+  "保留金属质感，为型材与家居细节赋予色彩。": {
+    "en": "Retain the metallic character while adding color to profiles and home details.",
+    "jp": "金属の質感を生かし、プロファイルや暮らしの細部に色を添えます。"
+  },
+  "原画册水性喷漆工艺": {
+    "en": "Water-based painting from the original catalog",
+    "jp": "原画冊の水性塗装工程"
+  },
+  "水性喷漆": {
+    "en": "Water-based painting",
+    "jp": "水性塗装"
+  },
+  "呈现柔和的色彩与触感。特殊颜色及非标工艺请联系确认。": {
+    "en": "Soft colors and feel. Please confirm special colors and non-standard finishes with us.",
+    "jp": "柔らかな色と触感。特注色・特殊仕上げはお問い合わせください。"
+  },
+  "型材实拍色卡": {
+    "en": "Photographed color samples",
+    "jp": "実物カラーサンプル"
+  },
+  "型材全部色卡合照及颜色名称": {
+    "en": "Complete photographed color-sample set with labels",
+    "jp": "色名付きカラーサンプル集合写真"
+  },
+  "截面对比：左侧切口为铝材本色，右侧切口与表面同色": {
+    "en": "Cut ends: natural aluminum on the left, matching color on the right",
+    "jp": "切断面比較：左はアルミ素地、右は表面と同色"
+  },
+  "截面本色 / 截面彩色": {
+    "en": "Natural vs. colored cut ends",
+    "jp": "切断面：素地とカラー"
+  },
+  "截面本色：": {
+    "en": "Natural ends: ",
+    "jp": "切断面が素地："
+  },
+  "型材表面为所选颜色，切口保留铝材银白本色，如图左。": {
+    "en": "The surface uses your selected color; the cut end stays silver aluminum, as shown on the left.",
+    "jp": "表面は選択色、切断面はアルミ本来の銀白色です（写真左）。"
+  },
+  "截面彩色（截面同色）：": {
+    "en": "Colored (matching) ends: ",
+    "jp": "切断面がカラー（同色）："
+  },
+  "型材表面与切口均为所选颜色，如图右。": {
+    "en": "Both the surface and cut end use your selected color, as shown on the right.",
+    "jp": "表面と切断面を同じ選択色に仕上げます（写真右）。"
+  },
+  "价格表中的“彩色 · 截面同色”即截面彩色。选型时请同时确认表面颜色和切口处理。": {
+    "en": "“Colored · Matching ends” in the price table means colored cut ends. Confirm both the surface color and cut-end finish when ordering.",
+    "jp": "価格表の「カラー・切断面：同色」は、切断面も着色した仕様です。表面色と切断面の仕上げを合わせてご確認ください。"
+  },
+  "屏幕与打印颜色仅供参考，实际以确认色样为准。颜色及截面处理的可选组合，以网站配置器为准。": {
+    "en": "Screen and print colors are references only; approved physical samples take priority. Available color and cut-end combinations are shown in the website configurator.",
+    "jp": "画面・印刷の色は参考です。承認済み実物サンプルを優先し、色と切断面処理の組合せはサイトでご確認ください。"
+  },
+  "铝型材 / 15与20系列": {
+    "en": "Profiles / 15 & 20 series",
+    "jp": "プロファイル / 15・20シリーズ"
+  },
+  "从一根线条开始。": {
+    "en": "Start with a single line.",
+    "jp": "一本のラインから。"
+  },
+  "按长度定制，用于收纳、家具框架、展示与空间构造。以下为材料米价，加工另计。": {
+    "en": "Cut-to-length profiles for storage, furniture, displays and structures. Prices below are per meter of material; machining is extra.",
+    "jp": "収納、家具、展示、構造用の長さ指定プロファイル。材料のメートル単価です。加工費は別途。"
+  },
+  "N1 / N2 / N3 / N4 表示一至四面封边，N2 对边为相对两面封边。「截面本色」与「截面同色」为两种彩色截面处理选项。": {
+    "en": "N1 / N2 / N3 / N4 mean one to four closed faces. N2 opposite has two opposing closed faces. Natural and matching cut ends are two finishing options for colored profiles.",
+    "jp": "N1 / N2 / N3 / N4は1〜4面の溝なし仕様。N2対向は向かい合う2面が溝なしです。カラー材の切断面は素地または同色仕上げを選べます。"
+  },
+  "铝型材 / 扩展规格": {
+    "en": "Profiles / Extended sizes",
+    "jp": "プロファイル / 拡張規格"
+  },
+  "更多尺度，更多可能。": {
+    "en": "More sizes. More possibilities.",
+    "jp": "広がるサイズ、広がる可能性。"
+  },
+  "20系列扩展规格，以及30、40系列。标准材料米价，加工另计。": {
+    "en": "Extended 20-series sizes plus 30 and 40 series. Retail material prices; machining extra.",
+    "jp": "20シリーズの拡張規格と30・40シリーズ。標準材料価格、加工費別途。"
+  },
+  "材料金额 = 长度（mm）÷ 1000 × 米价；加工费另计，最终按网站规则保留一位小数。长度须大于 20mm、最长 3000mm；不超过 100mm 的短料每根加收 ¥5 危险加工费。孔位、攻丝、斜切等按确认图纸下单。": {
+    "en": "Material cost = length (mm) ÷ 1000 × price/m. Add machining and round to one decimal per website rules. Length must be over 20mm and at most 3000mm. Pieces up to 100mm incur a ¥5 short-piece machining surcharge each. Confirm holes, tapping and angled cuts on drawings.",
+    "jp": "材料費＝長さ(mm)÷1000×メートル単価。加工費を加え、サイト規則に従い小数1桁に丸めます。長さは20mm超〜3000mm。100mm以下は1本につき短尺危険加工費¥5。穴・タップ・斜め切断は図面で確認します。"
+  },
+  "铝板、洞洞板与铝框门": {
+    "en": "Aluminum panels, pegboards & doors",
+    "jp": "アルミ板・有孔板・アルミ枠扉"
+  },
+  "一面墙，也可以有自己的秩序。": {
+    "en": "Give every wall its own order.",
+    "jp": "壁にも、自分らしい秩序を。"
+  },
+  "铝合金洞洞板用于收纳与展示；铝板适合桌面、层板及定制构件。按尺寸与厚度计价。": {
+    "en": "Aluminum pegboards for storage and display; solid panels for tabletops, shelves and custom parts. Priced by size and thickness.",
+    "jp": "収納・展示用のアルミ有孔板、天板・棚板・特注部材用のアルミ板。寸法と厚さで価格を計算します。"
+  },
+  "铝合金洞洞板": {
+    "en": "Aluminum pegboard",
+    "jp": "アルミ有孔板"
+  },
+  "铝板": {
+    "en": "Aluminum panel",
+    "jp": "アルミ板"
+  },
+  "铝框门": {
+    "en": "Aluminum framed door",
+    "jp": "アルミ枠扉"
+  },
+  "标准零售价 · 人民币元 / ㎡": {
+    "en": "Retail prices · CNY / m²",
+    "jp": "標準価格 · 人民元 / ㎡"
+  },
+  "厚度": {
+    "en": "Thickness",
+    "jp": "厚さ"
+  },
+  "洞洞板": {
+    "en": "Pegboard",
+    "jp": "有孔板"
+  },
+  "按块计费，最低": {
+    "en": "Per panel, minimum ",
+    "jp": "1枚ごと、最低面積 "
+  },
+  "每块金额 = max（宽 × 高 ÷ 1,000,000，": {
+    "en": "Panel cost = max(width × height ÷ 1,000,000, ",
+    "jp": "1枚の価格＝max(幅×高さ÷1,000,000, "
+  },
+  "）× 平方米单价。尺寸单位为 mm，单块金额保留一位小数，再乘数量。": {
+    "en": ") × price/m². Dimensions in mm. Round each panel to one decimal, then multiply by quantity.",
+    "jp": ")×㎡単価。寸法はmm。1枚の価格を小数1桁に丸めてから数量を掛けます。"
+  },
+  "例：2mm 铝板 500 × 300mm，按 0.2㎡计，标准零售价为": {
+    "en": "Example: 2mm panel, 500 × 300mm, charged as 0.2m². Retail price: ",
+    "jp": "例：厚さ2mm、500×300mmのアルミ板は0.2㎡で計算。標準価格 "
+  },
+  "/ 块。": {
+    "en": " / panel.",
+    "jp": " / 枚。"
+  },
+  "常规规格为 2mm、5mm。洞洞板最长边 ≤2400mm、最短边 ≤1200mm；具体尺寸范围以对应产品页面为准。": {
+    "en": "Standard thicknesses: 2mm and 5mm. Pegboard long side ≤2400mm, short side ≤1200mm. See each product page for full dimension limits.",
+    "jp": "標準厚さは2mm・5mm。有孔板の長辺≤2400mm、短辺≤1200mm。寸法範囲は各製品ページをご確認ください。"
+  },
+  "铝框门 / 2mm 门板 · 18mm 门框": {
+    "en": "Framed door / 2mm panel · 18mm frame",
+    "jp": "アルミ枠扉 / 扉板2mm・枠18mm"
+  },
+  "标准价": {
+    "en": "Retail: ",
+    "jp": "標準価格 "
+  },
+  "/ ㎡；每扇最低": {
+    "en": " / m²; minimum per door ",
+    "jp": " / ㎡、1枚の最低面積 "
+  },
+  "㎡。另加铰链": {
+    "en": "m². Hinges extra: ",
+    "jp": "㎡。ヒンジ別途 "
+  },
+  "/ 个。": {
+    "en": " / hinge.",
+    "jp": " / 個。"
+  },
+  "门高 ≤1500 / ≤2000 / ≤2500 / ≤3000mm，分别配置 2 / 3 / 4 / 5 个铰链。最大单扇 1500 × 3000mm，默认 200mm 居中拉手。": {
+    "en": "Door heights ≤1500 / ≤2000 / ≤2500 / ≤3000mm use 2 / 3 / 4 / 5 hinges respectively. Maximum door 1500 × 3000mm; default centered 200mm handle.",
+    "jp": "扉高さ≤1500 / ≤2000 / ≤2500 / ≤3000mmに対しヒンジ2 / 3 / 4 / 5個。最大1500×3000mm、標準は中央配置の200mm取手。"
+  },
+  "计价示例：标准价 500 × 2000mm 铝框门，面积 1㎡ + 3 个铰链，共": {
+    "en": "Example: retail 500 × 2000mm door, 1m² + 3 hinges = ",
+    "jp": "例：標準価格の500×2000mm扉、1㎡＋ヒンジ3個＝"
+  },
+  "/ 扇。": {
+    "en": " / door.",
+    "jp": " / 枚。"
+  },
+  "BBB 海洋板": {
+    "en": "BBB marine plywood",
+    "jp": "BBBマリン合板"
+  },
+  "木的温度，铝的轮廓。": {
+    "en": "Warm wood. Aluminum lines.",
+    "jp": "木の温もり、アルミの輪郭。"
+  },
+  "俄罗斯全进口 BBB 海洋板，为框架补上温润的面。": {
+    "en": "Russian-imported BBB marine plywood adds a warm surface to your frame.",
+    "jp": "ロシア輸入BBBマリン合板で、フレームに温かな面を添えます。"
+  },
+  "BBB海洋板": {
+    "en": "BBB marine plywood",
+    "jp": "BBBマリン合板"
+  },
+  "海洋板与铝型材框架搭配实拍": {
+    "en": "Marine plywood installed in an aluminum frame",
+    "jp": "アルミフレームに組み合わせたマリン合板の実例"
+  },
+  "海洋板应用实拍": {
+    "en": "Marine plywood in use",
+    "jp": "マリン合板使用例"
+  },
+  "海洋板原色 · 人民币元 / ㎡": {
+    "en": "Natural marine plywood · CNY / m²",
+    "jp": "マリン合板・ナチュラル · 元 / ㎡"
+  },
+  "BBB 素板": {
+    "en": "BBB unfinished",
+    "jp": "BBB無塗装"
+  },
+  "BBB 两面 UV 清漆 + 覆膜": {
+    "en": "BBB clear UV both sides + film",
+    "jp": "BBB両面UVクリア＋保護フィルム"
+  },
+  "彩色海洋板在所选板材单价上加": {
+    "en": "Colored marine plywood adds ",
+    "jp": "カラーマリン合板は選択した板の単価に "
+  },
+  "/ ㎡。每块最低计费": {
+    "en": " / m² to the selected price. Minimum per panel ",
+    "jp": " / ㎡加算。1枚の最低面積 "
+  },
+  "㎡；最大尺寸 2440 × 1220mm。网站当前提供 12mm、18mm。": {
+    "en": "m²; maximum 2440 × 1220mm. Available thicknesses: 12mm and 18mm.",
+    "jp": "㎡、最大2440×1220mm。現在の厚さは12mm・18mm。"
+  },
+  "配件 / 全规格价格": {
+    "en": "Accessories / All sizes",
+    "jp": "部品 / 全規格価格"
+  },
+  "连接，一页选齐。": {
+    "en": "Every connection, one page.",
+    "jp": "接続部品を、一ページに。"
+  },
+  "1515 / 2020 / 3030 / 4040 适配规格 · 人民币元 / 件。本色批量价适用于同一配件明细达到 20 件，不同明细不合并计算。": {
+    "en": "1515 / 2020 / 3030 / 4040 · CNY / pc. Natural bulk prices apply to 20+ pieces of the same line; different lines are not combined.",
+    "jp": "1515 / 2020 / 3030 / 4040対応 · 元 / 個。素地色のまとめ買い価格は同一明細20個以上に適用。異なる明細の数量は合算しません。"
+  },
+  "1至10号铝型材连接配件编号识别图": {
+    "en": "Numbered identification photo of aluminum connectors 1–10",
+    "jp": "アルミ接続部品1〜10番の番号付き識別写真"
+  },
+  "1–10号配件识别图": {
+    "en": "Accessories 1–10 reference",
+    "jp": "1〜10番部品識別図"
+  },
+  "1号含配套螺丝，5号含顶丝，2号不含螺丝；其余配件与螺丝按明细选购。请核对配件与型材的适配规格。": {
+    "en": "No.1 includes screws; No.5 includes set screws; No.2 excludes screws. Other fittings and screws are ordered separately. Check profile compatibility.",
+    "jp": "1番はねじ付き、5番は止めねじ付き、2番はねじ別売。他の部品・ねじは明細ごとに選択し、プロファイルとの適合をご確認ください。"
+  },
+  "家居与应用": {
+    "en": "Home & applications",
+    "jp": "家具と使用例"
+  },
+  "把想法，装进日常。": {
+    "en": "Bring ideas into everyday life.",
+    "jp": "アイデアを、日常へ。"
+  },
+  "从工作室的一面收纳墙，到家中的柜体和展架。产品组合随尺寸、板材、颜色与配件变化。": {
+    "en": "From a studio storage wall to cabinets and displays at home. Combinations vary with dimensions, panels, colors and fittings.",
+    "jp": "スタジオの収納壁から住まいのキャビネットや展示棚まで。寸法・板材・色・部品に合わせて組み合わせます。"
+  },
+  "原画册中的洞洞板收纳应用": {
+    "en": "Pegboard application from the original catalog",
+    "jp": "原画冊の有孔板使用例"
+  },
+  "尺寸与工艺确认后报价": {
+    "en": "Quote after size and finish confirmation",
+    "jp": "寸法・仕上げ確認後に見積り"
+  },
+  "按尺寸与材料配置报价": {
+    "en": "Quoted by size and materials",
+    "jp": "寸法・素材に応じて見積り"
+  },
+  "查看产品 ↗": {
+    "en": "View product ↗",
+    "jp": "製品を見る ↗"
+  },
+  "家居照片为应用参考，不对应固定套装价。定制柜体、展架与相框请通过网站或微信确认完整配置后报价。": {
+    "en": "Home photos illustrate applications, not fixed-price sets. For cabinets, displays and frames, confirm the complete configuration on the website or WeChat for a quote.",
+    "jp": "写真は使用例で、固定価格のセットではありません。キャビネット・展示棚・額縁は、サイトまたはWeChatで仕様を確認してお見積りします。"
+  },
+  "真实生活，各有秩序。": {
+    "en": "Real lives. Personal spaces.",
+    "jp": "暮らしごとに、心地よい秩序。"
+  },
+  "洞洞板应用实景 / 从工作室到家中的一角。": {
+    "en": "Pegboards in use / From the studio to a corner of your home.",
+    "jp": "有孔板の使用例 / スタジオから住まいの一角まで。"
+  },
+  "工作空间，原画册案例图片": {
+    "en": "Workspace, original catalog example",
+    "jp": "原画冊のワークスペース例"
+  },
+  "工作空间": {
+    "en": "Workspace",
+    "jp": "ワークスペース"
+  },
+  "咖啡角，原画册案例图片": {
+    "en": "Coffee corner, original catalog example",
+    "jp": "原画冊のコーヒーコーナー例"
+  },
+  "咖啡角": {
+    "en": "Coffee corner",
+    "jp": "コーヒーコーナー"
+  },
+  "彩色洞洞板，原画册案例图片": {
+    "en": "Colored pegboards, original catalog example",
+    "jp": "原画冊のカラー有孔板例"
+  },
+  "彩色洞洞板": {
+    "en": "Colored pegboards",
+    "jp": "カラー有孔板"
+  },
+  "极简铝框 & 实木框": {
+    "en": "Minimal aluminum & solid-wood frames",
+    "jp": "ミニマルなアルミ額・無垢材額"
+  },
+  "让作品，有自己的边界。": {
+    "en": "Give each work its own space.",
+    "jp": "作品に、ふさわしい輪郭を。"
+  },
+  "金属的利落与木材的温度，为照片、绘画与生活收藏留出位置。": {
+    "en": "Clean metal lines and warm wood frame photographs, paintings and everyday collections.",
+    "jp": "金属のすっきりした線と木の温もりで、写真・絵画・暮らしのコレクションを引き立てます。"
+  },
+  "极简画框组合，原画册案例图片": {
+    "en": "Minimal frame arrangement, original catalog example",
+    "jp": "原画冊のミニマル額縁組合せ例"
+  },
+  "极简画框组合": {
+    "en": "Minimal frame arrangement",
+    "jp": "ミニマルな額縁の組合せ"
+  },
+  "边角与材质细节，原画册案例图片": {
+    "en": "Corner and material detail, original catalog example",
+    "jp": "原画冊の角部・素材の細部"
+  },
+  "边角与材质细节": {
+    "en": "Corners & materials",
+    "jp": "角部と素材"
+  },
+  "相框定价 · ¥50 / 米": {
+    "en": "Frame pricing · ¥50 / m",
+    "jp": "額縁価格 · ¥50 / m"
+  },
+  "按周长计价：价格 = 2 ×（宽 + 高）÷ 1000 × ¥50，宽高单位为 mm。": {
+    "en": "By perimeter: price = 2 × (width + height) ÷ 1000 × ¥50. Dimensions in mm.",
+    "jp": "周長で計算：価格＝2×(幅＋高さ)÷1000×¥50。幅・高さはmm。"
+  },
+  "例如 500 × 700mm：周长 2.4 米，价格 ¥120。": {
+    "en": "Example: 500 × 700mm = 2.4m perimeter = ¥120.",
+    "jp": "例：500×700mm＝周長2.4m＝¥120。"
+  },
+  "把喜欢，认真装裱。": {
+    "en": "Frame what you love.",
+    "jp": "大切なものを、丁寧に額装。"
+  },
+  "艺术空间陈列 / 从单幅作品到一整面收藏。": {
+    "en": "Art displays / From one piece to a complete collection.",
+    "jp": "アートの展示 / 一作品からコレクション全体まで。"
+  },
+  "金属框，原画册案例图片": {
+    "en": "Metal frame, original catalog example",
+    "jp": "原画冊の金属額例"
+  },
+  "金属框": {
+    "en": "Metal frame",
+    "jp": "金属額"
+  },
+  "收藏与装裱，原画册案例图片": {
+    "en": "Collection and framing, original catalog example",
+    "jp": "原画冊のコレクション額装例"
+  },
+  "收藏与装裱": {
+    "en": "Collections & framing",
+    "jp": "コレクションと額装"
+  },
+  "实木框样，原画册案例图片": {
+    "en": "Solid-wood samples, original catalog example",
+    "jp": "原画冊の無垢材額サンプル"
+  },
+  "实木框样": {
+    "en": "Solid-wood frame samples",
+    "jp": "無垢材額サンプル"
+  },
+  "细节，回应你的想法。": {
+    "en": "Details shaped around your ideas.",
+    "jp": "アイデアに応える、細部。"
+  },
+  "定制案例细节 / 从结构到色彩，让设计落在实处。": {
+    "en": "Custom details / Bring design to life through structure and color.",
+    "jp": "カスタムの細部 / 構造と色でデザインを形に。"
+  },
+  "定制支架，原画册案例图片": {
+    "en": "Custom stand, original catalog example",
+    "jp": "原画冊の特注スタンド例"
+  },
+  "定制支架": {
+    "en": "Custom stand",
+    "jp": "特注スタンド"
+  },
+  "彩色型材样品，原画册案例图片": {
+    "en": "Colored profile samples, original catalog example",
+    "jp": "原画冊のカラープロファイルサンプル"
+  },
+  "彩色型材样品": {
+    "en": "Colored profile samples",
+    "jp": "カラープロファイルサンプル"
+  },
+  "型材连接细节，原画册案例图片": {
+    "en": "Profile connection detail, original catalog example",
+    "jp": "原画冊のプロファイル接続部"
+  },
+  "型材连接细节": {
+    "en": "Profile connection detail",
+    "jp": "プロファイル接続の細部"
+  },
+  "让定制，融入日常。": {
+    "en": "Make custom part of daily life.",
+    "jp": "カスタムを、日常に。"
+  },
+  "全屋定制案例 / 收纳、展示与家务空间，按生活的尺度安排。": {
+    "en": "Whole-home examples / Storage, display and utility spaces sized for your life.",
+    "jp": "住まいのカスタム例 / 収納・展示・家事空間を暮らしに合うサイズで。"
+  },
+  "移动收纳，原画册案例图片": {
+    "en": "Mobile storage, original catalog example",
+    "jp": "原画冊の可動式収納例"
+  },
+  "移动收纳": {
+    "en": "Mobile storage",
+    "jp": "可動式収納"
+  },
+  "开放展示架，原画册案例图片": {
+    "en": "Open display shelves, original catalog example",
+    "jp": "原画冊のオープン展示棚例"
+  },
+  "开放展示架": {
+    "en": "Open display shelves",
+    "jp": "オープン展示棚"
+  },
+  "家务空间柜体，原画册案例图片": {
+    "en": "Utility-room cabinets, original catalog example",
+    "jp": "原画冊の家事スペース収納例"
+  },
+  "家务空间柜体": {
+    "en": "Utility-room cabinets",
+    "jp": "家事スペース収納"
+  },
+  "他们都选择了我们": {
+    "en": "They chose us",
+    "jp": "私たちを選んだ空間"
+  },
+  "不同的空间，同样的用心。": {
+    "en": "Different spaces. The same care.",
+    "jp": "異なる空間に、同じ心配りを。"
+  },
+  "从商业空间到家居品牌，与设计师一起探索材料的更多可能。": {
+    "en": "From commercial spaces to home brands, we explore new material possibilities with designers.",
+    "jp": "商業空間から家具ブランドまで、デザイナーとともに素材の可能性を探ります。"
+  },
+  "商业空间，原画册案例图片": {
+    "en": "Commercial space, original catalog example",
+    "jp": "原画冊の商業空間例"
+  },
+  "商业空间": {
+    "en": "Commercial spaces",
+    "jp": "商業空間"
+  },
+  "家居品牌，原画册案例图片": {
+    "en": "Home brand, original catalog example",
+    "jp": "原画冊の家具ブランド例"
+  },
+  "家居品牌": {
+    "en": "Home brands",
+    "jp": "家具ブランド"
+  },
+  "设计师合作，原画册案例图片": {
+    "en": "Designer collaboration, original catalog example",
+    "jp": "原画冊のデザイナー協業例"
+  },
+  "设计师合作": {
+    "en": "Designer collaborations",
+    "jp": "デザイナーとの協業"
+  },
+  "选购与联系": {
+    "en": "Ordering & contact",
+    "jp": "ご注文・お問い合わせ"
+  },
+  "下一步，让它成为你的家。": {
+    "en": "Next, make it yours.",
+    "jp": "次は、あなたの暮らしへ。"
+  },
+  "在网站选好材料与尺寸，确认报价与图纸，再安排制作。": {
+    "en": "Choose materials and dimensions online, confirm the quote and drawings, then arrange production.",
+    "jp": "サイトで素材・寸法を選び、見積りと図面を確認してから製作へ。"
+  },
+  "选择材料与颜色": {
+    "en": "Choose materials & colors",
+    "jp": "素材と色を選ぶ"
+  },
+  "核对型号、厚度、表面颜色与截面处理。": {
+    "en": "Check model, thickness, surface color and cut-end finish.",
+    "jp": "型番・厚さ・表面色・切断面処理を確認します。"
+  },
+  "填写尺寸与加工": {
+    "en": "Specify size & machining",
+    "jp": "寸法と加工を指定"
+  },
+  "尺寸统一使用 mm；注明孔位、攻丝、斜切和数量。": {
+    "en": "Use mm throughout; specify holes, tapping, angled cuts and quantity.",
+    "jp": "寸法はmmに統一。穴・タップ・斜め切断・数量を指定します。"
+  },
+  "核对订单与图纸": {
+    "en": "Confirm order & drawings",
+    "jp": "注文と図面を確認"
+  },
+  "在网站查看完整报价，确认图纸后下单生产。": {
+    "en": "Review the complete online quote and confirm drawings before production.",
+    "jp": "サイトで見積り全体を確認し、図面承認後に製作します。"
+  },
+  "萌开了家居": {
+    "en": "Mengkaile Home",
+    "jp": "萌開了ホーム"
+  },
+  "微信 / 19821200413": {
+    "en": "WeChat / 19821200413",
+    "jp": "WeChat / 19821200413"
+  },
+  "萌开了微信联系二维码": {
+    "en": "Mengkaile WeChat contact QR code",
+    "jp": "萌開了WeChat連絡用QRコード"
+  },
+  "扫码确认方案与图纸": {
+    "en": "Scan to confirm plans & drawings",
+    "jp": "スキャンして仕様・図面を確認"
+  },
+  "价格阅读说明": {
+    "en": "About these prices",
+    "jp": "価格について"
+  },
+  "本画册以人民币标价，按材料的米、平方米或件计价。除明确标注的配件批量价外，均为标准零售价。运输费用按实际订单计算。": {
+    "en": "Prices are in Chinese yuan (CNY), per meter, square meter or piece. Unless marked as accessory bulk prices, they are retail prices. Shipping is calculated for each order.",
+    "jp": "価格は人民元(CNY)、単位はm・㎡・個です。部品のまとめ買い価格を除き標準価格です。送料は注文ごとに計算します。"
+  },
+  "画册版本": {
+    "en": "Edition ",
+    "jp": "カタログ版 "
+  },
+  "。下载的 HTML、PDF 与 Excel 为当时价格快照；下单前请在网站确认当前价格、账户资格、可选规格和库存。": {
+    "en": ". Downloaded HTML, PDF and Excel files are price snapshots. Confirm current prices, account eligibility, options and stock on the website before ordering.",
+    "jp": "。ダウンロードしたHTML・PDF・Excelは作成時点の価格です。注文前にサイトで最新価格・アカウント資格・仕様・在庫をご確認ください。"
+  },
+  "品牌与应用图片参考《萌开了家居画册2026》。定制项目以双方确认的尺寸、工艺、图纸和最终订单为准。": {
+    "en": "Brand and application images reference the original Mengkaile Home 2026 catalog. Custom orders follow the mutually approved dimensions, finishes, drawings and final order.",
+    "jp": "ブランド・使用例の画像は「萌開了ホーム画冊2026」を参照。特注品は双方で確認した寸法・仕上げ・図面・最終注文に従います。"
+  },
+  "VIP+ 专属权益": {
+    "en": "VIP+ exclusive benefits",
+    "jp": "VIP+限定特典"
+  },
+  "为你专属，更多选择。": {
+    "en": "More choice, just for you.",
+    "jp": "あなただけの、より多くの選択肢。"
+  },
+  "VIP+ 用户专属权益 · 本页仅向已登录的 VIP+ 账户提供": {
+    "en": "VIP+ benefits / This page is available only to signed-in VIP+ accounts.",
+    "jp": "VIP+限定特典 / ログイン中のVIP+アカウント専用ページです。"
+  },
+  "本页专属于 VIP+ 用户": {
+    "en": "Prepared exclusively for this VIP+ account",
+    "jp": "このVIP+アカウント専用"
+  },
+  "账号手机号：": {
+    "en": "Account phone: ",
+    "jp": "アカウント電話番号："
+  },
+  "此为该账号的专属权益页，随画册浏览、下载及打印一同附在最后。": {
+    "en": "Your account-specific benefits page is appended when viewing, downloading or printing the catalog.",
+    "jp": "閲覧・ダウンロード・印刷時に、このアカウント専用の特典ページを巻末に追加します。"
+  },
+  "铝型材专属价格": {
+    "en": "Exclusive profile prices",
+    "jp": "プロファイル限定価格"
+  },
+  "在第 04—05 页所列标准材料米价基础上，每米减 ¥4。加工费用按网站规则另计。": {
+    "en": "Deduct ¥4/m from the retail material prices on pages 04–05. Machining charges follow website rules.",
+    "jp": "04〜05ページの標準材料価格から1mにつき¥4割引。加工費はサイト規則に従います。"
+  },
+  "VIP+ 专享规格与价格 · 人民币元 / ㎡": {
+    "en": "VIP+ sizes & prices · CNY / m²",
+    "jp": "VIP+専用規格・価格 · 元 / ㎡"
+  },
+  "铝框门专属价格": {
+    "en": "Exclusive framed-door prices",
+    "jp": "アルミ枠扉限定価格"
+  },
+  "2mm 门板 · 18mm 门框：": {
+    "en": "2mm panel · 18mm frame: ",
+    "jp": "扉板2mm・枠18mm："
+  },
+  "/ ㎡，每扇最低计费": {
+    "en": " / m², minimum per door ",
+    "jp": " / ㎡、1枚の最低面積 "
+  },
+  "㎡，另加铰链": {
+    "en": "m², plus hinges at ",
+    "jp": "㎡、ヒンジ別途 "
+  },
+  "板材按块计费，每块最低": {
+    "en": "Panels are charged individually, minimum ",
+    "jp": "板材は1枚ごとに計算、最低面積 "
+  },
+  "㎡。上述权益仅适用于本页所列 VIP+ 账号，下单时以该账号当前资格及网站报价为准。": {
+    "en": "m² each. These benefits apply only to the VIP+ account shown here; current account eligibility and website prices apply at checkout.",
+    "jp": "㎡。特典は記載のVIP+アカウント専用です。注文時の資格とサイト価格を適用します。"
+  },
+  "正在准备图片…": {
+    "en": "Preparing images…",
+    "jp": "画像を準備中…"
+  },
+  "打印 / 保存 PDF": {
+    "en": "Print / Save PDF",
+    "jp": "印刷 / PDF保存"
+  },
+  "打印时选择 A4 横向、缩放 100%，关闭浏览器页眉页脚。目标打印机选择「另存为 PDF」。": {
+    "en": "Print on A4 landscape at 100% scale, with browser headers and footers off. Select “Save as PDF” as the printer.",
+    "jp": "A4横・倍率100%で印刷し、ブラウザのヘッダーとフッターをオフにしてください。送信先に「PDFに保存」を選択します。"
+  },
+  "下载失败，请检查网络后重试。": {
+    "en": "Download failed. Check your connection and retry.",
+    "jp": "ダウンロードに失敗しました。接続を確認して再試行してください。"
+  },
+  "正在准备下载…": {
+    "en": "Preparing download…",
+    "jp": "ダウンロード準備中…"
+  },
+  "下载离线 HTML": {
+    "en": "Download offline HTML",
+    "jp": "オフラインHTMLをダウンロード"
+  },
+  "官方网站": {
+    "en": "Official website",
+    "jp": "公式サイト"
+  },
+  "微信咨询": {
+    "en": "WeChat inquiries",
+    "jp": "WeChatで相談"
+  },
+  "萌开了淘宝店二维码": {
+    "en": "Mengkaile Taobao store QR code",
+    "jp": "萌開了タオバオ店のQRコード"
+  },
+  "淘宝店": {
+    "en": "Taobao store",
+    "jp": "タオバオ店"
+  },
+  "使用淘宝扫一扫": {
+    "en": "Scan with Taobao",
+    "jp": "タオバオでスキャン"
+  },
+  "萌开了家居小红书二维码": {
+    "en": "Mengkaile Home Xiaohongshu QR code",
+    "jp": "萌開了ホームの小紅書QRコード"
+  },
+  "小红书": {
+    "en": "Xiaohongshu (RED)",
+    "jp": "小紅書（RED）"
+  },
+  "发现更多家居灵感": {
+    "en": "Discover more home ideas",
+    "jp": "暮らしのアイデアを探す"
+  },
+  "探索金属的色彩美学": {
+    "en": "Explore the beauty of color in metal",
+    "jp": "金属に宿る、色彩の美しさを探る"
+  },
+  "20多年经验 · 铝合金表面处理专家 · 为设计赋予色彩": {
+    "en": "Over 20 years of experience · Aluminum finishing specialists · Color for design",
+    "jp": "20年以上の経験 · アルミ表面処理の専門家 · デザインに彩りを"
+  }
+}

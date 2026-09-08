@@ -17,7 +17,9 @@
     "package:handoff": "pwsh -NoProfile -File scripts/package-official-handoff.ps1",
     "setup:git-hooks": "git config core.hooksPath .githooks",
     "validate:diy-json": "node scripts/validate-mengkaile-diy-json.mjs",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "catalog:html": "vite build --ssr scripts/export-printable-catalog.tsx --outDir .catalog-export --emptyOutDir && node .catalog-export/export-printable-catalog.js",
+    "prebuild": "npm run catalog:html"
   },
   "dependencies": {
     "@types/three": "^0.185.1",
