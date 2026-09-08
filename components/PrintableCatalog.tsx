@@ -112,7 +112,7 @@ export async function printCatalog() {
   window.print();
 }
 
-function Page({ number, title, children, className = '', id }: { number: number; title: string; children: React.ReactNode; className?: string; id?: string }) {
+function Page({ number, title, children, className = '', id }: { number: number | string; title: string; children: React.ReactNode; className?: string; id?: string }) {
   return <section className={`mkl-page mkl-page-${number} ${className}`} id={id} aria-label={title}>
     <header className="mkl-running"><span>萌开了家居 / ALUMEN</span><span>{title}</span></header>
     <div className="mkl-page-body">{children}</div>
@@ -120,8 +120,8 @@ function Page({ number, title, children, className = '', id }: { number: number;
   </section>;
 }
 
-function Heading({ index, title, text }: { index: string; title: string; text: string }) {
-  return <div className="mkl-heading"><div className="mkl-eyebrow">{index} / COLLECTION</div><h2>{title}</h2><p>{text}</p></div>;
+function Heading({ index, title, text }: { index: string; title: string; text?: string }) {
+  return <div className="mkl-heading"><div className="mkl-eyebrow">{index} / COLLECTION</div><h2>{title}</h2>{text ? <p>{text}</p> : null}</div>;
 }
 
 function ProfileTable({ start, end }: { start: number; end: number }) {
@@ -135,6 +135,38 @@ function AccessoryTable({ start, end }: { start: number; end: number }) {
 }
 function VipAccessoryTable() {
   return <table className="mkl-table mkl-vip-accessories"><caption>彩色配件批量价 · 元 / 件 · 同一明细 ≥{ACCESSORY_BULK_THRESHOLD} 件</caption><thead><tr><th>配件</th>{['1515','2020','3030','4040'].map(size => <th key={size}>{size}</th>)}</tr></thead><tbody>{ACCESSORY_DEFINITIONS.map(a => <tr key={a.id}><th>{accessoryName(a)}</th>{(['1515','2020','3030','4040'] as AccessoryProfileSize[]).map(size => <td key={size}>{a.prices[size] ? money(a.prices[size]!.coloredBulk) : '—'}</td>)}</tr>)}</tbody></table>;
+}
+
+/* 海洋板家具两栏卡片网格：横版 A4 每页横向并排两张紧凑产品卡（图 + 名称/规格/材质色 + 价格），
+ * 信息密度高，41 件压到约 2–3 页，取代旧版“每页一张 7 列竖表”带来的页底大片空白。
+ * 每页卡片数由 MARINE_CARD_COUNTS 控制（第一页含大标题，故略少于纯卡续页）。 */
+const MARINE_CARD_COUNTS = [20, 21]; // 3列后单页容量大增，先粗分两页再实测校准
+function splitByCounts<T>(arr: T[], counts: number[]): T[][] {
+  const out: T[][] = []; let p = 0;
+  for (const c of counts) { out.push(arr.slice(p, p + c)); p += c; }
+  if (p < arr.length) out.push(arr.slice(p));
+  return out;
+}
+const MARINE_CARD_PAGES = splitByCounts(MARINE_FURNITURE, MARINE_CARD_COUNTS);
+
+function MarineCard({ item, language }: { item: MarineFurniture; language: Language }) {
+  const s = (t: string, i: number) => <CellText key={`s${i}`} value={t} language={language} />;
+  const lineBits: React.ReactNode[] = [];
+  let bi = 0;
+  const push = (txt?: string) => { if (txt && txt !== '—') { if (lineBits.length) lineBits.push(<span key={`sep${bi}`} className="mkl-mc-sep"> · </span>); lineBits.push(s(txt, bi)); } bi++; };
+  push(item.spec); push(item.material); push(item.color);
+  return (
+    <figure className="mkl-mc">
+      <img src={item.image} alt={item.name} />
+      <figcaption className="mkl-mc-txt">
+        <span className="mkl-mc-top"><b><CellText value={item.name} language={language} /></b>{item.retail ? <em className="mkl-mc-price">¥{item.retail}</em> : null}</span>
+        <span className="mkl-mc-line">{lineBits}{item.note ? <span className="mkl-mc-note">{lineBits.length ? <span className="mkl-mc-sep"> · </span> : null}<CellText value={item.note} language={language} /></span> : null}</span>
+      </figcaption>
+    </figure>
+  );
+}
+function MarineCardGrid({ items, language }: { items: MarineFurniture[]; language: Language }) {
+  return <div className="mkl-mcgrid">{items.map(it => <MarineCard key={it.id} item={it} language={language} />)}</div>;
 }
 
 /** Render a table cell with a soft-break hint at "+", "/", "，" so long
@@ -207,10 +239,14 @@ export function CatalogPages({ user, language = 'cn' }: { user?: User | null; la
       <p className="mkl-note">彩色海洋板在所选板材单价上加 {money(MARINE_BOARD_COLORED_SURCHARGE_PER_SQM)} / ㎡。每块最低计费 {MIN_BOARD_CHARGE_AREA_SQM}㎡；最大尺寸 2440 × 1220mm。网站当前提供 12mm、18mm。</p>
     </Page>
     <Page number={8} title="海洋板家具" id="catalog-marine-furniture" className="mkl-marine-furniture-page">
-      <Heading index="04" title="海洋板家具，2026 上海摩登展。" text="展会上精选样品：从层凳、收纳到桌椅与展示架。以俄罗斯桦木多层板为基材，色彩与造型都有更多可能。" />
-      <table className="mkl-table mkl-marine-table"><caption>海洋板家具 · 2026 摩登展样品价 · 人民币元</caption><thead><tr><th className="mkl-marine-img">图</th><th>名称</th><th>规格 mm</th><th>材质</th><th>颜色</th><th>零售价</th><th>备注</th></tr></thead><tbody>{MARINE_FURNITURE.map(item => <tr key={item.id}><td className="mkl-marine-img"><img src={item.image} alt={item.name} /></td><th><CellText value={item.name} language={language} /></th><td><CellText value={item.spec} language={language} /></td><td><CellText value={item.material} language={language} /></td><td><CellText value={item.color} language={language} /></td><td>{item.retail ? `¥${item.retail}` : '—'}</td><td><CellText value={item.note || ''} language={language} /></td></tr>)}</tbody></table>
-      <p className="mkl-note">所有价格为 2026 上海摩登展期间样品价，面向零售买家。展品多为小批量，可按要求定做尺寸与颜色；具体货期请通过微信或淘宝确认。</p>
+      <Heading index="04" title="海洋板家具" />
+      <MarineCardGrid items={MARINE_CARD_PAGES[0]} language={language} />
     </Page>
+    {MARINE_CARD_PAGES.slice(1).map((items, i) => (
+      <Page key={`marine-cont-${i}`} number={`8A${i + 1}`} title="海洋板家具 · 续表" className="mkl-marine-furniture-page mkl-marine-cont-page">
+        <MarineCardGrid items={items} language={language} />
+      </Page>
+    ))}
     <Page number={9} title="配件 / 全规格价格" id="catalog-accessories" className="mkl-all-accessories">
       <Heading index="05" title="连接，一页选齐。" text="1515 / 2020 / 3030 / 4040 适配规格 · 人民币元 / 件。本色批量价适用于同一配件明细达到 20 件，不同明细不合并计算。" />
       <div className="mkl-accessory-layout"><figure className="mkl-accessory-reference"><img src={ACCESSORY_IMAGE} alt="1至10号铝型材连接配件编号识别图" /><figcaption>1–10号配件识别图</figcaption></figure><div className="mkl-accessory-pair"><AccessoryTable start={0} end={Math.ceil(accessoryRows.length / 2)} /><AccessoryTable start={Math.ceil(accessoryRows.length / 2)} end={accessoryRows.length} /></div></div>
@@ -222,9 +258,33 @@ export function CatalogPages({ user, language = 'cn' }: { user?: User | null; la
       <div className="mkl-home-products">{['p7', 'p8', 'p9', 'p4'].map(id => { const p = INITIAL_PRODUCTS.find(p => p.id === id)!; return <article key={id}><img src={p.imageUrl} alt={p.name.cn} /><h3>{p.name.cn}</h3><p>{id === 'p4' ? '尺寸与工艺确认后报价' : '按尺寸与材料配置报价'}</p><a href={shop(id)}>查看产品 ↗</a></article>; })}</div>
       <p className="mkl-note">家居照片为应用参考，不对应固定套装价。定制柜体、展架与相框请通过网站或微信确认完整配置后报价。</p>
     </Page>
+    <Page number={17} title="彩色配件 / Color Profiles" className="mkl-story-page">
+      <Heading index="06" title="彩色配件 · 一组识别。" text="多款彩色型材端盖、角件与连接件按 1515 / 2020 / 3030 / 4040 规格配套。" />
+      <div className="mkl-accessories-gallery">
+        <figure><img src="/images/accessories/color-aluminum-01.jpg" alt="彩色配件全家福 · 总览" /><figcaption>全家福 / 端盖 · 法兰 · 角件 · 盖板</figcaption></figure>
+        <figure><img src="/images/accessories/color-aluminum-02.jpg" alt="彩色端盖和螺丝 · 多色一字铺" /><figcaption>端盖和螺丝 / 9 色可定制</figcaption></figure>
+        <figure><img src="/images/accessories/color-aluminum-03.jpg" alt="L 形角件 · 多色一字铺" /><figcaption>彩色1号和5号角码</figcaption></figure>
+        <figure><img src="/images/accessories/color-aluminum-04.jpg" alt="T 形角件 · 多色一字铺" /><figcaption>L型和T型，彩色7号角码</figcaption></figure>
+        <figure><img src="/images/accessories/color-aluminum-05.jpg" alt="方盒连接件 · 含螺栓" /><figcaption>彩色9号三通 / 含配套螺栓</figcaption></figure>
+        <figure><img src="/images/accessories/color-aluminum-06.jpg" alt="装饰边框 · 三色" /><figcaption>彩色2号挤压角码</figcaption></figure>
+      </div>
+      <p className="mkl-note">颜色以实际色样为准；本批次外另色需 50 件起订。详细规格与适配型材请见配件页或微信确认。</p>
+    </Page>
     <Page number={10} title="User Stories" className="mkl-story-page">
       <Heading index="User Stories" title="真实生活，各有秩序。" text="洞洞板应用实景 / 从工作室到家中的一角。" />
       <div className="mkl-story-images"><figure><img src="/images/catalog-editorial/story-08-05.jpg" alt="工作空间，原画册案例图片" /><figcaption>工作空间</figcaption></figure><figure><img src="/images/catalog-editorial/story-08-02.jpg" alt="咖啡角，原画册案例图片" /><figcaption>咖啡角</figcaption></figure><figure><img src="/images/catalog-editorial/story-08-03.jpg" alt="彩色洞洞板，原画册案例图片" /><figcaption>彩色洞洞板</figcaption></figure></div>
+    </Page>
+    <Page number={20} title="洞洞板配件 / Pegboard" className="mkl-story-page">
+      <Heading index="07" title="洞洞板配件 · 让墙面也长出秩序。" text="挂钩 · 角件 · 面板盖，配宜家孔通用孔距，10种彩色按房间分区搭配。" />
+      <div className="mkl-accessories-gallery-5">
+        <figure><img src="/images/accessories/pegboard-01.jpg" alt="彩色圆头挂钩 · 多色一字铺" /><figcaption>彩色铝合金洞洞板挂杆<br />含配件 1个12元，100个800元</figcaption></figure>
+        <figure><img src="/images/accessories/pegboard-02.jpg" alt="长方形面板螺丝堵盖 · 多色" /><figcaption>高颜值，高强度，易安装</figcaption></figure>
+        <figure><img src="/images/accessories/pegboard-06.jpg" alt="挂杆配件和垫片" /><figcaption>专利自锁配件，后装超高强度</figcaption></figure>
+        <figure><img src="/images/accessories/pegboard-04.jpg" alt="粗挂钩 · 彩色一字排" /><figcaption>短挂钩 2.5元</figcaption></figure>
+        <figure><img src="/images/accessories/pegboard-05.jpg" alt="单钩细节 · 哑光白" /><figcaption>木板 25元 可定制长度</figcaption></figure>
+        <figure><img src="/images/accessories/pegboard-03.jpg" alt="L 与 T 形角件 · 多色一字铺" /><figcaption>长挂钩 5元</figcaption></figure>
+      </div>
+      <p className="mkl-note">挂钩与角件按宜家孔通用孔距；颜色以实际色样为准。本批次外另色需 50 件起订。</p>
     </Page>
     <Page number={11} title="极简铝框 & 实木框" className="mkl-story-page mkl-frame-story">
       <Heading index="极简铝框 & 实木框" title="让作品，有自己的边界。" text="金属的利落与木材的温度，为照片、绘画与生活收藏留出位置。" />
