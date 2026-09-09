@@ -91,4 +91,14 @@
 .mkl-mc-note{color:#a05d2a}
 .mkl-catalog:lang(en) .mkl-mc-top b{font-size:9.5px}
 .mkl-catalog:lang(en) .mkl-mc-line{font-size:7.5px}
-@media screen and (max-width:700px){.mkl-mcgrid{grid-template-columns:1fr}}
+@media screen and (max-width:700px){
+  .mkl-marine-furniture-page .mkl-mcgrid{grid-template-columns:repeat(3,1fr);column-gap:6px;row-gap:6px;width:100%}
+  .mkl-mc{gap:5px;padding:5px 0 6px}
+  .mkl-mc>img{width:8.5mm;height:8mm;margin-top:1px}
+  .mkl-mc-txt{line-height:1.2}
+  .mkl-mc-top{flex-wrap:wrap;gap:2px 5px;align-items:baseline;min-width:0}
+  .mkl-mc-top b{font-size:8.5px;line-height:1.15;flex:0 1 auto;min-width:0;word-break:break-word}
+  .mkl-mc-price{font-size:8.5px;line-height:1.2}
+  .mkl-mc-line{font-size:6.5px;line-height:1.25;margin-top:2px;word-break:break-word}
+  .mkl-mc-note{word-break:break-word}
+}
