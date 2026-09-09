@@ -52,3 +52,6 @@ alufactory-backend/payment_credentials.py
 alufactory-backend/*.pem
 alufactory-backend/*_private_key.txt
 /images
+
+# Printable catalog intermediate bundle
+.catalog-export/
