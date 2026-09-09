@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { HashRouter, Routes, Route, Link, useLocation, useNavigate, useParams } from 'react-router-dom';
-import { ShoppingCart, User as UserIcon, LogOut, Menu, X, Globe, Home, Package, History, Settings, FileDown, Eye, Truck, MapPin, Plus, Trash2, Edit2, CheckCircle, ArrowLeft, Lock, Save, UserCheck, Key, Info, Pencil, ChevronRight, Download, ExternalLink } from 'lucide-react';
+import { ShoppingCart, User as UserIcon, LogOut, Menu, X, Globe, Home, Package, History, Settings, FileDown, Eye, Truck, MapPin, Plus, Trash2, Edit2, CheckCircle, ArrowLeft, Lock, Save, UserCheck, Key, Info, Pencil, ChevronRight, Download, ExternalLink, BookOpen } from 'lucide-react';
 import { Language, User, CartItem, Product, ProductType, ProfileConfig, Order, ProfileSide, DrillHole, Address, ProfileVariant, ColorDef } from './types';
 import { TRANSLATIONS, INITIAL_PRODUCTS, PROFILE_COLORS, PROFILE_VARIANTS, PROFILE_WEIGHTS, SHIPPING_RATES, SHIPPING_RATES_SF, SHIPPING_RATES_AN, SHIPPING_METHOD_NAMES, getMarineBoardOrderColorName } from './constants';
 import type { ShippingMethod } from './constants';
@@ -525,7 +525,39 @@ const Catalog: React.FC<{ language: Language }> = ({ language }) => {
   const accessoryProduct = ACCESSORY_PRODUCT;
   return (
     <div className="max-w-7xl mx-auto px-6 py-12">
-      <div className="mb-10 grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1fr)_260px]">
+      <div className="mb-10 grid grid-cols-1 gap-4 lg:grid-cols-2">
+        {/* 产品与价格画册（左侧醒目入口） */}
+        <Link
+          to="/catalog"
+          className="group relative overflow-hidden rounded-[2rem] bg-gradient-to-br from-emerald-950 via-emerald-900 to-teal-900 p-6 text-white shadow-2xl shadow-emerald-900/20 transition-all hover:-translate-y-1 hover:shadow-emerald-800/30 sm:p-8"
+        >
+          <div className="absolute -left-16 -top-20 h-64 w-64 rounded-full bg-emerald-400/20 blur-3xl transition group-hover:bg-emerald-300/30" />
+          <div className="relative flex flex-col gap-6 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex items-start gap-4">
+              <span className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl border border-white/15 bg-white/10 shadow-inner">
+                <BookOpen className="h-7 w-7 text-emerald-300" />
+              </span>
+              <div>
+                <div className="text-[10px] font-black uppercase tracking-[0.28em] text-emerald-300">Product &amp; Price Catalog 2026</div>
+                <h2 className="mt-2 text-2xl font-black tracking-tight sm:text-3xl">
+                  {language === 'cn' ? '浏览 2026 产品与价格画册' : language === 'jp' ? '2026 製品・価格カタログを見る' : 'Browse the 2026 Product &amp; Price Catalog'}
+                </h2>
+                <p className="mt-2 max-w-2xl text-sm font-medium leading-relaxed text-slate-300">
+                  {language === 'cn'
+                    ? '铝型材、洞洞板、铝板、海洋板与配件全系列产品与价格，可打印或保存为 PDF，也可下载离线 HTML。'
+                    : language === 'jp'
+                      ? 'プロファイル・ペグボード・アルミ板・マリンボード・金具の全製品と価格。PDF印刷・保存やオフラインHTMLのダウンロードも可能。'
+                      : 'Full product line & prices for profiles, pegboards, aluminum plates, marine boards and hardware. Print or save as PDF, or download the offline HTML.'}
+                </p>
+              </div>
+            </div>
+            <span className="inline-flex shrink-0 items-center justify-center gap-2 self-start rounded-2xl bg-emerald-600 px-5 py-3 text-sm font-black shadow-xl shadow-emerald-600/30 transition group-hover:bg-emerald-500 sm:self-center">
+              {language === 'cn' ? '打开画册' : language === 'jp' ? 'カタログを開く' : 'Open catalog'}
+              <ChevronRight className="h-4 w-4" />
+            </span>
+          </div>
+        </Link>
+        {/* 3D DIY 设计器（右侧醒目入口） */}
         <Link
           to="/diy-designer"
           target="_blank"
@@ -558,15 +590,7 @@ const Catalog: React.FC<{ language: Language }> = ({ language }) => {
             </span>
           </div>
         </Link>
-        <Link to="/quick-quote" className="flex items-center justify-between gap-3 rounded-[2rem] border border-blue-100 bg-blue-50 px-6 py-5 font-black text-blue-700 shadow-lg shadow-blue-600/5 transition-all hover:-translate-y-1 hover:bg-blue-100 lg:flex-col lg:items-start lg:justify-center">
-          <div>
-            <div className="text-[10px] uppercase tracking-widest text-blue-400">Fast pricing</div>
-            <div className="mt-1 text-xl">{t.quickQuote}</div>
-          </div>
-          <ChevronRight className="w-5 h-5" />
-        </Link>
       </div>
-      <Link to="/catalog" className="mb-8 flex items-center justify-between gap-4 rounded-2xl bg-white border border-slate-200 p-5 text-slate-800 hover:border-emerald-700"><span><b>{language === 'cn' ? '产品与价格画册 2026' : language === 'jp' ? '2026 製品・価格カタログ（中国語）' : '2026 Product & Price Catalog (Chinese)'}</b><span className="block mt-1 text-sm text-slate-500">{language === 'cn' ? '在线浏览 · 打印或保存 PDF · 下载离线 HTML' : 'Browse online · Print or save PDF · Download HTML'}</span></span><FileDown className="w-6 h-6 shrink-0" /></Link>
       {/*<h2 className="text-5xl font-black text-slate-900 mb-12 tracking-tight">{t.catalog}</h2>*/}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
         {INITIAL_PRODUCTS.map(product => (
@@ -601,6 +625,21 @@ const Catalog: React.FC<{ language: Language }> = ({ language }) => {
           </div>
         </div>
       </div>
+
+      {/* 快速报价（首页最底部） */}
+      <Link to="/quick-quote" className="mt-12 group flex flex-col items-center justify-between gap-4 rounded-[2rem] border-2 border-dashed border-blue-200 bg-gradient-to-r from-blue-50 via-white to-blue-50 px-6 py-8 text-center text-blue-700 shadow-lg shadow-blue-600/5 transition-all hover:-translate-y-1 hover:border-blue-400 hover:bg-blue-50 sm:flex-row sm:text-left">
+        <div className="flex items-center gap-4">
+          <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-blue-600 text-white shadow-xl shadow-blue-600/25 transition group-hover:scale-105"><ChevronRight className="h-6 w-6" /></span>
+          <div>
+            <div className="text-[10px] uppercase tracking-widest text-blue-400">Fast pricing</div>
+            <div className="mt-1 text-2xl font-black">{t.quickQuote}</div>
+            <div className="mt-1 text-sm text-slate-500">{language === 'cn' ? '不进入设计器，直接按尺寸与数量估算价格' : language === 'jp' ? 'デザイナーを使わず、サイズと数量だけで価格を見積もる' : 'Estimate prices by dimensions & quantity without opening the designer'}</div>
+          </div>
+        </div>
+        <span className="inline-flex shrink-0 items-center justify-center gap-2 rounded-2xl bg-blue-600 px-6 py-3 text-sm font-black shadow-xl shadow-blue-600/30 transition group-hover:bg-blue-500">
+          {language === 'cn' ? '开始快速报价' : language === 'jp' ? '見積もりを開始' : 'Start quick quote'}
+        </span>
+      </Link>
     </div>
   );
 };
