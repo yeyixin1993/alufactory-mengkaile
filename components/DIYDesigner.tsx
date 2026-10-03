@@ -124,6 +124,7 @@ import {
   SHAFT_UNIT_PRICE_PER_M,
   UPGRADED_WHEEL_UNIT_PRICE,
   classifyImportedComponent,
+  getLongestEnvelopeAxisMm,
   normalizeWheelGrade,
   resolveCasterUnitPrice,
   resolveImportedComponentPrice,
@@ -1774,6 +1775,94 @@ const stoolSupportFastenerCartItems = (
     },
   }];
 });
+
+/**
+ * The cart line id of a source part the catalogue cannot name.
+ *
+ * A source part has no catalogue row to quote back, so it used to be identified
+ * by its scene id — which made every *placement* its own line. The 凳子 places
+ * eight identical SHF12A supports and four identical D12 shafts, and the cart
+ * and the factory PDF showed eight and four separate lines for what the factory
+ * buys once.
+ *
+ * The id is therefore built from what the part observably **is**: its label,
+ * its envelope size, its price basis and its confirmed unit price. Identical
+ * placements collapse; genuinely different parts survive, because a different
+ * model carries a different label, a different envelope is a different cut
+ * size, and a D12 shaft is priced per millimetre (so a different length is a
+ * different unit price).
+ */
+export const importedSourcePartLineId = (
+  item: DIYSceneItem,
+  price: ImportedComponentPrice,
+  language: Language,
+): string => {
+  const label = (getItemLabel(item, language) || item.name || item.id).trim().replace(/\s+/g, '_');
+  // The physical size has to be part of the identity, because the price alone
+  // is not precise enough to keep two real parts apart: a D12 shaft is priced
+  // per millimetre and rounds to ¥0.01, and the stool's shafts are allowed
+  // fractional lengths, so two shafts 0.1 mm apart would share a unit price and
+  // be bought as one. The part's own envelope is its actual cut size, and
+  // identical placements share one source mesh, so they still collapse.
+  const sizeMm = getLongestEnvelopeAxisMm(item.sourceMesh?.boundsMm);
+  return `diy-source-part::${label}::${sizeMm}::${price.basis}::${price.unitPrice}`;
+};
+
+/**
+ * One placed source part as its own cart line, before grouping.
+ *
+ * A source-model part is a real purchased part — the running estimate charges
+ * it through `getImportedComponentPrice`, so the cart has to carry the same
+ * line or the panel and the cart would disagree. A part the owner linked to a
+ * numbered accessory is billed and named as that catalogue row; anything else
+ * keeps its own source identity at the confirmed per-piece rule. Identical
+ * placed parts merge downstream (see `importedSourcePartLineId`).
+ *
+ * Module-level and pure so a regression can assert the merging identity without
+ * standing up the whole designer.
+ */
+export const buildImportedComponentCartItem = (
+  item: DIYSceneItem,
+  totalPrice: number,
+  product: Product,
+  language: Language,
+): CartItem => {
+  const importedPrice = getImportedComponentPrice(item);
+  const linkedAccessory = importedPrice.linkedAccessory;
+  const quantity = Math.max(1, Math.round(item.quantity || 1));
+  const lineId = linkedAccessory?.key
+    || item.partCatalogRef?.catalogItemId
+    || importedSourcePartLineId(item, importedPrice, language);
+  const config = {
+    type: 'profile_accessory',
+    profileSize: linkedAccessory?.series || item.accessoryProfileSize || '',
+    colorMode: 'natural',
+    colorId: item.colorId || 'natural',
+    colorName: getDesignerColorName(item.colorId || 'natural', language, item.kind),
+    quantities: { [lineId]: quantity },
+    totalQuantity: quantity,
+    unitTotal: totalPrice,
+    lines: [{
+      id: lineId,
+      code: linkedAccessory?.code ?? 0,
+      name: getItemLabel(item, language),
+      imageKey: linkedAccessory ? (linkedAccessory.imageKey || linkedAccessory.defId) : '',
+      quantity,
+      unitPrice: Number((totalPrice / quantity).toFixed(2)),
+      subtotal: totalPrice,
+      isBulk: quantity >= ACCESSORY_BULK_THRESHOLD,
+    }],
+    sourceRecordId: item.partCatalogRef?.sourceRecordId,
+    // Only a catalogue-linked part quotes back a numbered accessory.
+    catalogItemId: linkedAccessory?.defId,
+    importedSourcePart: !linkedAccessory,
+    priceBasis: importedPrice.basis,
+    diyPosition: item.position,
+    diyRotation: item.rotation,
+    remark: item.remark?.trim() || undefined,
+  };
+  return { id: makeId(), product, quantity, config, totalPrice };
+};
 
 /**
  * The customer's acceptance of the design's known-unverified statements. Only
@@ -12345,48 +12434,7 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({
         return { id: makeId(), product, quantity: item.quantity, config, totalPrice };
       }
       if (item.kind === 'imported_component') {
-        // A source-model part is a real purchased part: the running estimate
-        // charges it through `getImportedComponentPrice`, so the cart has to
-        // carry the same line or the panel and the cart would disagree. A part
-        // the owner linked to a numbered accessory is billed and named as that
-        // catalog row; anything else keeps its own source identity at the
-        // confirmed per-piece rule. Identical placed parts merge downstream
-        // through the ordinary accessory grouping.
-        const importedPrice = getImportedComponentPrice(item);
-        const linkedAccessory = importedPrice.linkedAccessory;
-        const quantity = Math.max(1, Math.round(item.quantity || 1));
-        const lineId = linkedAccessory?.key
-          || item.partCatalogRef?.catalogItemId
-          || `diy-source-part-${item.id}`;
-        const config = {
-          type: 'profile_accessory',
-          profileSize: linkedAccessory?.series || item.accessoryProfileSize || '',
-          colorMode: 'natural',
-          colorId: item.colorId || 'natural',
-          colorName: getDesignerColorName(item.colorId || 'natural', language, item.kind),
-          quantities: { [lineId]: quantity },
-          totalQuantity: quantity,
-          unitTotal: totalPrice,
-          lines: [{
-            id: lineId,
-            code: linkedAccessory?.code ?? 0,
-            name: getItemLabel(item, language),
-            imageKey: linkedAccessory ? (linkedAccessory.imageKey || linkedAccessory.defId) : '',
-            quantity,
-            unitPrice: Number((totalPrice / quantity).toFixed(2)),
-            subtotal: totalPrice,
-            isBulk: quantity >= ACCESSORY_BULK_THRESHOLD,
-          }],
-          sourceRecordId: item.partCatalogRef?.sourceRecordId,
-          // Only a catalogue-linked part quotes back a numbered accessory.
-          catalogItemId: linkedAccessory?.defId,
-          importedSourcePart: !linkedAccessory,
-          priceBasis: importedPrice.basis,
-          diyPosition: item.position,
-          diyRotation: item.rotation,
-          remark: item.remark?.trim() || undefined,
-        };
-        return { id: makeId(), product: accessoryProduct, quantity, config, totalPrice };
+        return buildImportedComponentCartItem(item, totalPrice, accessoryProduct, language);
       }
       const board12ShelfSupport = isBoard12ShelfSupport(item);
       const fixedRackHardware = isFixedRackHardware(item);
