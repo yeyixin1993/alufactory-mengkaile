@@ -292,7 +292,7 @@ Availability and price must be verified against Mengkaile's authoritative catalo
 
 ### 13.4 External AI JSON handoff
 
-- External aluminum-profile AI systems may hand designs to Mengkaile through the editable `mengkaile-diy` JSON contract (`schemaVersion: 2`). The maintained copy-and-paste prompt and field rules live in `docs/AI_PROFILE_ORDER_TO_MENGKAILE_JSON_PROMPT.md`.
+- External aluminum-profile AI systems may hand designs to Mengkaile through the editable `mengkaile-diy` JSON contract (`schemaVersion: 2`). The maintained copy-and-paste prompt and field rules live in `docs/AI_PROFILE_ORDER_TO_MENGKAILE_JSON_PROMPT.md`. Version 2 stays correct and is what external authors should keep producing; the designer additionally reads version 3 (the same document with deduplicated source geometry, §13.6), which it writes itself when a design repeats a source component.
 - The handoff has two explicit modes. `assembly` is allowed only when every physical scene member has reliable millimetre centre coordinates and degree-based orientation. `bom-staging` is the required fallback when source coordinates are absent, use an unknown coordinate system, or cannot be converted confidently: expand every physical cut piece to its own `quantity=1` item, align it along world X, left-align its cut datum at X=0, and place successive profiles on deterministic 150mm-spaced rows. The resulting canvas is a production-list arrangement, not a claim about the original assembly.
 - Missing geometry alone must not discard otherwise reliable manufacturing data or force clarification. A quantity-only BOM cannot reconstruct the assembly, but it can generate a staged JSON that preserves exact model, length, count, color, holes, groove/face references, and end tapping for repricing, recoloring, cart, and grouped production PDF. Clarification remains mandatory when a missing/contradictory field would change material or machining. Staged records carry `placementStatus: "staged"`, `geometryConfidence: 0`, source-line provenance, and a root warning; they never invent connections or installed accessory relationships.
 - Imported third-party JSON must never make an external quoted total authoritative. Mengkaile recalculates the estimate from current catalog IDs, lengths, colors, machining, membership rules, and installed accessories so recoloring and checkout remain consistent.
@@ -300,7 +300,7 @@ Availability and price must be verified against Mengkaile's authoritative catalo
 
 ### 13.5 SketchUp interoperability
 
-- SketchUp assemblies hand off through the same editable `mengkaile-diy` JSON contract (`schemaVersion: 2`); the browser does not parse proprietary `.skp` binary geometry directly.
+- SketchUp assemblies hand off through the same editable `mengkaile-diy` JSON contract (`schemaVersion: 2`; the designer also reads the version-3 shared-geometry form described in §13.6, and its own Save writes version 3 once a source component is placed more than once); the browser does not parse proprietary `.skp` binary geometry directly.
 - The maintained APS plugin can open the local designer with an `apsImport=v1.<port>.<one-time-token>` hash query. The designer fetches the validated JSON from a short-lived `127.0.0.1` server, applies the normal append/replace/cancel policy, and removes the token from browser history after the attempt. The token carries no model data, the server is loopback-only, and manual JSON import remains the independent fallback. This path is local-only until explicitly deployed; the public site keeps using the older optional `apsBridge` browser-extension handoff so the two consumers cannot race for the same one-time response.
 - The repository-owned SketchUp Ruby exporter lives in `tools/sketchup/`. It runs inside SketchUp, expands nested ComponentInstance/Group transforms, and writes one `quantity=1` designer profile item for every physical component instance.
 - The verified `20系列.skp` library carries `LonaAluminumProfileSplitter/profile` metadata for exact SKUs including 2020, 2040, and 2047. The exporter reads that metadata before considering strict `APS_<SKU>` naming. It must never identify a hole, screw, or connector merely because its name happens to contain a profile dimension.
@@ -308,6 +308,16 @@ Availability and price must be verified against Mengkaile's authoritative catalo
 - Length-only scaling is supported. Effective cross-section dimensions must be checked against the selected SKU; a scaled 20/30/40mm section produces an explicit review warning rather than silently changing material identity.
 - Geometry does not authorize inferred machining. Side holes, end tapping, accessories, boards, and doors export only when their explicit Mengkaile metadata and attachment relationships exist. A visually touching SU joint alone is insufficient to invent factory operations.
 - The maintained installation, modeling, attribute, and preflight contract is `docs/SKETCHUP_TO_MENGKAILE_JSON.md`. `npm run validate:diy-json -- <file>` performs static schema and reference checks before browser import; design geometry and manufacturing intent still require customer confirmation in the designer.
+
+### 13.6 Shared source geometry in design files
+
+- `mengkaile-diy` accepts **schemaVersion 2 and 3**. Version 2 keeps every imported source mesh inline (what the SketchUp exporter and the external-AI prompt produce). Version 3 is the same document with the per-vertex half of each unique source geometry stored **once** in a top-level `sourceGeometries` map; items carry `sourceMesh.geometryRef` instead of `positionsMm`/`normals`/`uvs`/`indices`/`materials`/`groups`/`boundsMm`.
+- **Exporting a design writes version 3 only when it actually deduplicated something**, and version 2 otherwise. So a design without repeated source components keeps the shape every reader already knows, and an assembly that places one SketchUp component several times stops shipping one full copy of its triangulation per placement. Owner calibration: the 凳子 reference design places the same SHF12A support eight times and the same braked caster four times, so 84% of a 68.7 MB file was one mesh repeated; sharing takes it to 11.4 MB.
+- Each item **always keeps its own `sourceMesh.source`** (file SHA-256, instance path, entity id, component name, semantic type, hierarchy). Provenance is per placement and is never shared, deduplicated, or overwritten by the geometry reference.
+- Sharing is **lossless by construction**: the arrays are moved, not rewritten, and a reader hands back the exact same array objects. The accessory geometry signature, the registered catalog identity (`partCatalogRef`), the parts list, and the price are unchanged. `npm run test:source-geometry-sharing` freezes that against the fixture.
+- The geometry key is the geometry's own FNV-1a digest (`fnv1a32:xxxxxxxx`), the same digest the accessory catalog uses to prove an embedded mesh *is* its registered part. Expansion recomputes it and **refuses** a document whose record does not hash to the name it is filed under.
+- Resolution is **fail-closed** and happens before the import preflight: a missing record, a dangling or malformed reference, a digest mismatch, or a geometry map nobody references all fail the import with an explicit message. A silently mesh-less item would render as nothing while still being priced, so it is never an acceptable outcome.
+- `npm run validate:diy-json -- <file>` accepts both versions and checks reference integrity statically (key format, required record fields, every reference resolvable, no orphan records) before browser import.
 
 ## 14. STEP/STP interoperability direction
 
@@ -398,6 +408,7 @@ Before releasing a designer change, verify at minimum:
 ### Persistence and commerce
 
 - JSON save → load preserves the full editable assembly.
+- Save a design that places the same imported component more than once, reopen it, and verify §13.6: the file shrinks, every placement renders the same mesh, the parts list keeps its registered accessory names, and the estimate is unchanged. `npm run test:source-geometry-sharing` covers the file-level round trip and the fail-closed cases.
 - XLSX export is recognized as a real workbook; XLSX import reconstructs parts and estimate.
 - Cart and factory/PDF output preserve remarks, colors, marine “原色”, machining, tapping, accessory specifications, and JPG image mapping.
 - `npm run build` passes. Treat bundle-size warnings as performance work, not a functional failure.
@@ -434,6 +445,8 @@ Before releasing a designer change, verify at minimum:
 - When implementation and this document diverge, create an explicit issue/backlog entry and state which behavior is currently shipping.
 
 ### Decision log
+
+- **2026-10-03:** Stopped repeating source geometry inside a design file (§13.6). The 凳子 reference design places the same SHF12A support eight times and the same braked caster four times, and schema 2 embedded a full copy of each triangulation per placement, so 84% of a 68.7 MB design was one mesh written over and over — which is what made a customer-facing design JSON too large to upload comfortably. Schema 3 stores one record per unique geometry in `sourceGeometries` and has each placement reference it; the per-vertex arrays are moved rather than rewritten, so the accessory geometry signature, registered catalog identity, parts list and price are bit-for-bit unchanged. Items keep their own provenance (`sourceMesh.source`), the key is the geometry's own digest so a reference is self-verifying, and resolution is fail-closed before the import preflight. Version 3 is written only when a design actually deduplicates something; version 2 documents stay valid and external authors should keep producing them. 68.7 MB → 11.4 MB for the reference design.
 
 - **2026-09-06:** Temporarily hide all customer-facing profile/accessory inventory, including zero counts, loading placeholders and the accessory stock column. `SHOW_STOREFRONT_INVENTORY` centrally disables both rendering and public-editor stock requests until the owner explicitly requests restoration. Backend stock records, admin editing/Excel import/export, pricing and ordering remain unchanged. On restoration the existing silver-white-only accessory visibility rule still applies.
 

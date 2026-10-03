@@ -2,6 +2,7 @@ import { getStoolAccessory, getStoolAccessoryBySemanticType, STOOL_ACCESSORY_CAT
 import type { UnifiedPartReference } from '../data/stoolPartReference';
 import type { ParametricSceneItem } from './parametricFurniture';
 import { inspectImportedSourceMesh, type ImportedSourceMesh } from './importedSourceMesh';
+import { hashImportedSourceGeometry } from './importedSourceGeometrySharing';
 
 type Vector = [number, number, number];
 export type StoolAccessorySceneItem = ParametricSceneItem & { partCatalogRef: UnifiedPartReference };
@@ -16,21 +17,10 @@ export function getStoolAccessoryGeometrySignature(mesh: ImportedSourceMesh): st
   const cached = geometrySignatures.get(mesh.positionsMm);
   if (cached && cached.indices === mesh.indices && cached.normals === mesh.normals && cached.uvs === mesh.uvs
     && cached.materials === mesh.materials && cached.groups === mesh.groups && cached.bounds === mesh.boundsMm) return cached.signature;
-  let hash = 0x811c9dc5;
-  const bytes = new DataView(new ArrayBuffer(8));
-  const byte = (value: number) => { hash = Math.imul(hash ^ value, 0x01000193) >>> 0; };
-  const number = (value: number) => { bytes.setFloat64(0, value, true); for (let i = 0; i < 8; i++) byte(bytes.getUint8(i)); };
-  const string = (value: string) => { number(value.length); for (let i = 0; i < value.length; i++) { const n = value.charCodeAt(i); byte(n & 255); byte(n >>> 8); } };
-  const array = (values: number[]) => { number(values.length); values.forEach(number); };
-  array(mesh.positionsMm); array(mesh.normals || []); array(mesh.uvs || []); array(mesh.indices);
-  number(mesh.materials.length);
-  mesh.materials.forEach(material => {
-    string(material.name); array(material.rgba); string(material.side || 'double'); string(material.textureColorMode || '');
-    string(material.texture?.mimeType || ''); string(material.texture?.base64 || '');
-  });
-  number(mesh.groups.length); mesh.groups.forEach(group => { number(group.start); number(group.count); number(group.materialIndex); });
-  array(mesh.boundsMm.min); array(mesh.boundsMm.max);
-  const signature = `fnv1a32:${hash.toString(16).padStart(8, '0')}`;
+  // One digest implementation is shared with the schema 3 geometry registry
+  // (`utils/importedSourceGeometrySharing.ts`), so an inline mesh and the same
+  // mesh stored once and referenced agree on identity by construction.
+  const signature = hashImportedSourceGeometry(mesh);
   geometrySignatures.set(mesh.positionsMm, { indices: mesh.indices, normals: mesh.normals, uvs: mesh.uvs,
     materials: mesh.materials, groups: mesh.groups, bounds: mesh.boundsMm, signature });
   return signature;

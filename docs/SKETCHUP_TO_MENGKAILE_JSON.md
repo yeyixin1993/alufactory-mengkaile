@@ -4,6 +4,13 @@
 目标格式：`mengkaile-diy` / `schemaVersion: 2`
 SketchUp 内部单位：任意；导出统一转换为毫米
 
+> 插件**继续按本文导出 `schemaVersion: 2`**（每个零件的源网格内嵌），不需要改动。
+> 设计器额外还能读 `schemaVersion: 3`：同样字段，但「同一份源几何」只存一次放在顶层
+> `sourceGeometries`，零件用 `sourceMesh.geometryRef` 指向它，各自仍保留自己的
+> `sourceMesh.source`。设计器**保存**装配时，只有在真的去掉了重复几何时才写成 3 —— 一个 SketchUp
+> 组件被摆 8 次时，2 会把三角剖分重复写 8 份（凳子参考设计 84% 的体积就是这样来的），
+> 3 只写 1 份（68.7 MB → 11.4 MB），几何本身逐字段不变。
+
 ## 目标
 
 SketchUp 用户可以使用萌开了型材组件搭建装配，随后在 SketchUp 内导出原生设计器 JSON。该 JSON 导入 `#/diy-designer` 后，每根型材仍是独立可编辑实体，设计器会按当前目录重新计算报价；客户可检查结构、换颜色、加入购物车、付款并生成生产 PDF。

@@ -2,6 +2,13 @@ import { synchronizeDesignerSceneItems as synchronizeStoolScene, completeStoolCo
 import { inspectDesignerImportItems } from '../utils/designerImportPreflight';
 import { rekeyImportedDesignItems } from '../utils/designerImportRemap';
 import { hasImportedSourceMesh, validateImportedSourceMeshFileSize } from '../utils/importedSourceMesh';
+import {
+  INLINE_SOURCE_MESH_SCHEMA_VERSION,
+  SHARED_SOURCE_GEOMETRY_SCHEMA_VERSION,
+  expandImportedSourceGeometries,
+  isSupportedDesignSchemaVersion,
+  shareImportedSourceGeometries,
+} from '../utils/importedSourceGeometrySharing';
 import { resolveStoolAccessoryReference } from '../utils/stoolAccessoryAssets';
 import { reviewStoolAssembly } from '../utils/stoolAssemblyReview';
 import {
@@ -1509,25 +1516,38 @@ export const buildDesignDocument = (
   language: Language,
   provenance: DesignSourceInfo,
   finishedFurniture?: FinishedFurnitureQuote | null,
-) => ({
-  format: 'mengkaile-diy',
-  schemaVersion: 2,
-  savedAt: new Date().toISOString(),
-  coordinateUnit: 'mm',
-  provenance,
-  ...(finishedFurniture ? { finishedFurniture } : {}),
-  grooveConvention: {
-    sourceOfTruth: 'physicalGrooveIndex',
-    canonicalFaces: ['A', 'B'],
-    mirroredDrawingFaces: ['C', 'D'],
-    example: 'B面第一槽 = 物理P1 = D面第二槽（2040）',
-  },
-  items: normalizeDesignItems(items),
-  ...(inspectDesignerManufacturingPrecheck(items).applies ? {
-    productionRelease: { status: 'blocked' as const, ...inspectDesignerManufacturingPrecheck(items) },
-    stoolAssemblyReview: reviewStoolAssembly(items),
-  } : { production: buildProductionData(items, language) }),
-});
+  options: { shareSourceGeometries?: boolean } = {},
+) => {
+  const normalized = normalizeDesignItems(items);
+  // Repeated source components (the 凳子 design places the same support eight
+  // times) used to ship one full copy of the triangulation per placement. The
+  // shared form keeps each item's own provenance and stores the per-vertex half
+  // once per unique geometry, which is where 84% of that file's bytes were.
+  const shared = options.shareSourceGeometries ? shareImportedSourceGeometries(normalized) : null;
+  const sourceGeometries = shared?.sourceGeometries;
+  return {
+    format: 'mengkaile-diy' as const,
+    schemaVersion: sourceGeometries
+      ? SHARED_SOURCE_GEOMETRY_SCHEMA_VERSION
+      : INLINE_SOURCE_MESH_SCHEMA_VERSION,
+    savedAt: new Date().toISOString(),
+    coordinateUnit: 'mm' as const,
+    provenance,
+    ...(finishedFurniture ? { finishedFurniture } : {}),
+    ...(sourceGeometries ? { sourceGeometries } : {}),
+    grooveConvention: {
+      sourceOfTruth: 'physicalGrooveIndex',
+      canonicalFaces: ['A', 'B'],
+      mirroredDrawingFaces: ['C', 'D'],
+      example: 'B面第一槽 = 物理P1 = D面第二槽（2040）',
+    },
+    items: shared ? shared.items : normalized,
+    ...(inspectDesignerManufacturingPrecheck(items).applies ? {
+      productionRelease: { status: 'blocked' as const, ...inspectDesignerManufacturingPrecheck(items) },
+      stoolAssemblyReview: reviewStoolAssembly(items),
+    } : { production: buildProductionData(items, language) }),
+  };
+};
 
 const normalizeFinishedFurnitureQuote = (value: unknown): FinishedFurnitureQuote | null => {
   if (!value || typeof value !== 'object') return null;
@@ -11534,13 +11554,19 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({
         });
         if (!response.ok) throw new Error(`HTTP ${response.status}`);
         const parsed = await response.json();
-        if (parsed?.format !== 'mengkaile-diy' || Number(parsed?.schemaVersion) !== 2) {
+        if (parsed?.format !== 'mengkaile-diy' || !isSupportedDesignSchemaVersion(parsed?.schemaVersion)) {
           throw new Error(t.jsonImportUnsupported);
         }
         if (!Array.isArray(parsed.items) || !parsed.items.length || parsed.items.length > 20000) {
           throw new Error(t.jsonImportUnsupported);
         }
-        const importedItems = normalizeDesignItems(parsed.items as DIYSceneItem[]);
+        // Schema 3 ships one geometry per unique component and points at it, so
+        // the shared records are resolved before anything reads a mesh.
+        const expandedItems = expandImportedSourceGeometries(
+          parsed.items as DIYSceneItem[],
+          (parsed as { sourceGeometries?: unknown }).sourceGeometries,
+        );
+        const importedItems = normalizeDesignItems(expandedItems);
         if (!importedItems.length) throw new Error(t.jsonImportUnsupported);
         const appliedItems = await applyImportedDesign(
           importedItems,
@@ -11610,7 +11636,10 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({
 
   const save = () => {
     downloadTextFile(
-      JSON.stringify(buildDesignDocument(items, language, designSource, finishedFurnitureQuote)),
+      JSON.stringify(buildDesignDocument(
+        items, language, designSource, finishedFurnitureQuote,
+        { shareSourceGeometries: true },
+      )),
       'application/json;charset=utf-8',
       `mengkaile-design-${new Date().toISOString().slice(0, 10)}.json`,
     );
@@ -11667,9 +11696,16 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({
         const parsed = JSON.parse(String(reader.result || '{}'));
         let importedItems: DIYSceneItem[] = [];
         if (Array.isArray(parsed?.items)) {
-          const preflight = inspectDesignerImportItems(parsed.items);
+          // Resolve schema 3 shared geometry before the preflight sees the
+          // document: the preflight is the import boundary, so it must be shown
+          // complete meshes and never a dangling reference.
+          const expandedItems = expandImportedSourceGeometries(
+            parsed.items as DIYSceneItem[],
+            (parsed as { sourceGeometries?: unknown }).sourceGeometries,
+          );
+          const preflight = inspectDesignerImportItems(expandedItems);
           if (!preflight.valid) throw new Error(preflight.issues.map(issue => issue.message).join('\n'));
-          importedItems = normalizeDesignItems(parsed.items as DIYSceneItem[]);
+          importedItems = normalizeDesignItems(expandedItems);
         } else if (Array.isArray(parsed?.order_json?.items)) {
           importedItems = normalizeDesignItems(mapSystemOrderProfileItemsToDesignerItems(
             parsed.order_json.items,

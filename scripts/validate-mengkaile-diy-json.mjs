@@ -41,9 +41,46 @@ const finiteVec3 = (value) => Array.isArray(value)
   && value.every((entry) => Number.isFinite(entry));
 
 if (document?.format !== 'mengkaile-diy') errors.push('format must be "mengkaile-diy".');
-if (document?.schemaVersion !== 2) errors.push('schemaVersion must be 2.');
+// 2 = every item carries its own mesh; 3 = one record per unique geometry plus
+// per-item references. Hand-authored designs stay on 2; the designer writes 3
+// only when it actually deduplicated something.
+const SCHEMA_VERSIONS = [2, 3];
+if (!SCHEMA_VERSIONS.includes(document?.schemaVersion)) {
+  errors.push(`schemaVersion must be one of ${SCHEMA_VERSIONS.join(' / ')}, got ${JSON.stringify(document?.schemaVersion)}.`);
+}
 if (document?.coordinateUnit !== 'mm') errors.push('coordinateUnit must be "mm".');
 if (!Array.isArray(document?.items) || !document.items.length) errors.push('items must be a non-empty array.');
+
+const SOURCE_GEOMETRY_REF_PATTERN = /^fnv1a32:[0-9a-f]{8}$/;
+const REQUIRED_GEOMETRY_FIELDS = ['positionsMm', 'indices', 'materials', 'groups', 'boundsMm'];
+const registeredGeometries = new Set();
+const usedGeometryRefs = new Map();
+const sourceGeometries = document?.sourceGeometries;
+if (sourceGeometries !== undefined) {
+  if (!sourceGeometries || typeof sourceGeometries !== 'object' || Array.isArray(sourceGeometries)) {
+    errors.push('sourceGeometries must be an object keyed by geometry digest when present.');
+  } else {
+    Object.entries(sourceGeometries).forEach(([ref, geometry]) => {
+      if (!SOURCE_GEOMETRY_REF_PATTERN.test(ref)) {
+        errors.push(`sourceGeometries["${ref}"] key must look like fnv1a32:xxxxxxxx.`);
+        return;
+      }
+      registeredGeometries.add(ref);
+      if (!geometry || typeof geometry !== 'object' || Array.isArray(geometry)) {
+        errors.push(`sourceGeometries["${ref}"] must be an object.`);
+        return;
+      }
+      REQUIRED_GEOMETRY_FIELDS.forEach((field) => {
+        if (!Object.prototype.hasOwnProperty.call(geometry, field)) {
+          errors.push(`sourceGeometries["${ref}"] is missing ${field}.`);
+        }
+      });
+      if (geometry.reviewStatus !== 'source_geometry_only') {
+        errors.push(`sourceGeometries["${ref}"].reviewStatus must stay "source_geometry_only".`);
+      }
+    });
+  }
+}
 
 const ids = new Set();
 const profileIds = new Set();
@@ -62,6 +99,24 @@ const profileIds = new Set();
   if (item.kind === 'marine_board'
       && (!Number.isInteger(item.width) || !Number.isInteger(item.height))) {
     errors.push(`${label}.width and .height must be whole millimetres for marine board.`);
+  }
+
+  // Schema 3: the per-vertex half may live once in `sourceGeometries` instead of
+  // on every placement. The item's own `source` stays inline either way, because
+  // the source file hash, instance path and entity id differ per placement.
+  const geometryRef = item.sourceMesh?.geometryRef;
+  if (geometryRef !== undefined) {
+    if (typeof geometryRef !== 'string' || !SOURCE_GEOMETRY_REF_PATTERN.test(geometryRef)) {
+      errors.push(`${label}.sourceMesh.geometryRef ${JSON.stringify(geometryRef)} must look like fnv1a32:xxxxxxxx.`);
+    } else {
+      usedGeometryRefs.set(geometryRef, label);
+    }
+    if (Object.prototype.hasOwnProperty.call(item.sourceMesh, 'positionsMm')) {
+      warnings.push(`${label}.sourceMesh carries both geometryRef and inline positionsMm; readers use the reference.`);
+    }
+    if (!item.sourceMesh?.source) {
+      errors.push(`${label}.sourceMesh must keep its own source record; provenance is never shared.`);
+    }
   }
 
   if (item.kind !== 'profile') return;
@@ -95,6 +150,15 @@ const profileIds = new Set();
     }
   });
 });
+
+usedGeometryRefs.forEach((label, ref) => {
+  if (!registeredGeometries.has(ref)) {
+    errors.push(`${label} references shared geometry "${ref}" that sourceGeometries does not define.`);
+  }
+});
+if (registeredGeometries.size && !usedGeometryRefs.size) {
+  errors.push(`sourceGeometries defines ${registeredGeometries.size} record(s) that no item references.`);
+}
 
 (Array.isArray(document?.items) ? document.items : []).forEach((item, itemIndex) => {
   (Array.isArray(item?.attachedProfileIds) ? item.attachedProfileIds : []).forEach((profileId) => {
