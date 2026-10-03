@@ -10,7 +10,12 @@ import {
   shareImportedSourceGeometries,
 } from '../utils/importedSourceGeometrySharing';
 import { resolveStoolAccessoryReference } from '../utils/stoolAccessoryAssets';
-import { reviewStoolAssembly } from '../utils/stoolAssemblyReview';
+import {
+  materializeStoolSupportFasteners,
+  reviewStoolAssembly,
+  STOOL_SUPPORT_FASTENER_SPEC,
+  type StoolSupportFasteners,
+} from '../utils/stoolAssemblyReview';
 import {
   applyGroupMoveDelta,
   getGroupMoveTargets,
@@ -43,6 +48,7 @@ import {
   Home,
   MousePointer2,
   Move3D,
+  AlertTriangle,
   Paintbrush,
   PanelTop,
   Redo2,
@@ -96,7 +102,7 @@ import { getDiyScrewOrderSpec } from '../utils/screwCalculator';
 import { DEFAULT_SCREW_UNIT_PRICE, resolveDesignerScrewPrice } from '../utils/designerScrewPricing';
 import { getRotationallyCanonicalMachiningKey } from '../utils/profileManufacturingEquivalence';
 import { parseMaycadSceneXml, type MaycadProfileReview } from '../utils/maycadImport';
-import { getConfirmedEndCapUnitPrice, hasConfirmedEndCapPrice } from '../utils/accessoryPricing';
+import { ACCESSORY_BULK_THRESHOLD, getConfirmedEndCapUnitPrice, hasConfirmedEndCapPrice } from '../utils/accessoryPricing';
 import { ACCESSORY_CODE_IMAGE_MAP, getAccessoryRowSeriesLabel } from '../data/accessoryCatalog';
 import {
   DIY_TEMPLATE_STORAGE_PREFIX,
@@ -575,6 +581,18 @@ const TEXT: Record<Language, Record<string, string>> = {
     unlockLocation: '解锁位置',
     lockedLocation: '位置已锁定',
     attachedTo: '吸附型材',
+    releaseTitle: '生产放行确认',
+    releaseIntro: '这个设计可以下单，但以下项目仍需实物核对。请逐条阅读并确认后继续。',
+    releaseBlockedTitle: '暂不能下单',
+    releaseBlockedIntro: '模型本身还有必须先修正的问题：',
+    releaseAckLabel: '我已阅读并理解以上待核对项，同意按此下单 / 导出',
+    releaseConfirm: '确认并继续',
+    releaseCancel: '返回修改',
+    releaseReviewAction: '查看待核对项',
+    releaseAcknowledged: '待核对项已确认',
+    releaseFastenersTitle: '紧固件（规格已确认）',
+    releaseFastenersNote: '数量与单价取自编号配件目录；实物拧紧扭矩与工具进入顺序仍待核对。',
+    fastenerPrice: '紧固件小计',
     attachedParts: '连接部件',
   },
   en: {
@@ -874,6 +892,18 @@ const TEXT: Record<Language, Record<string, string>> = {
     unlockLocation: 'Unlock location',
     lockedLocation: 'Location locked',
     attachedTo: 'Attached profiles',
+    releaseTitle: 'Order release check',
+    releaseIntro: 'This design can be ordered, but the items below still need physical verification. Read and confirm each one to continue.',
+    releaseBlockedTitle: 'Cannot be ordered yet',
+    releaseBlockedIntro: 'The model itself has problems that must be fixed first:',
+    releaseAckLabel: 'I have read the outstanding items and accept ordering / exporting on this basis',
+    releaseConfirm: 'Confirm and continue',
+    releaseCancel: 'Back to edit',
+    releaseReviewAction: 'Review outstanding items',
+    releaseAcknowledged: 'Outstanding items accepted',
+    releaseFastenersTitle: 'Fasteners (specification confirmed)',
+    releaseFastenersNote: 'Quantity and unit price come from the numbered accessory catalog; tightening torque and tool access are still verified on hardware.',
+    fastenerPrice: 'Fastener subtotal',
     attachedParts: 'Connected parts',
   },
   jp: {
@@ -1180,6 +1210,18 @@ const TEXT: Record<Language, Record<string, string>> = {
     unlockLocation: '位置ロック解除',
     lockedLocation: '位置ロック中',
     attachedTo: '取付先形材',
+    releaseTitle: '製造リリース確認',
+    releaseIntro: 'この設計は発注できますが、以下は実物での確認が必要です。各項目を確認してから続行してください。',
+    releaseBlockedTitle: 'まだ発注できません',
+    releaseBlockedIntro: 'モデル自体に先に修正すべき問題があります：',
+    releaseAckLabel: '上記の未確認項目を理解し、この内容での発注・書き出しに同意します',
+    releaseConfirm: '確認して続行',
+    releaseCancel: '戻って修正',
+    releaseReviewAction: '未確認項目を表示',
+    releaseAcknowledged: '未確認項目を確認済み',
+    releaseFastenersTitle: '締結部品（仕様確定済み）',
+    releaseFastenersNote: '数量と単価は番号付き付属品カタログによります。実物での締付トルクと工具進入は要確認です。',
+    fastenerPrice: '締結部品小計',
     attachedParts: '接続部品',
   },
 };
@@ -1205,19 +1247,103 @@ export const synchronizeDesignerSceneItems = (source: DIYSceneItem[]): DIYSceneI
   return normalized.flatMap(item => synchronized.has(item.id) ? [synchronized.get(item.id) as DIYSceneItem] : []);
 };
 
-export const inspectDesignerManufacturingPrecheck = (items: DIYSceneItem[]) => {
+/**
+ * What still has to be true of a source-model part once the catalogue has named
+ * it. This is a physical check, so it is stated, not enforced.
+ */
+const SOURCE_MESH_REVIEW_NOTE = '源模型部件已关联编号配件：加工公差、紧固件规格与安装工艺仍待实物确认。';
+/**
+ * The same kind of statement for the 凳子 — true of a perfectly correct model.
+ */
+const STOOL_REVIEW_NOTE = '复古边几凳的板件固定、脚轮接口、层间紧固和承载待实物核对；框架检查不代表整凳制造放行。';
+
+/**
+ * The release state of a design, split into two different kinds of "not yet".
+ *
+ * `blocking` is a *computed* failure — the model is wrong, or a part has no
+ * catalogue identity and therefore no price. Nothing the customer accepts can
+ * fix it, so it always stops an order.
+ *
+ * `advisories` are the known-unverified statements (physical fastening, load,
+ * installation order). They are true of every design of that kind and no
+ * software check can settle them, so they do not stop an order by themselves —
+ * they have to be read and accepted first, and they are written into the order
+ * and the factory sheet.
+ *
+ * `valid` therefore means "no computed failure remains", not "fully verified".
+ */
+export interface DesignerManufacturingRelease {
+  applies: boolean;
+  valid: boolean;
+  scopes: string[];
+  blocking: string[];
+  advisories: string[];
+  /** `blocking` then `advisories`, for callers that want one list. */
+  issues: string[];
+}
+
+export const inspectDesignerManufacturingPrecheck = (items: DIYSceneItem[]): DesignerManufacturingRelease => {
   const scopes: string[] = [];
-  const issues: string[] = [];
-  if (items.some(hasImportedSourceMesh)) {
+  const blocking: string[] = [];
+  const advisories: string[] = [];
+  const sourceItems = items.filter(hasImportedSourceMesh);
+  if (sourceItems.length) {
     scopes.push('source_mesh_draft');
-    issues.push('源模型部件仅供设计复核：采购规格、加工、紧固件和安装尚未确认。');
+    // A source part the catalogue cannot identify has no purchasing identity and
+    // no price, so nobody can quote or make it — that is a real failure. A part
+    // the catalogue *can* name is a purchasing decision already taken, so only
+    // its machining and installation stay outstanding.
+    const unidentified = sourceItems.filter((item) => getImportedComponentPrice(item).status !== 'confirmed');
+    if (unidentified.length) {
+      blocking.push(`${unidentified.length}个源模型部件未关联编号配件、无法定价：${unidentified
+        .slice(0, 3).map((item) => item.name || item.id).join('、')}${unidentified.length > 3 ? ' 等' : ''}；`
+        + '请先在设计器里确认它对应目录中的哪一号配件。');
+    }
+    advisories.push(SOURCE_MESH_REVIEW_NOTE);
   }
   if (items.some(isStoolItem)) {
     scopes.push('parametric_stool_draft');
-    issues.push(...reviewStoolAssembly(items).issues,
-      '复古边几凳的板件固定、脚轮接口、层间紧固和承载待实物核对；框架检查不代表整凳制造放行。');
+    const review = reviewStoolAssembly(items);
+    blocking.push(...review.blockingIssues);
+    advisories.push(...review.advisoryNotes, STOOL_REVIEW_NOTE);
   }
-  return { applies: scopes.length > 0, valid: scopes.length === 0, scopes, issues };
+  const uniqueAdvisories = [...new Set(advisories)];
+  return {
+    applies: scopes.length > 0,
+    valid: blocking.length === 0,
+    scopes,
+    blocking,
+    advisories: uniqueAdvisories,
+    issues: [...blocking, ...uniqueAdvisories],
+  };
+};
+
+/**
+ * What a release-bearing action should do, as a pure function.
+ *
+ * `blocked` — a computed failure exists; nothing the customer accepts can fix it.
+ * `acknowledge` — a statement has to be read and accepted first.
+ * `proceed` — either there is no release question, or the exact statements on
+ *   screen have already been accepted (and the acceptance is returned so the
+ *   order and the factory sheet can carry it).
+ *
+ * Kept out of the component so the shell and the regressions read one rule.
+ */
+export type DesignerReleaseGate =
+  | { action: 'proceed'; acknowledgement?: ManufacturingAcknowledgement }
+  | { action: 'blocked' }
+  | { action: 'acknowledge' };
+
+export const decideDesignerReleaseGate = (
+  release: DesignerManufacturingRelease,
+  accepted: ManufacturingAcknowledgement | null,
+): DesignerReleaseGate => {
+  if (release.applies && release.blocking.length) return { action: 'blocked' };
+  if (!release.applies || !release.advisories.length) return { action: 'proceed' };
+  if (accepted && release.advisories.every((note) => accepted.advisories.includes(note))) {
+    return { action: 'proceed', acknowledgement: accepted };
+  }
+  return { action: 'acknowledge' };
 };
 
 function getCasterUnitPrice(item: Pick<DIYSceneItem, 'accessoryThreadSize' | 'hasBrake' | 'wheelGrade'>) {
@@ -1522,15 +1648,154 @@ export const buildProductionData = (items: DIYSceneItem[], language: Language) =
       };
     });
   });
-  return { parts, holes };
+  return {
+    // A derived line carries the same documented key set as an item line, but
+    // the item projection's type is inferred from its own literal, so the cast
+    // is about that inference rather than about a different shape. Readers that
+    // want the extra purchasing keys widen the type themselves — see
+    // `MaterialListInput` in `utils/materialList.ts`.
+    parts: [...parts, ...stoolSupportFastenerParts(parts.length, items, language)] as unknown as typeof parts,
+    holes,
+  };
 };
+
+/**
+ * One derived purchasing line of the 凳子's owner-confirmed tier fastener set.
+ * Only the keys the factory list reads are declared here.
+ */
+export interface StoolSupportFastenerPart {
+  line: number;
+  id: string;
+  type: 'screw';
+  model: string;
+  quantity: number;
+  colorId: string;
+  color: string;
+  partCatalogRef: { catalogItemId: string; sourceRecordId: string };
+  designDraftMarkers: string[];
+  screwOrderThreadSize: string;
+  screwOrderLengthMm: number;
+  positionMm: number[];
+  rotationDeg: number[];
+  leftTappingPorts: number;
+  rightTappingPorts: number;
+  autoGenerated: boolean;
+  remark: string;
+}
+
+/**
+ * The 凳子's owner-confirmed tier fasteners as factory-document parts.
+ *
+ * They are deliberately *not* scene geometry: the designer's screw identity
+ * allows one order specification per (series, head), and the 32 sets are not
+ * positioned bodies — modelling them would collide with the 28 internal-slot
+ * M8×45 screws the scene already generates. They are still real purchased
+ * parts, so the factory projection has to name them.
+ *
+ * No price is attached. The factory document is price-free by contract; the
+ * money lives on the cart line and on the designer's own estimate.
+ */
+const stoolSupportFastenerParts = (
+  offset: number,
+  items: DIYSceneItem[],
+  language: Language,
+): StoolSupportFastenerPart[] => {
+  const fasteners = materializeStoolSupportFasteners(items);
+  return fasteners.lines.map((line, index) => ({
+    line: offset + index + 1,
+    id: `stool-support-fastener-${line.catalogItemId}`,
+    type: 'screw',
+    model: line.label,
+    quantity: line.quantity,
+    colorId: 'natural',
+    color: language === 'cn' ? '本色' : 'natural',
+    partCatalogRef: { catalogItemId: line.catalogItemId, sourceRecordId: line.catalogItemId },
+    designDraftMarkers: [],
+    screwOrderThreadSize: STOOL_SUPPORT_FASTENER_SPEC.threadSize,
+    screwOrderLengthMm: STOOL_SUPPORT_FASTENER_SPEC.lengthMm,
+    positionMm: [0, 0, 0],
+    rotationDeg: [0, 0, 0],
+    leftTappingPorts: 0,
+    rightTappingPorts: 0,
+    autoGenerated: true,
+    remark: '',
+  }));
+};
+
+/**
+ * The same owner-confirmed fasteners as priced accessory cart lines.
+ *
+ * They are ordinary profile-accessory lines, so the cart total, the order and
+ * the accessory list all read the one catalogue row. The acknowledgement the
+ * customer accepted travels with the line, which is what puts those statements
+ * on the order rather than only on the customer's screen.
+ */
+const stoolSupportFastenerCartItems = (
+  fasteners: StoolSupportFasteners,
+  accessoryProduct: Product,
+  language: Language,
+  designSource: DesignSourceInfo,
+  acknowledgement?: ManufacturingAcknowledgement,
+): CartItem[] => fasteners.lines.flatMap((line) => {
+  const quantity = Math.max(1, Math.round(line.quantity));
+  if (!(line.subtotal > 0)) return [];
+  return [{
+    id: makeId(),
+    product: accessoryProduct,
+    quantity: 1,
+    totalPrice: line.subtotal,
+    config: {
+      type: 'profile_accessory',
+      profileSize: '3030',
+      colorMode: 'natural',
+      colorId: 'natural',
+      colorName: getDesignerColorName('natural', language, 'screw'),
+      quantities: { [line.catalogItemId]: quantity },
+      totalQuantity: quantity,
+      unitTotal: line.subtotal,
+      lines: [{
+        id: line.catalogItemId,
+        code: 10,
+        name: line.label,
+        imageKey: line.catalogItemId,
+        quantity,
+        unitPrice: line.unitPrice,
+        subtotal: line.subtotal,
+        isBulk: line.bulkApplied,
+      }],
+      colorModeFixed: 'natural',
+      designSource,
+      ...(acknowledgement ? {
+        manufacturingAcknowledgement: {
+          advisories: acknowledgement.advisories,
+          acknowledgedAt: acknowledgement.acknowledgedAt,
+        },
+      } : {}),
+    },
+  }];
+});
+
+/**
+ * The customer's acceptance of the design's known-unverified statements. Only
+ * the exact advisory texts that were on screen count: a saved design whose
+ * advisories have since changed is *not* covered by an older acceptance.
+ */
+export interface ManufacturingAcknowledgement {
+  advisories: string[];
+  acknowledgedAt: string;
+}
+
+export type ManufacturingReleaseStatus = 'blocked' | 'requires_acknowledgement' | 'acknowledged';
 
 export const buildDesignDocument = (
   items: DIYSceneItem[],
   language: Language,
   provenance: DesignSourceInfo,
   finishedFurniture?: FinishedFurnitureQuote | null,
-  options: { shareSourceGeometries?: boolean } = {},
+  options: {
+    shareSourceGeometries?: boolean;
+    manufacturingAcknowledgement?: ManufacturingAcknowledgement;
+  } = {},
 ) => {
   const normalized = normalizeDesignItems(items);
   // Repeated source components (the 凳子 design places the same support eight
@@ -1539,6 +1804,14 @@ export const buildDesignDocument = (
   // once per unique geometry, which is where 84% of that file's bytes were.
   const shared = options.shareSourceGeometries ? shareImportedSourceGeometries(normalized) : null;
   const sourceGeometries = shared?.sourceGeometries;
+  const release = inspectDesignerManufacturingPrecheck(items);
+  const acknowledgement = options.manufacturingAcknowledgement;
+  // The production projection is written in the same file that records the
+  // release decision, so a released design and its factory sheet can never be
+  // separated by an older reader.
+  const acknowledged = release.applies && !release.blocking.length && release.advisories.length > 0
+    && Boolean(acknowledgement)
+    && release.advisories.every((note) => acknowledgement!.advisories.includes(note));
   return {
     format: 'mengkaile-diy' as const,
     schemaVersion: sourceGeometries
@@ -1556,10 +1829,19 @@ export const buildDesignDocument = (
       example: 'B面第一槽 = 物理P1 = D面第二槽（2040）',
     },
     items: shared ? shared.items : normalized,
-    ...(inspectDesignerManufacturingPrecheck(items).applies ? {
-      productionRelease: { status: 'blocked' as const, ...inspectDesignerManufacturingPrecheck(items) },
+    ...(release.applies ? {
+      productionRelease: {
+        status: (release.blocking.length
+          ? 'blocked'
+          : acknowledged ? 'acknowledged' : 'requires_acknowledgement') as ManufacturingReleaseStatus,
+        ...release,
+        ...(acknowledged && acknowledgement
+          ? { acknowledgedAdvisories: acknowledgement.advisories, acknowledgedAt: acknowledgement.acknowledgedAt }
+          : {}),
+      },
       stoolAssemblyReview: reviewStoolAssembly(items),
-    } : { production: buildProductionData(items, language) }),
+    } : {}),
+    ...(release.applies && !acknowledged ? {} : { production: buildProductionData(items, language) }),
   };
 };
 
@@ -10597,6 +10879,8 @@ const removeItemsWithOwnedEndTapping = (source: DIYSceneItem[], requestedIds: Se
 
 type ImportConflictChoice = 'append' | 'replace' | 'cancel';
 type ImportConflictTarget = 'design' | 'cart';
+/** `proceed: false` when the design is blocked or the customer declined. */
+type ManufacturingReleaseDecision = { proceed: boolean; acknowledgement?: ManufacturingAcknowledgement };
 
 const DIYDesigner: React.FC<DIYDesignerProps> = ({
   language,
@@ -10659,6 +10943,16 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({
   } | null>(null);
   const [importTappingPrompt, setImportTappingPrompt] = useState<{ source: 'json' | 'maycad'; profileIds: string[] } | null>(null);
   const [importConflictTarget, setImportConflictTarget] = useState<ImportConflictTarget | null>(null);
+  /**
+   * Set while the customer is reading the design's known-unverified statements.
+   * Holding the open prompt means the decision (and the resolver) live in one
+   * place, so a rejected gate can never half-run the action it was guarding.
+   */
+  const [manufacturingReleaseTarget, setManufacturingReleaseTarget] = useState<DesignerManufacturingRelease | null>(null);
+  const [manufacturingAcknowledgement, setManufacturingAcknowledgement] = useState<ManufacturingAcknowledgement | null>(null);
+  /** The tick box is deliberately not sticky: every prompt starts unticked. */
+  const [manufacturingReleaseAcknowledged, setManufacturingReleaseAcknowledged] = useState(false);
+  const manufacturingReleaseResolverRef = useRef<((decision: ManufacturingReleaseDecision) => void) | null>(null);
   const importRef = useRef<HTMLInputElement>(null);
   const excelImportRef = useRef<HTMLInputElement>(null);
   const maycadImportRef = useRef<HTMLInputElement>(null);
@@ -10699,7 +10993,14 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({
     if (!id) return;
     setSelection(selectedIds.includes(id) ? selectedIds.filter((entry) => entry !== id) : [...selectedIds, id]);
   };
-  const componentTotal = useMemo(() => items.reduce((sum, item) => sum + calculatePrice(item, user), 0), [items, user]);
+  // The 凳子's tier fasteners are owner-confirmed purchased parts rather than
+  // scene items, so the running estimate has to add them explicitly — otherwise
+  // the panel would quote one number and the cart would charge another.
+  const stoolSupportFasteners = useMemo(() => materializeStoolSupportFasteners(items), [items]);
+  const componentTotal = useMemo(
+    () => items.reduce((sum, item) => sum + calculatePrice(item, user), 0) + stoolSupportFasteners.total,
+    [items, user, stoolSupportFasteners],
+  );
   // Imported source components are read through one shared pricing rule so the
   // panel and the running total can never disagree.
   const selectedImportedPrice = selected && selected.kind === 'imported_component'
@@ -10739,9 +11040,59 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({
     resolver?.(choice);
   };
 
+  /**
+   * The single door every release-bearing action goes through (add to cart,
+   * production JSON, production XLSX).
+   *
+   * A computed failure always stops the action. The known-unverified statements
+   * stop it exactly once: the customer reads them, ticks the box, and from then
+   * on the acceptance is remembered *for that exact set of statements* — edit
+   * the design until a new statement appears and the gate closes again.
+   */
+  const confirmManufacturingRelease = (): Promise<ManufacturingReleaseDecision> => {
+    const release = inspectDesignerManufacturingPrecheck(items);
+    const gate = decideDesignerReleaseGate(release, manufacturingAcknowledgement);
+    if (gate.action === 'blocked') {
+      showNotice(release.blocking.join(' '));
+      return Promise.resolve({ proceed: false });
+    }
+    if (gate.action === 'proceed') return Promise.resolve({ proceed: true, acknowledgement: gate.acknowledgement });
+    return new Promise<ManufacturingReleaseDecision>((resolve) => {
+      manufacturingReleaseResolverRef.current = resolve;
+      setManufacturingReleaseAcknowledged(false);
+      setManufacturingReleaseTarget(release);
+    });
+  };
+
+  const resolveManufacturingRelease = (accepted: boolean) => {
+    const resolver = manufacturingReleaseResolverRef.current;
+    const release = manufacturingReleaseTarget;
+    manufacturingReleaseResolverRef.current = null;
+    setManufacturingReleaseTarget(null);
+    if (!resolver) return;
+    if (!accepted || !release) {
+      resolver({ proceed: false });
+      return;
+    }
+    const acknowledgement: ManufacturingAcknowledgement = {
+      advisories: release.advisories,
+      acknowledgedAt: new Date().toISOString(),
+    };
+    setManufacturingAcknowledgement(acknowledgement);
+    resolver({ proceed: true, acknowledgement });
+  };
+
+  const openManufacturingRelease = () => {
+    const release = inspectDesignerManufacturingPrecheck(items);
+    setManufacturingAcknowledgement(null);
+    setManufacturingReleaseTarget(release.applies ? release : null);
+  };
+
   useEffect(() => () => {
     importConflictResolverRef.current?.('cancel');
     importConflictResolverRef.current = null;
+    manufacturingReleaseResolverRef.current?.({ proceed: false });
+    manufacturingReleaseResolverRef.current = null;
   }, []);
 
   const applyImportedDesign = async (
@@ -11657,7 +12008,10 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({
     downloadTextFile(
       JSON.stringify(buildDesignDocument(
         items, language, designSource, finishedFurnitureQuote,
-        { shareSourceGeometries: true },
+        {
+          shareSourceGeometries: true,
+          ...(manufacturingAcknowledgement ? { manufacturingAcknowledgement } : {}),
+        },
       )),
       'application/json;charset=utf-8',
       `mengkaile-design-${new Date().toISOString().slice(0, 10)}.json`,
@@ -11676,15 +12030,18 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({
 
   const load = () => importRef.current?.click();
 
-  const productionAllowed = () => {
-    const release = inspectDesignerManufacturingPrecheck(items);
-    if (release.applies && !release.valid) { showNotice(release.issues.join(' ')); return false; }
-    return true;
-  };
+  /**
+   * Reads the release state without acting on it, for the read-only panel. The
+   * ordered actions below all go through `confirmManufacturingRelease`.
+   */
+  const manufacturingRelease = inspectDesignerManufacturingPrecheck(items);
 
-  const exportJson = () => {
-    if (!productionAllowed()) return;
-    const document = buildDesignDocument(items, language, designSource, finishedFurnitureQuote);
+  const exportJson = async () => {
+    const decision = await confirmManufacturingRelease();
+    if (!decision.proceed) return;
+    const document = buildDesignDocument(items, language, designSource, finishedFurnitureQuote, {
+      ...(decision.acknowledgement ? { manufacturingAcknowledgement: decision.acknowledgement } : {}),
+    });
     downloadTextFile(
       JSON.stringify({
         format: document.format,
@@ -11693,6 +12050,9 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({
         provenance: document.provenance,
         ...(document.finishedFurniture ? { finishedFurniture: document.finishedFurniture } : {}),
         grooveConvention: document.grooveConvention,
+        // The factory sheet carries the release decision, so a released design
+        // is never separated from the statements the customer accepted.
+        productionRelease: 'productionRelease' in document ? document.productionRelease : undefined,
         production: 'production' in document ? document.production : undefined,
       }, null, 2),
       'application/json;charset=utf-8',
@@ -11700,11 +12060,15 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({
     );
   };
 
-  const exportExcel = () => productionAllowed() && downloadBinaryFile(
-    buildProductionXlsx(buildProductionData(items, language)),
-    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-    `mengkaile-production-${new Date().toISOString().slice(0, 10)}.xlsx`,
-  );
+  const exportExcel = async () => {
+    const decision = await confirmManufacturingRelease();
+    if (!decision.proceed) return;
+    downloadBinaryFile(
+      buildProductionXlsx(buildProductionData(items, language)),
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      `mengkaile-production-${new Date().toISOString().slice(0, 10)}.xlsx`,
+    );
+  };
 
   const importJson = (file?: File) => {
     if (!file) return;
@@ -11855,7 +12219,7 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({
     setImportTappingPrompt(null);
   };
 
-  const toCartItems = (): CartItem[] => {
+  const toCartItems = (acknowledgement?: ManufacturingAcknowledgement): CartItem[] => {
     const profileProduct = INITIAL_PRODUCTS.find((product) => product.type === ProductType.PROFILE)!;
     const plateProduct = INITIAL_PRODUCTS.find((product) => product.type === ProductType.ALUMINUM_PLATE)!;
     const pegboardProduct = INITIAL_PRODUCTS.find((product) => product.type === ProductType.PEGBOARD)!;
@@ -11979,6 +12343,50 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({
           remark: item.remark?.trim() || undefined,
         };
         return { id: makeId(), product, quantity: item.quantity, config, totalPrice };
+      }
+      if (item.kind === 'imported_component') {
+        // A source-model part is a real purchased part: the running estimate
+        // charges it through `getImportedComponentPrice`, so the cart has to
+        // carry the same line or the panel and the cart would disagree. A part
+        // the owner linked to a numbered accessory is billed and named as that
+        // catalog row; anything else keeps its own source identity at the
+        // confirmed per-piece rule. Identical placed parts merge downstream
+        // through the ordinary accessory grouping.
+        const importedPrice = getImportedComponentPrice(item);
+        const linkedAccessory = importedPrice.linkedAccessory;
+        const quantity = Math.max(1, Math.round(item.quantity || 1));
+        const lineId = linkedAccessory?.key
+          || item.partCatalogRef?.catalogItemId
+          || `diy-source-part-${item.id}`;
+        const config = {
+          type: 'profile_accessory',
+          profileSize: linkedAccessory?.series || item.accessoryProfileSize || '',
+          colorMode: 'natural',
+          colorId: item.colorId || 'natural',
+          colorName: getDesignerColorName(item.colorId || 'natural', language, item.kind),
+          quantities: { [lineId]: quantity },
+          totalQuantity: quantity,
+          unitTotal: totalPrice,
+          lines: [{
+            id: lineId,
+            code: linkedAccessory?.code ?? 0,
+            name: getItemLabel(item, language),
+            imageKey: linkedAccessory ? (linkedAccessory.imageKey || linkedAccessory.defId) : '',
+            quantity,
+            unitPrice: Number((totalPrice / quantity).toFixed(2)),
+            subtotal: totalPrice,
+            isBulk: quantity >= ACCESSORY_BULK_THRESHOLD,
+          }],
+          sourceRecordId: item.partCatalogRef?.sourceRecordId,
+          // Only a catalogue-linked part quotes back a numbered accessory.
+          catalogItemId: linkedAccessory?.defId,
+          importedSourcePart: !linkedAccessory,
+          priceBasis: importedPrice.basis,
+          diyPosition: item.position,
+          diyRotation: item.rotation,
+          remark: item.remark?.trim() || undefined,
+        };
+        return { id: makeId(), product: accessoryProduct, quantity, config, totalPrice };
       }
       const board12ShelfSupport = isBoard12ShelfSupport(item);
       const fixedRackHardware = isFixedRackHardware(item);
@@ -12118,7 +12526,15 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({
       },
     }));
     const groupedItems = groupDiyAccessoryCartItems(sourceTaggedItems);
-    if (!finishedFurnitureQuote) return groupedItems;
+    // The 凳子's 32 owner-confirmed fastener sets are not scene items, so they
+    // are appended as the priced accessory lines they are. A finished-furniture
+    // quote is a single fixed price and never contains a stool, so that branch
+    // is left alone.
+    if (!finishedFurnitureQuote) {
+      return [...groupedItems, ...stoolSupportFastenerCartItems(
+        stoolSupportFasteners, accessoryProduct, language, designSource, acknowledgement,
+      )];
+    }
 
     const targetTotal = Number(total.toFixed(1));
     const sourceTotal = groupedItems.reduce((sum, item) => sum + Math.max(0, Number(item.totalPrice || 0)), 0);
@@ -12194,8 +12610,9 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({
   };
 
   const addDesignToCart = async () => {
-    if (!productionAllowed()) return;
     if (!items.length) return;
+    const release = await confirmManufacturingRelease();
+    if (!release.proceed) return;
     const choice = cartItemCount > 0
       ? await requestImportConflictChoice('cart')
       : 'append';
@@ -12203,7 +12620,7 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({
       showNotice(t.importCancelled);
       return;
     }
-    onAddBatchToCart(toCartItems(), choice);
+    onAddBatchToCart(toCartItems(release.acknowledgement), choice);
     showNotice(t.cartAdded);
     window.setTimeout(() => navigate('/cart'), 450);
   };
@@ -13653,8 +14070,132 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({
           <button onClick={addDesignToCart} disabled={!items.length} className="mt-5 flex w-full items-center justify-center gap-2 rounded-2xl bg-blue-600 px-4 py-4 text-sm font-black text-white shadow-xl shadow-blue-600/20 transition hover:bg-blue-500 disabled:cursor-not-allowed disabled:bg-slate-300 disabled:shadow-none">
             <ShoppingCart className="h-5 w-5" />{t.addCart} · {currency}{total.toFixed(1)}
           </button>
+          {manufacturingRelease.applies && (
+            <button
+              type="button"
+              data-testid="diy-manufacturing-release-banner"
+              data-status={manufacturingRelease.blocking.length
+                ? 'blocked'
+                : manufacturingRelease.valid && manufacturingRelease.advisories.length ? 'acknowledgement-required' : 'clear'}
+              onClick={openManufacturingRelease}
+              className={`mt-2 flex w-full items-start gap-2 rounded-2xl border px-3 py-2.5 text-left text-[11px] font-bold leading-4 transition ${
+                manufacturingRelease.blocking.length
+                  ? 'border-rose-200 bg-rose-50 text-rose-800 hover:bg-rose-100'
+                  : 'border-amber-200 bg-amber-50 text-amber-800 hover:bg-amber-100'
+              }`}
+            >
+              <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+              <span>
+                {manufacturingRelease.blocking.length
+                  ? t.releaseBlockedTitle
+                  : manufacturingAcknowledgement ? t.releaseAcknowledged : t.releaseReviewAction}
+                {' · '}
+                {manufacturingRelease.issues.length}
+              </span>
+            </button>
+          )}
+          {stoolSupportFasteners.lines.length > 0 && (
+            <div
+              data-testid="diy-stool-support-fasteners"
+              className="mt-2 rounded-2xl border border-slate-200 bg-white px-3 py-2.5 text-[11px] leading-4 text-slate-600"
+            >
+              <p className="font-black text-slate-800">{t.releaseFastenersTitle}</p>
+              {stoolSupportFasteners.lines.map((line) => (
+                <p key={line.catalogItemId} className="mt-1 flex items-center justify-between gap-2">
+                  <span>{line.label} × {line.quantity}</span>
+                  <span className="shrink-0 font-bold text-slate-800">
+                    {currency}{line.unitPrice.toFixed(2)}
+                    {line.bulkApplied ? ` · ${language === 'cn' ? '批量价' : language === 'jp' ? 'ロット価格' : 'bulk'}` : ''}
+                  </span>
+                </p>
+              ))}
+              <p className="mt-1 flex items-center justify-between gap-2 border-t border-slate-100 pt-1 font-black text-slate-900">
+                <span>{t.fastenerPrice}</span><span>{currency}{stoolSupportFasteners.total.toFixed(2)}</span>
+              </p>
+              <p className="mt-1 text-[10px] text-slate-500">{t.releaseFastenersNote}</p>
+            </div>
+          )}
         </aside>
       </div>
+      {manufacturingReleaseTarget && (
+        <div
+          className="fixed inset-0 z-[200] flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-sm"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="diy-manufacturing-release-title"
+        >
+          <div className="flex max-h-[88vh] w-full max-w-xl flex-col rounded-3xl border border-white/70 bg-white p-6 shadow-2xl">
+            <div className={`flex items-center gap-2 ${manufacturingReleaseTarget.blocking.length ? 'text-rose-600' : 'text-amber-600'}`}>
+              <AlertTriangle className="h-5 w-5" />
+              <span className="text-[10px] font-black uppercase tracking-[0.2em]">
+                {manufacturingReleaseTarget.blocking.length ? t.releaseBlockedTitle : t.releaseTitle}
+              </span>
+            </div>
+            <h2 id="diy-manufacturing-release-title" className="mt-3 text-xl font-black text-slate-950">
+              {manufacturingReleaseTarget.blocking.length ? t.releaseBlockedTitle : t.releaseTitle}
+            </h2>
+            <p className="mt-2 text-sm font-bold leading-relaxed text-slate-600">
+              {manufacturingReleaseTarget.blocking.length ? t.releaseBlockedIntro : t.releaseIntro}
+            </p>
+            <div className="mt-4 min-h-0 flex-1 space-y-2 overflow-y-auto pr-1" data-testid="diy-manufacturing-release-issues">
+              {manufacturingReleaseTarget.issues.map((issue, index) => (
+                <p
+                  key={index}
+                  className={`rounded-2xl border px-4 py-3 text-xs font-bold leading-relaxed ${
+                    manufacturingReleaseTarget.blocking.includes(issue)
+                      ? 'border-rose-200 bg-rose-50 text-rose-800'
+                      : 'border-amber-200 bg-amber-50/70 text-amber-800'
+                  }`}
+                >
+                  {issue}
+                </p>
+              ))}
+            </div>
+            {manufacturingReleaseTarget.blocking.length !== 0 ? (
+              <button
+                type="button"
+                data-testid="diy-manufacturing-release-close"
+                onClick={() => resolveManufacturingRelease(false)}
+                className="mt-5 rounded-2xl bg-slate-900 px-4 py-3.5 text-sm font-black text-white transition hover:bg-slate-700"
+              >
+                {t.releaseCancel}
+              </button>
+            ) : (
+              <div className="mt-5 flex flex-col gap-2">
+                <label className="flex cursor-pointer items-start gap-2 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-xs font-bold leading-relaxed text-slate-700">
+                  <input
+                    type="checkbox"
+                    data-testid="diy-manufacturing-release-ack"
+                    checked={manufacturingReleaseAcknowledged}
+                    onChange={(event) => setManufacturingReleaseAcknowledged(event.target.checked)}
+                    className="mt-0.5 h-4 w-4 shrink-0"
+                  />
+                  <span>{t.releaseAckLabel}</span>
+                </label>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    data-testid="diy-manufacturing-release-cancel"
+                    onClick={() => resolveManufacturingRelease(false)}
+                    className="rounded-2xl border border-slate-200 px-4 py-3 text-sm font-black text-slate-600 transition hover:bg-slate-50"
+                  >
+                    {t.releaseCancel}
+                  </button>
+                  <button
+                    type="button"
+                    data-testid="diy-manufacturing-release-confirm"
+                    disabled={!manufacturingReleaseAcknowledged}
+                    onClick={() => resolveManufacturingRelease(true)}
+                    className="rounded-2xl bg-blue-600 px-4 py-3 text-sm font-black text-white shadow-lg shadow-blue-600/20 transition hover:bg-blue-500 disabled:cursor-not-allowed disabled:bg-slate-300 disabled:shadow-none"
+                  >
+                    {t.releaseConfirm}
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
       {importConflictTarget && (
         <div
           className="fixed inset-0 z-[200] flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-sm"

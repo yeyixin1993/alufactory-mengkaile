@@ -140,9 +140,22 @@ for (const dimensions of [STOOL_BASELINE, { widthMm: 600, depthMm: 600, heightMm
   const source = createDesignSourceInfo('parametric_template', { modelName: '复古边几凳' });
   const document = buildDesignDocument(synchronized, 'cn', source);
   assert.ok('productionRelease' in document);
-  assert.equal(document.productionRelease.status, 'blocked', 'connection completeness never releases the source mechanism/load rating');
+  assert.equal(document.productionRelease.blocking.length, 0,
+    'A complete native connection system has no computed assembly failure');
+  assert.equal(document.productionRelease.status, 'requires_acknowledgement',
+    'Connection completeness never releases the source mechanism/load rating — that statement has to be accepted first');
+  assert.equal('production' in document, false, 'An unaccepted design carries no production projection');
   assert.equal(document.stoolAssemblyReview?.totals.mounts, 32, 'editable export includes the recomputed whole-assembly review');
   assert.equal(document.stoolAssemblyReview?.complete, false);
+  const accepted = buildDesignDocument(synchronized, 'cn', source, null, {
+    manufacturingAcknowledgement: {
+      advisories: document.productionRelease.advisories,
+      acknowledgedAt: '2026-10-03T00:00:00.000Z',
+    },
+  });
+  assert.equal(accepted.productionRelease.status, 'acknowledged',
+    'Accepting the outstanding statements releases the design without claiming they were verified');
+  assert.ok('production' in accepted, 'An accepted design ships its production projection');
   const reopened = synchronizeDesignerSceneItems(normalizeDesignItems(JSON.parse(JSON.stringify(document)).items));
   assert.equal(inspectGuidedConnectionSystem(reopened, scope).valid, true, 'saved connections remain valid on reopening');
   assert.ok(inspectDesignerManufacturingPrecheck(reopened).scopes.includes('parametric_stool_draft'));
@@ -180,7 +193,7 @@ for (const dimensions of [STOOL_BASELINE, { widthMm: 600, depthMm: 600, heightMm
     cylinderM8x45: holeCount - internalHoles.length, no1: 0, inspection,
     checkScope: completed.check.scope, assemblyReview: completed.assemblyReview,
     holeAndScrewAxisToleranceMm: 0.002, synchronization: 'passed', completionIdempotency: 'passed', saveReopen: 'passed',
-    manufacturingRelease: 'blocked', pending: ['原机构与脚轮/板件安装工艺和承载仍需核定，几何通过不代表生产放行'] });
+    manufacturingRelease: 'requires_acknowledgement', pending: ['原机构与脚轮/板件安装工艺和承载仍需核定，几何通过不代表生产放行，须客户确认后方可下单'] });
 }
 assert.equal(JSON.stringify(asset), originalAsset, 'connection redesign never mutates the archived source');
 assert.deepEqual(failures, []);

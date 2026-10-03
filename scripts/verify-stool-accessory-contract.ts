@@ -77,13 +77,27 @@ const assertDraftList = (items: Scene, expectedAccessoryCount: number) => {
 };
 const saveDraft = (items: Scene) => {
   const precheck = inspectDesignerManufacturingPrecheck(items);
-  assert.equal(precheck.valid, false);
+  // Source accessories are all catalogue-identified, so nothing is *computed*
+  // to be wrong: the design is releasable once its outstanding statements are
+  // accepted, and it still ships no production projection before that.
+  assert.equal(precheck.blocking.length, 0);
+  assert.equal(precheck.valid, true);
+  assert.ok(precheck.advisories.length > 0);
   assert.ok(precheck.scopes.includes('source_mesh_draft'));
   const document = buildDesignDocument(items, 'cn', provenance);
   assert.ok('productionRelease' in document);
-  assert.equal(document.productionRelease.status, 'blocked');
+  assert.equal(document.productionRelease.status, 'requires_acknowledgement');
   assert.equal('production' in document, false, 'Editable files must not present draft accessories as manufacturing-ready');
   assertPriceFree(document, 'editableDocument');
+  const accepted = buildDesignDocument(items, 'cn', provenance, null, {
+    manufacturingAcknowledgement: {
+      advisories: document.productionRelease.advisories,
+      acknowledgedAt: '2026-10-03T00:00:00.000Z',
+    },
+  });
+  assert.equal(accepted.productionRelease.status, 'acknowledged');
+  assert.ok('production' in accepted);
+  assertPriceFree(accepted, 'acknowledgedDocument');
   return document;
 };
 
@@ -207,7 +221,7 @@ writeFileSync(output, JSON.stringify({
   standaloneAccessories: inserted.length, reusedStoolAccessories: originalAccessories.length,
   accessoriesAfterAppendAndReopen: catalogItems(combinedReopened).length,
   identities: STOOL_ACCESSORY_CATALOG.map(entry => entry.catalogItemId),
-  materialState: 'design_only', manufacturingStatus: 'blocked', priceFieldsPresent: false,
+  materialState: 'design_only', manufacturingStatus: 'requires_acknowledgement', priceFieldsPresent: false,
   checks: ['palette loader → normalize → synchronize', 'individual downloaded JSON reopen',
     '13 original meshes and designed poses retained, including measured handle alignment', 'material-list identities and quantities',
     'editable document → JSON reopen → append → save → reopen',

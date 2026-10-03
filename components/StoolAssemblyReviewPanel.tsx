@@ -2,6 +2,7 @@ import React, { useMemo } from 'react';
 import { ChevronDown, LocateFixed, Wrench } from 'lucide-react';
 import type { Language } from '../types';
 import {
+  materializeStoolSupportFasteners,
   reviewStoolAssembly,
   STOOL_ASSEMBLY_INSTALLATION_STEPS,
   type StoolAssemblyGroupReview,
@@ -21,10 +22,16 @@ const COPY = {
     distinction: '框内连接检查不等于整凳已装好。',
     supports: '固定件 / 应有', mounts: '已对位 / 应有安装位',
     contactOnly: '孔位对准仅表示几何贴合，尚未确认紧固。',
-    candidates: '紧固件候选',
-    screws: (n: number) => `${n} 颗 M6×12 圆柱头螺丝`,
-    nuts: (n: number) => `${n} 个 3030 M6 槽螺母`,
-    candidateNote: '未选定采购型号，未生成紧固件实体；垫片、啮合量与工具净空待核。',
+    candidates: '层间紧固件（规格已确认）',
+    screws: (n: number) => `${n} 颗 M6×12 圆柱头内六角螺丝`,
+    nuts: (n: number) => `${n} 个 3030 M6 T型螺母`,
+    fastenerSpecNote: '业主已确认采购规格并计入报价；安装垫片、啮合量与工具净空仍待实物核定。',
+    fastenerTotal: '紧固件合计',
+    fastenerNotPlaced: '有固定件未对准，暂不为其购买紧固件。',
+    sold: (quantity: number, unitPrice: number, subtotal: number) => `${quantity} 件 · ¥${unitPrice}/件 = ¥${subtotal}`,
+    bulkApplied: '已按批量价',
+    blocking: (n: number) => `${n} 项装配问题需先修正`,
+    advisory: (n: number) => `${n} 项待实物核对`,
     attention: '存在缺件、重复件或安装位失配，展开对应凳子定位。',
     assembly: (n: number) => `凳子 ${n}`,
     frames: (n: number, groups: number) => `三层框架 · ${n} 根型材 · ${groups} 个框内连通分量`,
@@ -44,10 +51,16 @@ const COPY = {
     distinction: 'Frame-joint checks do not mean the complete stool is assembled.',
     supports: 'Supports / expected', mounts: 'Aligned / expected mounts',
     contactOnly: 'Aligned holes indicate geometric contact, not verified fastening.',
-    candidates: 'Fastener candidates',
+    candidates: 'Tier fasteners (specification confirmed)',
     screws: (n: number) => `${n} M6×12 socket-head screws`,
     nuts: (n: number) => `${n} 3030 M6 T-slot nuts`,
-    candidateNote: 'No procurement model selected or fastener bodies generated. Washers, engagement and tool clearance remain unverified.',
+    fastenerSpecNote: 'The owner confirmed the specification and it is priced in the quote. Washers, thread engagement and tool clearance are still verified on hardware.',
+    fastenerTotal: 'Fastener subtotal',
+    fastenerNotPlaced: 'A support is unaligned, so no hardware is bought for it yet.',
+    sold: (quantity: number, unitPrice: number, subtotal: number) => `${quantity} pcs · ¥${unitPrice}/pc = ¥${subtotal}`,
+    bulkApplied: 'bulk price',
+    blocking: (n: number) => `${n} assembly problem(s) to fix first`,
+    advisory: (n: number) => `${n} item(s) to verify on hardware`,
     attention: 'Missing, duplicate or misaligned parts need review. Expand the stool to locate them.',
     assembly: (n: number) => `Stool ${n}`,
     frames: (n: number, groups: number) => `Three-tier frame · ${n} profiles · ${groups} frame connection groups`,
@@ -67,10 +80,16 @@ const COPY = {
     distinction: '枠内接続の確認だけでは、スツール全体の組立完了にはなりません。',
     supports: '固定金具 / 必要数', mounts: '位置一致 / 必要取付位置',
     contactOnly: '穴の一致は幾何学的な接触です。締結の確認は未完了です。',
-    candidates: '締結部品の候補',
+    candidates: '層間の締結部品（仕様確定済み）',
     screws: (n: number) => `M6×12 六角穴付きボルト ${n} 本`,
     nuts: (n: number) => `3030 M6 溝ナット ${n} 個`,
-    candidateNote: '購入型番は未選定、締結部品の実体も未生成です。ワッシャー・ねじ掛かり・工具空間は要確認です。',
+    fastenerSpecNote: '仕様は確定済みで見積に含まれます。ワッシャー・ねじ掛かり・工具空間は実物での確認が必要です。',
+    fastenerTotal: '締結部品 合計',
+    fastenerNotPlaced: '位置が一致しない固定金具があるため、その分の締結部品は計上していません。',
+    sold: (quantity: number, unitPrice: number, subtotal: number) => `${quantity} 個 · ¥${unitPrice}/個 = ¥${subtotal}`,
+    bulkApplied: 'ロット価格',
+    blocking: (n: number) => `先に修正が必要な組立問題 ${n} 件`,
+    advisory: (n: number) => `実物確認が必要な項目 ${n} 件`,
     attention: '不足・重複・取付位置の不一致があります。該当スツールを開いて確認してください。',
     assembly: (n: number) => `スツール ${n}`,
     frames: (n: number, groups: number) => `三層フレーム · 型材 ${n} 本 · 枠内接続 ${groups} 群`,
@@ -116,17 +135,21 @@ const hasAssemblyIssues = (assembly: StoolAssemblyGroupReview) => assembly.missi
 
 const StoolAssemblyReviewPanel: React.FC<StoolAssemblyReviewPanelProps> = ({ items, language = 'cn', onFocusItem }: StoolAssemblyReviewPanelProps) => {
   const review = useMemo(() => reviewStoolAssembly(items), [items]);
+  const fasteners = useMemo(() => materializeStoolSupportFasteners(items), [items]);
   if (!review.applicable) return null;
   const copy = COPY[language];
   const totals = review.totals;
   const hasIssues = review.assemblies.some(hasAssemblyIssues);
+  const blockingCount = review.blockingIssues.length;
   const holeTitle = (hole: StoolMountReview) => `${copy.statuses[hole.matchStatus]} · ${hole.worldCenterMm.map(n => Number(n.toFixed(2))).join(', ')} mm`;
 
   return (
     <section data-testid="stool-assembly-review" data-status={hasIssues ? 'needs-alignment' : 'fastening-unverified'} className="rounded-xl border border-slate-200 bg-white p-3 text-slate-700">
       <header className="flex flex-wrap items-center justify-between gap-2">
         <h3 className="flex items-center gap-1.5 text-xs font-bold text-slate-900"><Wrench size={14} aria-hidden="true" />{copy.title}</h3>
-        <span className="rounded-md bg-amber-50 px-2 py-1 text-[10px] font-semibold text-amber-800">{copy.pending}</span>
+        <span className={`rounded-md px-2 py-1 text-[10px] font-semibold ${blockingCount ? 'bg-rose-50 text-rose-800' : 'bg-amber-50 text-amber-800'}`}>
+          {blockingCount ? copy.blocking(blockingCount) : copy.pending}
+        </span>
       </header>
       <p className="mt-2 text-xs font-semibold leading-5">{copy.distinction}</p>
       <div className="mt-2 grid grid-cols-2 gap-2 text-[10px]">
@@ -134,12 +157,31 @@ const StoolAssemblyReviewPanel: React.FC<StoolAssemblyReviewPanelProps> = ({ ite
         <div className="rounded-lg bg-slate-50 px-2.5 py-2"><span className="block text-slate-500">{copy.mounts}</span><strong data-testid="stool-mount-count" className="mt-0.5 block text-base text-slate-900">{totals.matchedMounts} / {totals.expectedSupports * 2}</strong></div>
       </div>
       <p className="mt-1.5 text-[10px] leading-4 text-slate-500">{copy.contactOnly}</p>
-      <div data-testid="stool-fastener-candidates" className="mt-3 border-t border-slate-100 pt-2 text-[11px] leading-5">
+      <div data-testid="stool-fastener-candidates" data-spec-status={review.fastenerSpec.source} className="mt-3 border-t border-slate-100 pt-2 text-[11px] leading-5">
         <p className="font-semibold">{copy.candidates}</p>
         <p>{copy.screws(totals.candidateScrews)}<br />{copy.nuts(totals.candidateNuts)}</p>
-        <p className="mt-1 text-[10px] leading-4 text-slate-500">{copy.candidateNote}</p>
+        <ul data-testid="stool-fastener-lines" className="mt-1 space-y-0.5">
+          {fasteners.lines.map((line) => (
+            <li key={line.catalogItemId} className="flex flex-wrap items-baseline justify-between gap-1">
+              <span className="font-semibold text-slate-800">{line.label}</span>
+              <span className="text-slate-500">{copy.sold(line.quantity, line.unitPrice, line.subtotal)}
+                {line.bulkApplied ? ` · ${copy.bulkApplied}` : ''}</span>
+            </li>
+          ))}
+        </ul>
+        {fasteners.lines.length > 0
+          ? <p data-testid="stool-fastener-total" className="mt-1 flex items-baseline justify-between gap-1 font-bold text-slate-900"><span>{copy.fastenerTotal}</span><span>¥{fasteners.total.toFixed(2)}</span></p>
+          : <p className="mt-1 text-[10px] leading-4 text-amber-800">{copy.fastenerNotPlaced}</p>}
+        <p className="mt-1 text-[10px] leading-4 text-slate-500">{copy.fastenerSpecNote}</p>
       </div>
-      {hasIssues && <p role="status" data-testid="stool-assembly-issues" className="mt-2 rounded-lg bg-rose-50 px-2 py-1.5 text-[11px] leading-5 text-rose-800">{copy.attention}</p>}
+      {blockingCount > 0 && <p role="status" data-testid="stool-assembly-issues" className="mt-2 rounded-lg bg-rose-50 px-2 py-1.5 text-[11px] leading-5 text-rose-800">{copy.attention}</p>}
+      {blockingCount === 0 && review.advisoryNotes.length > 0 && (
+        <ul data-testid="stool-assembly-advisories" className="mt-2 space-y-1">
+          {review.advisoryNotes.map((note, index) => (
+            <li key={index} className="rounded-lg bg-amber-50 px-2 py-1.5 text-[11px] leading-5 text-amber-800">{note}</li>
+          ))}
+        </ul>
+      )}
       <div className="mt-3 space-y-2">
         {review.assemblies.map((assembly, index) => (
           <details key={assembly.scopeId} open={hasAssemblyIssues(assembly)} className="group rounded-lg border border-slate-200" data-testid="stool-assembly-group">

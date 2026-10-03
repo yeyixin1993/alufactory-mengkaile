@@ -140,18 +140,19 @@ assert.equal(Number(upgradedTotal.toFixed(2)), 386.6, '升级诺贝轮子方案�
 // the 28 颗 3030 螺丝 (¥0.75 each) instead of the old ¥479.4.
 // The sixteen 固定支座 moved from the ¥2 support basis to the 3号角码 catalog
 // tier (¥4.5), which is the ¥40 difference from the earlier ¥735 / ¥847 totals.
-// The upgraded-wheel total plus the 安能 freight to 浙江 is the current landing
-// figure — see `npm run test:stool-landed-total`.
+// These totals are the *scene item* subtotal: the 32 tier fastener sets are not
+// scene items, so the cart adds them as their own priced lines (+¥32) and the
+// landing figure is ¥952 — see `npm run test:stool-landed-total`.
 const totalFor = (designItems: typeof items) => Number(designItems.reduce((sum, item) => sum + calculatePrice(item), 0).toFixed(1));
 const standardTotal = totalFor(items);
 const upgradedDesignTotal = totalFor(upgraded as typeof items);
 assert.equal(upgradedDesignTotal - standardTotal, 112, '升级四只诺贝轮子应比普通方案贵 ¥112');
 assert.equal(standardTotal, 775, '凳子模板（普通轮子）整单应为 ¥775，而不是导入件归零时的 ¥479.4');
-assert.equal(upgradedDesignTotal, 887, '凳子模板（升级诺贝轮子）整单应为 ¥887（＋安能运费 ¥33 = 落地 ¥920）');
+assert.equal(upgradedDesignTotal, 887, '凳子模板（升级诺贝轮子）零件小计应为 ¥887；层间紧固件 ¥32 由购物车单独成行 ⇒ 落地 ¥952（安能 ¥33）');
 
 console.log('Designer component pricing regression checks passed.');
 console.log(`  imported components (standard wheels): ¥${importedTotal.toFixed(2)}`);
 console.log(`  imported components (upgraded wheels): ¥${upgradedTotal.toFixed(2)}`);
 console.log(`  whole 凳子 design (standard wheels): ¥${standardTotal.toFixed(1)}`);
-console.log(`  whole 凳子 design (upgraded wheels): ¥${upgradedDesignTotal.toFixed(1)}`);
+console.log(`  whole 凳子 design (upgraded wheels): ¥${upgradedDesignTotal.toFixed(1)}（+ 紧固件 ¥32 ⇒ 落地 ¥952）`);
 console.log(`  pricing scheme: ${JSON.stringify(IMPORTED_COMPONENT_PRICING_SCHEME)}`);

@@ -4,6 +4,7 @@ import path from 'node:path';
 import { gunzipSync } from 'node:zlib';
 import { buildDesignDocument, calculatePrice } from '../components/DIYDesigner';
 import { classifyImportedComponent } from '../utils/designerComponentPricing';
+import { materializeStoolSupportFasteners } from '../utils/stoolAssemblyReview';
 import { inspectDesignerImportItems } from '../utils/designerImportPreflight';
 import { validateImportedSourceMeshFileSize } from '../utils/importedSourceMesh';
 import {
@@ -37,17 +38,27 @@ import type { DesignSourceInfo } from '../types';
  * from the generic ¥2 support basis to the catalog tier, +¥40. Nothing else in
  * the design changed.
  *
+ * They moved again to **¥919 / ¥952** when the sixteen supports' tier fasteners
+ * stopped being an unverified advisory and became real purchasable lines: 32
+ * sets of M6×12 + 3030 T-nut at the catalog's 20-piece bulk tier, ¥16 + ¥16.
+ * Again no item price moved — this is hardware the customer previously had to
+ * source separately to be able to assemble the stool at all. The fastener sets
+ * are derived from the model rather than stored, so the reopened file
+ * reproduces them exactly.
+ *
  * Usage:
- *   npm run export:stool-920
- *   npm run export:stool-920 -- /absolute/path/out.json
+ *   npm run export:stool-952
+ *   npm run export:stool-952 -- /absolute/path/out.json
  */
 
 const DESIGN_SUBTOTAL_CNY = 887.0;
-const LANDED_TOTAL_CNY = 920;
+const SUPPORT_FASTENER_CNY = 32;
+const QUOTE_SUBTOTAL_CNY = 919;
+const LANDED_TOTAL_CNY = 952;
 const DESTINATION_PROVINCE = '浙江';
 
 const fixturePath = path.resolve('scripts/fixtures/stool-import-20260930.json.gz');
-const defaultFileName = 'mengkaile-凳子-920-含诺贝轮.json';
+const defaultFileName = `mengkaile-凳子-${LANDED_TOTAL_CNY}-含诺贝轮.json`;
 const requestedPath = process.argv[2];
 const outputPath = requestedPath
   ? path.resolve(requestedPath)
@@ -109,7 +120,20 @@ if (!preflight.valid) {
 }
 const subtotal = Number(reopened.reduce((sum, item) => sum + calculatePrice(item as any), 0).toFixed(1));
 if (subtotal !== DESIGN_SUBTOTAL_CNY) {
-  throw new Error(`设计估价小计 ¥${subtotal} 与冻结的 ¥${DESIGN_SUBTOTAL_CNY} 不一致，落地价不再是 ¥${LANDED_TOTAL_CNY}。`);
+  throw new Error(`零件小计 ¥${subtotal} 与冻结的 ¥${DESIGN_SUBTOTAL_CNY} 不一致，落地价不再是 ¥${LANDED_TOTAL_CNY}。`);
+}
+// The fasteners are derived from the reopened geometry, so a file that lost its
+// supports would silently ship a cheaper cart. Assert them on the same reopened
+// items the designer would price.
+const fasteners = materializeStoolSupportFasteners(
+  reopened as unknown as Parameters<typeof materializeStoolSupportFasteners>[0],
+);
+if (fasteners.total !== SUPPORT_FASTENER_CNY) {
+  throw new Error(`层间紧固件 ¥${fasteners.total} 与冻结的 ¥${SUPPORT_FASTENER_CNY} 不一致，落地价不再是 ¥${LANDED_TOTAL_CNY}。`);
+}
+const quoteSubtotal = Number((subtotal + fasteners.total).toFixed(1));
+if (quoteSubtotal !== QUOTE_SUBTOTAL_CNY) {
+  throw new Error(`设计估价 ¥${quoteSubtotal} 与冻结的 ¥${QUOTE_SUBTOTAL_CNY} 不一致，落地价不再是 ¥${LANDED_TOTAL_CNY}。`);
 }
 
 const serialized = JSON.stringify(document);
@@ -131,4 +155,5 @@ console.log(`  合同: mengkaile-diy / schemaVersion ${document.schemaVersion}�
 console.log(`  零件: ${reopened.length} 件 · ${Object.entries(counts).map(([kind, count]) => `${kind}×${count}`).join(' / ')}`);
 console.log(`  几何: ${uniqueGeometryCount} 份唯一记录承载 ${counts.imported_component} 个导入件放置`);
 console.log(`  诺贝轮子: ${upgradedWheelCount} 件（¥50/件）`);
-console.log(`  设计估价小计: ¥${subtotal} → 发${DESTINATION_PROVINCE}落地 ¥${LANDED_TOTAL_CNY}`);
+console.log(`  零件小计: ¥${subtotal} + 层间紧固件 ¥${fasteners.total}（${fasteners.sets} 套）= 设计估价 ¥${quoteSubtotal}`);
+console.log(`  发${DESTINATION_PROVINCE}落地: ¥${LANDED_TOTAL_CNY}`);

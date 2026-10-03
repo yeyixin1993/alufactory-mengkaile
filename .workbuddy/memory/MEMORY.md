@@ -13,10 +13,11 @@
 - `tsc --noEmit` 存在 5 个既有报错（与业务无关，改动时不要把它们当成自己引入的）：
   `alufactory-backend/FRONTEND_SERVICE.ts` 的 `@/config`、`App.tsx` 的 `setTimeout`、
   `components/PrintableCatalog.tsx` 的 3 个 `key` 属性。
-- **给业主「可直接导入设计器」的成品 JSON** 用 `npm run export:stool-920`（`scripts/export-stool-design.ts`）：
+- **给业主「可直接导入设计器」的成品 JSON** 用 `npm run export:stool-952`（`scripts/export-stool-design.ts`）：
   从冻结夹具重建凳子参考设计、给脚轮打 `wheelGrade: 'upgraded'`、过设计器真实预检
-  `inspectDesignerImportItems` + `calculatePrice` 断言小计 ¥887.0，默认写到
-  `~/Downloads/mengkaile-凳子-920-含诺贝轮.json`（可 `-- <绝对路径>`）。
+  `inspectDesignerImportItems` + `calculatePrice` 断言零件小计 ¥887.0（层间紧固件 ¥32 另计），
+  默认写到 `~/Downloads/mengkaile-凳子-952-含诺贝轮.json`（可 `-- <绝对路径>`）。
+  （脚本名 2026-10-03 从 `export:stool-920` 改名为 `export:stool-952`，旧名已移除。）
   **仍然必须紧凑 `JSON.stringify`**（格式化会成倍膨胀，逼近 128 MiB 导入上限
   `MAX_IMPORTED_SOURCE_FILE_BYTES`）；共享几何后成品 **11.47 MB**（schemaVersion 3），
   旧的内嵌形式是 68.7 MB。
@@ -33,7 +34,7 @@
     `expandImportedSourceGeometries` 展开，因为预检要看到完整网格（缺字段会被 fail-closed 拒绝）。
     **绝不给零件做精度取整/降采样来省体积**——那会破坏配件几何签名与目录身份。
 - 回归：`npm run test:source-geometry-sharing`（往返无损 + 配件身份 + 价格 + 四种坏文件被拒）。
-  导出给业主看的成品设计用 `npm run export:stool-920`（见下）。
+  导出给业主看的成品设计用 `npm run export:stool-952`（见下）。
 - **safe-delete shim 是按「回合」累计计数的**：同一回合里连续跑多个 `vite --emptyOutDir`，
   累计删除量一旦超过阈值（50），之后连删一个 `.DS_Store` 都会失败。批量跑回归 / 构建前，
   先用 Python 把 `.verify*-dist`（还有 `.catalog-export`、`dist`）的内容清空，就能一次全过。
@@ -112,15 +113,72 @@
     保留目录身份与单价（生成型螺丝靠它定价），但被 `CUSTOMER_ACCESSORY_ROWS` /
     `CUSTOMER_ACCESSORY_DEFINITIONS` 过滤出所有客户端列表（商城配件页、快速报价、纸质 VIP 价目表）。
     **`ACCESSORY_ROWS` 必须保持完整**（计价解析器读它），只在客户端消费点用 CUSTOMER_*。
-  - **¥920 落地价基线**：凳子参考设计（123 件、升级诺贝轮子、发浙江）落地 = 设计估价 ¥887.0 +
-    **安能运费 ¥33**（计费 11kg = 型材 8.4 + 海洋板 2.16，未超长）。**运费档位业主已确认为安能**，
-    不是「auto 碰巧选中最便宜的那个」——改价时不要再在普通/顺丰/安能里重挑。
+  - **¥952 落地价基线**：凳子参考设计（123 件、升级诺贝轮子、发浙江）落地 = 设计估价 ¥919
+    （零件 ¥887.0 + **层间紧固件 ¥32**）+ **安能运费 ¥33**（计费 11kg = 型材 8.4 + 海洋板 2.16，未超长）。
+    **运费档位业主已确认为安能**，不是「auto 碰巧选中最便宜的那个」——改价时不要再在普通/顺丰/安能里重挑。
     拉手/装饰料的数字就是按 ¥87.12 校准的，不是拍脑袋。
-    （¥880 是 2026-10-03 关联 3号角码**之前**的值；差额 ¥40 = 16 件 × (¥4.5 − ¥2)。）
+    （¥920 是 2026-10-03 关联 3号角码后的值；¥952 = ¥920 + 32 套紧固件 ¥32。）
+  - **16 个三层框架固定件需要 32 套紧固件（M6×12 杯头 + 3030 M6 T 型螺母），已做实**（2026-10-03）：
+    定价与描述统一在 `utils/stoolAssemblyReview.ts` 的 `materializeStoolSupportFasteners` /
+    `STOOL_SUPPORT_FASTENER_SPEC`。32 套 > `ACCESSORY_BULK_THRESHOLD`(20) ⇒ 批量价 ¥0.5/件，
+    ¥16 + ¥16 = ¥32。购物车是**计价配件行**（`stoolSupportFastenerCartItems`），工厂单是 2 行
+    **无价派生行**（`type: 'screw'`，`buildProductionData` 里 `stoolSupportFastenerParts`）。
+    **它们刻意不是场景 item**：设计器螺丝身份只允许「每 (系列, 头型) 一条下单规格」，
+    32 条场景螺丝会和已有的 28 颗槽内 M8×45 撞身份。
   - 回归：`npm run test:component-pricing`、`test:screw-pricing`、`test:stool-landed-total`、
-    `test:designer-accessory-link`，用凳子夹具冻结基线 —— 导入件标准轮 ¥274.6 / 升级轮 ¥386.6、
-    螺丝 28 × ¥0.75 = ¥21，整凳普通轮 ¥775.0、升级轮 ¥887.0、发浙江落地 ¥920；
-    对照全部归零时的旧值 ¥479.4。
+    `test:designer-accessory-link`、`test:designer-release-gate`，用凳子夹具冻结基线 ——
+    导入件标准轮 ¥274.6 / 升级轮 ¥386.6、螺丝 28 × ¥0.75 = ¥21，整凳普通轮 ¥775.0、
+    升级轮 ¥887.0、发浙江落地 ¥920（+ 紧固件 ¥32 ⇒ ¥952）；对照全部归零时的旧值 ¥479.4。
   - 型材按**长度**计价，加工费**按件**收（通孔 ¥1 / 沉头 ¥1.8 / 每端攻丝 ¥1.5·口），
     且 **20–100mm 的短件每根再加 ¥5 附加费** → 80mm 小件（材料 ¥2.32）实收 ¥10.32，比 300mm 光料还贵。
   - 板材有 **0.2 m² 最低计价面积**（300×300 实际 0.09m² 按 0.2m² 计），海洋板 18mm 本色 200/m²、彩色 +100/m²。
+
+## 制造放行门禁（2026-10-03，B+C 方案）
+
+- `inspectDesignerManufacturingPrecheck(items)` 返回 `DesignerManufacturingRelease { applies, valid, scopes,
+  blocking, advisories, issues }`，**两类「还没好」必须分开**：
+  - `blocking` = **算出来的失败**（源件无目录身份 ⇒ 无价、真实装配错误）。**客户点同意也清不掉，永远拦住下单。**
+  - `advisories` = **已知未验证的物理声明**（源件加工/紧固/安装、32 套紧固件实物安装验证、整凳板件固定/
+    脚轮接口/层间紧固/承载）。**读一次 + 勾选确认即可放行**，并写进订单与工厂单。
+  - `valid` = 「没有阻断」，**不是**「全部验证完成」。
+- 决策是**纯函数** `decideDesignerReleaseGate(release, accepted)` → `'proceed' | 'blocked' | 'acknowledge'`，
+  shell 与回归共用一条规则。**声明一变，旧确认立即失效**（部分/过期确认都不放行）。
+- `buildDesignDocument` 写 `productionRelease.status = blocked | requires_acknowledgement | acknowledged`，
+  **只有 `acknowledged` 才写 `production` 块**。UI：`diy-manufacturing-release-banner` / `-title` /
+  `-issues` / `-ack` / `-confirm` / `-cancel`；`exportJson` / `exportExcel` / `addDesignToCart` 都是 async，
+  先 `await confirmManufacturingRelease()`。
+- 回归：`npm run test:designer-release-gate`（已并入 `test:stool-all`）。
+
+## 往购物车加新的零件类型时必须加分支（曾因此线上崩过一次）
+
+- **`toCartItems` 的逐件 map 每个 `item.kind` 都必须有分支**。最后那个「通用配件」分支假设
+  `accessoryDefinition[item.kind]` 存在；一旦某个 kind 没被前面的分支覆盖（当初是 `imported_component`），
+  它就是 `undefined`，生成的行 `id`/`accessoryId` 变成 `undefined`，最终抛
+  `TypeError: Cannot read properties of undefined (reading 'id')`，且是**在 promise 里**（`unhandledrejection`）。
+  `imported_component` 分支 2026-10-03 已补（与运行中估价同源：`getImportedComponentPrice` 定价/basis、
+  `getItemLabel` 取名、`linkedAccessory?.key` 作行 id、按 `ACCESSORY_BULK_THRESHOLD` 判批量，产品用
+  `accessoryProduct`、`config.type = 'profile_accessory'`）。
+- **它潜伏的原因**：门禁把导入件设计挡在生产之外，**从没有导入件设计走到过购物车**。
+  以后再放开某类设计进入下单，务必先想一遍「这条路以前有真实流量吗」。
+
+## 用真实浏览器给设计器做端到端冒烟（agent-browser 配方）
+
+本环境装的是 `agent-browser`（`npm install -g agent-browser`），跑之前把托管 Node 放到 PATH 前面。
+把 `dist` 用 `run_in_background` 常驻起来（**`nohup ... &` 在本回合结束会被回收**）：
+
+```
+/usr/bin/python3 -m http.server 4180 --bind 127.0.0.1 --directory dist   # run_in_background: true
+```
+
+配方（按顺序）：
+1. 先挂钩子，否则「promise 里的异常」抓不到：
+   `agent-browser eval` 里 `addEventListener('unhandledrejection'|'error')`，把 `window.__rej/__err` 记下来。
+2. `agent-browser open "http://127.0.0.1:4180/#/diy-designer"`（**hash 路由**）。
+3. 导入设计：**上传到隐藏 input** `input[type=file][accept*="json"]`，不要去找菜单按钮。
+4. **导入后会先弹「导入型材攻丝设置」对话框，必须先关掉**（选「保留原有攻丝设置」），否则后面所有点击都被挡。
+5. **长页面里首屏之下的按钮 `agent-browser click` 会点空**：先 `el.scrollIntoView({block:'center'})`，
+   再用 `el.click()`（React 合成事件照常触发）。
+6. 断言：`location.hash` 变成 `#/cart`、`window.__rej/__err` 为 `null`、购物车文本里有预期行
+   （如 `3号角码 · 3030`、`M6×12 圆柱头内六角螺丝`、`3030 M6 T型螺母`）。
+7. 结束务必 `agent-browser close`。
+

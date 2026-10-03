@@ -1,6 +1,8 @@
 import { Euler, Matrix4, Vector3 } from 'three';
 import type { ImportedSourceMesh } from './importedSourceMesh';
 import { STOOL_ACCESSORY_SOURCE_SHA256 } from '../data/stoolAccessoryCatalog';
+import { ACCESSORY_ROWS } from '../data/accessoryCatalog';
+import { resolveAccessoryUnitPrice } from './accessoryQuote';
 
 type Point = [number, number, number];
 export interface StoolAssemblyReviewItem {
@@ -31,7 +33,7 @@ export interface StoolMountReview {
 export interface StoolFastenerCandidate {
   catalogItemId: string;
   label: string;
-  status: 'candidate_unverified';
+  status: 'candidate_unverified' | 'owner_confirmed';
   supplierSku: null;
   note: string;
 }
@@ -42,7 +44,10 @@ export interface StoolSupportReview {
   tier: 'lower_fixed_to_middle' | 'upper_middle_to_seat';
   holes: StoolMountReview[];
   matchedProfileIds: string[];
+  /** The physical fastening itself is still unverified on hardware. */
   fasteningStatus: 'unverified';
+  /** Whether the *purchasing specification* has been decided. */
+  fastenerSpecStatus: 'owner_confirmed';
   candidateFastener: StoolFastenerCandidate;
   candidateNut: StoolFastenerCandidate;
 }
@@ -60,6 +65,18 @@ export interface StoolAssemblyGroupReview {
   missingSupportCount: number;
   missingSupportLabels: string[];
   installationSteps: readonly string[];
+  /**
+   * Computed assembly failures. These keep the design out of production: they
+   * mean the model itself is wrong, not that a physical check is outstanding.
+   */
+  blockingIssues: string[];
+  /**
+   * Known-unverified statements. They are true of every stool design and cannot
+   * be resolved by the model, so they do not block the design — they have to be
+   * acknowledged before an order is placed.
+   */
+  advisoryNotes: string[];
+  /** `blockingIssues` then `advisoryNotes`, kept for readers that want one list. */
   issues: string[];
 }
 export interface StoolAssemblyReview {
@@ -72,8 +89,54 @@ export interface StoolAssemblyReview {
     matchedMounts: number; unmatchedMounts: number; missingSupports: number;
     candidateScrews: number; candidateNuts: number;
   };
+  /** Owner-confirmed purchasing specification these candidates now carry. */
+  fastenerSpec: StoolSupportFastenerSpec;
+  blockingIssues: string[];
+  advisoryNotes: string[];
   issues: string[];
 }
+
+/**
+ * The purchasing specification the owner confirmed on 2026-10-03 for the 凳子's
+ * sixteen three-tier frame supports (source path root/instances-5..8/1..4).
+ *
+ * This replaces the earlier "candidate, nothing selected" state: the thread, the
+ * length and the nut are decided, so the fasteners can be priced and bought.
+ * What the owner confirmed is the *specification*, not an installed joint — the
+ * physical engagement, washer stack and tool clearance are still checked on
+ * hardware, which is why `fasteningStatus` stays `unverified`.
+ *
+ * Both identities already exist in `data/accessoryCatalog.ts`; the price is read
+ * from there so the design and the accessory list cannot disagree.
+ */
+export interface StoolSupportFastenerSpec {
+  /** Where the specification came from, so a saved review cannot look invented. */
+  readonly source: 'owner_confirmed_2026-10-03';
+  readonly screwCatalogItemId: '10_3030_m6x12_cap';
+  readonly nutCatalogItemId: '10_3030_m6_tnut';
+  readonly screwLabel: string;
+  readonly nutLabel: string;
+  readonly threadSize: 'M6';
+  readonly lengthMm: 12;
+  /** Measured from the source CAD, not from a supplier drawing. */
+  readonly plateThicknessMm: 4;
+  readonly boreDiameterMm: 6.5;
+  /** One screw and one slot nut per mounting face; the source bracket has two. */
+  readonly setsPerSupport: 2;
+}
+
+export const STOOL_SUPPORT_FASTENER_SPEC: StoolSupportFastenerSpec = Object.freeze({
+  source: 'owner_confirmed_2026-10-03',
+  screwCatalogItemId: '10_3030_m6x12_cap',
+  nutCatalogItemId: '10_3030_m6_tnut',
+  screwLabel: 'M6×12 圆柱头内六角螺丝',
+  nutLabel: '3030 M6 T型螺母',
+  threadSize: 'M6',
+  lengthMm: 12,
+  plateThicknessMm: 4,
+  boreDiameterMm: 6.5,
+  setsPerSupport: 2,
+});
 
 export const STOOL_ASSEMBLY_INSTALLATION_STEPS = [
   '先完成主体与80mm装饰短柱：上端钻攻螺丝须在中框、座框叠上前紧固。',
@@ -164,14 +227,22 @@ function frameEdges(items: readonly StoolAssemblyReviewItem[], profileIds: Reado
 }
 
 const fastenerCandidate = (): StoolFastenerCandidate => ({
-  catalogItemId: '10_3030_m6x12_cap', label: 'M6×12圆柱头螺丝（候选）', status: 'candidate_unverified',
-  supplierSku: null,
-  note: '源CAD孔Ø6.5、板厚4；候选螺丝穿板后伸出8mm。垫片、槽螺母位置、啮合与底碰未核，未生成螺丝实体。',
+  catalogItemId: STOOL_SUPPORT_FASTENER_SPEC.screwCatalogItemId,
+  label: `${STOOL_SUPPORT_FASTENER_SPEC.screwLabel}（规格已确认）`,
+  status: 'owner_confirmed', supplierSku: null,
+  note: `源CAD孔Ø${STOOL_SUPPORT_FASTENER_SPEC.boreDiameterMm}、板厚${STOOL_SUPPORT_FASTENER_SPEC.plateThicknessMm}；`
+    + `${STOOL_SUPPORT_FASTENER_SPEC.lengthMm}mm 为穿板后的采购长度。垫片、啮合量与工具净空仍待实物核定。`,
 });
 const nutCandidate = (): StoolFastenerCandidate => ({
-  catalogItemId: '10_3030_m6_tnut', label: '3030 M6槽螺母（候选）', status: 'candidate_unverified',
-  supplierSku: null, note: '仅为已有旧目录身份，尚无本节点的实体/加工映射和实物安装验证。',
+  catalogItemId: STOOL_SUPPORT_FASTENER_SPEC.nutCatalogItemId,
+  label: `${STOOL_SUPPORT_FASTENER_SPEC.nutLabel}（规格已确认）`,
+  status: 'owner_confirmed', supplierSku: null,
+  note: '业主 2026-10-03 确认规格。螺母装入方向与槽内定位方式仍待实物核定。',
 });
+
+/** The one true statement that no model can settle; every stool carries it. */
+const installationVerificationNote = (sets: number) => `${sets} 套紧固件的实物安装验证（拧紧扭矩、工具进入顺序）仍待复核；`
+  + '几何接触不计为已紧固。';
 
 /** A read-only completeness review for this stool; planned contact never counts as fastening. */
 export function reviewStoolAssembly(items: readonly StoolAssemblyReviewItem[]): StoolAssemblyReview {
@@ -189,10 +260,11 @@ export function reviewStoolAssembly(items: readonly StoolAssemblyReviewItem[]): 
     const supports = scoped.filter((item) => item.sourceMesh?.source.fileSha256 === STOOL_ACCESSORY_SOURCE_SHA256
       && item.sourceMesh.source.semanticType === 'fixed_support' && SOURCE_PATH.test(item.sourceMesh.source.instancePath));
     if (!profiles.length && !supports.length) continue;
-    const issues: string[] = [];
+    const blocking: string[] = [];
+    const advisories: string[] = [];
     // A namespace representing more than one saved assembly cannot be guessed apart.
     const ambiguousScope = profiles.length > 32;
-    if (ambiguousScope) issues.push('同一导入批次包含超过32根凳子型材，无法可靠区分装配归属；未自动跨接。');
+    if (ambiguousScope) blocking.push('同一导入批次包含超过32根凳子型材，无法可靠区分装配归属；未自动跨接。');
     const candidates = profiles.filter((item) => item.variantId === '3030' && validPose(item)
       && Number.isFinite(item.length) && item.length! > 0).map((item) => ({ item, inverse: matrixFor(item).invert() }));
     const reviewed: StoolSupportReview[] = supports.map((support) => {
@@ -236,18 +308,21 @@ export function reviewStoolAssembly(items: readonly StoolAssemblyReviewItem[]): 
         itemId: support.id, sourcePath, label: labelForPath(sourcePath),
         tier: occurrence === 1 || occurrence === 4 ? 'lower_fixed_to_middle' : 'upper_middle_to_seat',
         holes, matchedProfileIds: holes.flatMap((hole) => hole.profileId ? [hole.profileId] : []),
-        fasteningStatus: 'unverified', candidateFastener: fastenerCandidate(), candidateNut: nutCandidate(),
+        fasteningStatus: 'unverified', fastenerSpecStatus: 'owner_confirmed',
+        candidateFastener: fastenerCandidate(), candidateNut: nutCandidate(),
       };
     });
     const sourcePaths = new Set(reviewed.map((support) => support.sourcePath));
     const missing = expectedPaths.filter((path) => !sourcePaths.has(path));
     const duplicates = reviewed.length - sourcePaths.size;
     const unmatchedMountCount = reviewed.reduce((sum, support) => sum + support.holes.filter((hole) => hole.matchStatus !== 'matched').length, 0);
-    if (profiles.length !== 32) issues.push(`检测到${profiles.length}根凳子型材，基准装配应为32根。`);
-    if (missing.length) issues.push(`缺少${missing.length}个三层框架固定件：${missing.map(labelForPath).join('、')}。`);
-    if (duplicates) issues.push(`发现${duplicates}个重复源固定件，安装归属待核。`);
-    if (unmatchedMountCount) issues.push(`${unmatchedMountCount}个固定件安装位没有唯一、贴合且对准槽线的3030配合面。`);
-    issues.push('16个三层框架固定件所需32套M6螺丝/3030槽螺母尚未完成安装验证；几何接触不计为已紧固。');
+    // Real model failures. Only these keep the design out of production.
+    if (profiles.length !== 32) blocking.push(`检测到${profiles.length}根凳子型材，基准装配应为32根。`);
+    if (missing.length) blocking.push(`缺少${missing.length}个三层框架固定件：${missing.map(labelForPath).join('、')}。`);
+    if (duplicates) blocking.push(`发现${duplicates}个重复源固定件，安装归属待核。`);
+    if (unmatchedMountCount) blocking.push(`${unmatchedMountCount}个固定件安装位没有唯一、贴合且对准槽线的3030配合面。`);
+    // Known unknowns. True of a perfect model too, so they advise rather than block.
+    advisories.push(installationVerificationNote(reviewed.length * STOOL_SUPPORT_FASTENER_SPEC.setsPerSupport));
     const ids = profiles.map((item) => item.id); const edges = frameEdges(items, new Set(ids));
     const bridges = reviewed.filter((support) => support.holes.every((hole) => hole.matchStatus === 'matched')
       && new Set(support.matchedProfileIds).size === 2).map((support) => support.matchedProfileIds);
@@ -255,17 +330,96 @@ export function reviewStoolAssembly(items: readonly StoolAssemblyReviewItem[]): 
       scopeId, profileIds: ids, expectedSupportCount: 16, supportCount: reviewed.length, supports: reviewed,
       profileComponents: components(ids, edges), geometricBridgeComponents: components(ids, [...edges, ...bridges]),
       unmatchedMountCount, missingSupportCount: missing.length, missingSupportLabels: missing.map(labelForPath),
-      installationSteps: STOOL_ASSEMBLY_INSTALLATION_STEPS, issues,
+      installationSteps: STOOL_ASSEMBLY_INSTALLATION_STEPS,
+      blockingIssues: blocking, advisoryNotes: advisories, issues: [...blocking, ...advisories],
     });
   }
   const supportCount = assemblies.reduce((sum, assembly) => sum + assembly.supportCount, 0);
   const unmatched = assemblies.reduce((sum, assembly) => sum + assembly.unmatchedMountCount, 0);
+  const blockingIssues = [...new Set(assemblies.flatMap((assembly) => assembly.blockingIssues))];
+  const advisoryNotes = [...new Set(assemblies.flatMap((assembly) => assembly.advisoryNotes))];
   return {
     applicable: assemblies.length > 0, complete: false, assemblies,
     totals: { assemblies: assemblies.length, supports: supportCount, expectedSupports: assemblies.length * 16,
       mounts: supportCount * 2, matchedMounts: supportCount * 2 - unmatched, unmatchedMounts: unmatched,
       missingSupports: assemblies.reduce((sum, assembly) => sum + assembly.missingSupportCount, 0),
       candidateScrews: assemblies.length * 32, candidateNuts: assemblies.length * 32 },
-    issues: [...new Set(assemblies.flatMap((assembly) => assembly.issues))],
+    fastenerSpec: STOOL_SUPPORT_FASTENER_SPEC,
+    blockingIssues, advisoryNotes,
+    issues: [...blockingIssues, ...advisoryNotes],
+  };
+}
+
+/** One purchasable line of the owner-confirmed stool fastening set. */
+export interface StoolSupportFastenerLine {
+  catalogItemId: string;
+  label: string;
+  quantity: number;
+  unitPrice: number;
+  subtotal: number;
+  /** True when this many pieces reached the catalog's own bulk threshold. */
+  bulkApplied: boolean;
+}
+
+export interface StoolSupportFasteners {
+  applicable: boolean;
+  /** Supports carrying the owner-confirmed fastener set. */
+  supports: number;
+  /** Screw-and-nut sets; one per mounting face of each support. */
+  sets: number;
+  lines: StoolSupportFastenerLine[];
+  total: number;
+  spec: StoolSupportFastenerSpec;
+}
+
+const EMPTY_FASTENERS: StoolSupportFasteners = {
+  applicable: false, supports: 0, sets: 0, lines: [], total: 0, spec: STOOL_SUPPORT_FASTENER_SPEC,
+};
+
+/**
+ * The stool's tier fasteners as real, priced purchasing lines.
+ *
+ * The assembly review already enumerates every mounting face, so this only has
+ * to turn the owner-confirmed specification into catalogue lines. Both
+ * identities exist in `data/accessoryCatalog.ts` and are priced through the
+ * accessory list's own colour/bulk rule, so the design quote, the cart and the
+ * printed accessory list name one SKU at one price.
+ *
+ * A support that cannot be placed contributes no line: an unverified mount must
+ * not silently buy hardware.
+ */
+export function materializeStoolSupportFasteners(
+  items: readonly StoolAssemblyReviewItem[],
+): StoolSupportFasteners {
+  const review = reviewStoolAssembly(items);
+  if (!review.applicable) return EMPTY_FASTENERS;
+  const supports = review.assemblies.flatMap((assembly) => assembly.supports);
+  const placedSupports = supports.filter((support) => (
+    support.holes.every((hole) => hole.matchStatus === 'matched')
+  ));
+  if (!placedSupports.length) return EMPTY_FASTENERS;
+  const sets = placedSupports.length * STOOL_SUPPORT_FASTENER_SPEC.setsPerSupport;
+  const lines = [
+    { catalogItemId: STOOL_SUPPORT_FASTENER_SPEC.screwCatalogItemId, label: STOOL_SUPPORT_FASTENER_SPEC.screwLabel },
+    { catalogItemId: STOOL_SUPPORT_FASTENER_SPEC.nutCatalogItemId, label: STOOL_SUPPORT_FASTENER_SPEC.nutLabel },
+  ].flatMap(({ catalogItemId, label }): StoolSupportFastenerLine[] => {
+    const row = ACCESSORY_ROWS.find((candidate) => candidate.defId === catalogItemId);
+    // The spec is only usable while the catalog still prices it; a missing row
+    // must not turn into a free part.
+    if (!row) return [];
+    const unitPrice = resolveAccessoryUnitPrice(row, 'natural', sets);
+    return [{
+      catalogItemId, label, quantity: sets, unitPrice,
+      subtotal: Number((unitPrice * sets).toFixed(2)),
+      bulkApplied: unitPrice < row.price.natural,
+    }];
+  });
+  return {
+    applicable: lines.length > 0,
+    supports: placedSupports.length,
+    sets,
+    lines,
+    total: Number(lines.reduce((sum, line) => sum + line.subtotal, 0).toFixed(2)),
+    spec: STOOL_SUPPORT_FASTENER_SPEC,
   };
 }
