@@ -45,11 +45,11 @@
 ## 分支 / stash 现状（2026-10-03 20:30 快照）
 
 - `main`：`origin/main` = **`9986e57`**（业主已推送：导入件/轮子/螺丝计价 → 共享源几何 v3 →
-  固定支座=3号角码 → 工厂单图案去重 → 记忆）。本地再领先 **1 个**：`b978428`
-  （放行门禁拆 blocking/advisories + 32 套紧固件做实 ¥952 + 修 `toCartItems` 缺
+  固定支座=3号角码 → 工厂单图案去重 → 记忆）。本地再领先若干提交，最近的是
+  **`b978428`**（放行门禁拆 blocking/advisories + 32 套紧固件做实 ¥952 + 修 `toCartItems` 缺
   `imported_component` 分支导致的加入购物车崩溃）。**本环境没有 GitHub 路由，
   push 需业主在 GitHub Desktop 手动点**（`git push` 会触发 `.githooks/pre-push` 打包，
-  在沙箱里容易撞批量删除拦截）。
+  在沙箱里容易撞批量删除拦截）。**核对领先量用 `git log --oneline origin/main..main`，别信这里的快照。**
 - `codex/ai-sales-assistant`：停在 `3248d47 major update`，**未动**。它和 `main` 的提交 3248d47
   曾经同一 SHA，所以「AI 销售助手」的代码其实**从未提交过**——一直是未提交的工作区改动。
 - **AI 销售助手的改动保存在 stash 里，不要 drop**：
