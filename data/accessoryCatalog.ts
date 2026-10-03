@@ -1,6 +1,7 @@
 import { DISPLAY_RACK_COMPONENT_CATALOG } from './displayRackComponentCatalog';
 import type { Language } from '../types';
 import { END_CAP_PRICES } from '../utils/accessoryPricing';
+import { DESIGNER_SCREW_ACCESSORY_DEFINITIONS } from './designerScrewAccessoryCatalog';
 
 export type AccessoryProfileSize = '1515' | '2020' | '3030' | '4040';
 export type AccessoryColorMode = 'natural' | 'colored';
@@ -41,6 +42,15 @@ export interface AccessoryDefinition {
   note?: string;
   lengthPriced?: boolean;
   naturalOnly?: boolean;
+  /**
+   * Identity the designer needs so a generated part still resolves to a
+   * catalog line, but which is not a customer-selectable purchase: the length
+   * comes from the modelled geometry ("长度按设计取值"), so there is nothing
+   * meaningful for a customer to add by hand. Internal identities stay in
+   * `ACCESSORY_ROWS` (the pricing/identity surface) and are filtered out of
+   * every customer-facing list.
+   */
+  designerInternalOnly?: boolean;
   imageKey?: string;
   prices: Partial<Record<AccessoryProfileSize, AccessoryPrice>>;
 }
@@ -89,7 +99,7 @@ const NO3_AND_NO7_PRICES: AccessoryDefinition['prices'] = {
       '4040': { natural: 6, colored: 8, naturalBulk: 4.5, coloredBulk: 6 },
     };
 
-export const ACCESSORY_DEFINITIONS: AccessoryDefinition[] = [
+const AUTHORED_ACCESSORY_DEFINITIONS: AccessoryDefinition[] = [
   ...(['SHAFT_8', 'SK8', 'SHF8'] as const).map((key, index): AccessoryDefinition => {
     const item = DISPLAY_RACK_COMPONENT_CATALOG[key];
     const price = item.unitPriceCny;
@@ -302,6 +312,23 @@ export const ACCESSORY_DEFINITIONS: AccessoryDefinition[] = [
   // { code: 8, ... }
 ];
 
+/**
+ * The one accessory catalog. Hand-written rows come first so the familiar
+ * No.1–No.9 lines keep their position; screw specifications the designer can
+ * produce are appended.
+ *
+ * Screws are generated rather than authored because the designer derives them
+ * from a machining rule, so a specification nobody had written down could
+ * previously reach a customer at ¥0. Generated rows are skipped whenever an
+ * authored row already covers the same identity.
+ */
+export const ACCESSORY_DEFINITIONS: AccessoryDefinition[] = [
+  ...AUTHORED_ACCESSORY_DEFINITIONS,
+  ...DESIGNER_SCREW_ACCESSORY_DEFINITIONS.filter((definition) => (
+    !AUTHORED_ACCESSORY_DEFINITIONS.some((authored) => authored.id === definition.id)
+  )),
+];
+
 /** Profile series that a definition is actually stocked/priced for. */
 export const getAccessorySeriesOf = (def: AccessoryDefinition): AccessoryProfileSize[] => (
   ACCESSORY_SERIES_ORDER.filter((size) => Boolean(def.prices[size]))
@@ -318,6 +345,8 @@ export interface AccessoryRow {
   note?: string;
   lengthPriced?: boolean;
   naturalOnly?: boolean;
+  /** Identity the designer resolves against, but not a customer-facing line. */
+  designerInternalOnly?: boolean;
   imageKey?: string;
   price: AccessoryPrice;
 }
@@ -345,6 +374,7 @@ export const ACCESSORY_ROWS: AccessoryRow[] = ACCESSORY_DEFINITIONS.flatMap((def
       note: def.note,
       lengthPriced: def.lengthPriced,
       naturalOnly: true,
+      designerInternalOnly: def.designerInternalOnly,
       imageKey: def.imageKey,
       price: def.prices[source]!,
     }];
@@ -358,10 +388,29 @@ export const ACCESSORY_ROWS: AccessoryRow[] = ACCESSORY_DEFINITIONS.flatMap((def
     series,
     note: def.note,
     lengthPriced: def.lengthPriced,
+    designerInternalOnly: def.designerInternalOnly,
     imageKey: def.imageKey,
     price: def.prices[series]!,
   }));
 });
+
+/**
+ * The accessory list a customer is allowed to pick from.
+ *
+ * `ACCESSORY_ROWS` stays complete on purpose — it is the identity and pricing
+ * surface the designer resolves generated parts against. Anything flagged
+ * `designerInternalOnly` (a screw whose length comes from the modelled
+ * geometry, "长度按设计取值") has no meaningful hand-picked quantity, so every
+ * customer-facing list renders this subset instead.
+ */
+export const CUSTOMER_ACCESSORY_ROWS: AccessoryRow[] = ACCESSORY_ROWS.filter(
+  (row) => !row.designerInternalOnly,
+);
+
+/** Customer-facing accessory definitions, mirroring `CUSTOMER_ACCESSORY_ROWS`. */
+export const CUSTOMER_ACCESSORY_DEFINITIONS: AccessoryDefinition[] = ACCESSORY_DEFINITIONS.filter(
+  (definition) => !definition.designerInternalOnly,
+);
 
 /** Human label for the "适配型号" description of a row. */
 export const getAccessoryRowSeriesLabel = (row: AccessoryRow, language: Language): string => (

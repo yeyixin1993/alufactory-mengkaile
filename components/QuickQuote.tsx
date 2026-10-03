@@ -15,7 +15,7 @@ import {
 import type { ShippingMethod } from '../constants';
 import {
   ACCESSORY_CODE_IMAGE_MAP,
-  ACCESSORY_ROWS,
+  CUSTOMER_ACCESSORY_ROWS,
   getAccessoryRowSeriesLabel,
   type AccessoryColorMode,
 } from '../data/accessoryCatalog';
@@ -436,8 +436,8 @@ const QuickQuote: React.FC<{ language: Language; user?: User | null }> = ({ lang
 
   const accessoryRowsFiltered = useMemo(() => {
     const needle = accessorySearch.trim().toLowerCase();
-    if (!needle) return ACCESSORY_ROWS;
-    return ACCESSORY_ROWS.filter((row) => [
+    if (!needle) return CUSTOMER_ACCESSORY_ROWS;
+    return CUSTOMER_ACCESSORY_ROWS.filter((row) => [
       String(row.code),
       row.codeLabel?.[language] || '',
       row.name[language],
