@@ -13,6 +13,27 @@
 - `tsc --noEmit` 存在 5 个既有报错（与业务无关，改动时不要把它们当成自己引入的）：
   `alufactory-backend/FRONTEND_SERVICE.ts` 的 `@/config`、`App.tsx` 的 `setTimeout`、
   `components/PrintableCatalog.tsx` 的 3 个 `key` 属性。
+- **给业主「可直接导入设计器」的成品 JSON** 用 `npm run export:stool-880`（`scripts/export-stool-design.ts`）：
+  从冻结夹具重建凳子参考设计、给脚轮打 `wheelGrade: 'upgraded'`、过设计器真实预检
+  `inspectDesignerImportItems` + `calculatePrice` 断言小计 ¥847.0，默认写到
+  `~/Downloads/mengkaile-凳子-880-含诺贝轮.json`（可 `-- <绝对路径>`）。
+  **仍然必须紧凑 `JSON.stringify`**（格式化会成倍膨胀，逼近 128 MiB 导入上限
+  `MAX_IMPORTED_SOURCE_FILE_BYTES`）；共享几何后成品 **11.47 MB**（schemaVersion 3），
+  旧的内嵌形式是 68.7 MB。
+- **设计文件合同 `mengkaile-diy` 现在接受 schemaVersion 2 和 3**（产品细节见
+  `docs/DIY_DESIGNER_PROJECT_KNOWLEDGE.md` §13.6）：
+  - **v2**：每件 `sourceMesh` 自带 `positionsMm/normals/uvs/indices/materials/groups/boundsMm`。
+    **SketchUp 插件与外部 AI 提示词继续产出 v2，不要改它们。**
+  - **v3**：顶层 `sourceGeometries: { "fnv1a32:xxxxxxxx": 几何 }`，零件的 `sourceMesh` 只留
+    `schemaVersion/coordinateSystem/source/reviewStatus/geometryRef`。**`source` 永远不共享**
+    （fileSha256/instancePath/entityId 每件不同）。键 = 几何自身的 FNV-1a 摘要，
+    与配件身份签名共用 `utils/importedSourceGeometrySharing.ts` 里的 `hashImportedSourceGeometry`。
+  - 规则：**只在真的去掉重复几何时才写 v3**（`buildDesignDocument` 的 `{shareSourceGeometries}`
+    默认关，设计器 `save()` 打开）；导入端**必须在 `inspectDesignerImportItems` 之前**用
+    `expandImportedSourceGeometries` 展开，因为预检要看到完整网格（缺字段会被 fail-closed 拒绝）。
+    **绝不给零件做精度取整/降采样来省体积**——那会破坏配件几何签名与目录身份。
+- 回归：`npm run test:source-geometry-sharing`（往返无损 + 配件身份 + 价格 + 四种坏文件被拒）。
+  导出给业主看的成品设计用 `npm run export:stool-880`（见下）。
 - **`git push` 会跑 `.githooks/pre-push`**（`core.hooksPath=.githooks`）：先 `npm run package:dist`
   （= 完整 `npm run build` + `node scripts/package-dist.mjs` 打 ZIP）才推。所以推送很慢，
   且在沙箱里容易触发批量删除拦截，建议 `dangerouslyDisableSandbox` + 后台跑。
@@ -20,7 +41,8 @@
 ## 分支 / stash 现状（2026-10-03 18:30 快照）
 
 - `main`：本会话的设计器计价工作已提交为 **`ad48f01`**（导入件/轮子/螺丝计价 + ¥880 落地价基线，
-  20 个文件），并推送到 `origin/main`。
+  20 个文件）+ `cd84d51`（记忆）+ `6f8f28f`（880 导出脚本）。**这三个提交都只在本地，尚未推送**：
+  `origin/main` 仍停在 `3248d47`，`main` 领先它 3 个提交（2026-10-03 18:35 核实）。
 - `codex/ai-sales-assistant`：停在 `3248d47 major update`，**未动**。它和 `main` 的提交 3248d47
   曾经同一 SHA，所以「AI 销售助手」的代码其实**从未提交过**——一直是未提交的工作区改动。
 - **AI 销售助手的改动保存在 stash 里，不要 drop**：
