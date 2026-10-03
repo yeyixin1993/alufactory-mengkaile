@@ -18,6 +18,14 @@ import {
  * designer's subtotal to that number through the same weight and shipping
  * rules the cart uses. If a price, a weight table or a shipping tier moves,
  * this fails instead of quietly changing what a customer is quoted.
+ *
+ * The landed figure was ¥880 while the sixteen 固定支座 were charged the ¥2
+ * support basis. The owner then identified that part as the catalog's 3号角码,
+ * which put it on the 3030 catalog tier (¥4.5) — ¥40 more — and the figure
+ * became ¥920. The 拉手 / 装饰料 split is deliberately *not* re-tuned to hide
+ * that: the owner pinned 装饰料 at a round ¥8/件, and at ¥8 × 8 the calibrated
+ * pair already exceeds what a ¥880 landing would leave, so ¥920 is the floor
+ * rather than a new calibration.
  */
 
 /** Mirrors `MARINE_BOARD_WEIGHT_PER_SQM` in `App.tsx` / `QuickQuote.tsx`. */
@@ -29,7 +37,7 @@ const ACCESSORY_SHIPPING_WEIGHT_KG = 1;
 const OVERLENGTH_THRESHOLD_MM = 1500;
 const OVERLENGTH_FEE = 20;
 
-const TARGET_LANDED_TOTAL = 880;
+const TARGET_LANDED_TOTAL = 920;
 const DESTINATION_PROVINCE = '浙江';
 
 const fixturePath = path.resolve('scripts/fixtures/stool-import-20260930.json.gz');
@@ -84,7 +92,19 @@ const calibratedPartsTotal = handleCount * HANDLE_UNIT_PRICE + decorativeCount *
 assert.equal(DECORATIVE_PROFILE_UNIT_PRICE, 8, '8080 装饰料应为整 ¥8/件');
 assert.equal(HANDLE_UNIT_PRICE, 23.12, '拉手应承担余数 = ¥23.12/件');
 assert.equal(Number(calibratedPartsTotal.toFixed(2)), 87.12,
-  '拉手 + 8080 装饰料合计必须为 ¥87.12，否则落地价不再是 ¥880');
+  '拉手 + 8080 装饰料合计必须仍为业主定下的 ¥87.12（装饰料整 ¥8，余数落拉手）');
+
+// The bracket re-price is the whole reason the landing moved, so name it here.
+const linkedBracketItems = ordered.filter((item) => (
+  item.kind === 'imported_component'
+  && item.sourceMesh?.source.semanticType === 'fixed_support'
+));
+assert.equal(linkedBracketItems.length, 16, '凳子夹具的固定支座数量已变化，请重新核对 3号角码 计价');
+assert.equal(
+  linkedBracketItems.reduce((sum, item) => sum + calculatePrice(item), 0),
+  72,
+  '十六件 3号角码（3030）必须按目录价 ¥4.5/件 计为 ¥72，而不是 ¥2 支座的 ¥32',
+);
 const rawSubtotal = baseOutsideCalibration + calibratedPartsTotal;
 const designSubtotal = Number(rawSubtotal.toFixed(1));
 
@@ -141,4 +161,5 @@ console.log(`  拉手 ¥${HANDLE_UNIT_PRICE}×${handleCount} + 8080装饰料 ¥$
 
 assert.equal(landed, TARGET_LANDED_TOTAL, `凳子参考设计发浙江的落地总价应为 ¥${TARGET_LANDED_TOTAL}`);
 
-console.log('Reference design landed total to 浙江 matches the owner-confirmed ¥880.');
+console.log(`Reference design landed total to 浙江: ¥${landed}`
+  + '（固定支座按 3号角码目录价后，由 ¥880 变为 ¥920：¥40 = 16 件 × (¥4.5 − ¥2)）');

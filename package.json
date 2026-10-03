@@ -39,8 +39,9 @@
     "test:component-pricing": "vite build --ssr scripts/verify-component-pricing.ts --outDir .verify-component-pricing-dist --emptyOutDir && node .verify-component-pricing-dist/verify-component-pricing.js",
     "test:screw-pricing": "vite build --ssr scripts/verify-screw-pricing.ts --outDir .verify-screw-pricing-dist --emptyOutDir && node .verify-screw-pricing-dist/verify-screw-pricing.js",
     "test:stool-landed-total": "vite build --ssr scripts/verify-stool-landed-total.ts --outDir .verify-stool-landed-total-dist --emptyOutDir && node .verify-stool-landed-total-dist/verify-stool-landed-total.js",
+    "test:designer-accessory-link": "vite build --ssr scripts/verify-designer-accessory-link.ts --outDir .verify-designer-accessory-link-dist --emptyOutDir && node .verify-designer-accessory-link-dist/verify-designer-accessory-link.js",
     "test:source-geometry-sharing": "vite build --ssr scripts/verify-source-geometry-sharing.ts --outDir .verify-source-geometry-sharing-dist --emptyOutDir && node .verify-source-geometry-sharing-dist/verify-source-geometry-sharing.js",
-    "export:stool-880": "vite build --ssr scripts/export-stool-design.ts --outDir .verify-export-stool-dist --emptyOutDir && node .verify-export-stool-dist/export-stool-design.js"
+    "export:stool-920": "vite build --ssr scripts/export-stool-design.ts --outDir .verify-export-stool-dist --emptyOutDir && node .verify-export-stool-dist/export-stool-design.js"
   },
   "dependencies": {
     "@types/three": "^0.185.1",

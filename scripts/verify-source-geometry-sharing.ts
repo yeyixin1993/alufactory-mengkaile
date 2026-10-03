@@ -178,7 +178,7 @@ expanded.forEach((item, index) => {
   }), `items[${index}] 的计价类目必须不变`);
 });
 
-// --- price is frozen by the same ¥880 baseline as the landed-total test -----
+// --- price is frozen by the same ¥920 baseline as the landed-total test -----
 const asOrdered = (items: typeof baseline) => items.map((item) => (
   item.kind === 'imported_component' && classifyImportedComponent({
     semanticType: (item as { sourceMesh?: { source?: { semanticType?: string } } }).sourceMesh?.source?.semanticType,
@@ -189,8 +189,8 @@ const asOrdered = (items: typeof baseline) => items.map((item) => (
 ));
 const totalOf = (items: typeof baseline) => Number(asOrdered(items)
   .reduce((sum, item) => sum + calculatePrice(item), 0).toFixed(1));
-assert.equal(totalOf(baseline), 847, '凳子参考设计（升级诺贝轮子）设计估价应为 ¥847');
-assert.equal(totalOf(expanded as typeof baseline), 847, '共享几何展开后设计估价必须仍是 ¥847');
+assert.equal(totalOf(baseline), 887, '凳子参考设计（升级诺贝轮子）设计估价应为 ¥887（固定支座按 3号角码 3030 目录价）');
+assert.equal(totalOf(expanded as typeof baseline), 887, '共享几何展开后设计估价必须仍是 ¥887');
 
 // --- JSON round trip, because the file is the real unit of exchange ---------
 const roundTripped = importDocument(JSON.parse(JSON.stringify({
@@ -260,6 +260,6 @@ console.log(`  体积: ${(inlineBytes / 1e6).toFixed(1)} MB → ${(sharedBytes /
   + `（省 ${(savedRatio * 100).toFixed(1)}%）`);
 console.log(`  几何: ${shared.uniqueCount} 份唯一记录承载 ${shared.placedCount} 个放置`
   + `（省掉 ${shared.placedCount - shared.uniqueCount} 份重复三角剖分）`);
-console.log(`  设计估价: ¥${totalOf(baseline)}（升级诺贝轮子，与落地 ¥880 基线一致）`);
+console.log(`  设计估价: ¥${totalOf(baseline)}（升级诺贝轮子，与落地 ¥920 基线一致）`);
 console.log(`  设计器保存: ${(inlineDocumentBytes / 1e6).toFixed(1)} MB → ${(sharedDocumentBytes / 1e6).toFixed(1)} MB`);
 console.log('  不可还原的文档（缺失/悬空/被篡改/无人引用）全部被拒绝。');

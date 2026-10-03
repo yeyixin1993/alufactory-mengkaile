@@ -190,10 +190,10 @@ assert.equal(screwSpecs.get('3030·socket_cylinder·45mm'), 20, '3030 圆柱头 
 assert.equal(screwSpecs.get('3030·button_socket·20mm'), 8, '3030 按钮头 M8×20 应为 8 颗');
 
 // 8. Whole-design totals through the designer's own price surface.
-// ¥479.4 (profiles/boards/connectors) + ¥11.48 光轴 + ¥48 支座 + ¥88 轮子
-// + ¥23.12 拉手 + ¥64 装饰料 + ¥21 螺丝 = ¥735.0.
+// ¥479.4 (profiles/boards/connectors) + ¥11.48 光轴 + ¥72 固定支座（16 件 3号角码 3030）
+// + ¥88 轮子 + ¥23.12 拉手 + ¥64 装饰料 + ¥21 螺丝 = ¥775.0.
 const designTotal = Number(items.reduce((sum, item) => sum + calculatePrice(item), 0).toFixed(1));
-assert.equal(designTotal, 735, '凳子模板（普通轮子）整单应为 ¥735.0，而不是导入件归零时的 ¥479.4');
+assert.equal(designTotal, 775, '凳子模板（普通轮子）整单应为 ¥775.0，而不是导入件归零时的 ¥479.4');
 
 console.log('Designer screw pricing regression checks passed.');
 console.log(`  default screw unit price: ¥${DEFAULT_SCREW_UNIT_PRICE}`);

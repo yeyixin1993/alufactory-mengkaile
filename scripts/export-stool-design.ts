@@ -16,8 +16,8 @@ import { createDesignSourceInfo } from '../utils/designSource';
 import type { DesignSourceInfo } from '../types';
 
 /**
- * Exports the owner's ¥880 reference design (凳子 + 诺贝 wheel upgrade, shipped
- * to 浙江) as one importable `mengkaile-diy` JSON file.
+ * Exports the owner's reference design (凳子 + 诺贝 wheel upgrade, shipped to
+ * 浙江) as one importable `mengkaile-diy` JSON file.
  *
  * It is built from the same three pieces the designer itself uses — the frozen
  * 凳子 fixture, `classifyImportedComponent` for part identity, and
@@ -32,17 +32,22 @@ import type { DesignSourceInfo } from '../types';
  * pretty-printing pushes the embedded meshes past the designer's 128 MiB import
  * ceiling.
  *
+ * Totals moved from ¥847 / ¥880 to **¥887 / ¥920** when the source model's
+ * 固定支座 was linked to catalog No.3 (3号角码 3030, ¥4.5): sixteen of them went
+ * from the generic ¥2 support basis to the catalog tier, +¥40. Nothing else in
+ * the design changed.
+ *
  * Usage:
- *   npm run export:stool-880
- *   npm run export:stool-880 -- /absolute/path/out.json
+ *   npm run export:stool-920
+ *   npm run export:stool-920 -- /absolute/path/out.json
  */
 
-const DESIGN_SUBTOTAL_CNY = 847.0;
-const LANDED_TOTAL_CNY = 880;
+const DESIGN_SUBTOTAL_CNY = 887.0;
+const LANDED_TOTAL_CNY = 920;
 const DESTINATION_PROVINCE = '浙江';
 
 const fixturePath = path.resolve('scripts/fixtures/stool-import-20260930.json.gz');
-const defaultFileName = 'mengkaile-凳子-880-含诺贝轮.json';
+const defaultFileName = 'mengkaile-凳子-920-含诺贝轮.json';
 const requestedPath = process.argv[2];
 const outputPath = requestedPath
   ? path.resolve(requestedPath)
@@ -81,7 +86,7 @@ const items = fixture.items.map((item) => {
   upgradedWheelCount += 1;
   return { ...item, wheelGrade: 'upgraded' as const };
 });
-if (!upgradedWheelCount) throw new Error('夹具里找不到脚轮，导出的文件不会等于落地价 ¥880。');
+if (!upgradedWheelCount) throw new Error(`夹具里找不到脚轮，导出的文件不会等于落地价 ¥${LANDED_TOTAL_CNY}。`);
 
 const provenance = (fixture.provenance
   || createDesignSourceInfo('parametric_template', { modelName: '凳子参考设计' })) as unknown as DesignSourceInfo;

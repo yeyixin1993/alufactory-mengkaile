@@ -97,6 +97,7 @@ import { DEFAULT_SCREW_UNIT_PRICE, resolveDesignerScrewPrice } from '../utils/de
 import { getRotationallyCanonicalMachiningKey } from '../utils/profileManufacturingEquivalence';
 import { parseMaycadSceneXml, type MaycadProfileReview } from '../utils/maycadImport';
 import { getConfirmedEndCapUnitPrice, hasConfirmedEndCapPrice } from '../utils/accessoryPricing';
+import { ACCESSORY_CODE_IMAGE_MAP, getAccessoryRowSeriesLabel } from '../data/accessoryCatalog';
 import {
   DIY_TEMPLATE_STORAGE_PREFIX,
   getShelfSupportUnitPrice,
@@ -345,7 +346,11 @@ const TEXT: Record<Language, Record<string, string>> = {
     priceNotYetAvailable: '暂未定价，先按 ¥0 计入',
     importedSourcePart: '源模型部件',
     importedSourceUnknown: '来源类型未记录',
-    importedSourcePriceNote: '单价按光轴（按米）、光轴支座（按件）、轮子（普通/升级）、拉手与 8080 装饰料（按件）规则折算；未记录的规格按 ¥0 明示计入。',
+    importedLinkedAccessory: '目录关联配件',
+    importedLinkedAccessoryNote: '业主已确认这个源模型零件就是该目录配件，名称、型号与单价都按配件目录计算，图纸与报价口径一致。',
+    linkedAccessoryCodeLabel: '目录编号',
+    priceUnitPiece: '/ 件',
+    importedSourcePriceNote: '单价按光轴（按米）、光轴支座（按件）、轮子（普通/升级）、拉手与 8080 装饰料（按件）规则折算；已关联目录的零件按目录价；未记录的规格按 ¥0 明示计入。',
     adjustableHeight: '可调高度 (mm)',
     footReferenceSpec: 'MayCAD 杯脚 · M8 螺杆 · 锁紧螺母 · 防滑底垫',
     pricePending: '当前使用预估价，待正式目录价确认后更新',
@@ -640,7 +645,11 @@ const TEXT: Record<Language, Record<string, string>> = {
     priceNotYetAvailable: 'Price not set yet; counted as ¥0',
     importedSourcePart: 'Imported source component',
     importedSourceUnknown: 'Source type not recorded',
-    importedSourcePriceNote: 'Unit price follows the shaft (per metre), shaft support (per piece), wheel (standard / upgraded) and handle / 8080 trim (per piece) rules; an unrecorded specification is shown as ¥0 rather than hidden.',
+    importedLinkedAccessory: 'Linked catalog accessory',
+    importedLinkedAccessoryNote: 'The owner identified this source part as that catalog accessory, so its name, series and unit price come from the accessory catalog and the drawing and quote agree.',
+    linkedAccessoryCodeLabel: 'Catalog code',
+    priceUnitPiece: '/ pc',
+    importedSourcePriceNote: 'Unit price follows the shaft (per metre), shaft support (per piece), wheel (standard / upgraded) and handle / 8080 trim (per piece) rules; a part linked to the catalog is priced from the catalog; an unrecorded specification is shown as ¥0 rather than hidden.',
     adjustableHeight: 'Adjustable height (mm)',
     footReferenceSpec: 'MayCAD cup foot · M8 stem · lock nut · nonslip sole',
     pricePending: 'Uses a provisional estimate until the official catalog price is confirmed',
@@ -939,7 +948,11 @@ const TEXT: Record<Language, Record<string, string>> = {
     screwCatalogReference: '付属品カタログ仕様',
     importedSourcePart: '取込元の部品',
     importedSourceUnknown: '取込元の種別が未記録です',
-    importedSourcePriceNote: '単価はシャフト（1m単位）、シャフト支持台（1個単位）、キャスター（標準／アップグレード）、取っ手・8080装飾材（1個単位）の規則で算出します。記録のない仕様は ¥0 として明示計上します。',
+    importedLinkedAccessory: 'カタログ関連部品',
+    importedLinkedAccessoryNote: 'この取込元部品はユーザーが当該カタログ部品と確認済みです。名称・適合型番・単価は付属品カタログから取得し、図面と見積の口径を揃えます。',
+    linkedAccessoryCodeLabel: 'カタログ番号',
+    priceUnitPiece: '/ 個',
+    importedSourcePriceNote: '単価はシャフト（1m単位）、シャフト支持台（1個単位）、キャスター（標準／アップグレード）、取っ手・8080装飾材（1個単位）の規則で算出します。カタログに関連付けた部品はカタログ価格で計上します。記録のない仕様は ¥0 として明示計上します。',
     adjustableHeight: '調整高さ (mm)',
     footReferenceSpec: 'MayCAD カップ脚 · M8ねじ · ロックナット · 滑り止め底面',
     pricePending: '正式なカタログ価格確定まで概算価格を使用します',
@@ -1222,6 +1235,7 @@ const getImportedComponentPrice = (item: DIYSceneItem): ImportedComponentPrice =
   wheelGrade: item.wheelGrade,
   accessoryThreadSize: item.accessoryThreadSize,
   hasBrake: item.hasBrake,
+  quantity: item.quantity,
 });
 
 function getEndCapConfirmedProfileSize(
@@ -10154,6 +10168,11 @@ const getShelfSupportFinishLabel = (item: DIYSceneItem, t: Record<string, string
 const getItemLabel = (item: DIYSceneItem, language: Language) => {
   const t = TEXT[language];
   if (item.kind === 'imported_component') {
+    // A source part the owner has identified as a numbered catalog accessory is
+    // named by the catalog, not by the source model's own component name, so
+    // the scene list and the accessory list say the same thing.
+    const linked = getImportedComponentPrice(item).linkedAccessory;
+    if (linked) return `${linked.name[language]} · ${getAccessoryRowSeriesLabel(linked, language)}`;
     const base = item.name || item.sourceMesh?.source.componentName || t.importedSourcePart;
     const upgradedWheel = normalizeWheelGrade(item.wheelGrade) === 'upgraded'
       && classifyImportedComponent({
@@ -13172,6 +13191,31 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({
                     <br />
                     {selected.sourceMesh?.source.semanticType || t.importedSourceUnknown}
                   </div>
+                  {selectedImportedPrice?.linkedAccessory && (
+                    <div className="mt-3 rounded-xl border border-blue-200 bg-blue-50 p-3" data-testid="diy-imported-linked-accessory">
+                      <div className="mb-2 text-[10px] font-black uppercase tracking-widest text-blue-700">{t.importedLinkedAccessory}</div>
+                      <div className="flex items-center gap-3">
+                        <img
+                          src={ACCESSORY_CODE_IMAGE_MAP[selectedImportedPrice.linkedAccessory.imageKey || selectedImportedPrice.linkedAccessory.defId]
+                            || ACCESSORY_CODE_IMAGE_MAP[String(selectedImportedPrice.linkedAccessory.code)]
+                            || ''}
+                          alt={selectedImportedPrice.linkedAccessory.name[language]}
+                          className="h-20 w-20 shrink-0 rounded-lg border border-blue-200 bg-white object-cover"
+                          data-testid="diy-imported-linked-accessory-artwork"
+                        />
+                        <div className="min-w-0 text-[10px] font-black leading-relaxed text-slate-700">
+                          <div className="text-xs">{selectedImportedPrice.linkedAccessory.name[language]}</div>
+                          <div className="mt-1 font-bold text-slate-500">
+                            {`${t.linkedAccessoryCodeLabel} ${selectedImportedPrice.linkedAccessory.code} · ${getAccessoryRowSeriesLabel(selectedImportedPrice.linkedAccessory, language)}`}
+                          </div>
+                          <div className="mt-1 font-bold text-slate-500">
+                            {`${t.confirmedPrice}：${currency}${selectedImportedPrice.unitPrice.toFixed(2)} ${t.priceUnitPiece}`}
+                          </div>
+                        </div>
+                      </div>
+                      <p className="mt-2 text-[10px] font-bold leading-relaxed text-blue-700">{t.importedLinkedAccessoryNote}</p>
+                    </div>
+                  )}
                   {selectedImportedIsWheel && (
                     <label className="mt-3 block">
                       <span className="diy-field-label">{t.wheelModel}</span>
