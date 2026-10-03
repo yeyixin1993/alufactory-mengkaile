@@ -104,3 +104,14 @@ The hook runs `npm run package:dist` before every push. A failed build or ZIP op
 - Browser-tested `clothing_rack_2020.scene` import: 9 editable profiles, verified `2020`/`2020-N1` lengths, 12 imported Q11 countersunk holes, and a non-destructive review warning for four unsupported Q2 blind bores.
 
 The repository-wide `npx tsc --noEmit` still reports two pre-existing errors outside this interaction change: the backend service alias in `alufactory-backend/FRONTEND_SERVICE.ts` (`@/config` is not present in the frontend TypeScript project) and a narrowed `window.setTimeout` call in `App.tsx`. The former designer `fastenerHead` normalization mismatch was resolved while adding generated drill-and-tap relationships.
+
+
+## Stool import fix (2026-10-02)
+
+The supplied 20260930 fix is integrated selectively through `utils/stoolDesignerEngine.ts` rather than replacing the current designer. Exact imported source geometry is rendered by `utils/importedSourceMesh.ts`; generator assets live in `public/models/stool`. `StoolGenerator` uses the existing append/replace flow, and `StoolAssemblyReviewPanel` explains the remaining physical assembly checks. Manufacturing values remain whole millimetres, overriding the supplier's fractional hole stations. These drafts can be saved/reopened but are blocked from manufacturing export/cart pending physical approval; existing regular designs keep their order flow.
+
+Run `npm run test:stool-all` for the eight geometry, source asset, connection, rendering/save/append and assembly-review checks. `scripts/fixtures/stool-import-20260930.json.gz` preserves the exact supplied import for regression testing. `npm run generate:stool` writes a new editable JSON and validation report under `outputs/stool-import-fix-20260930`. Use the existing port 3000 dev server for browser verification, and `npm run build` for the production bundle.
+
+Display rack (2026-10-03): set upper shelves to 0 for a base cabinet alone. Overall height then follows cabinet height; posts shorten to cabinet height minus the 18mm tabletop, and upper-only rails, shelves, shafts, fittings and passages are omitted. Existing drawers and base connections remain. `npm run test:display-rack-connections` covers cabinet-only default/minimum/tall configurations alongside the existing full rack.
+
+Cabinet-only pricing clarification (2026-10-03): default price is ¥4200. Automatically shortened overall height incurs no dimension-customization fee; width, depth, base-cabinet height, finishes and drawer-count adjustments retain their existing rules.

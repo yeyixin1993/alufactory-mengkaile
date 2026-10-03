@@ -1,6 +1,6 @@
 # 地址与订单记录生命周期
 
-最后核对：2026-08-08
+最后核对：2026-10-02
 
 ## 删除规则
 
@@ -34,3 +34,11 @@
 - `alufactory-backend/app/routes/admin.py`
 - `alufactory-backend/admin/index.html`
 - `App.tsx`
+
+## 时间口径（UTC 存储 / 东八区展示）
+
+- 数据库中的 `created_at`、`paid_at`、`shipped_at` 等一律按 **UTC** 存储。
+- 所有面向管理员和客户的接口输出、列表、统计都按 **东八区（UTC+8）** 呈现，由 `app/order_utils.py` 的 `to_east8_datetime` / `to_east8_isoformat` 统一转换。
+- **月度统计必须按东八区自然月归集**：`/api/admin/statistics` 的 `monthly_revenue` 先把 `paid_at` 转成东八区再取 `%Y-%m`。若按 UTC 归集，北京时间每月 1 日 00:00–08:00 付款的订单会被算进上一个月（例如 10-01 00:30 的订单落到 9 月）。
+- 订单号 `ORD` 后的时间戳同样使用东八区，保证订单号日期与后台显示的创建日期一致。
+- 新增按日期/月份聚合的后端逻辑时，必须遵守上述口径，不要直接对 UTC 值做 `strftime`。

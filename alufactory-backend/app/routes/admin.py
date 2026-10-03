@@ -4,7 +4,7 @@ from datetime import datetime
 from app.models.user import db, User, Order, Profile, ProfileInventory, AccessoryInventory
 from app.models.user import Cart
 from app.models.user import normalize_membership_level
-from app.order_utils import build_order_pdf_filename
+from app.order_utils import build_order_pdf_filename, to_east8_datetime
 from app.order_snapshot import refresh_order_json
 from app.product_order_db import (
     query_order_snapshots,
@@ -65,7 +65,12 @@ def _monthly_revenue_and_color_usage(orders):
     for order in orders:
         if order.status not in PAID_ORDER_STATUSES:
             continue
-        month = (order.paid_at or order.created_at or datetime.utcnow()).strftime('%Y-%m')
+        # Timestamps are stored in UTC but every admin screen renders them in
+        # UTC+8, so bucket by the Beijing calendar month. Grouping by UTC would
+        # push payments made in the first 8 hours of a month back into the
+        # previous month (e.g. 10-01 00:30 as seen by the owner -> 2026-09).
+        paid_moment = to_east8_datetime(order.paid_at or order.created_at or datetime.utcnow())
+        month = paid_moment.strftime('%Y-%m')
         monthly_revenue[month] += float(order.total_amount or 0)
         for (_, color_id), meters in _profile_usage_from_order(order).items():
             if color_id != 'natural':

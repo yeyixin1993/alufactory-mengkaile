@@ -77,6 +77,7 @@ export interface DrillHole {
   // of "outward" is used when the marked through-hole is the exit side and
   // the screw must travel from that face into an adjacent tapped profile.
   fastenerDirection?: 'inward' | 'outward';
+  fastenerSeat?: 'surface' | 'internal_slot';
   // Canonical slot on the physical extrusion. C/D face drawings mirror this index.
   physicalGrooveIndex?: number;
   // Entry-face display index retained for older saved orders and human-readable exports.

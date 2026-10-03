@@ -273,7 +273,7 @@ const DisplayRackLivePreview: React.FC<{
         <path d={`M${rearLeft} ${rearBottom}V${rearTop}M${rearRight} ${rearBottom}V${rearTop}`} />
         <path d={`M${left} ${bottom}V${baseY}M${right} ${bottom}V${baseY}`} />
         <path d={`M${rearLeft} ${rearBottom}L${left} ${bottom}M${rearRight} ${rearBottom}L${right} ${bottom}`} />
-        <path d={`M${rearLeft} ${rearTop}L${rearRight} ${rearTop}`} />
+        {upperLevels > 0 && <path d={`M${rearLeft} ${rearTop}L${rearRight} ${rearTop}`} />}
         <path d={`M${rearLeft} ${rearBaseY}L${rearRight} ${rearBaseY}M${rearLeft} ${rearBaseY}L${left} ${baseY}M${rearRight} ${rearBaseY}L${right} ${baseY}`} />
         <path d={`M${left} ${bottom}L${right} ${bottom}M${left} ${baseY}L${right} ${baseY}`} />
       </g>
@@ -337,7 +337,7 @@ const DisplayRackConfigurator: React.FC<DisplayRackConfiguratorProps> = ({ langu
 
   const parameters = useMemo<DisplayRack3Parameters>(() => ({
     widthMm,
-    heightMm,
+    heightMm: upperLevels === 0 ? baseCabinetHeightMm : heightMm,
     depthMm,
     baseCabinetHeightMm,
     upperLevels,
@@ -357,7 +357,7 @@ const DisplayRackConfigurator: React.FC<DisplayRackConfiguratorProps> = ({ langu
   const changeUpperLevels = (next: number) => {
     setUpperLevels(next);
     if (trackLayoutMode === 'custom') {
-      const nextLayout = automaticLayoutFor({ upperLevels: next });
+      const nextLayout = automaticLayoutFor({ upperLevels: next, heightMm });
       if (nextLayout) setTrackHeightsMm(nextLayout.upperTierHeightsMm);
     }
   };
@@ -380,12 +380,12 @@ const DisplayRackConfigurator: React.FC<DisplayRackConfiguratorProps> = ({ langu
   };
 
   const counts = validation.layout?.counts || {
-    profiles: 14 + lowerLevels * 2 + upperLevels * 4,
+    profiles: (upperLevels === 0 ? 13 : 14) + lowerLevels * 2 + upperLevels * 4,
     panels: 1 + lowerLevels * 5 + upperLevels * 2,
     shafts: upperLevels,
     supports: upperLevels * 5,
     drawerSlides: lowerLevels,
-    total: 15 + lowerLevels * 8 + upperLevels * 12,
+    total: (upperLevels === 0 ? 14 : 15) + lowerLevels * 8 + upperLevels * 12,
   };
 
   return (
@@ -410,7 +410,7 @@ const DisplayRackConfigurator: React.FC<DisplayRackConfiguratorProps> = ({ langu
             <h4 className="mb-3 text-sm font-black text-slate-900">{copy.dimensions}</h4>
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <RangeNumberControl label={copy.width} value={widthMm} {...DISPLAY_RACK_3_LIMITS.widthMm} onChange={setWidthMm} />
-              <RangeNumberControl label={copy.height} value={heightMm} {...DISPLAY_RACK_3_LIMITS.heightMm} onChange={setHeightMm} />
+              {upperLevels > 0 ? <RangeNumberControl label={copy.height} value={heightMm} {...DISPLAY_RACK_3_LIMITS.heightMm} onChange={setHeightMm} /> : <div className="rounded-2xl border border-blue-200 bg-blue-50 p-3 text-sm font-bold text-blue-900" data-testid="display-rack-cabinet-only-height">{copy.height}: {baseCabinetHeightMm}mm<p className="mt-1 text-xs">{language === 'cn' ? '仅保留下柜：总高随地柜高度变化，立柱自动缩短。' : language === 'jp' ? '下部キャビネットのみ：全高と支柱はキャビネット高さに合わせます。' : 'Base cabinet only: overall height and uprights follow the cabinet height.'}</p></div>}
               <RangeNumberControl label={copy.depth} value={depthMm} {...DISPLAY_RACK_3_LIMITS.depthMm} onChange={setDepthMm} />
               <RangeNumberControl label={copy.baseHeight} value={baseCabinetHeightMm} {...DISPLAY_RACK_3_LIMITS.baseCabinetHeightMm} onChange={setBaseCabinetHeightMm} />
             </div>
@@ -446,7 +446,7 @@ const DisplayRackConfigurator: React.FC<DisplayRackConfiguratorProps> = ({ langu
             </div>
           </section>
 
-          <section className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+          {upperLevels > 0 && <section className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
             <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
               <h4 className="text-sm font-black text-slate-900">{copy.trackLayout}</h4>
               <div className="grid grid-cols-2 gap-1 rounded-xl bg-slate-200/70 p-1">
@@ -473,7 +473,7 @@ const DisplayRackConfigurator: React.FC<DisplayRackConfiguratorProps> = ({ langu
               </div>
             )}
             <p className="mt-3 text-[10px] font-bold leading-relaxed text-slate-500">{copy.trackHint}</p>
-          </section>
+          </section>}
 
           <section className="rounded-2xl border border-emerald-100 bg-emerald-50/70 p-4">
             <div className="flex items-center gap-2 text-xs font-black text-emerald-900"><LockKeyhole className="h-4 w-4 text-emerald-700" />{copy.fixedTitle}</div>
@@ -519,7 +519,7 @@ const DisplayRackConfigurator: React.FC<DisplayRackConfiguratorProps> = ({ langu
                 <div key={label} className="rounded-xl border border-slate-200 bg-white px-3 py-3"><div className="text-[9px] font-black text-slate-400">{label}</div><div className="mt-1 text-xl font-black text-slate-900">{value}</div></div>
               ))}
             </div>
-            <div className="mt-2 rounded-xl bg-slate-950 px-4 py-3 text-white"><div className="text-[9px] font-black uppercase tracking-widest text-slate-400">{copy.total}</div><div className="mt-1 flex items-end justify-between gap-3"><strong className="text-2xl">{counts.total}</strong><span className="text-[10px] font-bold text-slate-300">{widthMm} × {heightMm} × {depthMm}mm</span></div></div>
+            <div className="mt-2 rounded-xl bg-slate-950 px-4 py-3 text-white"><div className="text-[9px] font-black uppercase tracking-widest text-slate-400">{copy.total}</div><div className="mt-1 flex items-end justify-between gap-3"><strong className="text-2xl">{counts.total}</strong><span className="text-[10px] font-bold text-slate-300">{widthMm} × {parameters.heightMm} × {depthMm}mm</span></div></div>
             <div className="mt-3 rounded-2xl bg-blue-600 p-4 text-white shadow-lg shadow-blue-600/20">
               <div className="text-[9px] font-black uppercase tracking-widest text-blue-100">{copy.quote}</div>
               <div className="mt-1 text-3xl font-black">¥{price.totalPriceCny.toFixed(0)}</div>

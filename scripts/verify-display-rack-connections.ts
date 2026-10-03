@@ -45,6 +45,12 @@ assertRackPrice({ upperLevels: 4 }, 4600, '增加展示层板');
 assertRackPrice({ upperLevels: 2 }, 4400, '减少展示层板');
 assertRackPrice({ lowerLevels: 6 }, 4700, '增加抽屉');
 assertRackPrice({ lowerLevels: 4 }, 4300, '减少抽屉');
+assertRackPrice({ upperLevels: 0 }, 4200, '标准下柜不收自动缩短定制费');
+assertRackPrice({ upperLevels: 0, heightMm: 824 }, 4200, '下柜有效高度报价');
+assertRackPrice({ upperLevels: 0, widthMm: 900 }, 4280, '下柜宽度定制');
+assertRackPrice({ upperLevels: 0, depthMm: 551 }, 4360, '下柜深度定制');
+assertRackPrice({ upperLevels: 0, baseCabinetHeightMm: 825 }, 4280, '下柜高度主动定制');
+assertRackPrice({ upperLevels: 0, profileColorId: 'black' }, 4700, '下柜彩色型材');
 
 const coloredPayload = buildDisplayRack3Template({
   ...DISPLAY_RACK_3_BASELINE,
@@ -96,7 +102,36 @@ if (normalizedLegacyMeasurements[0].holes?.[0]?.positionMm !== 1287
   throw new Error('Legacy manufacturing measurements were not rounded to whole millimetres');
 }
 
+const cabinetOnlyParameters = { ...DISPLAY_RACK_3_BASELINE, upperLevels: 0, trackLayoutMode: 'custom' as const, trackHeightsMm: [1100, 1450, 1680] };
+const cabinetOnly = buildDisplayRack3Template(cabinetOnlyParameters);
+if (cabinetOnly.summary.heightMm !== 824 || cabinetOnly.summary.upperLevels !== 0
+    || cabinetOnly.summary.profileCount !== 23 || cabinetOnly.summary.totalCount !== 54) {
+  throw new Error('Cabinet-only dimensions/counts must reflect the shortened assembly');
+}
+const cabinetProfiles = cabinetOnly.items.filter(item => item.kind === 'profile');
+const posts = cabinetProfiles.filter(item => item.remark?.includes('立柱'));
+if (posts.length !== 4 || posts.some(item => item.length !== 806)
+    || cabinetProfiles.some(item => item.remark?.includes('顶部后横梁'))
+    || cabinetOnly.items.some(item => item.shelfSupportType === 'linear_shaft' || item.shelfSupportType?.startsWith('shaft_support_'))
+    || cabinetProfiles.some(item => item.holes?.length)) {
+  throw new Error('Cabinet-only mode must remove upper rails, shaft fittings and shaft passages, and shorten all posts below the 18mm top');
+}
+const fullRack = buildDisplayRack3Template(DISPLAY_RACK_3_BASELINE);
+for (const drawer of cabinetOnly.items.filter(item => item.name.includes('抽屉'))) {
+  const original = fullRack.items.find(item => item.name === drawer.name)!;
+  if (JSON.stringify([drawer.position, drawer.width, drawer.height, drawer.thickness]) !== JSON.stringify([original.position, original.width, original.height, original.thickness])) {
+    throw new Error('Removing upper shelves must not alter existing drawers');
+  }
+}
+if (cabinetOnly.finishedFurniture.totalPriceCny !== 4200 || cabinetOnly.summary.totalPriceCny !== 4200
+    || cabinetOnly.finishedFurniture.totalPriceCny !== calculateDisplayRack3Price({ ...cabinetOnlyParameters, heightMm: 824 }).totalPriceCny) {
+  throw new Error('Cabinet-only price must use actual dimensions consistently');
+}
+
 const cases = [
+  cabinetOnlyParameters,
+  { ...DISPLAY_RACK_3_BASELINE, upperLevels: 0, baseCabinetHeightMm: 1400, lowerLevels: 7 },
+  { ...DISPLAY_RACK_3_BASELINE, widthMm: 400, heightMm: 1500, depthMm: 350, baseCabinetHeightMm: 600, upperLevels: 1, lowerLevels: 3 },
   DISPLAY_RACK_3_BASELINE,
   {
     ...DISPLAY_RACK_3_BASELINE,

@@ -32,7 +32,9 @@ assert.equal(imported.tappingRight, false, 'input stays unchanged for undo');
 for (const format of ['design', 'order', 'boards', 'cancel', 'invalid']) {
   let reader, prompt = null, importedOnce = false, warning = false;
   const importJson = compile('importJson', {
-    FileReader: class { constructor() { reader = this; } readAsText(file) { this.result = file; } },
+    FileReader: class { constructor() { reader = this; } readAsText(file) { this.result = file.contents; } },
+    validateImportedSourceMeshFileSize: size => assert.ok(Number.isFinite(size) && size > 0),
+    inspectDesignerImportItems: () => ({ valid: true, issues: [] }),
     normalizeDesignItems: items => items,
     mapSystemOrderProfileItemsToDesignerItems: items => items,
     createItem: () => ({}),
@@ -49,7 +51,7 @@ for (const format of ['design', 'order', 'boards', 'cancel', 'invalid']) {
   const json = format === 'invalid' ? '{bad json' : JSON.stringify(format === 'order'
     ? { order_json: { items: [imported] } }
     : { items: format === 'boards' ? [board] : [imported, board] });
-  importJson(json);
+  importJson({ name: 'design.json', size: Buffer.byteLength(json), contents: json });
   await reader.onload();
   assert.equal(importedOnce, format !== 'invalid');
   assert.equal(warning, format === 'invalid');

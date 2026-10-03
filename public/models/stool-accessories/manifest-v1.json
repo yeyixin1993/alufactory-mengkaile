@@ -1,0 +1,116 @@
+{
+  "schemaVersion": 1,
+  "sourceFileSha256": "c8dcb2a4f1c9f452b87225a1e98c34323cb75a6b14bd92db7e97f52b27ab0166",
+  "sourceAssetSha256": "a28e9a5426e46ca10ee97af2c6d0f371bbb2c579bd3e66c66ee08ce9e45e83de",
+  "coordinateUnit": "mm",
+  "records": [
+    {
+      "id": "decorative_8080_30",
+      "sourceSha256": "c8dcb2a4f1c9f452b87225a1e98c34323cb75a6b14bd92db7e97f52b27ab0166",
+      "sourceInstancePath": "root/groups-31",
+      "dimensionsMm": [
+        30,
+        80,
+        80
+      ],
+      "positionsUnchanged": true,
+      "indicesUnchanged": true,
+      "sourceMeshSha256": "f594230e0f4ea4f2dcbc068ad7a6a4cb34fd16b2cc5aa5c898bc508d94a98994",
+      "sourceMeshBytes": 125647,
+      "glbSha256": "0b549a140411084b27d9b25f4cea7d31983a299ddc8260b62a5e832e1dd40d87",
+      "glbBytes": 127640,
+      "designSha256": "0a39c2300a57ea59e816252f54a29900804d89e1b8f881969ca53cf1b799fa91",
+      "designBytes": 126475,
+      "renderTriangleCount": 1832,
+      "thumbnail": {
+        "renderer": "deterministic source-triangle orthographic z-buffer with original face sides, normals, colors and textures",
+        "size": [
+          512,
+          512
+        ],
+        "visibleRasterizedTriangles": 1148,
+        "cameraDirection": [
+          0.5576246709318381,
+          0.423794749908197,
+          0.7137595787927529
+        ],
+        "sha256": "ad3e355829796e4d08f163ec7cc515e2c813ae14cc372414517af8bc1297928d"
+      },
+      "reviewStatus": "source_geometry_only",
+      "trianglesDecimated": 0,
+      "geometrySignature": "fnv1a32:c07f96fe"
+    },
+    {
+      "id": "stainless_handle_126",
+      "sourceSha256": "c8dcb2a4f1c9f452b87225a1e98c34323cb75a6b14bd92db7e97f52b27ab0166",
+      "sourceInstancePath": "root/instances-41",
+      "dimensionsMm": [
+        126,
+        52,
+        43
+      ],
+      "positionsUnchanged": true,
+      "indicesUnchanged": true,
+      "sourceMeshSha256": "b8a0404bce85557f2efe88e014511687d987612f0fe3bddbc1e98fab0b0ad4c5",
+      "sourceMeshBytes": 548061,
+      "glbSha256": "074bc71a20443bcf331e261b4ddc327a56aceb8ef2c564d3b00fc81594495479",
+      "glbBytes": 421956,
+      "designSha256": "6997154215a1ac9c0290bf82e8fe0d431009cf194ba627d232960129bb99eb2e",
+      "designBytes": 548893,
+      "renderTriangleCount": 12000,
+      "thumbnail": {
+        "renderer": "deterministic source-triangle orthographic z-buffer with original face sides, normals, colors and textures",
+        "size": [
+          512,
+          512
+        ],
+        "visibleRasterizedTriangles": 8063,
+        "cameraDirection": [
+          0.5576246709318381,
+          0.423794749908197,
+          0.7137595787927529
+        ],
+        "sha256": "be7e726b3863f91d5206b09c8693d1fbdf96061236608c437077a1ef53d5bde1"
+      },
+      "reviewStatus": "source_geometry_only",
+      "trianglesDecimated": 0,
+      "geometrySignature": "fnv1a32:115fc42e"
+    },
+    {
+      "id": "brake_caster_source",
+      "sourceSha256": "c8dcb2a4f1c9f452b87225a1e98c34323cb75a6b14bd92db7e97f52b27ab0166",
+      "sourceInstancePath": "root/instances-37",
+      "dimensionsMm": [
+        69.652046,
+        82.585972,
+        16.34304
+      ],
+      "positionsUnchanged": true,
+      "indicesUnchanged": true,
+      "sourceMeshSha256": "bc31d9162a8794413d3e41385dd6c4aa45a4d5ae8e1e3cbe7d41e2b837c900b0",
+      "sourceMeshBytes": 4469483,
+      "glbSha256": "e682a37b07153d1a55742ea02eececfdb6f986724e1b4fc011248770c2627d38",
+      "glbBytes": 2923804,
+      "designSha256": "f70c02333011ff1405434575560d7ed5a819061748d8eadb84503b30f157d4f1",
+      "designBytes": 4470345,
+      "renderTriangleCount": 47104,
+      "thumbnail": {
+        "renderer": "deterministic source-triangle orthographic z-buffer with original face sides, normals, colors and textures",
+        "size": [
+          512,
+          512
+        ],
+        "visibleRasterizedTriangles": 10628,
+        "cameraDirection": [
+          0.5576246709318381,
+          0.423794749908197,
+          0.7137595787927529
+        ],
+        "sha256": "00bdee53d8ef128171aaec4d8f7a7cf05ecf6e9ed94e05dcce7f6fe2bccc5df6"
+      },
+      "reviewStatus": "source_geometry_only",
+      "trianglesDecimated": 0,
+      "geometrySignature": "fnv1a32:6354c753"
+    }
+  ]
+}

@@ -149,3 +149,56 @@ def test_dashboard_monthly_revenue_and_top_colored_profile_meters():
         assert statistics['top_profile_colors'] == [
             {'color_id': 'red', 'color_name': '中国红', 'meters': 3.6},
         ]
+
+
+def test_monthly_revenue_buckets_by_beijing_calendar_month():
+    """Timestamps are stored in UTC but the admin renders UTC+8.
+
+    A payment made on 10-01 00:30 Beijing time is stored as 09-30 16:30 UTC and
+    must land in the October bucket, not September.
+    """
+    app = create_app('testing')
+    with app.app_context():
+        client = app.test_client()
+        headers = _admin_headers(client)
+        customer = User(username='timezone-customer', phone='13800000003')
+        customer.set_password('customer')
+        db.session.add(customer)
+        db.session.flush()
+
+        # 2026-10-01 00:30 Beijing == 2026-09-30 16:30 UTC
+        boundary_order = Order(
+            order_number='TZ-BOUNDARY',
+            user_id=customer.id,
+            recipient_name='边界客户',
+            phone=customer.phone,
+            province='上海',
+            address_detail='测试地址',
+            total_amount=160.8,
+            status='confirmed',
+            created_at=datetime(2026, 9, 30, 16, 30, 0),
+            paid_at=datetime(2026, 9, 30, 16, 30, 0),
+        )
+        # 2026-09-30 23:00 Beijing == 2026-09-30 15:00 UTC, still September
+        same_month_order = Order(
+            order_number='TZ-SAME-MONTH',
+            user_id=customer.id,
+            recipient_name='同月客户',
+            phone=customer.phone,
+            province='上海',
+            address_detail='测试地址',
+            total_amount=100.0,
+            status='shipped',
+            created_at=datetime(2026, 9, 30, 15, 0, 0),
+            paid_at=datetime(2026, 9, 30, 15, 0, 0),
+        )
+        db.session.add_all([boundary_order, same_month_order])
+        db.session.commit()
+
+        response = client.get('/api/admin/statistics', headers=headers)
+        assert response.status_code == 200
+        monthly = response.get_json()['monthly_revenue']
+        assert monthly == [
+            {'month': '2026-09', 'revenue': 100.0},
+            {'month': '2026-10', 'revenue': 160.8},
+        ], monthly

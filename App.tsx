@@ -26,6 +26,11 @@ import {
   expandFinishedFurnitureCartItems,
   isFinishedFurnitureCartItem,
 } from './utils/finishedFurnitureCart';
+import {
+  CALLIGRAPHY_BASKET_DEPTH_MM,
+  CALLIGRAPHY_BASKET_WIDTH_MM,
+  isCalligraphyLongOpening,
+} from './utils/parametricFurniture';
 
 const DIYDesigner = React.lazy(() => import('./components/DIYDesigner'));
 const FactorySheetPreviewPage = React.lazy(() => import('./components/FactorySheetPreviewPage'));
@@ -867,6 +872,9 @@ const getFinishedFurnitureParameterRows = (item: CartItem, language: Language) =
     layers: language === 'cn' ? '层数' : language === 'jp' ? '段数' : 'Layers',
     shelves: language === 'cn' ? '展示层板' : language === 'jp' ? '展示棚板' : 'Display shelves',
     drawers: language === 'cn' ? '抽屉' : language === 'jp' ? '引出し' : 'Drawers',
+    opening: language === 'cn' ? '开口方向' : language === 'jp' ? '開口方向' : 'Opening face',
+    openingShort: language === 'cn' ? '短边朝前' : language === 'jp' ? '短辺が前面' : 'Short side front',
+    openingLong: language === 'cn' ? '长边朝前' : language === 'jp' ? '長辺が前面' : 'Long side front',
     profileColor: language === 'cn' ? '型材颜色' : language === 'jp' ? '形材カラー' : 'Profile color',
     boardColor: language === 'cn' ? '海洋板颜色' : language === 'jp' ? 'マリンボードカラー' : 'Marine-board color',
   };
@@ -880,6 +888,16 @@ const getFinishedFurnitureParameterRows = (item: CartItem, language: Language) =
     rows.push({ label: text.size, value: `${dimensionValues.map((value) => Number(value)).join(' × ')}mm` });
   }
   if (Number.isFinite(Number(summary.baseCabinetHeightMm))) rows.push({ label: text.baseHeight, value: `${Number(summary.baseCabinetHeightMm)}mm` });
+  if (summary.openingSide || Number.isFinite(Number(summary.openingWidthMm))) {
+    const isLongOpening = isCalligraphyLongOpening(summary.openingSide, summary.openingWidthMm);
+    const openingWidth = Number.isFinite(Number(summary.openingWidthMm))
+      ? Number(summary.openingWidthMm)
+      : (isLongOpening ? CALLIGRAPHY_BASKET_DEPTH_MM : CALLIGRAPHY_BASKET_WIDTH_MM);
+    rows.push({
+      label: text.opening,
+      value: `${isLongOpening ? text.openingLong : text.openingShort} · ${openingWidth}mm`,
+    });
+  }
   if (Number.isFinite(Number(summary.columns))) rows.push({ label: text.columns, value: String(Number(summary.columns)) });
   if (Number.isFinite(Number(summary.layers))) rows.push({ label: text.layers, value: String(Number(summary.layers)) });
   if (Number.isFinite(Number(summary.storageLayers))) rows.push({ label: text.layers, value: String(Number(summary.storageLayers)) });

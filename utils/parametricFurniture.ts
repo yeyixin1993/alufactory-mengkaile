@@ -1,12 +1,15 @@
+import type { ImportedSourceMesh } from './importedSourceMesh';
+import type { UnifiedPartReference } from '../data/stoolPartReference';
 import type { DrillHole, ProfileFinish, ProfileSide } from '../types';
 
-export type ParametricFurnitureSource = 'calligraphy_cabinet' | 'wardrobe' | 'display_rack_3_0';
+export type ParametricFurnitureSource = 'calligraphy_cabinet' | 'wardrobe' | 'display_rack_3_0' | 'parametric_stool';
 
 export type ParametricItemKind =
   | 'profile'
   | 'marine_board'
   | 'shelf_support'
-  | 'connector';
+  | 'connector'
+  | 'imported_component';
 
 export type ParametricShelfSupportType =
   | 'linear'
@@ -14,7 +17,17 @@ export type ParametricShelfSupportType =
   | 'linear_shaft'
   | 'shaft_support_sk8'
   | 'shaft_support_shf8'
-  | 'drawer_slide_pair';
+  | 'shaft_support_cross_d8'
+  | 'shaft_support_collar_d8'
+  | 'linear_shaft_imported'
+  | 'shaft_support_cross_imported'
+  | 'shaft_support_collar_imported'
+  | 'shaft_support_vertical_imported'
+  | 'external_fixture_imported'
+  | 'external_bom_only'
+  | 'drawer_slide_pair'
+  | 'drawer_generator_side_slide'
+  | 'drawer_generator_under_slide';
 
 export interface ParametricSceneItem {
   id: string;
@@ -34,7 +47,7 @@ export interface ParametricSceneItem {
   tappingRight?: boolean;
   finish?: ProfileFinish;
   shelfSupportType?: ParametricShelfSupportType;
-  fixedReferenceId?: 'MODEL_REF_SK8_SUPPORT' | 'MODEL_REF_SHF8_SUPPORT';
+  fixedReferenceId?: 'MODEL_REF_SK8_SUPPORT' | 'MODEL_REF_SHF8_SUPPORT' | 'MODEL_REF_CROSS_CLAMP_D8' | 'MODEL_REF_COLLAR_D8';
   shaftDiameterMm?: number;
   accessoryPrice?: number;
   accessoryProfileSize?: '2020' | '3030';
@@ -43,6 +56,8 @@ export interface ParametricSceneItem {
   attachedProfileIds?: string[];
   attachmentKey?: string;
   remark?: string;
+  sourceMesh?: ImportedSourceMesh;
+  partCatalogRef?: UnifiedPartReference;
 }
 
 export interface ParametricTemplatePayload {
@@ -50,7 +65,7 @@ export interface ParametricTemplatePayload {
   source: ParametricFurnitureSource;
   createdAt: string;
   summary: Record<string, number | string>;
-  finishedFurniture: FinishedFurnitureQuote;
+  finishedFurniture?: FinishedFurnitureQuote;
   items: ParametricSceneItem[];
 }
 
@@ -72,6 +87,44 @@ export const CALLIGRAPHY_BASKET_DEPTH_MM = 420;
 export const CALLIGRAPHY_BASKET_HEIGHT_MM = 100;
 export const CALLIGRAPHY_LAYER_PITCH_MM = 130;
 export const CALLIGRAPHY_OUTER_DEPTH_MM = 460;
+
+// Which basket face is turned toward the customer: 'short' puts the 300mm
+// face at the front (basket stands in with its 420mm length along the depth),
+// 'long' puts the 420mm face at the front (basket lies across the opening).
+// The depth rail therefore follows the basket's other plan dimension, so the
+// fixed 460mm outside depth only applies to the short-side opening.
+export type CalligraphyOpeningSide = 'short' | 'long';
+export const CALLIGRAPHY_DEFAULT_OPENING_SIDE: CalligraphyOpeningSide = 'short';
+
+export const normalizeCalligraphyOpeningSide = (value: unknown): CalligraphyOpeningSide => (
+  String(value) === 'long' ? 'long' : 'short'
+);
+export const getCalligraphyOpeningWidthMm = (openingSide: CalligraphyOpeningSide) => (
+  openingSide === 'long' ? CALLIGRAPHY_BASKET_DEPTH_MM : CALLIGRAPHY_BASKET_WIDTH_MM
+);
+export const getCalligraphyInnerDepthMm = (openingSide: CalligraphyOpeningSide) => (
+  openingSide === 'long' ? CALLIGRAPHY_BASKET_WIDTH_MM : CALLIGRAPHY_BASKET_DEPTH_MM
+);
+export const getCalligraphyOuterDepthMm = (openingSide: CalligraphyOpeningSide) => (
+  getCalligraphyInnerDepthMm(openingSide) + CALLIGRAPHY_PROFILE_MM * 2
+);
+export const getCalligraphyBayPitchMm = (openingSide: CalligraphyOpeningSide) => (
+  getCalligraphyOpeningWidthMm(openingSide) + CALLIGRAPHY_PROFILE_MM
+);
+export const getCalligraphyColumnLimit = (openingSide: CalligraphyOpeningSide) => (
+  Math.max(1, Math.floor(
+    (CALLIGRAPHY_MAX_LENGTH_MM - CALLIGRAPHY_PROFILE_MM) / getCalligraphyBayPitchMm(openingSide),
+  ))
+);
+export const getCalligraphyMinLengthMm = (openingSide: CalligraphyOpeningSide) => (
+  getCalligraphyOpeningWidthMm(openingSide) + CALLIGRAPHY_PROFILE_MM * 2
+);
+export const isCalligraphyLongOpening = (openingSide: unknown, openingWidthMm?: unknown) => {
+  const side = String(openingSide || '');
+  if (side === 'long' || side === 'short') return side === 'long';
+  const width = Number(openingWidthMm);
+  return Number.isFinite(width) && width > 0 && width !== CALLIGRAPHY_BASKET_WIDTH_MM;
+};
 export const CALLIGRAPHY_PROFILE_MM = 20;
 export const CALLIGRAPHY_MAX_LENGTH_MM = 3000;
 export const CALLIGRAPHY_MAX_HEIGHT_MM = 1600;
@@ -181,10 +234,14 @@ const createProfile = (
   remark: options.remark,
 });
 
-export const getCalligraphyCabinetDimensions = (columnsInput: number, layersInput: number) => {
-  const maxColumns = Math.floor((CALLIGRAPHY_MAX_LENGTH_MM - CALLIGRAPHY_PROFILE_MM) / (
-    CALLIGRAPHY_BASKET_WIDTH_MM + CALLIGRAPHY_PROFILE_MM
-  ));
+export const getCalligraphyCabinetDimensions = (
+  columnsInput: number,
+  layersInput: number,
+  openingSideInput: CalligraphyOpeningSide | string = CALLIGRAPHY_DEFAULT_OPENING_SIDE,
+) => {
+  const openingSide = normalizeCalligraphyOpeningSide(openingSideInput);
+  const openingWidthMm = getCalligraphyOpeningWidthMm(openingSide);
+  const maxColumns = getCalligraphyColumnLimit(openingSide);
   const maxLayers = Math.floor(
     (CALLIGRAPHY_MAX_HEIGHT_MM
       - CALLIGRAPHY_PROFILE_MM * 2
@@ -195,20 +252,30 @@ export const getCalligraphyCabinetDimensions = (columnsInput: number, layersInpu
   return {
     columns,
     layers,
-    lengthMm: columns * CALLIGRAPHY_BASKET_WIDTH_MM + (columns + 1) * CALLIGRAPHY_PROFILE_MM,
+    openingSide,
+    openingWidthMm,
+    lengthMm: columns * openingWidthMm + (columns + 1) * CALLIGRAPHY_PROFILE_MM,
     heightMm: layers * CALLIGRAPHY_LAYER_PITCH_MM
       + CALLIGRAPHY_LAYER_PITCH_MM / 2
       + CALLIGRAPHY_PROFILE_MM * 2,
-    depthMm: CALLIGRAPHY_OUTER_DEPTH_MM,
+    depthMm: getCalligraphyOuterDepthMm(openingSide),
   };
 };
 
-export const getCalligraphyGridForBounds = (lengthInput: number, heightInput: number) => {
-  const requestedLengthMm = clampInteger(lengthInput, 340, CALLIGRAPHY_MAX_LENGTH_MM);
+export const getCalligraphyGridForBounds = (
+  lengthInput: number,
+  heightInput: number,
+  openingSideInput: CalligraphyOpeningSide | string = CALLIGRAPHY_DEFAULT_OPENING_SIDE,
+) => {
+  const openingSide = normalizeCalligraphyOpeningSide(openingSideInput);
+  const requestedLengthMm = clampInteger(
+    lengthInput,
+    getCalligraphyMinLengthMm(openingSide),
+    CALLIGRAPHY_MAX_LENGTH_MM,
+  );
   const requestedHeightMm = clampInteger(heightInput, 235, CALLIGRAPHY_MAX_HEIGHT_MM);
   const columns = Math.max(1, Math.floor(
-    (requestedLengthMm - CALLIGRAPHY_PROFILE_MM) /
-    (CALLIGRAPHY_BASKET_WIDTH_MM + CALLIGRAPHY_PROFILE_MM),
+    (requestedLengthMm - CALLIGRAPHY_PROFILE_MM) / getCalligraphyBayPitchMm(openingSide),
   ));
   const layers = Math.max(1, Math.floor(
     (requestedHeightMm
@@ -216,7 +283,7 @@ export const getCalligraphyGridForBounds = (lengthInput: number, heightInput: nu
       - CALLIGRAPHY_LAYER_PITCH_MM / 2) / CALLIGRAPHY_LAYER_PITCH_MM,
   ));
   return {
-    ...getCalligraphyCabinetDimensions(columns, layers),
+    ...getCalligraphyCabinetDimensions(columns, layers, openingSide),
     requestedLengthMm,
     requestedHeightMm,
   };
@@ -225,10 +292,17 @@ export const getCalligraphyGridForBounds = (lengthInput: number, heightInput: nu
 export const buildCalligraphyCabinetTemplate = (
   columnsInput: number,
   layersInput: number,
+  openingSideInput: CalligraphyOpeningSide | string = CALLIGRAPHY_DEFAULT_OPENING_SIDE,
 ): ParametricTemplatePayload => {
-  const dimensions = getCalligraphyCabinetDimensions(columnsInput, layersInput);
-  const { columns, layers, lengthMm, heightMm, depthMm } = dimensions;
-  const id = createIdFactory(`calligraphy-${columns}x${layers}`);
+  const dimensions = getCalligraphyCabinetDimensions(columnsInput, layersInput, openingSideInput);
+  const { columns, layers, lengthMm, heightMm, depthMm, openingSide, openingWidthMm } = dimensions;
+  const bayWidthMm = openingWidthMm;
+  // The depth rail always carries the basket's other plan dimension: 420mm
+  // behind a 300mm opening, and 300mm behind a 420mm opening.
+  const depthRailLengthMm = getCalligraphyInnerDepthMm(openingSide);
+  const supportLengthMm = depthRailLengthMm - CALLIGRAPHY_PROFILE_MM;
+  const openingLabel = openingSide === 'long' ? '长边420mm开口' : '短边300mm开口';
+  const id = createIdFactory(`calligraphy-${openingSide}-${columns}x${layers}`);
   const items: ParametricSceneItem[] = [];
   const halfLength = lengthMm / 2;
   const halfDepth = depthMm / 2;
@@ -244,7 +318,7 @@ export const buildCalligraphyCabinetTemplate = (
   const boundaryXs = Array.from(
     { length: columns + 1 },
     (_, boundary) => -halfLength + CALLIGRAPHY_PROFILE_MM / 2
-      + boundary * (CALLIGRAPHY_BASKET_WIDTH_MM + CALLIGRAPHY_PROFILE_MM),
+      + boundary * (bayWidthMm + CALLIGRAPHY_PROFILE_MM),
   );
   const boundaryHolePositions = boundaryXs.map((x) => x + halfLength);
 
@@ -299,12 +373,12 @@ export const buildCalligraphyCabinetTemplate = (
     boundaryXs.forEach((x, boundary) => {
       items.push(createProfile(id, {
         variantId: '2020',
-        length: CALLIGRAPHY_BASKET_DEPTH_MM,
+        length: depthRailLengthMm,
         position: [x, y, 0],
         rotation: [0, 90, 0],
         tappingLeft: true,
         tappingRight: true,
-        remark: `舒法特柜${levelIndex === 0 ? '底部' : '顶部'}第${boundary + 1}道420mm框架深度梁（不装层板托），两端攻丝`,
+        remark: `舒法特柜${levelIndex === 0 ? '底部' : '顶部'}第${boundary + 1}道${depthRailLengthMm}mm框架深度梁（${openingLabel}，不装层板托），两端攻丝`,
       }));
     });
   });
@@ -316,12 +390,12 @@ export const buildCalligraphyCabinetTemplate = (
     boundaryXs.forEach((x, boundary) => {
       items.push(createProfile(id, {
         variantId: '2020',
-        length: CALLIGRAPHY_BASKET_DEPTH_MM,
+        length: depthRailLengthMm,
         position: [x, y, 0],
         rotation: [0, 90, 0],
         tappingLeft: true,
         tappingRight: true,
-        remark: `中间第${layer + 1}层第${boundary + 1}道420mm共享承托型材，与立柱孔位对齐并安装层板托，两端攻丝`,
+        remark: `中间第${layer + 1}层第${boundary + 1}道${depthRailLengthMm}mm共享承托型材（${openingLabel}），与立柱孔位对齐并安装层板托，两端攻丝`,
       }));
       const supportSides = [
         ...(boundary > 0 ? [-1] : []),
@@ -338,9 +412,9 @@ export const buildCalligraphyCabinetTemplate = (
           quantity: 1,
           width: 12,
           height: 2,
-          thickness: 400,
+          thickness: supportLengthMm,
           finish: 'oxidized',
-          accessoryPrice: getShelfSupportUnitPrice(400, 'oxidized'),
+          accessoryPrice: getShelfSupportUnitPrice(supportLengthMm, 'oxidized'),
           accessoryProfileSize: '2020',
           remark: `第${layer + 1}层第${boundary + 1}道深度梁${supportSide < 0 ? '左' : '右'}侧层板托`,
         });
@@ -403,6 +477,8 @@ export const buildCalligraphyCabinetTemplate = (
       lengthMm,
       heightMm,
       depthMm,
+      openingSide,
+      openingWidthMm,
       basketWidthMm: CALLIGRAPHY_BASKET_WIDTH_MM,
       basketDepthMm: CALLIGRAPHY_BASKET_DEPTH_MM,
       basketHeightMm: CALLIGRAPHY_BASKET_HEIGHT_MM,

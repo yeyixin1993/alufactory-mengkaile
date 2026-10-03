@@ -6,10 +6,13 @@ import {
   buildWardrobeTemplate,
   CALLIGRAPHY_MAX_HEIGHT_MM,
   CALLIGRAPHY_MAX_LENGTH_MM,
-  CALLIGRAPHY_OUTER_DEPTH_MM,
+  CalligraphyOpeningSide,
   DIY_TEMPLATE_STORAGE_PREFIX,
   getCalligraphyCabinetDimensions,
+  getCalligraphyColumnLimit,
   getCalligraphyGridForBounds,
+  getCalligraphyInnerDepthMm,
+  getCalligraphyMinLengthMm,
   getWardrobeColumnLimit,
   getWardrobeProfileCount,
   getWardrobeStorageLayerLimit,
@@ -28,7 +31,11 @@ const COPY = {
     gridMode: '按层数和列数', sizeMode: '按空间上限', columns: '列数', layers: '层数',
     totalLength: '最长不能超过 (mm)', totalWidth: '整体宽/深 (mm)', totalHeight: '最高不能超过 (mm)',
     generatedSize: '实际生成尺寸', requestedLimit: '这里填写柜体允许占用的最大长度和最大高度。系统会在不超过这两个上限的前提下，生成可容纳最多列、最多层篓子的完整柜体；实际尺寸通常小于输入值，并非按输入尺寸严丝合缝定做。舒法特柜最长不超过3000mm、最高不超过1600mm。',
-    calligraphyTitle: '舒法特篓子柜参数化生成', calligraphyHint: '每格按300×420×100mm篓子预留；中间承托层距130mm，柜体固定深度460mm。',
+    calligraphyTitle: '舒法特篓子柜参数化生成', calligraphyHint: '每格按300×420×100mm篓子预留；可选择300mm短边朝前或420mm长边朝前，中间承托层距130mm。',
+    openingLabel: '篓子开口方向', openingShort: '短边开口 · 300mm朝前', openingLong: '长边开口 · 420mm朝前',
+    openingShortHint: '篓子竖着放，420mm进深，柜深460mm', openingLongHint: '篓子横着放，300mm进深，柜深340mm',
+    openingNote: '切换开口方向会同时改变列宽和柜体深度：长边开口每格更宽、柜体更浅，同样的最大长度下可容纳的列数更少。',
+    depthLabel: '柜深',
     wardrobeTitle: '参数化衣柜框架', wardrobeHint: '可选择N列，系统沿正面总长平均分配每列宽度；每列每个收纳层生成完整四边层框和一块内嵌12mm UV层板，相邻列共享中间深度横杆。任一型材最长不超过3000mm，进入设计器后会自动启用柜门。',
     length: '长 (mm)', width: '宽/深 (mm)', height: '高 (mm)',
     wardrobeLayers: '收纳层数', wardrobeColumnWidth: '平均列宽', wardrobeGenerated: '实际型材数量',
@@ -44,7 +51,11 @@ const COPY = {
     gridMode: 'Rows & columns', sizeMode: 'Space limits', columns: 'Columns', layers: 'Layers',
     totalLength: 'Maximum allowed length (mm)', totalWidth: 'Fixed depth (mm)', totalHeight: 'Maximum allowed height (mm)',
     generatedSize: 'Generated size', requestedLimit: 'Enter the maximum length and height the cabinet may occupy. The system generates the complete cabinet with the most basket columns and layers that fit within both limits. The actual size will usually be smaller than the entered limits; it is not built to match them exactly. The cabinet is capped at 3000 mm long and 1600 mm high.',
-    calligraphyTitle: 'Parametric calligraphy basket cabinet', calligraphyHint: 'Each bay fits a 300×420×100 mm basket; intermediate support pitch is 130 mm and cabinet depth is fixed at 460 mm.',
+    calligraphyTitle: 'Parametric calligraphy basket cabinet', calligraphyHint: 'Each bay fits a 300×420×100 mm basket with either the 300 mm short side or the 420 mm long side facing front; intermediate support pitch is 130 mm.',
+    openingLabel: 'Basket opening face', openingShort: 'Short side · 300 mm front', openingLong: 'Long side · 420 mm front',
+    openingShortHint: 'Basket stands in, 420 mm deep, cabinet 460 mm', openingLongHint: 'Basket lies across, 300 mm deep, cabinet 340 mm',
+    openingNote: 'Changing the opening face changes both bay width and cabinet depth: the long-side opening makes every bay wider and the cabinet shallower, so fewer columns fit into the same maximum length.',
+    depthLabel: 'Depth',
     wardrobeTitle: 'Parametric wardrobe frame', wardrobeHint: 'Choose N columns and the system divides the front length evenly. Every storage level in every column receives a complete four-sided frame and an inset 12mm UV shelf board, with adjacent columns sharing the middle depth rail. No profile may exceed 3000 mm. Cabinet doors are enabled automatically in the designer.',
     length: 'Length (mm)', width: 'Width/depth (mm)', height: 'Height (mm)',
     wardrobeLayers: 'Storage levels', wardrobeColumnWidth: 'Average column width', wardrobeGenerated: 'Total profiles',
@@ -60,7 +71,11 @@ const COPY = {
     gridMode: '段数・列数で指定', sizeMode: '設置上限で指定', columns: '列数', layers: '段数',
     totalLength: '超えられない最大全長 (mm)', totalWidth: '固定奥行 (mm)', totalHeight: '超えられない最大高さ (mm)',
     generatedSize: '生成寸法', requestedLimit: 'キャビネットを設置できる最大全長と最大高さを入力してください。両方の上限を超えない範囲で、かごの列数・段数が最大になる完成形を生成します。実寸は通常、入力した上限より小さく、入力寸法ぴったりに製作する指定ではありません。最大長さは3000mm、最大高さは1600mmです。',
-    calligraphyTitle: '書道バスケット棚のパラメトリック生成', calligraphyHint: '各区画は300×420×100mm、中間棚受けピッチ130mm、棚奥行は460mm固定です。',
+    calligraphyTitle: '書道バスケット棚のパラメトリック生成', calligraphyHint: '各区画は300×420×100mm。300mm短辺を前にするか420mm長辺を前にするか選べます。中間棚受けピッチは130mmです。',
+    openingLabel: 'かごの開口面', openingShort: '短辺開口・300mmが前面', openingLong: '長辺開口・420mmが前面',
+    openingShortHint: 'かご縦置き、奥行420mm、棚奥行460mm', openingLongHint: 'かご横置き、奥行300mm、棚奥行340mm',
+    openingNote: '開口面を変えると区画幅と棚奥行が同時に変わります。長辺開口は1区画が広く棚が浅くなり、同じ最大全長では列数が減ります。',
+    depthLabel: '奥行',
     wardrobeTitle: 'パラメトリックワードローブ枠', wardrobeHint: 'N列を選ぶと正面全長を均等に分割します。各列の各収納段に完全な四辺棚枠と12mm UV棚板を内蔵し、隣接列は中央の奥行材を共有します。形材は最長3000mmで、デザイナーでは扉機能が自動で有効になります。',
     length: '長さ (mm)', width: '幅／奥行 (mm)', height: '高さ (mm)',
     wardrobeLayers: '収納段数', wardrobeColumnWidth: '平均列幅', wardrobeGenerated: '形材の合計本数',
@@ -121,6 +136,7 @@ const StandardFurnitureConfigurator: React.FC<{
   const [wardrobeHeight, setWardrobeHeight] = useState(2200);
   const [wardrobeLayers, setWardrobeLayers] = useState(5);
   const [wardrobeColumns, setWardrobeColumns] = useState(1);
+  const [openingSide, setOpeningSide] = useState<CalligraphyOpeningSide>('short');
   const wardrobeLayerLimit = getWardrobeStorageLayerLimit(wardrobeHeight);
   const effectiveWardrobeLayers = Math.min(wardrobeLayers, wardrobeLayerLimit);
   const wardrobeColumnLimit = getWardrobeColumnLimit(wardrobeLength);
@@ -131,15 +147,31 @@ const StandardFurnitureConfigurator: React.FC<{
   );
   const wardrobeColumnWidthMm = Number((wardrobeLength / effectiveWardrobeColumns).toFixed(1));
 
+  const calligraphyColumnLimit = getCalligraphyColumnLimit(openingSide);
+  const effectiveCalligraphyColumns = Math.min(columns, calligraphyColumnLimit);
+  const calligraphyMinLengthMm = getCalligraphyMinLengthMm(openingSide);
+  const calligraphyDepthMm = getCalligraphyInnerDepthMm(openingSide);
+
   const calligraphyDimensions = useMemo(() => (
     mode === 'grid'
-      ? getCalligraphyCabinetDimensions(columns, layers)
-      : getCalligraphyGridForBounds(targetLength, targetHeight)
-  ), [columns, layers, mode, targetHeight, targetLength]);
+      ? getCalligraphyCabinetDimensions(effectiveCalligraphyColumns, layers, openingSide)
+      : getCalligraphyGridForBounds(targetLength, targetHeight, openingSide)
+  ), [effectiveCalligraphyColumns, layers, mode, openingSide, targetHeight, targetLength]);
+
+  // The depth-rail length follows the selected opening face, so the profile
+  // summary must show 420mm for a short-side opening and 300mm for a long one.
+  const calligraphyProfilesCopy = copy.calligraphyProfiles.replace(
+    /420(\s?)mm/g,
+    `${calligraphyDepthMm}$1mm`,
+  );
 
   const generate = () => {
     const payload = isCalligraphy
-      ? buildCalligraphyCabinetTemplate(calligraphyDimensions.columns, calligraphyDimensions.layers)
+      ? buildCalligraphyCabinetTemplate(
+        calligraphyDimensions.columns,
+        calligraphyDimensions.layers,
+        openingSide,
+      )
       : buildWardrobeTemplate(
         wardrobeLength,
         wardrobeWidth,
@@ -164,23 +196,42 @@ const StandardFurnitureConfigurator: React.FC<{
 
       {isCalligraphy ? (
         <>
+          <div>
+            <span className="mb-2 block text-xs font-black uppercase tracking-wider text-slate-500">{copy.openingLabel}</span>
+            <div className="grid grid-cols-1 gap-2 rounded-2xl bg-slate-100 p-1.5 sm:grid-cols-2">
+              {(['short', 'long'] as CalligraphyOpeningSide[]).map((side) => (
+                <button
+                  key={side}
+                  type="button"
+                  data-testid={`furniture-opening-${side}`}
+                  onClick={() => setOpeningSide(side)}
+                  className={`rounded-xl px-3 py-2.5 text-left transition ${openingSide === side ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500'}`}
+                >
+                  <span className="block text-xs font-black">{side === 'short' ? copy.openingShort : copy.openingLong}</span>
+                  <span className={`mt-0.5 block text-[10px] font-bold ${openingSide === side ? 'text-blue-400' : 'text-slate-400'}`}>{side === 'short' ? copy.openingShortHint : copy.openingLongHint}</span>
+                </button>
+              ))}
+            </div>
+            <p className="mt-2 text-xs font-bold text-slate-400">{copy.openingNote}</p>
+          </div>
           <div className="grid grid-cols-2 gap-2 rounded-2xl bg-slate-100 p-1.5">
             <button type="button" onClick={() => setMode('grid')} className={`rounded-xl px-3 py-2.5 text-xs font-black transition ${mode === 'grid' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500'}`}>{copy.gridMode}</button>
             <button type="button" onClick={() => setMode('size')} className={`rounded-xl px-3 py-2.5 text-xs font-black transition ${mode === 'size' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500'}`}>{copy.sizeMode}</button>
           </div>
           {mode === 'grid' ? (
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-              <NumericInput label={copy.columns} value={columns} min={1} max={9} onChange={setColumns} />
+              <NumericInput label={copy.columns} value={effectiveCalligraphyColumns} min={1} max={calligraphyColumnLimit} onChange={(value) => setColumns(Math.min(value, calligraphyColumnLimit))} />
               <NumericInput label={copy.layers} value={layers} min={1} max={11} onChange={setLayers} />
             </div>
           ) : (
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-              <NumericInput label={copy.totalLength} value={targetLength} min={340} max={CALLIGRAPHY_MAX_LENGTH_MM} onChange={setTargetLength} />
+              <NumericInput label={copy.totalLength} value={targetLength} min={calligraphyMinLengthMm} max={CALLIGRAPHY_MAX_LENGTH_MM} onChange={setTargetLength} />
               <NumericInput label={copy.totalHeight} value={targetHeight} min={235} max={CALLIGRAPHY_MAX_HEIGHT_MM} onChange={setTargetHeight} />
             </div>
           )}
-          <div className="grid grid-cols-1 gap-3 rounded-2xl border border-blue-100 bg-blue-50/70 p-4 sm:grid-cols-3">
-            <div><div className="text-[10px] font-black uppercase text-blue-400">{copy.generatedSize}</div><div className="mt-1 font-black text-blue-950">{calligraphyDimensions.lengthMm} × {CALLIGRAPHY_OUTER_DEPTH_MM} × {calligraphyDimensions.heightMm}mm</div></div>
+          <div className="grid grid-cols-2 gap-3 rounded-2xl border border-blue-100 bg-blue-50/70 p-4 sm:grid-cols-4">
+            <div><div className="text-[10px] font-black uppercase text-blue-400">{copy.generatedSize}</div><div className="mt-1 font-black text-blue-950">{calligraphyDimensions.lengthMm} × {calligraphyDimensions.depthMm} × {calligraphyDimensions.heightMm}mm</div></div>
+            <div><div className="text-[10px] font-black uppercase text-blue-400">{copy.depthLabel}</div><div className="mt-1 font-black text-blue-950">{calligraphyDimensions.depthMm}mm / 内{calligraphyDepthMm}mm</div></div>
             <div><div className="text-[10px] font-black uppercase text-blue-400">{copy.columns}</div><div className="mt-1 font-black text-blue-950">{calligraphyDimensions.columns}</div></div>
             <div><div className="text-[10px] font-black uppercase text-blue-400">{copy.layers}</div><div className="mt-1 font-black text-blue-950">{calligraphyDimensions.layers}</div></div>
           </div>
@@ -205,7 +256,7 @@ const StandardFurnitureConfigurator: React.FC<{
       )}
 
       <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-        <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4"><div className="flex items-center gap-2 text-xs font-black text-slate-800"><Ruler className="h-4 w-4 text-blue-600" />{copy.profileSummary}</div><p className="mt-2 text-xs font-medium leading-relaxed text-slate-500">{isCalligraphy ? copy.calligraphyProfiles : copy.wardrobeProfiles}</p></div>
+        <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4"><div className="flex items-center gap-2 text-xs font-black text-slate-800"><Ruler className="h-4 w-4 text-blue-600" />{copy.profileSummary}</div><p className="mt-2 text-xs font-medium leading-relaxed text-slate-500">{isCalligraphy ? calligraphyProfilesCopy : copy.wardrobeProfiles}</p></div>
         <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4"><div className="flex items-center gap-2 text-xs font-black text-slate-800"><Sparkles className="h-4 w-4 text-amber-500" />{copy.machiningSummary}</div><p className="mt-2 text-xs font-medium leading-relaxed text-slate-500">{isCalligraphy ? copy.calligraphyMachining : copy.wardrobeMachining}</p></div>
       </div>
 

@@ -26,7 +26,7 @@ export const DISPLAY_RACK_3_LIMITS = {
   heightMm: { min: 1500, max: 3000, step: 1 },
   depthMm: { min: 350, max: 750, step: 1 },
   baseCabinetHeightMm: { min: 600, max: 1400, step: 1 },
-  upperLevels: { min: 1, max: 5, step: 1 },
+  upperLevels: { min: 0, max: 5, step: 1 },
   lowerLevels: { min: 3, max: 7, step: 1 },
 } as const;
 
@@ -76,7 +76,8 @@ export const calculateDisplayRack3Price = (
 ): DisplayRack3PriceBreakdown => {
   const maximumDimensionDeviationMm = Math.max(
     Math.abs(parameters.widthMm - DISPLAY_RACK_3_BASELINE.widthMm),
-    Math.abs(parameters.heightMm - DISPLAY_RACK_3_BASELINE.heightMm),
+    // Cabinet-only height follows the base automatically; charge only deliberate dimension changes.
+    parameters.upperLevels === 0 ? 0 : Math.abs(parameters.heightMm - DISPLAY_RACK_3_BASELINE.heightMm),
     Math.abs(parameters.depthMm - DISPLAY_RACK_3_BASELINE.depthMm),
     Math.abs(parameters.baseCabinetHeightMm - DISPLAY_RACK_3_BASELINE.baseCabinetHeightMm),
   );
@@ -165,9 +166,11 @@ const assertSteppedValue = (
 export const calculateDisplayRack3Layout = (
   parameters: DisplayRack3Parameters,
 ): DisplayRack3Layout => {
-  const { widthMm, heightMm, depthMm, upperLevels, lowerLevels } = parameters;
+  const { widthMm, depthMm, upperLevels, lowerLevels } = parameters;
+  const cabinetOnly = upperLevels === 0;
+  const heightMm = cabinetOnly ? parameters.baseCabinetHeightMm : parameters.heightMm;
   assertSteppedValue('widthMm', widthMm, '宽度');
-  assertSteppedValue('heightMm', heightMm, '高度');
+  if (!cabinetOnly) assertSteppedValue('heightMm', heightMm, '高度');
   assertSteppedValue('depthMm', depthMm, '深度');
   assertSteppedValue('baseCabinetHeightMm', parameters.baseCabinetHeightMm, '地柜高度');
   assertSteppedValue('upperLevels', upperLevels, '上部层数');
@@ -178,7 +181,7 @@ export const calculateDisplayRack3Layout = (
   const idealUpperFirst = dividerHeightMm + FIXED.upperTierBottomClearanceMm;
   const minimumUpperFirst = dividerHeightMm + FIXED.upperTierMinimumBottomClearanceMm;
   const upperLast = heightMm - FIXED.upperTierTopClearanceMm;
-  if (upperLast < minimumUpperFirst) {
+  if (!cabinetOnly && upperLast < minimumUpperFirst) {
     throw new Error('当前高度不足以容纳上部固定结构，请增加总高度或减少上部层数。');
   }
 
@@ -188,7 +191,7 @@ export const calculateDisplayRack3Layout = (
       idealUpperFirst,
       upperLast - FIXED.minimumUpperPitchMm * (upperLevels - 1),
     );
-  if (upperFirst < minimumUpperFirst) {
+  if (!cabinetOnly && upperFirst < minimumUpperFirst) {
     throw new Error('当前高度不足以保留上部层板与中间台面的安全间隙。');
   }
   const upperPitchMm = upperLevels === 1 ? 0 : (upperLast - upperFirst) / (upperLevels - 1);
@@ -202,10 +205,10 @@ export const calculateDisplayRack3Layout = (
   const automaticUpperTierHeights = upperLevels === 1
     ? [round((upperFirst + upperLast) / 2)]
     : Array.from({ length: upperLevels }, (_, index) => round(upperFirst + upperPitchMm * index));
-  const customTrackHeights = parameters.trackLayoutMode === 'custom'
+  const customTrackHeights = !cabinetOnly && parameters.trackLayoutMode === 'custom'
     ? parameters.trackHeightsMm
     : undefined;
-  if (parameters.trackLayoutMode === 'custom' && customTrackHeights?.length !== upperLevels) {
+  if (!cabinetOnly && parameters.trackLayoutMode === 'custom' && customTrackHeights?.length !== upperLevels) {
     throw new Error(`请为${upperLevels}层上部层板分别填写安装高度。`);
   }
   const upperTierHeightsMm = customTrackHeights
@@ -236,7 +239,7 @@ export const calculateDisplayRack3Layout = (
   );
   const drawerCenterHeightsMm = drawerRailHeightsMm.map((height) => round(height + 0.5));
   const counts = {
-    profiles: 14 + lowerLevels * 2 + upperLevels * 4,
+    profiles: (cabinetOnly ? 13 : 14) + lowerLevels * 2 + upperLevels * 4,
     panels: 1 + lowerLevels * 5 + upperLevels * 2,
     shafts: upperLevels,
     supports: upperLevels * 5,
@@ -252,7 +255,7 @@ export const calculateDisplayRack3Layout = (
     baseCabinetHeightMm: dividerHeightMm,
     upperLevels,
     lowerLevels,
-    trackLayoutMode: parameters.trackLayoutMode || 'auto',
+    trackLayoutMode: cabinetOnly ? 'auto' : parameters.trackLayoutMode || 'auto',
     trackHeightsMm: upperTierHeightsMm,
     dividerHeightMm,
     topRailHeightMm,
@@ -402,7 +405,7 @@ export const buildDisplayRack3Template = (
       width,
       depth,
       [15, widthStation, 0],
-      [15, widthStation, height],
+      [15, widthStation, upperLevels === 0 ? divider - 18 : height],
       `3.0展架后立柱${index + 1}；每个上层仅保留一个Ø8光轴贯通孔`,
       // The rack shaft runs along the scene X/overall-width axis. A vertical
       // profile is rotated +90 degrees around Z, so its local A/C faces are
@@ -476,7 +479,7 @@ export const buildDisplayRack3Template = (
       ));
     });
   });
-  items.push(createRackProfile(
+  if (upperLevels > 0) items.push(createRackProfile(
     id, width, depth,
     [15, 30, height - 15], [15, width - 30, height - 15],
     '3.0展架顶部后横梁',

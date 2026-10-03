@@ -13,10 +13,22 @@ import {
   TRANSLATIONS,
 } from '../constants';
 import type { ShippingMethod } from '../constants';
+import {
+  ACCESSORY_CODE_IMAGE_MAP,
+  ACCESSORY_ROWS,
+  getAccessoryRowSeriesLabel,
+  type AccessoryColorMode,
+} from '../data/accessoryCatalog';
+import { ACCESSORY_BULK_THRESHOLD } from '../utils/accessoryPricing';
+import {
+  resolveAccessoryUnitPrice,
+  setAccessoryQuantity,
+  summarizeAccessoryQuote,
+} from '../utils/accessoryQuote';
 import { normalizeMembershipLevel } from '../utils/membership';
 import ProfileSectionGuide from './ProfileSectionGuide';
 
-type QuickQuoteProduct = 'profile' | 'aluminum_plate' | 'pegboard' | 'marine_board' | 'frame';
+type QuickQuoteProduct = 'profile' | 'aluminum_plate' | 'pegboard' | 'marine_board' | 'frame' | 'accessory';
 type ProfileSection = 'natural' | 'colored';
 type FrameType = 'wood' | 'aluminum' | 'alu_wood';
 type MarineSpecId = 'marine_bbb_uv_film' | 'marine_bbb_plain';
@@ -229,6 +241,10 @@ const QuickQuote: React.FC<{ language: Language; user?: User | null }> = ({ lang
     createBoardRow(18, { marineSpecId: 'marine_bbb_uv_film', colorId: 'natural' }),
   ]);
   const [frameRows, setFrameRows] = useState<FrameRow[]>([createFrameRow()]);
+  const [accessoryQtyMap, setAccessoryQtyMap] = useState<Record<string, number>>({});
+  const [accessoryColorMode, setAccessoryColorMode] = useState<AccessoryColorMode>('natural');
+  const [accessoryColorId, setAccessoryColorId] = useState<string>('silver');
+  const [accessorySearch, setAccessorySearch] = useState('');
   const [showSummary, setShowSummary] = useState(false);
 
   const clearCategory = (key: QuickQuoteProduct) => {
@@ -251,6 +267,10 @@ const QuickQuote: React.FC<{ language: Language; user?: User | null }> = ({ lang
     }
     if (key === 'frame') {
       setFrameRows([createFrameRow()]);
+      return;
+    }
+    if (key === 'accessory') {
+      setAccessoryQtyMap({});
     }
   };
 
@@ -352,8 +372,20 @@ const QuickQuote: React.FC<{ language: Language; user?: User | null }> = ({ lang
     }, 0);
   }, [marineBoardCalculated]);
 
+  const accessorySummary = useMemo(
+    () => summarizeAccessoryQuote(accessoryQtyMap, accessoryColorMode, language, 1000),
+    [accessoryColorMode, accessoryQtyMap, language],
+  );
+
+  // Blank/default rows are not goods; check every non-accessory category,
+  // including categories whose shipping weight is not calculated here.
+  const hasOtherQuotedItems = profileRows.some(row => row.quantity > 0 && row.length > 0)
+    || [...aluPlateRows, ...pegboardRows, ...marineBoardRows].some(row => row.quantity > 0 && row.width > 0 && row.height > 0)
+    || frameRows.some(row => row.quantity > 0 && (row.innerWidth > 0 || row.innerHeight > 0));
+  const accessoryWeightKg = accessorySummary.totalQuantity > 0 && !hasOtherQuotedItems ? 1 : 0;
+
   const shippingSummary = useMemo(() => {
-    const exactTotalWeightKg = profileSummary.totalWeightKg + marineBoardWeightKg;
+    const exactTotalWeightKg = profileSummary.totalWeightKg + marineBoardWeightKg + accessoryWeightKg;
     const totalWeightKg = round1(exactTotalWeightKg);
     const hasOverlength = profileRows.some((row) => row.length > 1500 && row.quantity > 0);
     const options = selectedProvince
@@ -386,7 +418,7 @@ const QuickQuote: React.FC<{ language: Language; user?: User | null }> = ({ lang
       options,
       cheapestMethod: cheapestOption.method,
     };
-  }, [marineBoardWeightKg, profileRows, profileSummary.totalWeightKg, selectedProvince, shippingSelection]);
+  }, [accessoryWeightKg, marineBoardWeightKg, profileRows, profileSummary.totalWeightKg, selectedProvince, shippingSelection]);
 
   const shippingMethods: QuickQuoteShippingMethod[] = ['standard', 'sf', 'anneng'];
   const cheapestShippingOption = shippingSummary.options.find(
@@ -401,6 +433,19 @@ const QuickQuote: React.FC<{ language: Language; user?: User | null }> = ({ lang
       return { row, unitPrice, subtotal };
     });
   }, [frameRows]);
+
+  const accessoryRowsFiltered = useMemo(() => {
+    const needle = accessorySearch.trim().toLowerCase();
+    if (!needle) return ACCESSORY_ROWS;
+    return ACCESSORY_ROWS.filter((row) => [
+      String(row.code),
+      row.codeLabel?.[language] || '',
+      row.name[language],
+      row.series,
+      getAccessoryRowSeriesLabel(row, language),
+      row.note || '',
+    ].join(' ').toLowerCase().includes(needle));
+  }, [accessorySearch, language]);
 
   const compactSummary = useMemo(() => {
     const profileMetersMap = new Map<string, number>();
@@ -534,6 +579,11 @@ const QuickQuote: React.FC<{ language: Language; user?: User | null }> = ({ lang
         })
         .filter((x): x is { id: string; text: string } => Boolean(x)),
       frameDetails,
+      accessoryDetails: accessorySummary.lines.map((line) => ({
+        id: line.key,
+        text: `${line.row.name[language]} · ${getAccessoryRowSeriesLabel(line.row, language)}${line.row.lengthPriced ? ' · 1000mm' : ''} · ×${line.quantity}`,
+      })),
+      accessoryColorMode,
       profileProcessTotals,
     };
   }, [
@@ -557,6 +607,8 @@ const QuickQuote: React.FC<{ language: Language; user?: User | null }> = ({ lang
     pegboardRows,
     marineBoardRows,
     marineBoardColorOptions,
+    accessorySummary,
+    accessoryColorMode,
   ]);
 
   const categorySummary = useMemo(() => {
@@ -595,6 +647,12 @@ const QuickQuote: React.FC<{ language: Language; user?: User | null }> = ({ lang
         itemTotal: frameItemTotal,
         total: frameItemTotal,
       },
+      {
+        key: 'accessory',
+        name: t.qq_accessory,
+        itemTotal: accessorySummary.total,
+        total: accessorySummary.total,
+      },
     ].filter((c) => c.itemTotal > 0);
 
     const grandTotal = round1(categories.reduce((sum, c) => sum + c.total, 0) + shippingSummary.fee);
@@ -605,12 +663,14 @@ const QuickQuote: React.FC<{ language: Language; user?: User | null }> = ({ lang
     t.qq_pegboard,
     t.qq_marineBoard,
     t.qq_frame,
+    t.qq_accessory,
     profileSummary,
     aluPlateCalculated,
     pegboardCalculated,
     marineBoardCalculated,
     shippingSummary,
     frameCalculated,
+    accessorySummary,
   ]);
 
   const updateProfileRow = (id: string, patch: Partial<ProfileRow>) => {
@@ -780,6 +840,7 @@ const QuickQuote: React.FC<{ language: Language; user?: User | null }> = ({ lang
     { value: 'pegboard', label: t.qq_pegboard },
     { value: 'marine_board', label: t.qq_marineBoard },
     { value: 'frame', label: t.qq_frame },
+    { value: 'accessory', label: t.qq_accessory },
   ];
   const marineBoardMaxSizeNote =
     language === 'cn'
@@ -1192,6 +1253,168 @@ const QuickQuote: React.FC<{ language: Language; user?: User | null }> = ({ lang
           </div>
         )}
 
+        {selectedProduct === 'accessory' && (
+          <div className="space-y-4">
+            <div className="bg-blue-50 border border-blue-100 rounded-2xl p-4 text-sm">
+              <div className="font-bold text-blue-700">{t.qq_accessory}</div>
+              <div className="text-slate-700">{t.qq_accessoryHint}</div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+              <div>
+                <label className="block text-xs font-black text-slate-500 mb-1">{t.qq_color}</label>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setAccessoryColorMode('natural')}
+                    className={`px-3 py-2.5 rounded-xl border text-sm font-black ${
+                      accessoryColorMode === 'natural' ? 'bg-slate-900 text-white border-slate-900' : 'bg-white text-slate-700 border-slate-200'
+                    }`}
+                  >
+                    {t.qq_accessoryNatural}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setAccessoryColorMode('colored')}
+                    className={`px-3 py-2.5 rounded-xl border text-sm font-black ${
+                      accessoryColorMode === 'colored' ? 'bg-slate-900 text-white border-slate-900' : 'bg-white text-slate-700 border-slate-200'
+                    }`}
+                  >
+                    {t.qq_accessoryColored}
+                  </button>
+                </div>
+              </div>
+
+              {accessoryColorMode === 'colored' && (
+                <div>
+                  <label className="block text-xs font-black text-slate-500 mb-1">{t.qq_accessoryColor}</label>
+                  <select
+                    value={accessoryColorId}
+                    onChange={(e) => setAccessoryColorId(e.target.value)}
+                    className="w-full border border-slate-200 rounded-xl px-3 py-2.5 bg-white"
+                  >
+                    {PROFILE_COLORS.filter((c) => c.id !== 'natural').map((c) => (
+                      <option key={c.id} value={c.id}>{c.name[language]}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
+              <div className={accessoryColorMode === 'colored' ? '' : 'md:col-span-2'}>
+                <label className="block text-xs font-black text-slate-500 mb-1">{t.qq_accessorySearch}</label>
+                <input
+                  type="search"
+                  value={accessorySearch}
+                  onChange={(e) => setAccessorySearch(e.target.value)}
+                  placeholder={t.qq_accessorySearch}
+                  className="w-full border border-slate-200 rounded-xl px-3 py-2.5 bg-white"
+                />
+              </div>
+            </div>
+
+            <p className="text-xs font-bold text-amber-700 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2">{t.qq_accessoryNote}</p>
+
+            <div className="max-h-[560px] overflow-auto border border-slate-200 rounded-2xl">
+              <table className="w-full text-sm border-collapse">
+                <thead className="sticky top-0 bg-slate-50 z-10">
+                  <tr className="text-left">
+                    <th className="p-2 border border-slate-200">{t.qq_model}</th>
+                    <th className="p-2 border border-slate-200">{t.qq_accessory}</th>
+                    <th className="p-2 border border-slate-200">{t.qq_accessoryFitModel}</th>
+                    <th className="p-2 border border-slate-200">{t.qq_unitPrice}</th>
+                    <th className="p-2 border border-slate-200">{t.qq_accessoryBulk}</th>
+                    <th className="p-2 border border-slate-200">{t.qq_quantity}</th>
+                    <th className="p-2 border border-slate-200">{t.qq_subtotal}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {accessoryRowsFiltered.length === 0 && (
+                    <tr>
+                      <td colSpan={7} className="p-6 text-center text-slate-500 font-bold">{t.qq_accessoryEmpty}</td>
+                    </tr>
+                  )}
+                  {accessoryRowsFiltered.map((row, index) => {
+                    const qty = Math.max(0, Number(accessoryQtyMap[row.key] ?? 0));
+                    // Quick quote has no shaft length input, so length-priced
+                    // parts are quoted per metre.
+                    const unitPrice = resolveAccessoryUnitPrice(row, accessoryColorMode, qty, 1000);
+                    const isBulk = !row.naturalOnly && qty >= ACCESSORY_BULK_THRESHOLD;
+                    const subtotal = round1(unitPrice * qty);
+                    const previous = accessoryRowsFiltered[index - 1];
+                    const startsGroup = !previous || previous.defId !== row.defId;
+                    const catalogUnit = row.naturalOnly || accessoryColorMode === 'natural' ? row.price.natural : row.price.colored;
+                    const catalogBulk = row.naturalOnly || accessoryColorMode === 'natural' ? row.price.naturalBulk : row.price.coloredBulk;
+                    const imageSrc = ACCESSORY_CODE_IMAGE_MAP[row.imageKey || row.defId] || ACCESSORY_CODE_IMAGE_MAP[String(row.code)] || '';
+                    return (
+                      <tr
+                        key={row.key}
+                        className={`${startsGroup && index > 0 ? 'border-t-2 border-slate-200' : ''} odd:bg-white even:bg-slate-50/60`}
+                      >
+                        <td className="p-2 border border-slate-100 whitespace-nowrap">
+                          <div className="flex items-center gap-2">
+                            <span className="w-10 h-8 shrink-0 rounded border border-slate-200 bg-white overflow-hidden relative">
+                              {imageSrc ? (
+                                <img src={imageSrc} alt={row.name[language]} className="w-full h-full object-contain" loading="lazy" />
+                              ) : null}
+                            </span>
+                            <span className="font-black text-xs">{row.codeLabel?.[language] || `${row.code}号`}</span>
+                          </div>
+                        </td>
+                        <td className="p-2 border border-slate-100">
+                          <div className={`font-semibold ${startsGroup ? 'text-slate-900' : 'text-slate-600'}`}>{row.name[language]}</div>
+                          {row.lengthPriced && (
+                            <div className="text-[11px] text-slate-500">
+                              {language === 'cn' ? '按米计价' : language === 'jp' ? 'メートル単価' : 'priced per metre'}
+                            </div>
+                          )}
+                        </td>
+                        <td className="p-2 border border-slate-100">
+                          <span className={`inline-flex rounded-lg px-2 py-1 text-xs font-black ${startsGroup ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-600'}`}>
+                            {getAccessoryRowSeriesLabel(row, language)}
+                          </span>
+                        </td>
+                        <td className="p-2 border border-slate-100 whitespace-nowrap">{currency}{catalogUnit.toFixed(2)}</td>
+                        <td className="p-2 border border-slate-100 whitespace-nowrap">{currency}{catalogBulk.toFixed(2)}</td>
+                        <td className="p-2 border border-slate-100">
+                          <input
+                            type="number"
+                            min={0}
+                            value={qty}
+                            aria-label={`${row.name[language]} ${getAccessoryRowSeriesLabel(row, language)}`}
+                            onChange={(e) => setAccessoryQtyMap((prev) => setAccessoryQuantity(prev, row.key, Number(e.target.value)))}
+                            className={`w-20 border rounded-lg px-2 py-1 ${qty > 0 ? 'border-blue-400 bg-blue-50' : 'border-slate-200'}`}
+                          />
+                        </td>
+                        <td className="p-2 border border-slate-100 font-black text-slate-800 whitespace-nowrap">
+                          {currency}{subtotal.toFixed(1)}
+                          {isBulk ? <span className="text-[10px] text-emerald-600"> (Bulk)</span> : null}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+
+            <div className="rounded-xl border border-blue-100 bg-blue-50 p-3 text-sm text-slate-700" data-testid="quick-quote-accessory-shipping">
+              <p>{t.qq_accessoryWeightNote}</p>
+              <p className="mt-1">
+                {t.qq_estimatedWeight}: <strong>{shippingSummary.totalWeightKg.toFixed(1)}kg</strong>
+                {' · '}{t.qq_shippingFee}: <strong>{shippingSummary.method ? `${currency}${shippingSummary.fee.toFixed(1)}` : '—'}</strong>
+                {shippingSummary.method && ` · ${SHIPPING_METHOD_NAMES[shippingSummary.method][language]}`}
+              </p>
+            </div>
+            <div className="flex flex-wrap items-center justify-between gap-4">
+              <div className="text-sm font-bold text-slate-700">
+                {t.qq_quantity}: <span className="text-slate-900">{accessorySummary.totalQuantity}</span>
+              </div>
+              <div className="text-lg font-black text-slate-900">
+                {t.qq_itemTotal}: {currency}{accessorySummary.total.toFixed(1)}
+              </div>
+            </div>
+          </div>
+        )}
+
         <button
           onClick={() => setShowSummary(true)}
           className="w-full md:w-auto px-6 py-3 rounded-xl bg-blue-600 text-white font-black text-sm"
@@ -1352,6 +1575,19 @@ const QuickQuote: React.FC<{ language: Language; user?: User | null }> = ({ lang
                         ))}
                       </ul>
                     )}
+                  </div>
+                )}
+
+                {compactSummary.accessoryDetails.length > 0 && (
+                  <div className="text-sm text-slate-700">
+                    <div className="font-bold text-slate-800">
+                      {t.qq_accessory} · {compactSummary.accessoryColorMode === 'natural' ? t.qq_accessoryNatural : t.qq_accessoryColored}
+                    </div>
+                    <ul className="list-disc pl-5 mt-1 space-y-1 text-xs text-slate-500">
+                      {compactSummary.accessoryDetails.map((x) => (
+                        <li key={`accessory-detail-${x.id}`}>{x.text}</li>
+                      ))}
+                    </ul>
                   </div>
                 )}
               </div>

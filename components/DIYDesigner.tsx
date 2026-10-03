@@ -1,3 +1,19 @@
+import { synchronizeDesignerSceneItems as synchronizeStoolScene, completeStoolConnectionSystem, inspectGuidedConnectionSystem, createAccessoryObject as createStoolAccessoryObject, getAccessoryDimensions as getStoolAccessoryDimensions, type DIYSceneItem as StoolSceneItem } from '../utils/stoolDesignerEngine';
+import { inspectDesignerImportItems } from '../utils/designerImportPreflight';
+import { rekeyImportedDesignItems } from '../utils/designerImportRemap';
+import { hasImportedSourceMesh, validateImportedSourceMeshFileSize } from '../utils/importedSourceMesh';
+import { resolveStoolAccessoryReference } from '../utils/stoolAccessoryAssets';
+import { reviewStoolAssembly } from '../utils/stoolAssemblyReview';
+import {
+  applyGroupMoveDelta,
+  getGroupMoveTargets,
+  isMovableAccessoryKind,
+} from '../utils/designerGroupMove';
+import { isMoveGizmoSuppressed } from '../utils/designerDrillMode';
+import StoolAssemblyReviewPanel from './StoolAssemblyReviewPanel';
+import StoolGenerator from './StoolGenerator';
+import { DISPLAY_RACK_COMPONENT_CATALOG } from '../data/displayRackComponentCatalog';
+export { completeStoolConnectionSystem, inspectGuidedConnectionSystem };
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { designerDraftKey, readDesignerDraft, writeDesignerDraft } from '../utils/designerDraft';
@@ -89,6 +105,7 @@ import {
 } from '../utils/designSource';
 
 type DIYItemKind =
+  | 'imported_component'
   | 'profile'
   | 'plate'
   | 'pegboard'
@@ -118,7 +135,7 @@ type DIYDoorOverlay = 'full' | 'half' | 'inset';
 type DIYDoorLeafMode = 'single' | 'double';
 type DIYDoorPairSide = 'left' | 'right';
 
-interface DIYSceneItem {
+interface DIYSceneItem extends StoolSceneItem {
   id: string;
   kind: DIYItemKind;
   name: string;
@@ -136,7 +153,7 @@ interface DIYSceneItem {
   tappingRight?: boolean;
   finish?: ProfileFinish;
   shelfSupportType?: ParametricShelfSupportType;
-  fixedReferenceId?: 'MODEL_REF_SK8_SUPPORT' | 'MODEL_REF_SHF8_SUPPORT';
+  fixedReferenceId?: StoolSceneItem['fixedReferenceId'];
   shaftDiameterMm?: number;
   accessoryPrice?: number;
   accessoryProfileSize?: DIYAccessoryProfileSize;
@@ -345,7 +362,7 @@ const TEXT: Record<Language, Record<string, string>> = {
     otherParts: '其他配件',
     accessorySpec: '配件规格',
     accessoryProfileSize: '适配型材规格',
-    availableForSeries: '仅显示当前规格可用配件',
+    availableForSeries: '每根配件下方直接标注适配型号，无需先选规格；彩色配件另按彩色价目计价。',
     bracketSize: '角码边长 (mm)',
     connectorLength: '连接件长度 (mm)',
     screwOrderSpec: '订货规格',
@@ -355,7 +372,7 @@ const TEXT: Record<Language, Record<string, string>> = {
     addDemo: '生成示例工作台',
     move: '移动',
     drillMode: '点选打孔',
-    drillModeHint: '先选择孔类型，再点击型材表面；系统自动识别面、槽位和两端距离。',
+    drillModeHint: '先选择孔类型，再点击型材表面；系统自动识别面、槽位和两端距离。打孔期间移动和长度手柄会暂时隐藏，避免挡住要点的位置，退出打孔后自动恢复。',
     drillSetup: '选择打孔类型',
     startDrilling: '确认并开始点选',
     rotate: '型材方向',
@@ -483,7 +500,7 @@ const TEXT: Record<Language, Record<string, string>> = {
     machiningMarks: '加工标注',
     machiningLegend: '加工符号',
     multiSelected: '批量选择',
-    shiftHint: 'Shift+单击可追加或取消选择；从空白处 Shift+拖动可框选；选中型材后 Shift+拖彩色轴可复制并平移。',
+    shiftHint: 'Shift+单击可追加或取消选择；从空白处 Shift+拖动可框选；拖选区中心的彩色轴可整批一起移动，Shift+拖轴则整批复制并平移，也可按 Ctrl/Cmd+D 复制整批。',
     newProfileLength: '选择型材规格与长度',
     addProfile: '添加型材',
     freeDrawProfile: '自由绘制',
@@ -642,7 +659,7 @@ const TEXT: Record<Language, Record<string, string>> = {
     addDemo: 'Build demo workbench',
     move: 'Move',
     drillMode: 'Place holes',
-    drillModeHint: 'Choose a hole type first, then click a profile surface to detect its face, groove, and both end distances.',
+    drillModeHint: 'Choose a hole type first, then click a profile surface to detect its face, groove, and both end distances. Move and length handles are hidden while placing holes so they cannot cover the spot you are aiming at; they return when you leave drill mode.',
     drillSetup: 'Choose hole type',
     startDrilling: 'Confirm and start placing holes',
     rotate: 'Profile direction',
@@ -770,7 +787,7 @@ const TEXT: Record<Language, Record<string, string>> = {
     machiningMarks: 'Machining marks',
     machiningLegend: 'Machining symbols',
     multiSelected: 'Batch selection',
-    shiftHint: 'Shift-click toggles items; Shift-drag empty space marquee-selects; Shift-drag a colored axis to duplicate and move a selected profile.',
+    shiftHint: 'Shift-click toggles items; Shift-drag empty space marquee-selects; drag a colored axis at the selection centre to move the whole batch, Shift-drag it to duplicate and move the whole batch, or press Ctrl/Cmd+D to duplicate the batch.',
     newProfileLength: 'Choose profile and length',
     addProfile: 'Add profile',
     freeDrawProfile: 'Free draw',
@@ -878,6 +895,9 @@ const TEXT: Record<Language, Record<string, string>> = {
     pricePending: '正式なカタログ価格確定まで概算価格を使用します',
     fixedBlack: 'ミッドナイトブラック固定・色選択なし',
     fixedGold: '金属素地 / 黒底・色選択なし',
+    accessoryColorNatural: '本色',
+    accessoryColorColored: 'カラー',
+    accessoryColorNaturalHint: '金具・端キャップは本色価格で計算されます',
     cabinetDoor: '自動キャビネット扉',
     doorNeedFrame: '正面の形材枠を完成すると扉を追加できます',
     doorFrameReady: '扉を取り付け可能な正面枠を検出しました',
@@ -919,7 +939,7 @@ const TEXT: Record<Language, Record<string, string>> = {
     otherParts: 'その他',
     accessorySpec: '部品仕様',
     accessoryProfileSize: '対応フレーム規格',
-    availableForSeries: '対応部品のみ表示',
+    availableForSeries: '各部品の下に対応型番を表示しています。規格を先に選ぶ必要はありません。カラー部品はカラー価格で計算されます。',
     bracketSize: 'ブラケット辺長 (mm)',
     connectorLength: 'コネクタ長さ (mm)',
     screwOrderSpec: '発注仕様',
@@ -929,7 +949,7 @@ const TEXT: Record<Language, Record<string, string>> = {
     addDemo: '作業台サンプルを作成',
     move: '移動',
     drillMode: 'クリック穴あけ',
-    drillModeHint: '穴タイプを先に選択し、形材面をクリックすると面・溝・両端距離を自動判定します。',
+    drillModeHint: '穴タイプを先に選択し、形材面をクリックすると面・溝・両端距離を自動判定します。穴あけ中は移動ハンドルと長さハンドルを一時的に非表示にし、狙う位置を遮らないようにします（終了後に復帰）。',
     drillSetup: '穴タイプを選択',
     startDrilling: '確認して穴あけ開始',
     rotate: '形材の方向',
@@ -1057,7 +1077,7 @@ const TEXT: Record<Language, Record<string, string>> = {
     machiningMarks: '加工マーク',
     machiningLegend: '加工記号',
     multiSelected: '一括選択',
-    shiftHint: 'Shift+クリックで選択を追加・解除。空白部からShift+ドラッグで範囲選択、選択中の形材はShift+色軸ドラッグで複製・移動できます。',
+    shiftHint: 'Shift+クリックで選択を追加・解除。空白部からShift+ドラッグで範囲選択。選択中心の色軸ドラッグで一括移動、Shift+ドラッグで一括複製・移動、Ctrl/Cmd+Dでも一括複製できます。',
     newProfileLength: '形材規格と長さを選択',
     addProfile: '形材を追加',
     freeDrawProfile: '自由描画',
@@ -1103,7 +1123,39 @@ const TEXT: Record<Language, Record<string, string>> = {
 
 const makeId = () => `diy_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 7)}`;
 
-const cloneItems = (items: DIYSceneItem[]) => JSON.parse(JSON.stringify(items)) as DIYSceneItem[];
+const cloneItems = (items: DIYSceneItem[]): DIYSceneItem[] => items.map(({ sourceMesh, ...item }) => ({
+  ...JSON.parse(JSON.stringify(item)), ...(sourceMesh ? { sourceMesh } : {}),
+}));
+
+const isStoolItem = (item: DIYSceneItem) => item.id.startsWith('parametric-stool-')
+  || (item.attachedProfileIds || []).some(id => id.startsWith('parametric-stool-'))
+  || Boolean(item.linkedProfileId?.startsWith('parametric-stool-'));
+
+export const synchronizeDesignerSceneItems = (source: DIYSceneItem[]): DIYSceneItem[] => {
+  const normalized = normalizeManufacturingMeasurements(source);
+  const stool = normalized.filter(isStoolItem);
+  const ordinary = normalized.filter(item => !isStoolItem(item));
+  const synchronized = new Map([
+    ...syncLinkedScrews(syncAttachedAccessories(ordinary)),
+    ...synchronizeStoolScene(stool),
+  ].map(item => [item.id, item]));
+  return normalized.flatMap(item => synchronized.has(item.id) ? [synchronized.get(item.id) as DIYSceneItem] : []);
+};
+
+export const inspectDesignerManufacturingPrecheck = (items: DIYSceneItem[]) => {
+  const scopes: string[] = [];
+  const issues: string[] = [];
+  if (items.some(hasImportedSourceMesh)) {
+    scopes.push('source_mesh_draft');
+    issues.push('源模型部件仅供设计复核：采购规格、加工、紧固件和安装尚未确认。');
+  }
+  if (items.some(isStoolItem)) {
+    scopes.push('parametric_stool_draft');
+    issues.push(...reviewStoolAssembly(items).issues,
+      '复古边几凳的板件固定、脚轮接口、层间紧固和承载待实物核对；框架检查不代表整凳制造放行。');
+  }
+  return { applies: scopes.length > 0, valid: scopes.length === 0, scopes, issues };
+};
 
 function getCasterUnitPrice(item: Pick<DIYSceneItem, 'accessoryThreadSize' | 'hasBrake'>) {
   return CASTER_BASE_UNIT_PRICE
@@ -1131,6 +1183,41 @@ function getEndCapUnitPrice(
     : END_CAP_FALLBACK_ESTIMATED_PRICE.colored;
 }
 
+/**
+ * Colour patch for the selected part. Profiles and panels only need the color
+ * id swapped; shelf supports and end caps also reprice because their unit price
+ * depends on the 本色 / 彩色 tier.
+ */
+const buildSelectedColorPatch = (
+  selected: DIYSceneItem,
+  colorId: string,
+): Partial<DIYSceneItem> => {
+  const shelfSupportFinish = colorId === 'natural'
+    ? 'oxidized' as const
+    : (selected.finish === 'powder' ? 'powder' as const : 'electrophoretic' as const);
+  return {
+    colorId,
+    ...(selected.kind === 'shelf_support' ? {
+      finish: shelfSupportFinish,
+      accessoryPrice: getShelfSupportUnitPrice(selected.thickness || 0, shelfSupportFinish),
+    } : {}),
+    ...(selected.kind === 'end_cap' ? {
+      accessoryPrice: getEndCapUnitPrice({
+        variantId: selected.variantId,
+        accessoryProfileSize: selected.accessoryProfileSize,
+        colorId,
+        quantity: selected.quantity,
+      }),
+    } : {}),
+  };
+};
+
+/** Hardware parts only exist in 本色 or 彩色; panels keep the full palette. */
+const usesAccessoryColorMode = (kind: DIYItemKind) => isConnectionAccessoryKind(kind) || kind === 'end_cap';
+
+/** Representative coloured finish used when 彩色 is switched on. */
+const DEFAULT_COLORED_ACCESSORY_COLOR_ID = 'silver';
+
 const getDoorHingePositions = (heightMm: number) => {
   const height = Math.max(0, Math.min(3000, Number(heightMm) || 0));
   if (height <= 0) return [] as number[];
@@ -1147,7 +1234,7 @@ const duplicateSceneItem = (item: DIYSceneItem): DIYSceneItem => {
   const duplicate = cloneItems([item])[0];
   return {
     ...duplicate,
-    id: makeId(),
+    id: isStoolItem(item) ? `parametric-stool-${makeId()}` : makeId(),
     holes: duplicate.kind === 'profile'
       ? (duplicate.holes || []).map((hole) => ({ ...hole, id: makeId(), jointKey: undefined }))
       : duplicate.holes,
@@ -1166,40 +1253,6 @@ const duplicateSceneItem = (item: DIYSceneItem): DIYSceneItem => {
  * accessories and generated screws continue to point at the newly imported
  * profiles rather than the profiles that were already on the canvas.
  */
-const rekeyImportedDesignItems = (source: DIYSceneItem[]) => {
-  const itemIdMap = new Map(source.map((item) => [item.id, makeId()]));
-  const holeIdMap = new Map<string, string>();
-  source.forEach((item) => {
-    (item.holes || []).forEach((hole) => holeIdMap.set(hole.id, makeId()));
-  });
-  const allReferenceIds = [...itemIdMap.entries(), ...holeIdMap.entries()]
-    .sort(([left], [right]) => right.length - left.length);
-  const remapEmbeddedReferences = (value?: string) => {
-    if (!value) return value;
-    return allReferenceIds.reduce(
-      (current, [oldId, newId]) => current.split(oldId).join(newId),
-      value,
-    );
-  };
-
-  return source.map((item) => ({
-    ...item,
-    id: itemIdMap.get(item.id) || makeId(),
-    holes: (item.holes || []).map((hole) => ({
-      ...hole,
-      id: holeIdMap.get(hole.id) || makeId(),
-      jointKey: remapEmbeddedReferences(hole.jointKey),
-    })),
-    linkedProfileId: item.linkedProfileId
-      ? itemIdMap.get(item.linkedProfileId) || item.linkedProfileId
-      : undefined,
-    linkedHoleId: item.linkedHoleId
-      ? holeIdMap.get(item.linkedHoleId) || item.linkedHoleId
-      : undefined,
-    attachedProfileIds: item.attachedProfileIds?.map((profileId) => itemIdMap.get(profileId) || profileId),
-    attachmentKey: remapEmbeddedReferences(item.attachmentKey),
-  }));
-};
 
 const isBoard12ShelfSupport = (item: Pick<DIYSceneItem, 'kind' | 'shelfSupportType'>) => (
   item.kind === 'shelf_support' && item.shelfSupportType === 'board_12mm'
@@ -1239,11 +1292,16 @@ const normalizeManufacturingMeasurements = (source: DIYSceneItem[]) => source.ma
   };
 });
 
-export const normalizeDesignItems = (source: DIYSceneItem[]) => normalizeManufacturingMeasurements(source).map((item) => {
+export const normalizeDesignItems = (source: DIYSceneItem[]): DIYSceneItem[] => normalizeManufacturingMeasurements(source).map((item) => {
+  if (hasImportedSourceMesh(item)) {
+    const { accessoryPrice: _legacySourcePrice, ...sourceItem } = item;
+    return { ...sourceItem, catalogItemId: undefined, fastenerCatalogId: undefined,
+      partCatalogRef: resolveStoolAccessoryReference(item.sourceMesh), autoGenerated: false, quantity: 1 };
+  }
   const shelfSupportFinish: ProfileFinish = item.finish
     || (item.colorId === 'natural' ? 'oxidized' : 'powder');
   const connectionDimensions = isConnectionAccessoryKind(item.kind)
-    ? getAccessoryDimensions(item.kind, item.accessoryProfileSize || '2020')
+    ? (isStoolItem(item) ? getStoolAccessoryDimensions : getAccessoryDimensions)(item.kind, item.accessoryProfileSize || '2020')
     : null;
   return {
     ...item,
@@ -1304,7 +1362,7 @@ export const normalizeDesignItems = (source: DIYSceneItem[]) => normalizeManufac
   };
 });
 
-const buildProductionData = (items: DIYSceneItem[], language: Language) => {
+export const buildProductionData = (items: DIYSceneItem[], language: Language) => {
   const normalizedItems = normalizeDesignItems(items);
   const parts = normalizedItems.map((item, index) => ({
     line: index + 1,
@@ -1319,7 +1377,10 @@ const buildProductionData = (items: DIYSceneItem[], language: Language) => {
     shelfSupportType: item.shelfSupportType,
     fixedReferenceId: item.fixedReferenceId,
     shaftDiameterMm: item.shaftDiameterMm,
-    accessoryPrice: item.accessoryPrice,
+    ...(item.accessoryPrice !== undefined ? { accessoryPrice: item.accessoryPrice } : {}),
+    partCatalogRef: item.partCatalogRef,
+    designDraftMarkers: item.sourceMesh ? ['sourceMesh'] : [],
+    ...(item.sourceMesh ? { sourceGeometry: { ...item.sourceMesh.source, reviewStatus: 'source_geometry_only' as const } } : {}),
     accessoryProfileSize: item.accessoryProfileSize,
     accessoryThreadSize: item.accessoryThreadSize,
     hasBrake: item.hasBrake,
@@ -1379,6 +1440,7 @@ const buildProductionData = (items: DIYSceneItem[], language: Language) => {
         holeType: hole.type,
         threadSize: hole.threadSize || '',
         fastenerHead: hole.fastenerHead,
+        fastenerSeat: hole.fastenerSeat,
         fastenerLengthMm: hole.fastenerLengthMm,
         fastenerDirection: hole.fastenerDirection,
         verification: describeHolePassage(hole, variantId, language),
@@ -1388,7 +1450,7 @@ const buildProductionData = (items: DIYSceneItem[], language: Language) => {
   return { parts, holes };
 };
 
-const buildDesignDocument = (
+export const buildDesignDocument = (
   items: DIYSceneItem[],
   language: Language,
   provenance: DesignSourceInfo,
@@ -1407,7 +1469,10 @@ const buildDesignDocument = (
     example: 'B面第一槽 = 物理P1 = D面第二槽（2040）',
   },
   items: normalizeDesignItems(items),
-  production: buildProductionData(items, language),
+  ...(inspectDesignerManufacturingPrecheck(items).applies ? {
+    productionRelease: { status: 'blocked' as const, ...inspectDesignerManufacturingPrecheck(items) },
+    stoolAssemblyReview: reviewStoolAssembly(items),
+  } : { production: buildProductionData(items, language) }),
 });
 
 const normalizeFinishedFurnitureQuote = (value: unknown): FinishedFurnitureQuote | null => {
@@ -1598,14 +1663,6 @@ const isConnectionAccessoryKind = (kind: DIYItemKind): kind is DIYConnectionKind
   || kind === 'l_connector'
   || kind === 't_connector'
   || kind === 'tee_connector'
-);
-
-const isMovableAccessoryKind = (kind: DIYItemKind) => (
-  kind !== 'profile'
-  && kind !== 'plate'
-  && kind !== 'pegboard'
-  && kind !== 'marine_board'
-  && kind !== 'cabinet_door'
 );
 
 const getAvailableAccessorySizes = (kind: DIYConnectionKind) => (
@@ -5220,12 +5277,16 @@ const createCabinetDoorObject = (
   return group;
 };
 
-const createAccessoryObject = (
+export const createAccessoryObject = (
   item: DIYSceneItem,
   selected: boolean,
   showInternalHardware = false,
   linkedHoleType?: HoleType,
+  linkedHoleSeat?: DrillHole['fastenerSeat'],
 ) => {
+  if (hasImportedSourceMesh(item) || isStoolItem(item)) {
+    return createStoolAccessoryObject(item, selected, showInternalHardware, linkedHoleType, linkedHoleSeat);
+  }
   const group = new THREE.Group();
   const material = makeMaterial(item.colorId, selected, item.kind);
   const darkMetal = new THREE.MeshStandardMaterial({
@@ -6268,6 +6329,13 @@ const ThreeAssembly: React.FC<{
     placement?: AccessoryPlacement | null,
     duplicate?: boolean,
   ) => void;
+  // One grouped move for a shift/box multi-selection. Every entry receives the
+  // same world delta, so relative spacing inside the selection is preserved and
+  // the whole gesture stays a single undoable commit.
+  onTransformMany: (
+    entries: Array<{ id: string; position: Vec3; rotation: Vec3 }>,
+    duplicate?: boolean,
+  ) => void;
   onResizeProfile: (id: string, length: number, position: Vec3) => void;
   onRotateQuarterTurn: (id: string, axisIndex: RotationAxisIndex) => void;
   onDelete: (id: string) => void;
@@ -6316,6 +6384,7 @@ const ThreeAssembly: React.FC<{
   onSelect,
   onSelectionChange,
   onTransform,
+  onTransformMany,
   onResizeProfile,
   onRotateQuarterTurn,
   onDelete,
@@ -6332,6 +6401,7 @@ const ThreeAssembly: React.FC<{
 }) => {
   const mountRef = useRef<HTMLDivElement>(null);
   const [renderError, setRenderError] = useState<string | null>(null);
+  const [sourceRenderStats, setSourceRenderStats] = useState({ total: 0, rendered: 0, hidden: 0 });
   const [contextMenu, setContextMenu] = useState<{ id: string; x: number; y: number } | null>(null);
   const [snapHint, setSnapHint] = useState<string | null>(null);
   const snapHintTimerRef = useRef<number>(0);
@@ -6366,6 +6436,10 @@ const ThreeAssembly: React.FC<{
     startPosition?: Vec3;
     direction?: Vec3;
     dragging?: boolean;
+    // Present only when the move editor drives a multi-selection drag: every
+    // listed item shifts by the same entered distance along the same axis.
+    moveTargetIds?: string[];
+    targetStartPositions?: Vec3[];
   } | null>(null);
   const operationInputRef = useRef<HTMLInputElement>(null);
   const [profileRelationOverlay, setProfileRelationOverlay] = useState<ProfileRelationOverlay>({
@@ -6420,6 +6494,9 @@ const ThreeAssembly: React.FC<{
   const onSelectRef = useRef(onSelect);
   const onSelectionChangeRef = useRef(onSelectionChange);
   const onTransformRef = useRef(onTransform);
+  const onTransformManyRef = useRef(onTransformMany);
+  // Ids of the items currently driven by one grouped multi-selection gizmo.
+  const multiMoveIdsRef = useRef<string[]>([]);
   const onResizeProfileRef = useRef(onResizeProfile);
   const onRotateQuarterTurnRef = useRef(onRotateQuarterTurn);
   const onDeleteRef = useRef(onDelete);
@@ -6507,6 +6584,7 @@ const ThreeAssembly: React.FC<{
   useEffect(() => { onSelectRef.current = onSelect; }, [onSelect]);
   useEffect(() => { onSelectionChangeRef.current = onSelectionChange; }, [onSelectionChange]);
   useEffect(() => { onTransformRef.current = onTransform; }, [onTransform]);
+  useEffect(() => { onTransformManyRef.current = onTransformMany; }, [onTransformMany]);
   useEffect(() => { onResizeProfileRef.current = onResizeProfile; }, [onResizeProfile]);
   useEffect(() => { onRotateQuarterTurnRef.current = onRotateQuarterTurn; }, [onRotateQuarterTurn]);
   useEffect(() => { onDeleteRef.current = onDelete; }, [onDelete]);
@@ -6620,6 +6698,27 @@ const ThreeAssembly: React.FC<{
     }
     if (
       editor.kind === 'move'
+      && editor.direction
+      && editor.moveTargetIds
+      && editor.moveTargetIds.length > 1
+      && editor.targetStartPositions
+    ) {
+      // Exact-value entry for a grouped move: every member starts from its own
+      // pre-drag position and takes the same signed distance along the axis.
+      const direction = new THREE.Vector3(...editor.direction).normalize();
+      const moveValueMm = Number.isFinite(parsedValue) ? parsedValue : editor.valueMm;
+      const entries = editor.moveTargetIds.flatMap((id, index) => {
+        const start = editor.targetStartPositions?.[index];
+        const item = itemsRef.current.find((entry) => entry.id === id);
+        if (!start || !item) return [];
+        const position = new THREE.Vector3(...start).addScaledVector(direction, moveValueMm / SCENE_SCALE);
+        return [{ id, position: scenePositionToMm(position), rotation: item.rotation }];
+      });
+      if (entries.length > 1) onTransformManyRef.current(entries, false);
+      return;
+    }
+    if (
+      editor.kind === 'move'
       && editor.startPosition
       && editor.direction
     ) {
@@ -6713,6 +6812,22 @@ const ThreeAssembly: React.FC<{
     transform.disconnect();
     const getTransformTarget = () => transform.object?.userData.targetObject as THREE.Group | undefined;
     const updateTransformAnchor = () => {
+      // A multi-selection gizmo sits at the centre of the whole selection, so
+      // it must follow the average of every moving member instead of a single
+      // target object. Single selection keeps its exact object centre.
+      const multiIds = multiMoveIdsRef.current;
+      if (multiIds.length > 1) {
+        const centre = new THREE.Vector3();
+        let counted = 0;
+        multiIds.forEach((id) => {
+          const group = groupsRef.current.get(id);
+          if (!group) return;
+          centre.add(group.position);
+          counted += 1;
+        });
+        if (counted > 0) transformAnchor.position.copy(centre.divideScalar(counted));
+        return;
+      }
       const target = getTransformTarget();
       if (!target) return;
       target.getWorldPosition(transformAnchor.position);
@@ -7502,7 +7617,11 @@ const ThreeAssembly: React.FC<{
     let lengthResizeState: LengthResizeState | null = null;
     type FreeMoveState = {
       item: DIYSceneItem;
-      object: THREE.Group;
+      // Single selection moves the item group itself; a multi-selection move
+      // drives the scene-level centre anchor and copies its delta onto every
+      // member of `moveTargets`.
+      object: THREE.Object3D;
+      moveTargets?: Array<{ item: DIYSceneItem; object: THREE.Group; startPosition: THREE.Vector3 }>;
       pointerId: number;
       startPoint: THREE.Vector3;
       startPosition: THREE.Vector3;
@@ -8275,7 +8394,11 @@ const ThreeAssembly: React.FC<{
           }
         }
       }
-      if (event.button === 0) {
+      // Drill mode owns the click: the transform gizmo is detached, but its
+      // picker meshes are still raycast-able (three does not skip invisible
+      // objects), so skip the axis pick outright or it would swallow the
+      // surface click the customer is using to describe the hole.
+      if (event.button === 0 && !isMoveGizmoSuppressed(drillModeRef.current)) {
         setPointerRay(event.clientX, event.clientY);
         const translatePicker = (transform as TransformGizmoInternals)._gizmo?.picker.translate;
         const transformHandleHit = translatePicker
@@ -8293,13 +8416,34 @@ const ThreeAssembly: React.FC<{
           const selectedObject = getTransformTarget();
           const selectedItemId = selectedObject?.userData.itemId as string | undefined;
           const item = selectedItemId ? itemsRef.current.find((entry) => entry.id === selectedItemId) : undefined;
-          if (baseAxis && selectedObject && item && !rayHitsDifferentItem(event.clientX, event.clientY, selectedItemId)) {
+          // A grouped multi-selection move reuses the same axis gesture: the
+          // centre anchor is dragged and every selected member receives the
+          // identical world delta.
+          const multiIds = multiMoveIdsRef.current;
+          const multiTargets = multiIds.length > 1
+            ? getGroupMoveTargets<DIYSceneItem>(itemsRef.current, multiIds).flatMap((targetItem) => {
+              const targetObject = groupsRef.current.get(targetItem.id);
+              return targetObject
+                ? [{ item: targetItem, object: targetObject, startPosition: targetObject.position.clone() }]
+                : [];
+            })
+            : [];
+          const isGroupMove = multiTargets.length > 1;
+          const anchorObject: THREE.Object3D | undefined = isGroupMove ? transformAnchor : selectedObject;
+          const anchorItem = isGroupMove ? multiTargets[multiTargets.length - 1].item : item;
+          // Any hit on a member of the current selection still counts as a
+          // grab of the selection gizmo; only a foreign item in front blocks it.
+          const hitItemId = getHitItemId(event.clientX, event.clientY);
+          const blockedByOtherItem = isGroupMove
+            ? Boolean(hitItemId && !multiIds.includes(hitItemId))
+            : Boolean(hitItemId && hitItemId !== selectedItemId);
+          if (baseAxis && anchorObject && anchorItem && !blockedByOtherItem) {
             // The translate gizmo has two arrows per axis. Use the picked side
             // as a signed direction so each handle represents one of the six
             // explicit movements: ±X, ±Y, and ±Z.
             const directionSign = transformHandleHit.point
               .clone()
-              .sub(selectedObject.position)
+              .sub(anchorObject.position)
               .dot(baseAxis) < 0 ? -1 : 1;
             const axis = baseAxis.multiplyScalar(directionSign);
             const cameraDirection = camera.getWorldDirection(new THREE.Vector3()).normalize();
@@ -8307,35 +8451,49 @@ const ThreeAssembly: React.FC<{
             const startPoint = raycaster.ray.intersectPlane(movePlane, new THREE.Vector3());
             if (startPoint) {
               const editorPosition = getOperationEditorPosition(event.clientX, event.clientY);
+              const anchorStartPosition = anchorObject.position.clone();
               freeMoveState = {
-                item,
-                object: selectedObject,
+                item: anchorItem,
+                object: anchorObject,
+                ...(isGroupMove ? { moveTargets: multiTargets } : {}),
                 pointerId: event.pointerId,
                 startPoint,
-                startPosition: selectedObject.position.clone(),
-                dragOriginPosition: selectedObject.position.clone(),
-                validPosition: selectedObject.position.clone(),
+                startPosition: anchorStartPosition,
+                dragOriginPosition: anchorStartPosition.clone(),
+                validPosition: anchorStartPosition.clone(),
                 moved: false,
                 axis,
-                startRotation: selectedObject.quaternion.clone(),
+                startRotation: anchorObject.quaternion.clone(),
                 accessoryPlacement: null,
                 snapLock: null,
                 snapPointerPosition: null,
                 snapSuppressed: false,
                 snapRearmAt: 0,
-                sourceAttachmentKey: item.lockedPosition ? item.attachmentKey : undefined,
-                duplicateOnCommit: event.shiftKey && item.kind === 'profile',
+                sourceAttachmentKey: anchorItem.lockedPosition ? anchorItem.attachmentKey : undefined,
+                // Shift-drag duplicates. Single selection keeps its historical
+                // profile-only rule; a group duplicates everything it moves.
+                duplicateOnCommit: isGroupMove
+                  ? event.shiftKey
+                  : event.shiftKey && anchorItem.kind === 'profile',
               };
               if (!freeMoveState.duplicateOnCommit) {
                 setOperationEditor({
                   kind: 'move',
-                  itemId: item.id,
+                  itemId: anchorItem.id,
                   valueMm: 0,
                   x: editorPosition.x,
                   y: editorPosition.y,
-                  startPosition: [selectedObject.position.x, selectedObject.position.y, selectedObject.position.z],
+                  startPosition: [anchorStartPosition.x, anchorStartPosition.y, anchorStartPosition.z],
                   direction: [axis.x, axis.y, axis.z],
                   dragging: true,
+                  ...(isGroupMove ? {
+                    moveTargetIds: multiTargets.map((target) => target.item.id),
+                    targetStartPositions: multiTargets.map((target) => [
+                      target.startPosition.x,
+                      target.startPosition.y,
+                      target.startPosition.z,
+                    ] as Vec3),
+                  } : {}),
                 });
               }
               orbit.enabled = false;
@@ -8420,15 +8578,71 @@ const ThreeAssembly: React.FC<{
         state.moved = true;
         const nextPosition = state.startPosition.clone().add(movement);
         state.object.position.copy(nextPosition);
+        if (state.moveTargets && state.moveTargets.length > 1) {
+          // Grouped move: every member takes exactly the same world delta, so
+          // the arrangement inside the selection is preserved. Magnetic
+          // per-profile snapping is deliberately skipped here because a group
+          // has no single contact face to snap.
+          // Fellow members of the same selection are excluded from the check:
+          // their stored item positions are still the pre-drag ones, and a
+          // group always keeps its own internal spacing by construction.
+          const movingIds = new Set(state.moveTargets.map((target) => target.item.id));
+          const collisionItems = itemsRef.current.filter((item) => !movingIds.has(item.id));
+          state.moveTargets.forEach((target) => {
+            target.object.position.copy(target.startPosition).add(movement);
+            if (target.item.kind === 'profile') {
+              setLiveProfileInterference(
+                target.object,
+                profileItemCollides(
+                  { ...target.item, position: scenePositionToMm(target.object.position) },
+                  collisionItems,
+                ),
+              );
+            }
+          });
+          state.validPosition.copy(nextPosition);
+          syncProfileLengthHandles(lengthHandles, undefined, undefined);
+          const groupDistanceMm = Math.round(
+            nextPosition.clone().sub(state.dragOriginPosition).dot(state.axis) * SCENE_SCALE,
+          );
+          const viewportRect = renderer.domElement.getBoundingClientRect();
+          const anchorPoint = projectRelationPoint(transformAnchor.position);
+          const anchorX = anchorPoint?.x ?? event.clientX - viewportRect.left;
+          const anchorY = anchorPoint?.y ?? event.clientY - viewportRect.top;
+          setOperationEditor((current) => (
+            current?.kind === 'move' && current.itemId === state.item.id
+              ? {
+                ...current,
+                valueMm: groupDistanceMm,
+                x: THREE.MathUtils.clamp(
+                  anchorX + (anchorX < viewportRect.width * 0.68 ? 88 : -88),
+                  48,
+                  Math.max(48, viewportRect.width - 48),
+                ),
+                y: THREE.MathUtils.clamp(
+                  anchorY + (anchorY < viewportRect.height * 0.72 ? 62 : -62),
+                  18,
+                  Math.max(18, viewportRect.height - 28),
+                ),
+                dragging: true,
+              }
+              : current
+          ));
+          event.preventDefault();
+          return;
+        }
         if (state.item.kind === 'profile') {
           const collisionItems = itemsRef.current;
-          const tolerances = getProfileSnapTolerances(state.object.position, state.item);
+          // Single selection always drags the item group itself, so every
+          // snap/interference helper can keep its THREE.Group contract.
+          const movedObject = state.object as THREE.Group;
+          const tolerances = getProfileSnapTolerances(movedObject.position, state.item);
           const retainedLock = retainSnapLock(
             state.snapLock || null,
             state.snapPointerPosition || null,
             nextPosition,
             tolerances.releaseDistance,
-            state.object,
+            movedObject,
             state.item,
             collisionItems,
           );
@@ -8450,7 +8664,7 @@ const ThreeAssembly: React.FC<{
           const candidateSnap = state.snapSuppressed
             ? null
             : findMagneticProfileSnap(
-              state.object,
+              movedObject,
               state.item,
               collisionItems,
               groupsRef.current,
@@ -8458,7 +8672,7 @@ const ThreeAssembly: React.FC<{
               tolerances.planeTolerance,
               snapAlignmentRef.current,
             ) || findAxisFlushSnap(
-              state.object,
+              movedObject,
               state.item,
               collisionItems,
               groupsRef.current,
@@ -8482,7 +8696,7 @@ const ThreeAssembly: React.FC<{
             state.snapLock = snap;
             nextPosition.copy(axialSnapPosition);
             state.object.position.copy(nextPosition);
-            showSnapVisual(snap, state.object, state.item);
+            showSnapVisual(snap, movedObject, state.item);
           } else {
             state.snapLock = null;
             state.snapPointerPosition = null;
@@ -8490,8 +8704,8 @@ const ThreeAssembly: React.FC<{
             setSnapHint(null);
           }
           setLiveProfileInterference(
-            state.object,
-            profileCollides(state.object, state.item, nextPosition, collisionItems, groupsRef.current),
+            state.object as THREE.Group,
+            profileCollides(state.object as THREE.Group, state.item, nextPosition, collisionItems, groupsRef.current),
           );
         } else if (isConnectionAccessoryKind(state.item.kind)) {
           const tolerances = getSnapTolerances(state.object.position);
@@ -8542,7 +8756,7 @@ const ThreeAssembly: React.FC<{
           }
         }
         state.validPosition.copy(nextPosition);
-        syncProfileLengthHandles(lengthHandles, state.object, state.item);
+        syncProfileLengthHandles(lengthHandles, state.object as THREE.Group, state.item);
         const moveDistanceMm = Math.round(
           nextPosition.clone().sub(state.dragOriginPosition).dot(state.axis) * SCENE_SCALE,
         );
@@ -8588,7 +8802,11 @@ const ThreeAssembly: React.FC<{
           hoveredLengthSide = handleObject?.userData.lengthHandleSide as -1 | 1 | null;
         }
         setProfileLengthHandleHighlight(lengthHandles, hoveredLengthSide);
-        const translatePicker = (transform as TransformGizmoInternals)._gizmo?.picker.translate;
+        // Same reason as pointerdown: never arm the (now hidden) move gizmo
+        // while the customer is describing a hole.
+        const translatePicker = isMoveGizmoSuppressed(drillModeRef.current)
+          ? undefined
+          : (transform as TransformGizmoInternals)._gizmo?.picker.translate;
         const transformHandleHit = !hoveredLengthSide && translatePicker
           ? raycaster.intersectObjects(translatePicker.children, true)[0]
           : undefined;
@@ -8699,37 +8917,69 @@ const ThreeAssembly: React.FC<{
         if (renderer.domElement.hasPointerCapture?.(state.pointerId)) {
           renderer.domElement.releasePointerCapture?.(state.pointerId);
         }
+        const groupMove = state.moveTargets && state.moveTargets.length > 1
+          ? state.moveTargets
+          : null;
         if (state.moved) {
-          const committedRotation = state.accessoryPlacement?.rotation || state.item.rotation;
-          onTransformRef.current(
-            state.item.id,
-            scenePositionToMm(state.validPosition),
-            committedRotation,
-            state.accessoryPlacement,
-            state.duplicateOnCommit,
-          );
+          if (groupMove) {
+            // One grouped commit keeps the whole gesture a single undo step and
+            // preserves every relative offset inside the selection.
+            onTransformManyRef.current(
+              groupMove.map((target) => ({
+                id: target.item.id,
+                position: scenePositionToMm(target.object.position),
+                rotation: target.item.rotation,
+              })),
+              state.duplicateOnCommit,
+            );
+          } else {
+            const committedRotation = state.accessoryPlacement?.rotation || state.item.rotation;
+            onTransformRef.current(
+              state.item.id,
+              scenePositionToMm(state.validPosition),
+              committedRotation,
+              state.accessoryPlacement,
+              state.duplicateOnCommit,
+            );
+          }
         }
         const movement = state.validPosition.clone().sub(state.dragOriginPosition);
         const editorPosition = getMoveEditorEdgePosition(event.clientX, event.clientY);
+        const movedDistanceMm = Math.round(movement.dot(state.axis) * SCENE_SCALE);
+        const baseMoveEditor = {
+          kind: 'move' as const,
+          itemId: state.item.id,
+          valueMm: movedDistanceMm,
+          startPosition: [state.dragOriginPosition.x, state.dragOriginPosition.y, state.dragOriginPosition.z] as Vec3,
+          direction: [state.axis.x, state.axis.y, state.axis.z] as Vec3,
+          dragging: false,
+        };
         if (state.duplicateOnCommit) {
           setOperationEditor(null);
+        } else if (groupMove) {
+          setOperationEditor({
+            ...baseMoveEditor,
+            x: editorPosition.x,
+            y: editorPosition.y,
+            moveTargetIds: groupMove.map((target) => target.item.id),
+            targetStartPositions: groupMove.map((target) => [
+              target.startPosition.x,
+              target.startPosition.y,
+              target.startPosition.z,
+            ] as Vec3),
+          });
         } else {
           setOperationEditor((current) => (
             current?.kind === 'move' && current.itemId === state.item.id
               ? {
                 ...current,
-                valueMm: Math.round(movement.dot(state.axis) * SCENE_SCALE),
+                valueMm: movedDistanceMm,
                 dragging: false,
               }
               : {
-                kind: 'move',
-                itemId: state.item.id,
-                valueMm: Math.round(movement.dot(state.axis) * SCENE_SCALE),
+                ...baseMoveEditor,
                 x: editorPosition.x,
                 y: editorPosition.y,
-                startPosition: [state.dragOriginPosition.x, state.dragOriginPosition.y, state.dragOriginPosition.z],
-                direction: [state.axis.x, state.axis.y, state.axis.z],
-                dragging: false,
               }
           ));
         }
@@ -9057,8 +9307,13 @@ const ThreeAssembly: React.FC<{
       linkedHoleIds.add(item.linkedHoleId);
       linkedScrewHoleIdsByProfile.set(item.linkedProfileId, linkedHoleIds);
     });
+    const sourceStats = { total: items.filter(hasImportedSourceMesh).length, rendered: 0, hidden: 0 };
     const showMultiSelectionOutline = selectedIds.length > 1;
     items.forEach((item) => {
+      if (hasImportedSourceMesh(item) && (item.importedBomOnly || item.sourceMesh?.source.visible === false)) {
+        sourceStats.hidden += 1;
+        return;
+      }
       const itemIsSelected = selectedSet.has(item.id);
       const showSelectionOutline = showMultiSelectionOutline && itemIsSelected;
       const machiningEmphasis = selectedIds.length === 0
@@ -9088,7 +9343,18 @@ const ThreeAssembly: React.FC<{
               ? items.find((candidate) => candidate.id === item.linkedProfileId && candidate.kind === 'profile')
                 ?.holes?.find((hole) => hole.id === item.linkedHoleId)?.type
               : undefined,
+            item.kind === 'screw' ? items.find(candidate => candidate.id === item.linkedProfileId)
+              ?.holes?.find(hole => hole.id === item.linkedHoleId)?.fastenerSeat : undefined,
           );
+      if (hasImportedSourceMesh(item)) {
+        let visibleMesh = false;
+        group.traverseVisible(child => {
+          if (!(child instanceof THREE.Mesh) || child.userData.selectionProxy || child.userData.selectionDecoration) return;
+          const materials = Array.isArray(child.material) ? child.material : [child.material];
+          if (child.geometry.getAttribute('position')?.count && materials.some(material => material.visible && material.colorWrite && material.opacity > 0)) visibleMesh = true;
+        });
+        if (visibleMesh) sourceStats.rendered += 1;
+      }
       group.userData.itemId = item.id;
       group.traverse((child) => {
         child.userData.itemId = item.id;
@@ -9102,6 +9368,7 @@ const ThreeAssembly: React.FC<{
       content.add(group);
       groups.set(item.id, group);
     });
+    setSourceRenderStats(sourceStats);
     groupsRef.current = groups;
     const selected = selectedId ? groups.get(selectedId) : undefined;
     const selectedItem = selectedId ? items.find((item) => item.id === selectedId) : undefined;
@@ -9109,14 +9376,40 @@ const ThreeAssembly: React.FC<{
       selectedItem
       && (!selectedItem.lockedPosition || isMovableAccessoryKind(selectedItem.kind))
     );
-    if (selected && selectedIds.length === 1 && selectedCanMove) {
+    // A shift/box multi-selection gets the same translate gizmo, parked at the
+    // centre of everything that can actually move. Auto-generated end caps and
+    // cabinet doors stay out because they are owned by their host item.
+    const multiMoveTargets = selectedIds.length > 1
+      ? getGroupMoveTargets<DIYSceneItem>(items, selectedIds).flatMap((item) => {
+        const group = groups.get(item.id);
+        return group ? [{ item, group }] : [];
+      })
+      : [];
+    multiMoveIdsRef.current = multiMoveTargets.map((entry) => entry.item.id);
+    // Drill mode is a "point at the face you want drilled" gesture: the customer
+    // aims at a profile surface to pick side/groove/distance. The coloured
+    // translate gizmo and the length handles sit exactly on that surface, so
+    // they would swallow the click and mis-place the hole. Suppress both while
+    // placing holes; they come back the moment drill mode ends.
+    const suppressManipulators = isMoveGizmoSuppressed(drillMode);
+    if (!suppressManipulators && selected && selectedIds.length === 1 && selectedCanMove) {
       transformAnchor.position.copy(selected.position);
       transformAnchor.userData.targetObject = selected;
+      transform.attach(transformAnchor);
+    } else if (!suppressManipulators && multiMoveTargets.length > 1) {
+      const centre = new THREE.Vector3();
+      multiMoveTargets.forEach((entry) => centre.add(entry.group.position));
+      transformAnchor.position.copy(centre.divideScalar(multiMoveTargets.length));
+      transformAnchor.userData.targetObject = undefined;
       transform.attach(transformAnchor);
     } else {
       transformAnchor.userData.targetObject = undefined;
     }
-    syncProfileLengthHandles(lengthHandles, selectedIds.length === 1 ? selected : undefined, selectedIds.length === 1 ? selectedItem : undefined);
+    syncProfileLengthHandles(
+      lengthHandles,
+      !suppressManipulators && selectedIds.length === 1 ? selected : undefined,
+      !suppressManipulators && selectedIds.length === 1 ? selectedItem : undefined,
+    );
 
     // Auto-fit only when scene membership gains a new item. Deleting one or
     // more items (including cascaded accessories, caps, and linked screws)
@@ -9136,7 +9429,7 @@ const ThreeAssembly: React.FC<{
     }
     lastFrameSignatureRef.current = frameSignature;
     lastFrameItemIdsRef.current = items.map((item) => item.id);
-  }, [items, selectedId, selectedIds, showMachiningMarks, transparentProfiles, accessoryEditMode]);
+  }, [items, selectedId, selectedIds, showMachiningMarks, transparentProfiles, accessoryEditMode, drillMode]);
 
   const installAccessoryFace = (candidate: AccessoryPlacementOverlay) => {
     if (!accessoryPlacementTemplate) return;
@@ -9165,6 +9458,10 @@ const ThreeAssembly: React.FC<{
       }}
     >
       <div ref={mountRef} className="absolute inset-0 overflow-hidden" data-testid="diy-3d-canvas" />
+      {sourceRenderStats.total > 0 && <div data-testid="diy-source-render-count" className={`pointer-events-none absolute left-3 z-20 rounded-xl bg-white/95 px-3 py-2 text-xs font-bold text-slate-700 shadow ${profileDrawTemplate || accessoryPlacementTemplate || drillMode ? 'top-44' : 'top-28'}`}>
+        原模型部件已绘制 {sourceRenderStats.rendered}/{sourceRenderStats.total}
+        {sourceRenderStats.hidden > 0 && ` · 主动隐藏 ${sourceRenderStats.hidden}`}
+      </div>}
       {selectionRect && (
         <div
           className="pointer-events-none absolute z-40 border-2 border-blue-500 bg-blue-400/15"
@@ -9374,7 +9671,7 @@ const ThreeAssembly: React.FC<{
           </button>
         );
       })}
-      {selectedSceneItem && selectedIds.length === 1 && !selectedSceneItem.lockedPosition && (
+      {selectedSceneItem && selectedIds.length === 1 && !selectedSceneItem.lockedPosition && !drillMode && (
         <div
           className="absolute left-3 top-28 z-20 w-[190px] rounded-2xl border border-slate-200 bg-white/95 p-2.5 shadow-xl backdrop-blur"
           data-testid="diy-scene-rotation-toolbar"
@@ -9509,7 +9806,7 @@ const ThreeAssembly: React.FC<{
           ) : operationEditor.kind === 'move' ? (
             <div className="flex items-center gap-1.5">
               <span className="shrink-0 text-[8px] font-black text-slate-500">
-                {operationLabels.move}
+                {operationLabels.move}{operationEditor.moveTargetIds && operationEditor.moveTargetIds.length > 1 ? ` · ${operationEditor.moveTargetIds.length}` : ''}
               </span>
               <input
                 type="number"
@@ -9764,6 +10061,7 @@ const getShelfSupportFinishLabel = (item: DIYSceneItem, t: Record<string, string
 );
 
 const getItemLabel = (item: DIYSceneItem, language: Language) => {
+  if (item.kind === 'imported_component') return item.name || item.sourceMesh?.source.componentName || '源模型部件';
   const t = TEXT[language];
   if (item.kind === 'profile') return `${item.variantId || '2020'} · ${item.length || 0}mm`;
   if (item.kind === 'plate') return `${t.plate} · ${item.width}×${item.height}`;
@@ -9811,7 +10109,7 @@ const getItemLabel = (item: DIYSceneItem, language: Language) => {
       item.screwHead,
       Math.max(1, Math.round(item.height || 35)),
     );
-    const kitSuffix = orderSpec.includesElasticFastener ? ` + ${t.elasticFastener}` : '';
+    const kitSuffix = orderSpec.includesElasticFastener && item.fastenerSeat !== 'internal_slot' ? ` + ${t.elasticFastener}` : '';
     return `${label} · ${orderSpec.threadSize}×${orderSpec.lengthMm}${kitSuffix}${item.linkedHoleId ? ` · ${t.linkedHole}` : ''}`;
   }
   if (item.kind === 'caster') {
@@ -10105,12 +10403,27 @@ const withImportedProfileEndTapping = (source: DIYSceneItem[], importedProfileId
 
 };
 
-const removeItemsWithOwnedEndTapping = (source: DIYSceneItem[], requestedIds: Set<string>) => {
+const removeItemsWithOwnedEndTapping = (source: DIYSceneItem[], requestedIds: Set<string>, removeLinkedHoles = false) => {
   const removedProfileIds = new Set(source
     .filter((item) => requestedIds.has(item.id) && item.kind === 'profile')
     .map((item) => item.id));
   const removalIds = new Set(requestedIds);
+  // A linked screw is the clickable representation of its machining hole.
+  // The customer chooses whether deleting it also removes its machining hole.
+  // Scope by BOTH profile and hole: imported profiles may reuse local hole IDs.
+  const removedHoleIdsByProfile = new Map<string, Set<string>>();
   source.forEach((item) => {
+    if (!removeLinkedHoles || !requestedIds.has(item.id) || item.kind !== 'screw' || !item.linkedProfileId || !item.linkedHoleId) return;
+    const holeIds = removedHoleIdsByProfile.get(item.linkedProfileId) || new Set<string>();
+    holeIds.add(item.linkedHoleId);
+    removedHoleIdsByProfile.set(item.linkedProfileId, holeIds);
+  });
+  source.forEach((item) => {
+    if (item.kind === 'screw' && item.linkedProfileId && item.linkedHoleId
+      && removedHoleIdsByProfile.get(item.linkedProfileId)?.has(item.linkedHoleId)) {
+      removalIds.add(item.id);
+    }
+
     if (
       item.attachmentKey?.startsWith('PANEL:')
       && item.attachedProfileIds?.some((attachmentId) => requestedIds.has(attachmentId))
@@ -10141,6 +10454,9 @@ const removeItemsWithOwnedEndTapping = (source: DIYSceneItem[], requestedIds: Se
       && !remaining.some((cap) => cap.kind === 'end_cap' && cap.attachedProfileIds?.[0] === item.id && cap.attachedEnd === 'right');
     return {
       ...item,
+      ...(removedHoleIdsByProfile.has(item.id) ? {
+        holes: (item.holes || []).filter((hole) => !removedHoleIdsByProfile.get(item.id)!.has(hole.id)),
+      } : {}),
       ...(removeLeft ? { tappingLeft: false } : {}),
       ...(removeRight ? { tappingRight: false } : {}),
     };
@@ -10167,7 +10483,11 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({
     if (new URLSearchParams(location.search).has('template')) return { items: [] as DIYSceneItem[], failed: false };
     try {
       const restored = readDesignerDraft<DIYSceneItem>(window.localStorage, draftKey);
-      return { items: syncLinkedScrews(syncAttachedAccessories(normalizeDesignItems(restored))), failed: false };
+      if (restored.length) {
+        const inspected = inspectDesignerImportItems(restored);
+        if (!inspected.valid) throw new Error(inspected.issues.map(issue => issue.message).join(' '));
+      }
+      return { items: synchronizeDesignerSceneItems(normalizeDesignItems(restored)), failed: false };
     } catch {
       return { items: [] as DIYSceneItem[], failed: true };
     }
@@ -10194,9 +10514,9 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({
   const [profileDrawTemplate, setProfileDrawTemplate] = useState<DIYSceneItem | null>(null);
   const [libraryProfileVariantId, setLibraryProfileVariantId] = useState('2020');
   const [accessoryPlacementTemplate, setAccessoryPlacementTemplate] = useState<DIYSceneItem | null>(null);
-  const [selectedAccessoryProfileSize, setSelectedAccessoryProfileSize] = useState<DIYAccessoryProfileSize>('2020');
   const [newDoorLeafMode, setNewDoorLeafMode] = useState<DIYDoorLeafMode>('single');
   const [newDoorOverlay, setNewDoorOverlay] = useState<DIYDoorOverlay>('full');
+  const [deleteHolePrompt, setDeleteHolePrompt] = useState<string[] | null>(null);
   const [fileMenu, setFileMenu] = useState<'json' | 'excel' | null>(null);
   const [projectPanelCollapsed, setProjectPanelCollapsed] = useState(false);
   const [maycadImporting, setMaycadImporting] = useState(false);
@@ -10259,7 +10579,7 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({
   const commit = (next: DIYSceneItem[], selection = selectedId) => {
     const manufacturingReady = normalizeManufacturingMeasurements(next);
     const synchronized = normalizeManufacturingMeasurements(
-      syncLinkedScrews(syncAttachedAccessories(manufacturingReady)),
+      synchronizeDesignerSceneItems(manufacturingReady),
     );
     setHistory((current) => [...current.slice(-39), cloneItems(items)]);
     setFuture([]);
@@ -10291,6 +10611,8 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({
     incomingSource: DesignSourceInfo,
     incomingFinishedFurniture: FinishedFurnitureQuote | null = null,
   ) => {
+    const preflight = inspectDesignerImportItems(incoming);
+    if (!preflight.valid) throw new Error(preflight.issues.map(issue => issue.message).join('\n'));
     const choice = items.length
       ? await requestImportConflictChoice('design')
       : 'replace';
@@ -10311,6 +10633,9 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({
 
   const updateSelected = (patch: Partial<DIYSceneItem>) => {
     if (!selected) return;
+    if (hasImportedSourceMesh(selected) && ['kind', 'length', 'width', 'height', 'thickness', 'quantity', 'variantId', 'colorId', 'sourceMesh'].some(key => key in patch)) {
+      showNotice('源模型部件保持原始几何；可移动、旋转或复制独立部件。'); return;
+    }
     const detachLinkedScrew = selected.kind === 'screw'
       && selected.autoGenerated
       && (patch.position !== undefined
@@ -10354,14 +10679,27 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({
     rotateItemQuarterTurn(selected.id, axisIndex);
   };
 
-  const deleteItem = (itemId: string) => {
-    commit(removeItemsWithOwnedEndTapping(items, new Set([itemId])), null);
+  const requestDeleteItems = (ids: string[]) => {
+    const requested = new Set(ids);
+    const hasRemainingLinkedHole = items.some(item => requested.has(item.id)
+      && item.kind === 'screw' && item.linkedProfileId && item.linkedHoleId
+      && !requested.has(item.linkedProfileId)
+      && items.some(profile => profile.id === item.linkedProfileId && profile.kind === 'profile'
+        && profile.holes?.some(hole => hole.id === item.linkedHoleId)));
+    if (hasRemainingLinkedHole) { setDeleteHolePrompt(ids); return; }
+    commit(removeItemsWithOwnedEndTapping(items, requested), null);
   };
 
+  const finishDeleteItems = (removeLinkedHoles: boolean) => {
+    if (!deleteHolePrompt) return;
+    commit(removeItemsWithOwnedEndTapping(items, new Set(deleteHolePrompt), removeLinkedHoles), null);
+    setDeleteHolePrompt(null);
+  };
+
+  const deleteItem = (itemId: string) => requestDeleteItems([itemId]);
+
   const deleteSelected = () => {
-    if (!selectedIds.length) return;
-    const selectedSet = new Set<string>(selectedIds as string[]);
-    commit(removeItemsWithOwnedEndTapping(items, selectedSet), null);
+    if (selectedIds.length) requestDeleteItems([...selectedIds]);
   };
 
   const fillScrews = () => {
@@ -10631,14 +10969,64 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({
   const duplicateSelected = () => {
     if (!selectedIds.length) return;
     const selectedSet = new Set(selectedIds);
-    const duplicates = items.filter((item) => selectedSet.has(item.id) && item.kind !== 'end_cap' && item.kind !== 'cabinet_door').map((item) => ({
-      ...duplicateSceneItem(item),
-      position: [item.position[0] + 80, item.position[1] + 80, item.position[2]] as Vec3,
-    }));
-    if (!duplicates.length) return;
+    const copies = items
+      .filter((item) => selectedSet.has(item.id) && item.kind !== 'end_cap' && item.kind !== 'cabinet_door')
+      .map((item) => duplicateSceneItem(item));
+    if (!copies.length) return;
+    // One shared offset for the whole batch, so a copied multi-selection keeps
+    // the arrangement the customer built and lands clear of the originals.
+    const duplicates = applyGroupMoveDelta(copies, copies.map((item) => item.id), [80, 80, 0]);
     const next = [...items, ...duplicates];
     commit(next, duplicates[duplicates.length - 1]?.id || null);
     setSelectedIds(duplicates.map((item) => item.id));
+  };
+
+  // One grouped transform for a shift/box multi-selection. Every entry already
+  // carries its own final position, so the whole gesture becomes a single
+  // history step and relative spacing inside the selection survives.
+  const transformManyItems = (
+    entries: Array<{ id: string; position: Vec3; rotation: Vec3 }>,
+    duplicate = false,
+  ) => {
+    const sources = entries.flatMap((entry) => {
+      const item = items.find((candidate) => candidate.id === entry.id);
+      return item ? [{ item, entry }] : [];
+    });
+    if (!sources.length) return;
+    if (duplicate) {
+      const duplicated = sources.map(({ item, entry }) => ({
+        ...duplicateSceneItem(item),
+        position: entry.position,
+        rotation: entry.rotation,
+      }));
+      commit([...items, ...duplicated], duplicated[duplicated.length - 1].id);
+      setSelectedIds(duplicated.map((item) => item.id));
+      return;
+    }
+    const byId = new Map(sources.map(({ item, entry }) => [item.id, entry]));
+    const next = items.map((item) => {
+      const entry = byId.get(item.id);
+      if (!entry) return item;
+      return {
+        ...item,
+        position: entry.position,
+        rotation: entry.rotation,
+        // A moved attachment is no longer installed at its old joint.
+        ...(isConnectionAccessoryKind(item.kind) || isMovableAccessoryKind(item.kind)
+          ? {
+            lockedPosition: false,
+            attachedProfileIds: undefined,
+            attachmentKey: undefined,
+            ...(item.kind === 'end_cap' ? { attachedEnd: undefined, autoAddedTapping: false } : {}),
+          }
+          : {}),
+        ...(item.kind === 'screw' && item.autoGenerated
+          ? { autoGenerated: false, linkedProfileId: undefined, linkedHoleId: undefined }
+          : {}),
+      };
+    });
+    commit(next, sources[sources.length - 1].item.id);
+    setSelectedIds(sources.map(({ item }) => item.id));
   };
 
   const updateSelectedItems = (patch: Partial<DIYSceneItem>) => {
@@ -10646,6 +11034,7 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({
     const selectedSet = new Set(selectedIds);
     commit(items.map((item) => {
       if (!selectedSet.has(item.id)) return item;
+      if (hasImportedSourceMesh(item) && ['kind', 'length', 'width', 'height', 'thickness', 'quantity', 'variantId', 'colorId', 'sourceMesh'].some(key => key in patch)) return item;
       if (patch.colorId && (item.kind === 'caster' || item.kind === 'foot')) return item;
       const updated = { ...item, ...patch };
       return item.kind === 'end_cap' && patch.colorId
@@ -10667,21 +11056,33 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({
   };
 
   useEffect(() => {
-    const handleDeleteShortcut = (event: KeyboardEvent) => {
-      if (!selectedIds.length || (event.key !== 'Delete' && event.key !== 'Backspace')) return;
-      if (event.metaKey || event.ctrlKey || event.altKey) return;
+    const handleDesignerShortcut = (event: KeyboardEvent) => {
       const target = event.target;
       const isEditing = target instanceof HTMLInputElement
         || target instanceof HTMLTextAreaElement
         || target instanceof HTMLSelectElement
         || (target instanceof HTMLElement && target.isContentEditable);
+      if (deleteHolePrompt) {
+        if (event.key === 'Escape') setDeleteHolePrompt(null);
+        return;
+      }
       if (isEditing) return;
+      if (!selectedIds.length) return;
+      // Cmd/Ctrl+D duplicates the whole selection, so a shift multi-selection
+      // is copied in one step with its arrangement preserved.
+      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'd') {
+        event.preventDefault();
+        duplicateSelected();
+        return;
+      }
+      if (event.key !== 'Delete' && event.key !== 'Backspace') return;
+      if (event.metaKey || event.ctrlKey || event.altKey) return;
       event.preventDefault();
       deleteSelected();
     };
-    window.addEventListener('keydown', handleDeleteShortcut);
-    return () => window.removeEventListener('keydown', handleDeleteShortcut);
-  }, [items, selectedIds]);
+    window.addEventListener('keydown', handleDesignerShortcut);
+    return () => window.removeEventListener('keydown', handleDesignerShortcut);
+  }, [items, selectedIds, deleteHolePrompt]);
 
   const addItem = (kind: DIYItemKind, variantId?: string) => {
     if (kind === 'profile') {
@@ -10774,10 +11175,12 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({
       showNotice(t.endCapInstalled);
       return;
     }
+    // The library lists every accessory once per compatible profile series, so
+    // the series now travels with the picked entry instead of a panel selector.
     let accessorySeries = isConnectionAccessoryKind(kind)
       ? (ACCESSORY_PROFILE_SIZES.includes(variantId as DIYAccessoryProfileSize)
         ? variantId as DIYAccessoryProfileSize
-        : selectedAccessoryProfileSize)
+        : getAvailableAccessorySizes(kind)[0])
       : undefined;
     if (isConnectionAccessoryKind(kind)) {
       const hasRequestedSeries = items.some((item) => (
@@ -10785,10 +11188,7 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({
       ));
       if (!hasRequestedSeries) {
         const inferredSeries = dominantAccessoryProfileSeries(items, getAvailableAccessorySizes(kind));
-        if (inferredSeries) {
-          accessorySeries = inferredSeries;
-          setSelectedAccessoryProfileSize(inferredSeries);
-        }
+        if (inferredSeries) accessorySeries = inferredSeries;
       }
     }
     if (isConnectionAccessoryKind(kind) && !ACCESSORY_PRICES[kind][accessorySeries!]) return;
@@ -11111,7 +11511,7 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({
 
   const save = () => {
     downloadTextFile(
-      JSON.stringify(buildDesignDocument(items, language, designSource, finishedFurnitureQuote), null, 2),
+      JSON.stringify(buildDesignDocument(items, language, designSource, finishedFurnitureQuote)),
       'application/json;charset=utf-8',
       `mengkaile-design-${new Date().toISOString().slice(0, 10)}.json`,
     );
@@ -11129,7 +11529,14 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({
 
   const load = () => importRef.current?.click();
 
+  const productionAllowed = () => {
+    const release = inspectDesignerManufacturingPrecheck(items);
+    if (release.applies && !release.valid) { showNotice(release.issues.join(' ')); return false; }
+    return true;
+  };
+
   const exportJson = () => {
+    if (!productionAllowed()) return;
     const document = buildDesignDocument(items, language, designSource, finishedFurnitureQuote);
     downloadTextFile(
       JSON.stringify({
@@ -11139,14 +11546,14 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({
         provenance: document.provenance,
         ...(document.finishedFurniture ? { finishedFurniture: document.finishedFurniture } : {}),
         grooveConvention: document.grooveConvention,
-        production: document.production,
+        production: 'production' in document ? document.production : undefined,
       }, null, 2),
       'application/json;charset=utf-8',
       `mengkaile-production-${new Date().toISOString().slice(0, 10)}.json`,
     );
   };
 
-  const exportExcel = () => downloadBinaryFile(
+  const exportExcel = () => productionAllowed() && downloadBinaryFile(
     buildProductionXlsx(buildProductionData(items, language)),
     'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
     `mengkaile-production-${new Date().toISOString().slice(0, 10)}.xlsx`,
@@ -11154,12 +11561,15 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({
 
   const importJson = (file?: File) => {
     if (!file) return;
+    try { validateImportedSourceMeshFileSize(file.size); } catch (error) { showNotice(String(error)); return; }
     const reader = new FileReader();
     reader.onload = async () => {
       try {
         const parsed = JSON.parse(String(reader.result || '{}'));
         let importedItems: DIYSceneItem[] = [];
         if (Array.isArray(parsed?.items)) {
+          const preflight = inspectDesignerImportItems(parsed.items);
+          if (!preflight.valid) throw new Error(preflight.issues.map(issue => issue.message).join('\n'));
           importedItems = normalizeDesignItems(parsed.items as DIYSceneItem[]);
         } else if (Array.isArray(parsed?.order_json?.items)) {
           importedItems = normalizeDesignItems(mapSystemOrderProfileItemsToDesignerItems(
@@ -11238,8 +11648,6 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({
       const importedProfileIds = appliedItems
         .filter((item) => item.kind === 'profile')
         .map((item) => item.id);
-      const importedAccessorySeries = dominantAccessoryProfileSeries(appliedItems);
-      if (importedAccessorySeries) setSelectedAccessoryProfileSize(importedAccessorySeries);
       setMaycadReview({ source: result.sourceTitle || file.name, confidence: result.confidence, warnings: result.warnings });
       if (result.profileReviews.length) {
         setMaycadProfileReviewPrompt({
@@ -11269,8 +11677,6 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({
       const variantId = confirmedVariantByItemId.get(item.id);
       return variantId ? { ...item, variantId, name: variantId } : item;
     });
-    const confirmedAccessorySeries = dominantAccessoryProfileSeries(confirmedItems);
-    if (confirmedAccessorySeries) setSelectedAccessoryProfileSize(confirmedAccessorySeries);
     commit(confirmedItems, null);
     const profileIds = maycadProfileReviewPrompt.profileIds;
     setMaycadProfileReviewPrompt(null);
@@ -11437,12 +11843,12 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({
         hidden_connector: { id: '5', code: 5, label: t.hiddenConnector, imageKey: '5' },
         tee_connector: { id: '9', code: 9, label: t.teeConnector, imageKey: '9' },
         screw: item.screwHead === 'button_socket'
-          ? { id: 'diy-button-socket-screw', code: 3, label: t.buttonSocketScrew, imageKey: '3' }
+          ? { id: 'diy-button-socket-screw', code: 10, label: t.buttonSocketScrew, imageKey: '10' }
           : item.screwHead === 'flat_socket'
-            ? { id: 'diy-flat-socket-screw', code: 3, label: t.flatSocketScrew, imageKey: '3' }
+            ? { id: 'diy-flat-socket-screw', code: 10, label: t.flatSocketScrew, imageKey: '10' }
           : item.screwHead === 'socket_cylinder'
-            ? { id: 'diy-socket-cylinder-screw', code: 3, label: t.socketCylinderScrew, imageKey: '3' }
-            : { id: 'diy-socket-head-screw', code: 3, label: t.screw, imageKey: '3' },
+            ? { id: 'diy-socket-cylinder-screw', code: 10, label: t.socketCylinderScrew, imageKey: '10' }
+            : { id: 'diy-socket-head-screw', code: 10, label: t.screw, imageKey: '10' },
         foot: { id: 'diy-leveling-foot', code: 8, label: t.foot, imageKey: '8' },
         caster: { id: 'diy-threaded-caster', code: 0, label: t.caster, imageKey: '' },
         end_cap: { id: 'diy-profile-end-cap', code: 0, label: t.endCap, imageKey: '' },
@@ -11625,6 +12031,7 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({
   };
 
   const addDesignToCart = async () => {
+    if (!productionAllowed()) return;
     if (!items.length) return;
     const choice = cartItemCount > 0
       ? await requestImportConflictChoice('cart')
@@ -11686,6 +12093,18 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({
 
   const grooveLabel = (index: number) => grooveOrdinal(index, language);
 
+  // Flat library: one entry per (accessory kind × compatible profile series).
+  const accessoryLibraryEntries = ([
+    ['connector', t.connector, Wrench],
+    ['extruded_connector', t.extrudedConnector, Wrench],
+    ['hidden_connector', t.hiddenConnector, Box],
+    ['l_connector', t.lConnector, PanelTop],
+    ['t_connector', t.tConnector, PanelTop],
+    ['tee_connector', t.teeConnector, PanelTop],
+  ] as const).flatMap(([kind, label, icon]) => (
+    getAvailableAccessorySizes(kind).map((series) => ({ kind, label, icon, series }))
+  ));
+
   const paletteGroups = [
     {
       id: 'materials',
@@ -11700,14 +12119,15 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({
     {
       id: 'fasteners',
       label: t.fasteningParts,
-      items: [
-        { kind: 'connector' as const, label: t.connector, icon: Wrench },
-        { kind: 'extruded_connector' as const, label: t.extrudedConnector, icon: Wrench },
-        { kind: 'hidden_connector' as const, label: t.hiddenConnector, icon: Box },
-        { kind: 'l_connector' as const, label: t.lConnector, icon: PanelTop },
-        { kind: 't_connector' as const, label: t.tConnector, icon: PanelTop },
-        { kind: 'tee_connector' as const, label: t.teeConnector, icon: PanelTop },
-      ].filter((entry) => !isConnectionAccessoryKind(entry.kind) || Boolean(ACCESSORY_PRICES[entry.kind][selectedAccessoryProfileSize])),
+      // Every accessory is expanded once per compatible profile series so the
+      // customer picks the part directly; the series is shown as a description
+      // line under the name instead of being chosen up front.
+      items: accessoryLibraryEntries.map((entry) => ({
+        kind: entry.kind,
+        label: entry.label,
+        series: entry.series,
+        icon: entry.icon,
+      })),
     },
     {
       id: 'other',
@@ -11868,24 +12288,8 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({
                   </div>
                 )}
                 {paletteGroup.id === 'fasteners' && (
-                  <div className="mb-2 rounded-2xl border border-blue-100 bg-blue-50/70 p-2.5">
-                    <div className="mb-2 flex items-center justify-between gap-2">
-                      <span className="text-[9px] font-black uppercase tracking-widest text-blue-700">{t.accessoryProfileSize}</span>
-                      <span className="text-[8px] font-bold text-blue-400">{t.availableForSeries}</span>
-                    </div>
-                    <div className="grid grid-cols-4 gap-1">
-                      {ACCESSORY_PROFILE_SIZES.map((size) => (
-                        <button
-                          key={size}
-                          type="button"
-                          data-testid={`diy-accessory-series-${size}`}
-                          onClick={() => setSelectedAccessoryProfileSize(size)}
-                          className={`rounded-lg px-1 py-1.5 text-[9px] font-black transition ${selectedAccessoryProfileSize === size ? 'bg-blue-600 text-white shadow-sm' : 'bg-white text-slate-500 hover:text-blue-600'}`}
-                        >
-                          {size}
-                        </button>
-                      ))}
-                    </div>
+                  <div className="mb-2 rounded-2xl border border-blue-100 bg-blue-50/70 p-2.5" data-testid="diy-accessory-series-note">
+                    <p className="text-[9px] font-bold leading-relaxed text-blue-700">{t.availableForSeries}</p>
                   </div>
                 )}
                 {paletteGroup.id === 'materials' && cabinetDoorOpenings.length > 0 && (
@@ -11924,28 +12328,22 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({
                   {paletteGroup.items.map((entry) => {
                     const Icon = entry.icon;
                     const entryDisabled = entry.kind === 'cabinet_door' && !cabinetDoorOpenings.length;
-                    const accessoryPrice = isConnectionAccessoryKind(entry.kind)
-                      ? ACCESSORY_PRICES[entry.kind][selectedAccessoryProfileSize]
+                    const entrySeries = 'series' in entry ? entry.series : undefined;
+                    const accessoryPrice = isConnectionAccessoryKind(entry.kind) && entrySeries
+                      ? ACCESSORY_PRICES[entry.kind][entrySeries]
                       : undefined;
                     return (
                       <button
-                        key={`${entry.kind}-${'variantId' in entry ? entry.variantId || '' : ''}`}
-                        data-testid={`diy-add-${entry.kind}${'variantId' in entry && entry.variantId ? `-${entry.variantId}` : ''}`}
+                        key={`${entry.kind}-${entrySeries || ''}`}
+                        data-testid={`diy-add-${entry.kind}${entrySeries ? `-${entrySeries}` : ''}`}
                         draggable={!entryDisabled}
                         disabled={entryDisabled}
                         title={entry.kind === 'cabinet_door' ? (cabinetDoorOpenings.length ? t.doorFrameReady : t.doorNeedFrame) : undefined}
                         onDragStart={(event) => event.dataTransfer.setData('application/x-mengkaile-part', JSON.stringify({
                           kind: entry.kind,
-                          variantId: isConnectionAccessoryKind(entry.kind)
-                            ? selectedAccessoryProfileSize
-                            : 'variantId' in entry ? entry.variantId : undefined,
+                          variantId: entrySeries,
                         }))}
-                        onClick={() => addItem(
-                          entry.kind,
-                          isConnectionAccessoryKind(entry.kind)
-                            ? selectedAccessoryProfileSize
-                            : 'variantId' in entry ? entry.variantId : undefined,
-                        )}
+                        onClick={() => addItem(entry.kind, entrySeries)}
                         className="group flex items-center gap-3 rounded-2xl border border-slate-200 bg-slate-50 p-3 text-left transition hover:border-blue-400 hover:bg-blue-50 disabled:cursor-not-allowed disabled:opacity-45 disabled:hover:border-slate-200 disabled:hover:bg-slate-50"
                       >
                         <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-white text-slate-500 shadow-sm group-hover:text-blue-600"><Icon className="h-5 w-5" /></span>
@@ -11958,9 +12356,9 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({
                                 : t.doorNeedFrame}
                             </span>
                           )}
-                          {accessoryPrice && (
+                          {entrySeries && (
                             <span className="mt-0.5 block text-[9px] font-bold text-blue-500">
-                              {selectedAccessoryProfileSize} · {currency}{accessoryPrice.natural.toFixed(1)}
+                              {t.accessoryProfileSize} {entrySeries}{accessoryPrice ? ` · ${currency}${accessoryPrice.natural.toFixed(1)}` : ''}
                             </span>
                           )}
                         </span>
@@ -11971,6 +12369,29 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({
               </section>
             ))}
           </div>
+          <section className="mt-4 space-y-2" data-testid="diy-shaft-library">
+            <h3 className="text-xs font-black text-slate-500">{language === 'cn' ? '8mm 光轴 / 光轴座' : language === 'jp' ? '8mm シャフト・サポート' : '8mm shafts & supports'}</h3>
+            {(['SHAFT_8', 'SK8', 'SHF8'] as const).map(key => {
+              const entry = DISPLAY_RACK_COMPONENT_CATALOG[key];
+              return <button key={key} type="button" data-testid={`diy-add-${key}`} className="w-full rounded-xl border border-slate-200 p-3 text-left text-xs font-bold hover:border-blue-400" onClick={() => {
+                const dimensions = 'dimensionsMm' in entry ? entry.dimensionsMm : [8, 8, 500];
+                const part: DIYSceneItem = {
+                  id: makeId(), kind: 'shelf_support', name: entry.name, position: [0, 100, 0], rotation: [0, 0, 0], colorId: 'natural', quantity: 1,
+                  shelfSupportType: key === 'SHAFT_8' ? 'linear_shaft' : key === 'SK8' ? 'shaft_support_sk8' : 'shaft_support_shf8',
+                  fixedReferenceId: key === 'SHAFT_8' ? undefined : entry.id as 'MODEL_REF_SK8_SUPPORT' | 'MODEL_REF_SHF8_SUPPORT',
+                  shaftDiameterMm: 8, ...(key === 'SHAFT_8' ? { length: 500 } : {}), width: dimensions[0], height: dimensions[1], thickness: dimensions[2],
+                  accessoryPrice: key === 'SHAFT_8' ? 5 : entry.unitPriceCny,
+                };
+                commit([...items, part], part.id);
+              }}>{entry.name}<span className="ml-2 text-blue-600">¥{entry.unitPriceCny}/{key === 'SHAFT_8' ? 'm' : 'pcs'}</span></button>;
+            })}
+          </section>
+          <StoolGenerator language={language} onImport={async source => {
+            const completed = completeStoolConnectionSystem(normalizeDesignItems(source));
+            if (!completed.check.valid) throw new Error(completed.check.issues.join(' '));
+            return applyImportedDesign(completed.items, createDesignSourceInfo('parametric_template', { modelName: '复古边几凳' }));
+          }} />
+          <StoolAssemblyReviewPanel items={items} language={language} onFocusItem={setSelectedId} />
           <button onClick={() => commit(buildDemoWorkbench(), null)} className="mt-3 w-full rounded-2xl bg-slate-900 px-4 py-3 text-xs font-black text-white transition hover:bg-blue-600">
             {t.addDemo}
           </button>
@@ -12144,6 +12565,7 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({
               const next = [...baseItems, candidate];
               commit(next, id);
             }}
+            onTransformMany={transformManyItems}
             onResizeProfile={(id, length, position) => {
               const resized = items.find((item) => item.id === id);
               if (!resized || resized.kind !== 'profile') return;
@@ -12482,9 +12904,13 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({
                       <div className="text-[10px] font-black uppercase tracking-widest text-slate-400">固定数据库构件</div>
                       <div className="mt-1 text-lg font-black text-slate-900">{getItemLabel(selected, language)}</div>
                       <div className="mt-1 text-sm font-black text-emerald-700">{t.confirmedPrice}：{currency}{Number(selected.accessoryPrice || 0).toFixed(2)}</div>
+                      {selected.shelfSupportType === 'linear_shaft' && !selected.lockedPosition && <NumberField label={t.length} value={selected.thickness || 500} min={1} max={3000} deferCommit onChange={value => {
+                        const length = Math.round(value);
+                        updateSelected({ length, thickness: length, accessoryPrice: Number((length / 1000 * DISPLAY_RACK_COMPONENT_CATALOG.SHAFT_8.unitPriceCny).toFixed(2)) });
+                      }} />}
                       <div className="mt-2 text-[10px] font-bold leading-relaxed text-blue-700">
                         {selected.shelfSupportType === 'linear_shaft'
-                          ? '直径固定，仅长度随产品宽度计算；禁止截面缩放。'
+                          ? '直径固定为8mm；长度按整毫米填写，价格按米计算。'
                           : `数据库编号：${selected.fixedReferenceId || '已登记'}；1:1定尺，禁止拉伸。`}
                       </div>
                     </div>
@@ -12723,40 +13149,63 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({
 
               {selected.kind !== 'caster' && selected.kind !== 'foot' && !isFixedRackHardware(selected) && <div>
                 <div className="mb-2 flex items-center gap-2"><Paintbrush className="h-4 w-4 text-blue-600" /><span className="diy-field-label !mb-0">{t.color}</span></div>
-                <div className="grid grid-cols-2 gap-2">
-                  {(selected.kind === 'marine_board' || (selected.kind === 'cabinet_door' && selected.doorMaterial === 'marine') ? MARINE_BOARD_COLORS : PROFILE_COLORS).map((color) => (
-                    <button
-                      key={color.id}
-                      title={color.name[language]}
-                      onClick={() => updateSelected({
-                        colorId: color.id,
-                        ...(selected.kind === 'shelf_support' ? {
-                          finish: color.id === 'natural'
-                            ? 'oxidized'
-                            : (selected.finish === 'powder' ? 'powder' : 'electrophoretic'),
-                          accessoryPrice: getShelfSupportUnitPrice(
-                            selected.thickness || 0,
-                            color.id === 'natural'
-                              ? 'oxidized'
-                              : (selected.finish === 'powder' ? 'powder' : 'electrophoretic'),
-                          ),
-                        } : {}),
-                        ...(selected.kind === 'end_cap' ? {
-                          accessoryPrice: getEndCapUnitPrice({
-                            variantId: selected.variantId,
-                            accessoryProfileSize: selected.accessoryProfileSize,
-                            colorId: color.id,
-                            quantity: selected.quantity,
-                          }),
-                        } : {}),
-                      })}
-                      className={`flex min-w-0 items-center gap-2 rounded-xl border p-2 text-left transition ${selected.colorId === color.id ? 'border-blue-600 bg-blue-50 ring-2 ring-blue-100' : 'border-slate-200 bg-slate-50 hover:border-blue-300'}`}
-                    >
-                      <span className="h-7 w-7 shrink-0 rounded-lg border border-black/10 shadow-inner" style={{ backgroundColor: COLOR_HEX[color.id] || '#ccc' }} />
-                      <span className="min-w-0 truncate text-[10px] font-black text-slate-700">{selected.kind === 'cabinet_door' && selected.doorMaterial === 'marine' ? getMarineBoardOrderColorName(color.id, language) : getDesignerColorName(color.id, language, selected.kind)}</span>
-                    </button>
-                  ))}
-                </div>
+                {usesAccessoryColorMode(selected.kind) ? (
+                  <>
+                    <div className="grid grid-cols-2 gap-2">
+                      <button
+                        type="button"
+                        data-testid="diy-accessory-color-natural"
+                        onClick={() => updateSelected(buildSelectedColorPatch(selected, 'natural'))}
+                        className={`rounded-xl border px-3 py-2.5 text-[10px] font-black transition ${selected.colorId === 'natural' ? 'border-blue-600 bg-blue-50 text-blue-700 ring-2 ring-blue-100' : 'border-slate-200 bg-slate-50 text-slate-600 hover:border-blue-300'}`}
+                      >
+                        {t.accessoryColorNatural}
+                      </button>
+                      <button
+                        type="button"
+                        data-testid="diy-accessory-color-colored"
+                        onClick={() => {
+                          if (selected.colorId === 'natural') {
+                            updateSelected(buildSelectedColorPatch(selected, DEFAULT_COLORED_ACCESSORY_COLOR_ID));
+                          }
+                        }}
+                        className={`rounded-xl border px-3 py-2.5 text-[10px] font-black transition ${selected.colorId !== 'natural' ? 'border-blue-600 bg-blue-50 text-blue-700 ring-2 ring-blue-100' : 'border-slate-200 bg-slate-50 text-slate-600 hover:border-blue-300'}`}
+                      >
+                        {t.accessoryColorColored}
+                      </button>
+                    </div>
+                    {selected.colorId === 'natural' ? (
+                      <p className="mt-2 rounded-xl bg-white px-3 py-2 text-[10px] font-bold text-slate-500">{t.accessoryColorNaturalHint}</p>
+                    ) : (
+                      <div className="mt-2 grid grid-cols-2 gap-2">
+                        {PROFILE_COLORS.filter((color) => color.id !== 'natural').map((color) => (
+                          <button
+                            key={color.id}
+                            title={color.name[language]}
+                            onClick={() => updateSelected(buildSelectedColorPatch(selected, color.id))}
+                            className={`flex min-w-0 items-center gap-2 rounded-xl border p-2 text-left transition ${selected.colorId === color.id ? 'border-blue-600 bg-blue-50 ring-2 ring-blue-100' : 'border-slate-200 bg-slate-50 hover:border-blue-300'}`}
+                          >
+                            <span className="h-7 w-7 shrink-0 rounded-lg border border-black/10 shadow-inner" style={{ backgroundColor: COLOR_HEX[color.id] || '#ccc' }} />
+                            <span className="min-w-0 truncate text-[10px] font-black text-slate-700">{getDesignerColorName(color.id, language, selected.kind)}</span>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </>
+                ) : (
+                  <div className="grid grid-cols-2 gap-2">
+                    {(selected.kind === 'marine_board' || (selected.kind === 'cabinet_door' && selected.doorMaterial === 'marine') ? MARINE_BOARD_COLORS : PROFILE_COLORS).map((color) => (
+                      <button
+                        key={color.id}
+                        title={color.name[language]}
+                        onClick={() => updateSelected(buildSelectedColorPatch(selected, color.id))}
+                        className={`flex min-w-0 items-center gap-2 rounded-xl border p-2 text-left transition ${selected.colorId === color.id ? 'border-blue-600 bg-blue-50 ring-2 ring-blue-100' : 'border-slate-200 bg-slate-50 hover:border-blue-300'}`}
+                      >
+                        <span className="h-7 w-7 shrink-0 rounded-lg border border-black/10 shadow-inner" style={{ backgroundColor: COLOR_HEX[color.id] || '#ccc' }} />
+                        <span className="min-w-0 truncate text-[10px] font-black text-slate-700">{selected.kind === 'cabinet_door' && selected.doorMaterial === 'marine' ? getMarineBoardOrderColorName(color.id, language) : getDesignerColorName(color.id, language, selected.kind)}</span>
+                      </button>
+                    ))}
+                  </div>
+                )}
               </div>}
 
               {selected.kind !== 'end_cap' && selected.kind !== 'cabinet_door' && <NumberField label={t.quantity} value={selected.quantity} min={1} max={999} onChange={(quantity) => updateSelected({ quantity: Math.max(1, quantity) })} />}
@@ -13030,6 +13479,19 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({
             >
               {t.maycadConfirmProfiles}
             </button>
+          </div>
+        </div>
+      )}
+      {deleteHolePrompt && (
+        <div className="fixed inset-0 z-[130] flex items-center justify-center bg-slate-950/55 p-4 backdrop-blur-sm">
+          <div role="dialog" aria-modal="true" aria-labelledby="delete-linked-hole-title" data-testid="diy-delete-linked-hole-dialog" className="w-full max-w-lg rounded-3xl bg-white p-6 shadow-2xl">
+            <h2 id="delete-linked-hole-title" className="text-xl font-black text-slate-950">{language === 'cn' ? '是否一并删除打孔？' : language === 'jp' ? '穴加工も削除しますか？' : 'Delete the machining holes too?'}</h2>
+            <p className="mt-3 text-sm leading-6 text-slate-600">{language === 'cn' ? '所选螺丝关联了型材孔位。保留孔位会继续显示孔圈，并计入加工；一并删除则恢复为无孔状态。' : language === 'jp' ? '選択したねじには穴加工が関連しています。穴を残すとマーカーと加工情報が残り、一緒に削除すると穴のない状態に戻ります。' : 'These screws are linked to profile holes. Keeping the holes retains their markers and machining instructions. Deleting both restores an undrilled surface.'}</p>
+            <div className="mt-5 flex flex-col gap-2">
+              <button type="button" onClick={() => finishDeleteItems(true)} className="rounded-xl bg-red-600 px-4 py-3 text-sm font-bold text-white">{language === 'cn' ? '螺丝与孔位一起删除' : language === 'jp' ? 'ねじと穴を両方削除' : 'Delete screws and holes'}</button>
+              <button type="button" onClick={() => finishDeleteItems(false)} className="rounded-xl border border-slate-300 px-4 py-3 text-sm font-bold text-slate-700">{language === 'cn' ? '仅删除螺丝，保留孔位' : language === 'jp' ? 'ねじのみ削除し、穴を残す' : 'Delete screws, keep holes'}</button>
+              <button type="button" autoFocus onClick={() => setDeleteHolePrompt(null)} className="rounded-xl px-4 py-3 text-sm font-bold text-slate-500">{t.cancel}</button>
+            </div>
           </div>
         </div>
       )}

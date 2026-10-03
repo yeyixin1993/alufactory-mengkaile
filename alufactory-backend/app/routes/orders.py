@@ -2,7 +2,7 @@ from flask import Blueprint, request, jsonify, current_app
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from datetime import datetime
 from app.models.user import db, User, Cart, CartItem, Order, OrderItem, Profile
-from app.order_utils import build_order_pdf_filename
+from app.order_utils import build_order_pdf_filename, to_east8_datetime
 from app.product_order_db import sync_order_snapshot, remove_order_snapshot
 from app.order_snapshot import refresh_order_json
 from app.security import get_request_json_secure
@@ -72,8 +72,13 @@ def create_order():
         return jsonify({'error': SHIPPING_PHONE_ERROR}), 400
     
     try:
-        # Generate order number
-        order_number = f"ORD{datetime.utcnow().strftime('%Y%m%d%H%M%S')}{str(uuid.uuid4())[:8].upper()}"
+        # Generate order number. Use the Beijing calendar stamp so the human
+        # readable prefix matches the date the admin actually sees (an order
+        # placed at 10-01 00:29 CST must not be numbered ORD20260930...).
+        order_number = (
+            f"ORD{to_east8_datetime(datetime.utcnow()).strftime('%Y%m%d%H%M%S')}"
+            f"{str(uuid.uuid4())[:8].upper()}"
+        )
         
         order = Order(
             order_number=order_number,

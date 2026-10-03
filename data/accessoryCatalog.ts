@@ -1,8 +1,30 @@
+import { DISPLAY_RACK_COMPONENT_CATALOG } from './displayRackComponentCatalog';
 import type { Language } from '../types';
 import { END_CAP_PRICES } from '../utils/accessoryPricing';
 
 export type AccessoryProfileSize = '1515' | '2020' | '3030' | '4040';
 export type AccessoryColorMode = 'natural' | 'colored';
+
+/**
+ * Customer-facing colour choice is deliberately binary. "本色" (natural) is
+ * the default; every other finish is billed through the "彩色" (coloured)
+ * price tier. Bright silver and every anodised/powder colour live behind it.
+ */
+export const ACCESSORY_COLOR_MODES: AccessoryColorMode[] = ['natural', 'colored'];
+export const DEFAULT_ACCESSORY_COLOR_MODE: AccessoryColorMode = 'natural';
+
+/** Display order of the profile series used by the accessory catalog. */
+export const ACCESSORY_SERIES_ORDER: AccessoryProfileSize[] = ['1515', '2020', '3030', '4040'];
+
+/** Series marker for parts that fit every profile (8mm shafts and supports). */
+export const ACCESSORY_UNIVERSAL_SERIES = 'universal' as const;
+export type AccessoryRowSeries = AccessoryProfileSize | typeof ACCESSORY_UNIVERSAL_SERIES;
+
+export const ACCESSORY_UNIVERSAL_LABEL: Record<Language, string> = {
+  cn: '通用',
+  en: 'All series',
+  jp: '共通',
+};
 
 export interface AccessoryPrice {
   natural: number;
@@ -17,15 +39,27 @@ export interface AccessoryDefinition {
   codeLabel?: Record<Language, string>;
   name: Record<Language, string>;
   note?: string;
+  lengthPriced?: boolean;
+  naturalOnly?: boolean;
   imageKey?: string;
   prices: Partial<Record<AccessoryProfileSize, AccessoryPrice>>;
 }
 
 export const ACCESSORY_IMAGE = '/images/accessory/accessory_codes.jpg';
+/** Separator between the definition id and the profile series inside a row key. */
+export const ACCESSORY_ROW_KEY_SEPARATOR = '::';
+
+/**
+ * Stable identifier for one purchasable accessory line. The series is part of
+ * the key so a single SKU can be ordered for several profile sizes in one cart.
+ */
+export const buildAccessoryRowKey = (defId: string, series: AccessoryRowSeries) => (
+  `${defId}${ACCESSORY_ROW_KEY_SEPARATOR}${series}`
+);
 export const ACCESSORY_CODE_IMAGE_MAP: Record<string, string> = {
   '1': '/images/accessory/1.jpg',
   '2': '/images/accessory/2.jpg',
-  '3': '/images/accessory/3.jpg',
+  '3': ACCESSORY_IMAGE,
   '5': '/images/accessory/5.jpg',
   '7': '/images/accessory/7L.jpg',
   '7L': '/images/accessory/7L.jpg',
@@ -47,7 +81,27 @@ export const ACCESSORY_CODE_IMAGE_MAP: Record<string, string> = {
   '10_3030_m6_tnut': '/images/accessory/10_3030_m6_tnut.jpg',
 };
 
+// No.3 temporarily shares every No.7 price tier.
+const NO3_AND_NO7_PRICES: AccessoryDefinition['prices'] = {
+      '1515': { natural: 3, colored: 3.5, naturalBulk: 2.5, coloredBulk: 3 },
+      '2020': { natural: 3, colored: 3.5, naturalBulk: 2.5, coloredBulk: 3 },
+      '3030': { natural: 4.5, colored: 5, naturalBulk: 3.5, coloredBulk: 4 },
+      '4040': { natural: 6, colored: 8, naturalBulk: 4.5, coloredBulk: 6 },
+    };
+
 export const ACCESSORY_DEFINITIONS: AccessoryDefinition[] = [
+  ...(['SHAFT_8', 'SK8', 'SHF8'] as const).map((key, index): AccessoryDefinition => {
+    const item = DISPLAY_RACK_COMPONENT_CATALOG[key];
+    const price = item.unitPriceCny;
+    return {
+      id: item.id, code: 80 + index,
+      codeLabel: { cn: key === 'SHAFT_8' ? 'Ø8' : key, en: key === 'SHAFT_8' ? 'Ø8' : key, jp: key === 'SHAFT_8' ? 'Ø8' : key },
+      name: { cn: key === 'SHAFT_8' ? '8mm 光轴（g6）' : `${key} 光轴座（8mm）`, en: key === 'SHAFT_8' ? '8mm linear shaft (g6)' : `${key} shaft support (8mm)`, jp: key === 'SHAFT_8' ? '8mm シャフト（g6）' : `${key} シャフトサポート（8mm）` },
+      naturalOnly: true, lengthPriced: key === 'SHAFT_8',
+      prices: Object.fromEntries((['1515', '2020', '3030', '4040'] as const).map(size => [size, { natural: price, colored: price, naturalBulk: price, coloredBulk: price }])),
+    };
+  }),
+
   {
     id: '1',
     code: 1,
@@ -68,6 +122,12 @@ export const ACCESSORY_DEFINITIONS: AccessoryDefinition[] = [
     },
   },
   {
+    id: '3',
+    code: 3,
+    name: { en: 'No.3 Angle Bracket', cn: '3号角码', jp: '3番コーナーブラケット' },
+    prices: NO3_AND_NO7_PRICES,
+  },
+  {
     id: '5',
     code: 5,
     name: { en: 'No.5 Corner Bracket + Set Screw', cn: '5号角码配顶丝', jp: '5番コーナーブラケット+止めねじ' },
@@ -81,24 +141,14 @@ export const ACCESSORY_DEFINITIONS: AccessoryDefinition[] = [
     code: 7,
     imageKey: '7L',
     name: { en: 'No.7 Corner Bracket (L Type)', cn: '7号角码 L型', jp: '7番コーナーブラケット L型' },
-    prices: {
-      '1515': { natural: 3, colored: 3.5, naturalBulk: 2.5, coloredBulk: 3 },
-      '2020': { natural: 3, colored: 3.5, naturalBulk: 2.5, coloredBulk: 3 },
-      '3030': { natural: 4.5, colored: 5, naturalBulk: 3.5, coloredBulk: 4 },
-      '4040': { natural: 6, colored: 8, naturalBulk: 4.5, coloredBulk: 6 },
-    },
+    prices: NO3_AND_NO7_PRICES,
   },
   {
     id: '7T',
     code: 7,
     imageKey: '7T',
     name: { en: 'No.7 Corner Bracket (T Type)', cn: '7号角码 T型', jp: '7番コーナーブラケット T型' },
-    prices: {
-      '1515': { natural: 3, colored: 3.5, naturalBulk: 2.5, coloredBulk: 3 },
-      '2020': { natural: 3, colored: 3.5, naturalBulk: 2.5, coloredBulk: 3 },
-      '3030': { natural: 4.5, colored: 5, naturalBulk: 3.5, coloredBulk: 4 },
-      '4040': { natural: 6, colored: 8, naturalBulk: 4.5, coloredBulk: 6 },
-    },
+    prices: NO3_AND_NO7_PRICES,
   },
   {
     id: '9',
@@ -247,9 +297,123 @@ export const ACCESSORY_DEFINITIONS: AccessoryDefinition[] = [
     },
   },
   // 暂不提供（图片有但当前无完整单价）
-  // { code: 3, ... }
   // { code: 4, ... }
   // { code: 6, ... }
   // { code: 8, ... }
 ];
+
+/** Profile series that a definition is actually stocked/priced for. */
+export const getAccessorySeriesOf = (def: AccessoryDefinition): AccessoryProfileSize[] => (
+  ACCESSORY_SERIES_ORDER.filter((size) => Boolean(def.prices[size]))
+);
+
+/** One purchasable accessory line: a definition paired with a profile series. */
+export interface AccessoryRow {
+  key: string;
+  defId: string;
+  code: number;
+  codeLabel?: Record<Language, string>;
+  name: Record<Language, string>;
+  series: AccessoryRowSeries;
+  note?: string;
+  lengthPriced?: boolean;
+  naturalOnly?: boolean;
+  imageKey?: string;
+  price: AccessoryPrice;
+}
+
+/**
+ * Flat, ready-to-render accessory list.
+ *
+ * Every definition is expanded once per compatible profile series so the
+ * customer never has to pre-select 1515/2020/3030/4040 up front — the series
+ * becomes a descriptive attribute of the row instead of a filter. Universal
+ * parts (8mm shafts and supports) appear exactly once.
+ */
+export const ACCESSORY_ROWS: AccessoryRow[] = ACCESSORY_DEFINITIONS.flatMap((def): AccessoryRow[] => {
+  const available = getAccessorySeriesOf(def);
+  if (def.naturalOnly) {
+    const source = available[0];
+    if (!source) return [];
+    return [{
+      key: buildAccessoryRowKey(def.id, ACCESSORY_UNIVERSAL_SERIES),
+      defId: def.id,
+      code: def.code,
+      codeLabel: def.codeLabel,
+      name: def.name,
+      series: ACCESSORY_UNIVERSAL_SERIES,
+      note: def.note,
+      lengthPriced: def.lengthPriced,
+      naturalOnly: true,
+      imageKey: def.imageKey,
+      price: def.prices[source]!,
+    }];
+  }
+  return available.map((series) => ({
+    key: buildAccessoryRowKey(def.id, series),
+    defId: def.id,
+    code: def.code,
+    codeLabel: def.codeLabel,
+    name: def.name,
+    series,
+    note: def.note,
+    lengthPriced: def.lengthPriced,
+    imageKey: def.imageKey,
+    price: def.prices[series]!,
+  }));
+});
+
+/** Human label for the "适配型号" description of a row. */
+export const getAccessoryRowSeriesLabel = (row: AccessoryRow, language: Language): string => (
+  row.series === ACCESSORY_UNIVERSAL_SERIES
+    ? ACCESSORY_UNIVERSAL_LABEL[language]
+    : row.series
+);
+
+/**
+ * Concatenated series label for a whole selection, e.g. `2020 / 3030`.
+ * Used by the cart, factory sheet and PDF "适配型号" field.
+ */
+export const getAccessorySelectionSeriesLabel = (rows: AccessoryRow[], language: Language): string => {
+  const labels: string[] = [];
+  rows.forEach((row) => {
+    const label = getAccessoryRowSeriesLabel(row, language);
+    if (!labels.includes(label)) labels.push(label);
+  });
+  return labels.length ? labels.join(' / ') : '-';
+};
+
+/**
+ * Migrates a legacy quantity map (keyed by definition id only) onto the new
+ * per-series row keys. Legacy carts always carried a single profile size.
+ */
+export const migrateLegacyAccessoryQuantities = (
+  quantities: Record<string, number> | undefined,
+  legacyProfileSize: string | undefined,
+): Record<string, number> => {
+  const source = quantities || {};
+  const fallbackSeries = ACCESSORY_SERIES_ORDER.includes(legacyProfileSize as AccessoryProfileSize)
+    ? legacyProfileSize as AccessoryProfileSize
+    : null;
+  return Object.entries(source).reduce<Record<string, number>>((acc, [key, rawQuantity]) => {
+    const quantity = Math.max(0, Number(rawQuantity) || 0);
+    if (quantity <= 0) return acc;
+    if (key.includes(ACCESSORY_ROW_KEY_SEPARATOR)) {
+      acc[key] = quantity;
+      return acc;
+    }
+    const definition = ACCESSORY_DEFINITIONS.find((def) => def.id === key);
+    if (!definition) return acc;
+    if (definition.naturalOnly) {
+      acc[buildAccessoryRowKey(key, ACCESSORY_UNIVERSAL_SERIES)] = quantity;
+      return acc;
+    }
+    const series = fallbackSeries && definition.prices[fallbackSeries]
+      ? fallbackSeries
+      : getAccessorySeriesOf(definition)[0];
+    if (!series) return acc;
+    acc[buildAccessoryRowKey(key, series)] = quantity;
+    return acc;
+  }, {});
+};
 
