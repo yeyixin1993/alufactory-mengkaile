@@ -13,6 +13,27 @@
 - `tsc --noEmit` 存在 5 个既有报错（与业务无关，改动时不要把它们当成自己引入的）：
   `alufactory-backend/FRONTEND_SERVICE.ts` 的 `@/config`、`App.tsx` 的 `setTimeout`、
   `components/PrintableCatalog.tsx` 的 3 个 `key` 属性。
+- **`git push` 会跑 `.githooks/pre-push`**（`core.hooksPath=.githooks`）：先 `npm run package:dist`
+  （= 完整 `npm run build` + `node scripts/package-dist.mjs` 打 ZIP）才推。所以推送很慢，
+  且在沙箱里容易触发批量删除拦截，建议 `dangerouslyDisableSandbox` + 后台跑。
+
+## 分支 / stash 现状（2026-10-03 18:30 快照）
+
+- `main`：本会话的设计器计价工作已提交为 **`ad48f01`**（导入件/轮子/螺丝计价 + ¥880 落地价基线，
+  20 个文件），并推送到 `origin/main`。
+- `codex/ai-sales-assistant`：停在 `3248d47 major update`，**未动**。它和 `main` 的提交 3248d47
+  曾经同一 SHA，所以「AI 销售助手」的代码其实**从未提交过**——一直是未提交的工作区改动。
+- **AI 销售助手的改动保存在 stash 里，不要 drop**：
+  - `stash@{1}` = `a41fb61`（On codex/ai-sales-assistant）＝ **AI 工作 + 我当时的计价工作混在一起**
+    （`components/AIChatBar.tsx`、`alufactory-backend/app/ai_*.py`、`admin/ai.html`、
+    `scripts/export-ai-catalog.ts`、`docs/AI_*.md`、`App.tsx`/`.gitignore`/`services/apiService.ts` 的
+    AI 改动 + `package.json` 的 `catalog:ai`；另有我后来已单独提交到 main 的那些文件）。
+  - `stash@{0}` = `ec2d376`（On main）＝ 175 个 `.ai-catalog-export/**` 产物。
+- 要把 AI 工作单独落到它的分支上：`git checkout codex/ai-sales-assistant`，然后
+  `git checkout stash@{1} -- <只列 AI 的路径>`（**别直接 `stash pop`**，那会把已经进了 main 的
+  计价文件也一起倒出来）。
+- 踩坑记录：用户用 GitHub Desktop，它会用 `git stash` 自动处理切分支时的未提交改动，
+  所以「工作区看起来是 clean」不代表改动丢了——先 `git stash list` 再看 `git stash show --name-status`。
 
 ## 产品与代码约定
 
