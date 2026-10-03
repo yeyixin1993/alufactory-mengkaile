@@ -66,12 +66,17 @@
 - 配件目录唯一来源是 `data/accessoryCatalog.ts`；商城配件页、设计器零件库、快速报价都从这里取数据。
   单价/批量/颜色档位规则在 `utils/accessoryQuote.ts`（纯函数，可回归）。
 - **配件图案规则**：`ACCESSORY_CODE_IMAGE_MAP` 里**每个编号必须指向自己的图**，禁止回落到整张
-  1–10 号识别图 `ACCESSORY_IMAGE`。两条线并存且不可互换：
+  1–10 号识别图 `ACCESSORY_IMAGE`。这张表**唯一归属 `data/accessoryCatalog.ts`**；
+  商城、快速报价、配件报价编辑器、设计器面板、**工厂单**都从它取。**别再自建第二份副本 ——
+  工厂单原来那份已经漂移过**（它写 `3.jpg`，目录却还是整张识别图，客户和工厂看到的图不一样）。
+  两条线并存且不可互换：
   - **实物 JPG** `/images/accessory/<imageKey>.jpg` —— 门店、购物车、客户 PDF、工厂 PDF 的权威图形，
     **绝不允许用 SVG 覆盖 JPG**。新编号的 JPG 一律从 `public/images/accessory/accessory_codes.jpg`
     裁框后 resample（与 1/2/5/7L/7T/9 同源同风格）。例：No.3 裁 `(88,292,488,692)` → 400×400。
   - **设计器 SVG** `/images/accessory/<code>.svg`，**统一 400×300 画布**，按该零件源网格的正面
     正视投影绘制（共面合并 → 背面剔除 → 顶点索引做边抵消求轮廓 → 孔填深色）。
+    **它是「参考物」不是运行时图片源** —— 客户界面不渲染它，所以某个编号没有
+    `accessoryModelAssets` 记录但有 SVG 是正常的。
 - 配件选择是**平铺列表**：每个配件按其可用型号各占一行（行键 `definitionId::series`），型号是描述，
   不是必须先选的过滤器。颜色只有本色（默认）/ 彩色两档；型材、板材、洞洞板、海洋板、柜门仍保留完整色板。
 - 设计器相关的产品规则以 `docs/DIY_DESIGNER_PROJECT_KNOWLEDGE.md` 为准，改产品决策要同步该文件 + 追加 changelog。

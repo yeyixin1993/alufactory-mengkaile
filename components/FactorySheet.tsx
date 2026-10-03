@@ -14,6 +14,11 @@ import {
 } from '../utils/cartAccessories';
 import { getAccessoryShippingWeightKg } from '../utils/membership';
 import { expandFinishedFurnitureCartItems } from '../utils/finishedFurnitureCart';
+// The factory sheet prints the same numbered accessory picture the customer saw,
+// so it reads the catalog's own map rather than keeping a second copy. The copy
+// it used to hold had already drifted: it asked for `/images/accessory/3.jpg`
+// while the catalog still fell back to the whole 1–10 chart.
+import { ACCESSORY_CODE_IMAGE_MAP } from '../data/accessoryCatalog';
 
 interface FactorySheetProps {
   cart: CartItem[];
@@ -33,30 +38,6 @@ interface FactorySheetProps {
 }
 
 const getCurrency = (lang: Language) => lang === 'cn' ? '￥' : '$';
-
-const ACCESSORY_CODE_IMAGE_MAP: Record<string, string> = {
-  '1': '/images/accessory/1.jpg',
-  '2': '/images/accessory/2.jpg',
-  '3': '/images/accessory/3.jpg',
-  '5': '/images/accessory/5.jpg',
-  '7': '/images/accessory/7L.jpg',
-  '7L': '/images/accessory/7L.jpg',
-  '7T': '/images/accessory/7T.jpg',
-  '8': '/images/accessory/8.jpg',
-  '9': '/images/accessory/9.jpg',
-  '10': '/images/accessory/10.jpg',
-  '10_1515_m4x6_cap': '/images/accessory/10_1515_m4x6_cap.jpg',
-  '10_1515_m4x12_cap': '/images/accessory/10_1515_m4x12_cap.jpg',
-  '10_1515_m4_tnut': '/images/accessory/10_1515_m4_tnut.jpg',
-  '10_2020_m5x14_cap': '/images/accessory/10_2020_m5x14_cap.jpg',
-  '10_2020_m5x8_cap': '/images/accessory/10_2020_m5x8_cap.jpg',
-  '10_2020_m6x20_cs': '/images/accessory/10_2020_m6x20_cs.jpg',
-  '10_2020_m5_tnut': '/images/accessory/10_2020_m5_tnut.jpg',
-  '10_3030_m6x18_cap': '/images/accessory/10_3030_m6x18_cap.jpg',
-  '10_3030_m6x12_cap': '/images/accessory/10_3030_m6x12_cap.jpg',
-  '10_3030_m8x20_cs': '/images/accessory/10_3030_m8x20_cs.jpg',
-  '10_3030_m6_tnut': '/images/accessory/10_3030_m6_tnut.jpg',
-};
 
 const pickFirstNonEmpty = (...values: any[]): string => {
   for (const value of values) {

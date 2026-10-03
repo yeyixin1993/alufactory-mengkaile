@@ -29,6 +29,9 @@ import {
  * bracket the catalog cannot place. A wrong series here would silently charge
  * the wrong tier, and a missing picture would send the customer's 3号角码 row
  * back to the whole 1–10 chart.
+ *
+ * It also keeps the picture map single-owner: the factory sheet once held a
+ * second copy that had already drifted away from the catalog's.
  */
 
 // --- 1. The link record itself ---------------------------------------------
@@ -150,7 +153,18 @@ assert.match(artwork, /viewBox="0 0 400 300"/,
 assert.match(artwork, /<title[^>]*>3号角码<\/title>/, '设计器图案应标明 3号角码');
 assert.match(artwork, /<path/, '设计器图案必须包含按源网格绘制的形状');
 
+// --- 6. The map has one owner ----------------------------------------------
+// The factory sheet used to carry its own copy, and that copy had already
+// drifted: it asked for 3.jpg while the catalog still fell back to the whole
+// 1–10 chart, so the customer and the factory saw different pictures for No.3.
+const factorySheet = readFileSync(path.join(root, 'components/FactorySheet.tsx'), 'utf8');
+assert.doesNotMatch(factorySheet, /const ACCESSORY_CODE_IMAGE_MAP\s*:/,
+  '工厂单不得再自建一份配件图案映射，必须从配件目录导入');
+assert.match(factorySheet, /import \{[^}]*ACCESSORY_CODE_IMAGE_MAP[^}]*\} from '\.\.\/data\/accessoryCatalog'/,
+  '工厂单必须从 data/accessoryCatalog 导入配件图案映射');
+
 console.log('Designer source-accessory link checks passed.');
 console.log(`  固定支座 → 目录定义 ${link.definitionId}（3号角码，3030）`);
 console.log(`  夹具：16 件 × ¥${pricedBracket.unitPrice} = ¥${bracketTotal}；SHF 轴支座 8 件 × ¥${SHAFT_SUPPORT_UNIT_PRICE} = ¥${shaftSupportTotal}`);
 console.log(`  图案：${ACCESSORY_CODE_IMAGE_MAP['3']}（实物）+ public/images/accessory/3.svg（设计器）`);
+console.log('  工厂单与客户看到同一个映射（只有 data/accessoryCatalog.ts 一份）');
