@@ -161,6 +161,17 @@
   `accessoryProduct`、`config.type = 'profile_accessory'`）。
 - **它潜伏的原因**：门禁把导入件设计挡在生产之外，**从没有导入件设计走到过购物车**。
   以后再放开某类设计进入下单，务必先想一遍「这条路以前有真实流量吗」。
+- **完全相同的东西必须是「一行」**（2026-10-03）：`toCartItems` 返回前就会调用
+  `groupDiyAccessoryCartItems`，而 `accessoryGroupKey` 比较 `lines[].id`。所以**卡行 id 就是卡分组**：
+  源件以前用场景 id（`diy-source-part-<item.id>`）当行 id，于是每个摆放都成了独立一行
+  （8 个 SHF12A 支架 = 8 行），购物车和工厂单都分不开。
+  现在身份由 `importedSourcePartLineId` 生成：**标签 + 包络尺寸 + 计价 basis + 确认单价**
+  （纯函数，模块级导出；`buildImportedComponentCartItem` 是同一分支抽出来的纯函数，可回归）。
+  **包络尺寸不能省**：单价精度不足以区分真实差异（D12 光轴按毫米计价且 `toFixed(2)`，
+  凳子光轴允许 287.3 这种小数长度，差 0.1mm 单价相同 → 会被当成一根去裁）。
+  同型号件共享同一个源网格，包络一致，所以照样合得起来。
+  回归：`npm run test:source-part-cart-merge`（已并入 `test:stool-all`）。
+  改任何 kind 的购物车行时，先问一句「两件一模一样的东西会拿到同一个行 id 吗」。
 
 ## 用真实浏览器给设计器做端到端冒烟（agent-browser 配方）
 
