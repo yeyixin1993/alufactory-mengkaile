@@ -62,3 +62,6 @@ alufactory-backend/*_private_key.txt
 # Reproducible stool verification reports and generated editable models
 outputs/stool-product-20260930/
 outputs/stool-import-fix-20260930/
+
+# Generated AI catalog exporter bundle
+.ai-catalog-export/

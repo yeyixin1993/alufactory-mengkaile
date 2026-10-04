@@ -1,5 +1,6 @@
 
 import React, { useState, useEffect, useRef } from 'react';
+import AIChatBar from './components/AIChatBar';
 import { HashRouter, Routes, Route, Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { ShoppingCart, User as UserIcon, LogOut, Menu, X, Globe, Home, Package, History, Settings, FileDown, Eye, Truck, MapPin, Plus, Trash2, Edit2, CheckCircle, ArrowLeft, Lock, Save, UserCheck, Key, Info, Pencil, ChevronRight, Download, ExternalLink, BookOpen } from 'lucide-react';
 import { Language, User, CartItem, Product, ProductType, ProfileConfig, Order, ProfileSide, DrillHole, Address, ProfileVariant, ColorDef } from './types';
@@ -599,7 +600,7 @@ const Catalog: React.FC<{ language: Language }> = ({ language }) => {
       {/*<h2 className="text-5xl font-black text-slate-900 mb-12 tracking-tight">{t.catalog}</h2>*/}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
         {INITIAL_PRODUCTS.map(product => (
-          <div key={product.id} className="bg-white rounded-[2.5rem] overflow-hidden shadow-xl border border-slate-100 hover:shadow-2xl transition-all duration-300 group">
+          <div key={product.id} id={product.id === 'p2' ? 'profile-products' : undefined} className="scroll-mt-28 bg-white rounded-[2.5rem] overflow-hidden shadow-xl border border-slate-100 hover:shadow-2xl transition-all duration-300 group">
             <div className="h-64 overflow-hidden relative">
               <img src={product.imageUrl} alt={product.name[language]} loading="lazy" decoding="async" className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-1000" />
               <div className="absolute inset-0 bg-gradient-to-t from-black/40 via-transparent to-transparent" />
@@ -632,16 +633,16 @@ const Catalog: React.FC<{ language: Language }> = ({ language }) => {
       </div>
 
       {/* 快速报价（首页最底部） */}
-      <Link to="/quick-quote" className="mt-12 group flex flex-col items-center justify-between gap-4 rounded-[2rem] border-2 border-dashed border-blue-200 bg-gradient-to-r from-blue-50 via-white to-blue-50 px-6 py-8 text-center text-blue-700 shadow-lg shadow-blue-600/5 transition-all hover:-translate-y-1 hover:border-blue-400 hover:bg-blue-50 sm:flex-row sm:text-left">
+      <Link to="/quick-quote" className="mt-12 group flex flex-col items-center justify-between gap-4 rounded-[2rem] border-2 border-dashed border-blue-200 ai-soft-surface px-6 py-8 text-center text-blue-700 shadow-lg shadow-blue-600/5 transition-all hover:-translate-y-1 hover:border-blue-400 hover:bg-blue-50 sm:flex-row sm:text-left">
         <div className="flex items-center gap-4">
           <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-blue-600 text-white shadow-xl shadow-blue-600/25 transition group-hover:scale-105"><ChevronRight className="h-6 w-6" /></span>
           <div>
-            <div className="text-[10px] uppercase tracking-widest text-blue-400">Fast pricing</div>
-            <div className="mt-1 text-2xl font-black">{t.quickQuote}</div>
-            <div className="mt-1 text-sm text-slate-500">{language === 'cn' ? '不进入设计器，直接按尺寸与数量估算价格' : language === 'jp' ? 'デザイナーを使わず、サイズと数量だけで価格を見積もる' : 'Estimate prices by dimensions & quantity without opening the designer'}</div>
+            <div className="text-[10px] uppercase tracking-widest text-blue-600">Fast pricing</div>
+            <div className="mt-1 text-2xl font-black text-slate-900">{t.quickQuote}</div>
+            <div className="mt-1 text-sm text-slate-600">{language === 'cn' ? '不进入设计器，直接按尺寸与数量估算价格' : language === 'jp' ? 'デザイナーを使わず、サイズと数量だけで価格を見積もる' : 'Estimate prices by dimensions & quantity without opening the designer'}</div>
           </div>
         </div>
-        <span className="inline-flex shrink-0 items-center justify-center gap-2 rounded-2xl bg-blue-600 px-6 py-3 text-sm font-black shadow-xl shadow-blue-600/30 transition group-hover:bg-blue-500">
+        <span className="inline-flex shrink-0 items-center justify-center gap-2 rounded-2xl bg-blue-600 text-white px-6 py-3 text-sm font-black shadow-xl shadow-blue-600/30 transition group-hover:bg-blue-500">
           {language === 'cn' ? '开始快速报价' : language === 'jp' ? '見積もりを開始' : 'Start quick quote'}
         </span>
       </Link>
@@ -2574,8 +2575,9 @@ const App: React.FC = () => {
           </div>
         </nav>}
 
+        {!isPreviewRoute && !isDesignerRoute && <AIChatBar key={user?.id || 'guest'} user={user} />}
         <Routes>
-          <Route path="/" element={<Catalog language={language} />} />
+          <Route path="/" element={<div id="product-catalog" className="scroll-mt-28"><Catalog language={language} /></div>} />
           <Route path="/catalog" element={<React.Suspense fallback={<div className="p-12 text-center">正在加载画册…</div>}><PrintableCatalog user={user} language={language} /></React.Suspense>} />
           <Route path="/diy-designer" element={(
             <React.Suspense fallback={<div className="min-h-[70vh] flex items-center justify-center text-slate-400 font-black">{language === 'cn' ? '正在加载 3D 设计器…' : language === 'jp' ? '3D デザイナーを読み込み中…' : 'Loading 3D designer…'}</div>}>

@@ -12,6 +12,8 @@ from app.routes.profiles import profile_bp
 from app.routes.accessories import accessory_bp
 from app.routes.payments import payment_bp
 from app.routes.ai_import import ai_import_bp
+from app.routes.ai_chat import ai_bp
+from app.ai_faq import seed_faq_rules
 from app.product_order_db import init_product_order_db
 from app.security import init_payload_encryption
 from app.profile_inventory import seed_profile_inventory
@@ -55,6 +57,7 @@ def create_app(config_name='development'):
     app.register_blueprint(profile_bp)
     app.register_blueprint(accessory_bp)
     app.register_blueprint(payment_bp)
+    app.register_blueprint(ai_bp)
     # AI reconstruction stays off unless a future deployment explicitly opts
     # in after its provider and API keys are ready.
     if os.getenv('ENABLE_MAYCAD_AI_IMPORT', '0') == '1':
@@ -63,6 +66,7 @@ def create_app(config_name='development'):
     # Create database tables and run auto-migrations
     with app.app_context():
         db.create_all()
+        seed_faq_rules()
         init_product_order_db(app.instance_path)
         seed_profile_inventory()
         seed_accessory_inventory()

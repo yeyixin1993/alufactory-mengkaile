@@ -72,6 +72,9 @@ const resolveApiBaseUrl = () => {
 };
 
 class ApiServiceClass {
+  async aiRequest(endpoint: string, data?: unknown) {
+    return this.request(data === undefined ? 'GET' : 'POST', `/ai${endpoint}`, data);
+  }
   private authToken: string | null = localStorage.getItem('authToken');
   private apiBaseUrl: string | null = null;
   private hasLoggedApiBase = false;

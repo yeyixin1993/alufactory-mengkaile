@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { INITIAL_PRODUCTS, PROFILE_VARIANTS } from '../constants';
-import { ACCESSORY_DEFINITIONS, ACCESSORY_IMAGE, type AccessoryProfileSize } from '../data/accessoryCatalog';
+import { CUSTOMER_ACCESSORY_DEFINITIONS, ACCESSORY_IMAGE, type AccessoryProfileSize } from '../data/accessoryCatalog';
 import { PEGBOARD_PRICE_PER_SQM, ALUMINUM_PLATE_PRICE_PER_SQM, VIP_PLUS_PEGBOARD_PRICE_PER_SQM, VIP_PLUS_ALUMINUM_PLATE_PRICE_PER_SQM, MARINE_BOARD_SPEC_PRICE_PER_SQM, MARINE_BOARD_COLORED_SURCHARGE_PER_SQM, MIN_BOARD_CHARGE_AREA_SQM, DOOR_HINGE_UNIT_PRICE } from '../data/boardPricing';
 import { ACCESSORY_BULK_THRESHOLD } from '../utils/accessoryPricing';
 import './PrintableCatalog.css';
@@ -128,13 +128,13 @@ function ProfileTable({ start, end }: { start: number; end: number }) {
   return <table className="mkl-table mkl-profile-table"><caption>标准零售价 · 人民币元 / 米</caption><thead><tr><th>型号</th><th>截面图</th><th>壁厚 mm</th><th>喷砂氧化银白</th><th>彩色<br />截面本色</th><th>彩色<br />截面同色</th></tr></thead><tbody>{PROFILE_VARIANTS.slice(start, end).map(p => <tr key={p.id}><th>{p.name}</th><td className="mkl-section-cell">{['3060-N1-60', '4080'].includes(p.id) ? <span className="mkl-section-missing">截面图待补</span> : <img src={`/images/profile_${p.id}.png`} alt={`${p.name}截面图`} />}</td><td>{p.wallThickness.toFixed(1)}</td><td>{money(p.price.oxidized)}</td><td>{money(p.price.electrophoretic)}</td><td>{money(p.price.powder)}</td></tr>)}</tbody></table>;
 }
 
-const accessoryRows = (['1515', '2020', '3030', '4040'] as AccessoryProfileSize[]).flatMap(size => ACCESSORY_DEFINITIONS.filter(a => a.prices[size]).map(a => ({ a, size, price: a.prices[size]! })));
-const accessoryName = (a: typeof ACCESSORY_DEFINITIONS[number]) => a.name.cn.replace(' only', '（不含螺丝）').replace('10号螺丝 · ', '').replace('10号配件 · ', '');
+const accessoryRows = (['1515', '2020', '3030', '4040'] as AccessoryProfileSize[]).flatMap(size => CUSTOMER_ACCESSORY_DEFINITIONS.filter(a => a.prices[size]).map(a => ({ a, size, price: a.prices[size]! })));
+const accessoryName = (a: typeof CUSTOMER_ACCESSORY_DEFINITIONS[number]) => a.name.cn.replace(' only', '（不含螺丝）').replace('10号螺丝 · ', '').replace('10号配件 · ', '');
 function AccessoryTable({ start, end }: { start: number; end: number }) {
   return <table className="mkl-table mkl-consolidated-table"><thead><tr><th>配件</th><th>规格</th><th>本色</th><th>彩色</th><th>本色批量</th></tr></thead><tbody>{accessoryRows.slice(start, end).map(({a, size, price}) => <tr key={`${size}-${a.id}`}><th>{accessoryName(a)}{a.note && <small>{a.note}</small>}</th><td>{size}</td><td>{money(price.natural)}</td><td>{money(price.colored)}</td><td>{money(price.naturalBulk)}</td></tr>)}</tbody></table>;
 }
 function VipAccessoryTable() {
-  return <table className="mkl-table mkl-vip-accessories"><caption>彩色配件批量价 · 元 / 件 · 同一明细 ≥{ACCESSORY_BULK_THRESHOLD} 件</caption><thead><tr><th>配件</th>{['1515','2020','3030','4040'].map(size => <th key={size}>{size}</th>)}</tr></thead><tbody>{ACCESSORY_DEFINITIONS.map(a => <tr key={a.id}><th>{accessoryName(a)}</th>{(['1515','2020','3030','4040'] as AccessoryProfileSize[]).map(size => <td key={size}>{a.prices[size] ? money(a.prices[size]!.coloredBulk) : '—'}</td>)}</tr>)}</tbody></table>;
+  return <table className="mkl-table mkl-vip-accessories"><caption>彩色配件批量价 · 元 / 件 · 同一明细 ≥{ACCESSORY_BULK_THRESHOLD} 件</caption><thead><tr><th>配件</th>{['1515','2020','3030','4040'].map(size => <th key={size}>{size}</th>)}</tr></thead><tbody>{CUSTOMER_ACCESSORY_DEFINITIONS.map(a => <tr key={a.id}><th>{accessoryName(a)}</th>{(['1515','2020','3030','4040'] as AccessoryProfileSize[]).map(size => <td key={size}>{a.prices[size] ? money(a.prices[size]!.coloredBulk) : '—'}</td>)}</tr>)}</tbody></table>;
 }
 
 /* 海洋板家具两栏卡片网格：横版 A4 每页横向并排两张紧凑产品卡（图 + 名称/规格/材质色 + 价格），

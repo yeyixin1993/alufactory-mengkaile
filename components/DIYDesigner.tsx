@@ -86,6 +86,7 @@ import { buildProductionXlsx, parseProductionXlsx, type ProductionWorkbookData }
 import { calculateProfileInnerClearance } from '../utils/diyGeometry';
 import { groupDiyAccessoryCartItems } from '../utils/cartAccessories';
 import { getDiyScrewOrderSpec } from '../utils/screwCalculator';
+import { DEFAULT_SCREW_UNIT_PRICE, resolveDesignerScrewPrice } from '../utils/designerScrewPricing';
 import { getRotationallyCanonicalMachiningKey } from '../utils/profileManufacturingEquivalence';
 import { parseMaycadSceneXml, type MaycadProfileReview } from '../utils/maycadImport';
 import { getConfirmedEndCapUnitPrice, hasConfirmedEndCapPrice } from '../utils/accessoryPricing';
@@ -103,6 +104,18 @@ import {
   getDesignSourceLabel,
   mergeDesignSourceInfo,
 } from '../utils/designSource';
+import {
+  CASTER_BASE_UNIT_PRICE,
+  IMPORTED_COMPONENT_PRICING_SCHEME,
+  SHAFT_UNIT_PRICE_PER_M,
+  UPGRADED_WHEEL_UNIT_PRICE,
+  classifyImportedComponent,
+  normalizeWheelGrade,
+  resolveCasterUnitPrice,
+  resolveImportedComponentPrice,
+  type ImportedComponentPrice,
+  type WheelGrade,
+} from '../utils/designerComponentPricing';
 
 type DIYItemKind =
   | 'imported_component'
@@ -159,6 +172,11 @@ interface DIYSceneItem extends StoolSceneItem {
   accessoryProfileSize?: DIYAccessoryProfileSize;
   accessoryThreadSize?: DIYAccessoryThreadSize;
   hasBrake?: boolean;
+  /**
+   * Wheel tier chosen by the customer: `standard` keeps the original caster
+   * price, `upgraded` is the 诺贝 wheel option. Only wheels read this field.
+   */
+  wheelGrade?: WheelGrade;
   attachedEnd?: 'left' | 'right';
   autoAddedTapping?: boolean;
   doorMaterial?: DIYDoorMaterial;
@@ -203,9 +221,6 @@ const ALUMINUM_PLATE_PRICE: Record<number, number> = { 1: 500, 2: 700, 3: 1000, 
 const PEGBOARD_PRICE: Record<number, number> = { 1: 780, 2: 1080, 3: 1380, 4: 1680, 5: 1980 };
 const MARINE_BOARD_PRICE: Record<number, number> = { 12: 155, 18: 200 };
 const MARINE_COLOR_SURCHARGE = 100;
-const CASTER_BASE_UNIT_PRICE = 18;
-const CASTER_BRAKE_SURCHARGE = 4;
-const CASTER_THREAD_SURCHARGE: Record<DIYAccessoryThreadSize, number> = { M6: 0, M8: 0, M10: 2, M12: 4 };
 const FOOT_UNIT_PRICE = 10;
 const END_CAP_FALLBACK_ESTIMATED_PRICE = { natural: 6, colored: 8 };
 const DOOR_HINGE_UNIT_PRICE = 10;
@@ -316,6 +331,14 @@ const TEXT: Record<Language, Record<string, string>> = {
     casterBrake: '刹车类型',
     casterWithBrake: '带刹车',
     casterWithoutBrake: '不带刹车',
+    wheelModel: '轮子型号',
+    wheelStandard: '普通轮子',
+    wheelUpgraded: '升级诺贝轮子',
+    wheelUpgradedNote: `升级价 ¥${UPGRADED_WHEEL_UNIT_PRICE}/个`,
+    priceNotYetAvailable: '暂未定价，先按 ¥0 计入',
+    importedSourcePart: '源模型部件',
+    importedSourceUnknown: '来源类型未记录',
+    importedSourcePriceNote: '单价按光轴（按米）、光轴支座（按件）、轮子（普通/升级）、拉手与 8080 装饰料（按件）规则折算；未记录的规格按 ¥0 明示计入。',
     adjustableHeight: '可调高度 (mm)',
     footReferenceSpec: 'MayCAD 杯脚 · M8 螺杆 · 锁紧螺母 · 防滑底垫',
     pricePending: '当前使用预估价，待正式目录价确认后更新',
@@ -603,6 +626,14 @@ const TEXT: Record<Language, Record<string, string>> = {
     casterBrake: 'Brake type',
     casterWithBrake: 'With brake',
     casterWithoutBrake: 'Without brake',
+    wheelModel: 'Wheel model',
+    wheelStandard: 'Standard caster',
+    wheelUpgraded: 'Upgraded 诺贝 caster',
+    wheelUpgradedNote: `Upgrade ¥${UPGRADED_WHEEL_UNIT_PRICE}/pc`,
+    priceNotYetAvailable: 'Price not set yet; counted as ¥0',
+    importedSourcePart: 'Imported source component',
+    importedSourceUnknown: 'Source type not recorded',
+    importedSourcePriceNote: 'Unit price follows the shaft (per metre), shaft support (per piece), wheel (standard / upgraded) and handle / 8080 trim (per piece) rules; an unrecorded specification is shown as ¥0 rather than hidden.',
     adjustableHeight: 'Adjustable height (mm)',
     footReferenceSpec: 'MayCAD cup foot · M8 stem · lock nut · nonslip sole',
     pricePending: 'Uses a provisional estimate until the official catalog price is confirmed',
@@ -890,6 +921,18 @@ const TEXT: Record<Language, Record<string, string>> = {
     casterBrake: 'ブレーキ',
     casterWithBrake: 'ブレーキ付き',
     casterWithoutBrake: 'ブレーキなし',
+    wheelModel: 'キャスター仕様',
+    wheelStandard: '標準キャスター',
+    wheelUpgraded: 'アップグレード（诺贝）',
+    wheelUpgradedNote: `アップグレード ¥${UPGRADED_WHEEL_UNIT_PRICE}/個`,
+    priceNotYetAvailable: '価格未設定のため暫定 ¥0 で計上',
+    screwPriceFromCatalog: '付属品カタログ単価で計算',
+    screwPriceFromSeriesCatalog: 'この長さのカタログ価格なし。型番統一単価で計算',
+    screwPriceDefault: `カタログ未登録のため統一 ¥${DEFAULT_SCREW_UNIT_PRICE}/個 で計上`,
+    screwCatalogReference: '付属品カタログ仕様',
+    importedSourcePart: '取込元の部品',
+    importedSourceUnknown: '取込元の種別が未記録です',
+    importedSourcePriceNote: '単価はシャフト（1m単位）、シャフト支持台（1個単位）、キャスター（標準／アップグレード）、取っ手・8080装飾材（1個単位）の規則で算出します。記録のない仕様は ¥0 として明示計上します。',
     adjustableHeight: '調整高さ (mm)',
     footReferenceSpec: 'MayCAD カップ脚 · M8ねじ · ロックナット · 滑り止め底面',
     pricePending: '正式なカタログ価格確定まで概算価格を使用します',
@@ -1157,11 +1200,22 @@ export const inspectDesignerManufacturingPrecheck = (items: DIYSceneItem[]) => {
   return { applies: scopes.length > 0, valid: scopes.length === 0, scopes, issues };
 };
 
-function getCasterUnitPrice(item: Pick<DIYSceneItem, 'accessoryThreadSize' | 'hasBrake'>) {
-  return CASTER_BASE_UNIT_PRICE
-    + CASTER_THREAD_SURCHARGE[item.accessoryThreadSize || 'M8']
-    + (item.hasBrake ? CASTER_BRAKE_SURCHARGE : 0);
+function getCasterUnitPrice(item: Pick<DIYSceneItem, 'accessoryThreadSize' | 'hasBrake' | 'wheelGrade'>) {
+  return resolveCasterUnitPrice(item);
 }
+
+/** One place to read every imported source component through the pricing rules. */
+const getImportedComponentPrice = (item: DIYSceneItem): ImportedComponentPrice => resolveImportedComponentPrice({
+  semanticType: item.sourceMesh?.source.semanticType,
+  componentName: item.sourceMesh?.source.componentName || item.name,
+  catalogItemId: item.partCatalogRef?.catalogItemId,
+  sourceRecordId: item.partCatalogRef?.sourceRecordId,
+  lengthMm: item.length,
+  boundsMm: item.sourceMesh?.boundsMm,
+  wheelGrade: item.wheelGrade,
+  accessoryThreadSize: item.accessoryThreadSize,
+  hasBrake: item.hasBrake,
+});
 
 function getEndCapConfirmedProfileSize(
   item: Pick<DIYSceneItem, 'variantId' | 'accessoryProfileSize'>,
@@ -1597,13 +1651,30 @@ const getProfileTapGrid = (variantId = '2020') => {
   };
 };
 
-const naturalScrewUnitPrice = (variantId = '2020') => {
-  const [width, height] = profileSize(variantId);
-  const moduleSize = Math.min(width, height);
-  if (moduleSize <= 20) return 0.5;
-  if (moduleSize <= 30) return 0.75;
-  return 1.5;
-};
+/**
+ * Default "natural screw" price for one profile series, used by the part
+ * library and by the colour-normalisation pass.
+ *
+ * The number itself no longer lives here: screws are priced from the accessory
+ * catalog (`utils/designerScrewPricing`) and anything the catalog does not
+ * carry falls back to the owner-confirmed flat default, so an unrecognised
+ * screw specification can never be billed at ¥0.
+ */
+const naturalScrewUnitPrice = (variantId = '2020') => resolveDesignerScrewPrice({
+  profileSize: profileAccessorySeriesFromVariant(variantId),
+  screwHead: 'socket_cylinder',
+}).unitPrice;
+
+/** Price of one screw exactly as `calculatePrice` charges it. */
+const resolveScrewItemUnitPrice = (item: DIYSceneItem) => resolveDesignerScrewPrice({
+  profileSize: item.accessoryProfileSize || '2020',
+  screwHead: item.screwHead,
+  ...getDiyScrewOrderSpec(
+    item.accessoryProfileSize,
+    item.screwHead,
+    Math.max(1, Math.round(item.height || 35)),
+  ),
+});
 
 const ACCESSORY_PROFILE_SIZES: DIYAccessoryProfileSize[] = ['1515', '2020', '3030', '4040'];
 
@@ -10061,8 +10132,18 @@ const getShelfSupportFinishLabel = (item: DIYSceneItem, t: Record<string, string
 );
 
 const getItemLabel = (item: DIYSceneItem, language: Language) => {
-  if (item.kind === 'imported_component') return item.name || item.sourceMesh?.source.componentName || '源模型部件';
   const t = TEXT[language];
+  if (item.kind === 'imported_component') {
+    const base = item.name || item.sourceMesh?.source.componentName || t.importedSourcePart;
+    const upgradedWheel = normalizeWheelGrade(item.wheelGrade) === 'upgraded'
+      && classifyImportedComponent({
+        semanticType: item.sourceMesh?.source.semanticType,
+        componentName: item.sourceMesh?.source.componentName || item.name,
+        catalogItemId: item.partCatalogRef?.catalogItemId,
+        sourceRecordId: item.partCatalogRef?.sourceRecordId,
+      }) === 'caster';
+    return upgradedWheel ? `${base} · ${t.wheelUpgraded}` : base;
+  }
   if (item.kind === 'profile') return `${item.variantId || '2020'} · ${item.length || 0}mm`;
   if (item.kind === 'plate') return `${t.plate} · ${item.width}×${item.height}`;
   if (item.kind === 'pegboard') return `${t.pegboard} · ${item.width}×${item.height}`;
@@ -10113,7 +10194,8 @@ const getItemLabel = (item: DIYSceneItem, language: Language) => {
     return `${label} · ${orderSpec.threadSize}×${orderSpec.lengthMm}${kitSuffix}${item.linkedHoleId ? ` · ${t.linkedHole}` : ''}`;
   }
   if (item.kind === 'caster') {
-    return `${t.caster} · ${item.accessoryThreadSize || 'M8'} · ${item.hasBrake ? t.casterWithBrake : t.casterWithoutBrake}`;
+    return `${t.caster} · ${item.accessoryThreadSize || 'M8'} · ${item.hasBrake ? t.casterWithBrake : t.casterWithoutBrake}`
+      + (normalizeWheelGrade(item.wheelGrade) === 'upgraded' ? ` · ${t.wheelUpgraded}` : '');
   }
   if (item.kind === 'foot') return `${t.foot} · ${Math.round(item.height || 60)}mm`;
   if (item.kind === 'end_cap') {
@@ -10250,7 +10332,7 @@ const getCabinetDoorPricing = (item: DIYSceneItem, user?: User | null) => {
   };
 };
 
-const calculatePrice = (item: DIYSceneItem, user?: User | null) => {
+export const calculatePrice = (item: DIYSceneItem, user?: User | null) => {
   const quantity = Math.max(1, item.quantity || 1);
   if (item.kind === 'profile') {
     const variant = PROFILE_VARIANTS.find((entry) => entry.id === item.variantId) || PROFILE_VARIANTS[0];
@@ -10285,6 +10367,17 @@ const calculatePrice = (item: DIYSceneItem, user?: User | null) => {
   if (item.kind === 'caster') return Number((getCasterUnitPrice(item) * quantity).toFixed(1));
   if (item.kind === 'foot') return Number((FOOT_UNIT_PRICE * quantity).toFixed(1));
   if (item.kind === 'end_cap') return Number((getEndCapUnitPrice(item) * quantity).toFixed(1));
+  // Screws are identified by a machining rule rather than by a picked SKU, so
+  // the accessory catalog is asked first and everything it does not carry
+  // falls back to the owner-confirmed flat default. A screw is never ¥0.
+  if (item.kind === 'screw') {
+    return Number((resolveScrewItemUnitPrice(item).unitPrice * quantity).toFixed(2));
+  }
+  // Imported source components keep their own recorded identity; a part whose
+  // price is not confirmed yet stays at ¥0 instead of inventing a number.
+  if (item.kind === 'imported_component') {
+    return Number((getImportedComponentPrice(item).unitPrice * quantity).toFixed(2));
+  }
   const standardAccessoryPrice = getStandardAccessoryUnitPrice(item);
   return Number((((standardAccessoryPrice ?? item.accessoryPrice) || 0) * quantity).toFixed(1));
 };
@@ -10568,6 +10661,12 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({
     setSelection(selectedIds.includes(id) ? selectedIds.filter((entry) => entry !== id) : [...selectedIds, id]);
   };
   const componentTotal = useMemo(() => items.reduce((sum, item) => sum + calculatePrice(item, user), 0), [items, user]);
+  // Imported source components are read through one shared pricing rule so the
+  // panel and the running total can never disagree.
+  const selectedImportedPrice = selected && selected.kind === 'imported_component'
+    ? getImportedComponentPrice(selected)
+    : null;
+  const selectedImportedIsWheel = selectedImportedPrice?.category === 'caster';
   const total = finishedFurnitureQuote?.pricingModel === 'display_rack_3_0'
     && Number.isFinite(finishedFurnitureQuote.totalPriceCny)
     ? Number(finishedFurnitureQuote.totalPriceCny)
@@ -11848,8 +11947,7 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({
             ? { id: 'diy-flat-socket-screw', code: 10, label: t.flatSocketScrew, imageKey: '10' }
           : item.screwHead === 'socket_cylinder'
             ? { id: 'diy-socket-cylinder-screw', code: 10, label: t.socketCylinderScrew, imageKey: '10' }
-            : { id: 'diy-socket-head-screw', code: 10, label: t.screw, imageKey: '10' },
-        foot: { id: 'diy-leveling-foot', code: 8, label: t.foot, imageKey: '8' },
+            : { id: 'diy-socket-head-screw', code: 10, label: t.screw, imageKey: '10' },        foot: { id: 'diy-leveling-foot', code: 8, label: t.foot, imageKey: '8' },
         caster: { id: 'diy-threaded-caster', code: 0, label: t.caster, imageKey: '' },
         end_cap: { id: 'diy-profile-end-cap', code: 0, label: t.endCap, imageKey: '' },
         shelf_support: board12ShelfSupport
@@ -11858,7 +11956,6 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({
             ? fixedRackAccessory
             : { id: 'diy-shelf-support', code: 0, label: t.shelfSupport, imageKey: '' },
       }[item.kind as 'connector' | 'extruded_connector' | 'l_connector' | 't_connector' | 'hidden_connector' | 'tee_connector' | 'screw' | 'foot' | 'caster' | 'end_cap' | 'shelf_support'];
-      const accessoryId = accessoryDefinition.id;
       const unitPrice = Number((totalPrice / Math.max(1, item.quantity)).toFixed(2));
       const linkedProfile = item.linkedProfileId
         ? items.find((candidate) => candidate.kind === 'profile' && candidate.id === item.linkedProfileId)
@@ -11872,6 +11969,17 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({
         : undefined;
       const screwLengthMm = screwOrderSpec?.lengthMm;
       const screwThreadSize = screwOrderSpec?.threadSize;
+      // A screw line references the accessory-catalog row it was priced from, so
+      // the order, the factory sheet and the accessory list all name one SKU.
+      const screwPricing = item.kind === 'screw'
+        ? resolveDesignerScrewPrice({
+          profileSize: compatibleProfileSize,
+          screwHead: item.screwHead,
+          threadSize: screwThreadSize,
+          lengthMm: screwLengthMm,
+        })
+        : undefined;
+      const accessoryId = screwPricing?.accessoryRowKey || accessoryDefinition.id;
       const accessoryLengthMm = item.kind === 'shelf_support' && !board12ShelfSupport
         ? Math.max(1, Math.round(item.shelfSupportType === 'linear_shaft'
           ? item.length || item.thickness || 0
@@ -11888,7 +11996,7 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({
         : item.kind === 'shelf_support' && !board12ShelfSupport
           ? `${accessoryDefinition.label} · ${getShelfSupportFinishLabel(item, t)} · ${accessoryLengthMm}mm`
           : item.kind === 'caster'
-            ? `${accessoryDefinition.label} · ${item.accessoryThreadSize || 'M8'} · ${item.hasBrake ? t.casterWithBrake : t.casterWithoutBrake}`
+            ? `${accessoryDefinition.label} · ${item.accessoryThreadSize || 'M8'} · ${item.hasBrake ? t.casterWithBrake : t.casterWithoutBrake}${normalizeWheelGrade(item.wheelGrade) === 'upgraded' ? ` · ${t.wheelUpgraded}` : ''}`
             : item.kind === 'foot'
               ? `${accessoryDefinition.label} · ${Math.round(item.height || 60)}mm · M8`
             : item.kind === 'end_cap'
@@ -12989,8 +13097,74 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({
                       <option value="brake">{t.casterWithBrake}</option>
                     </select>
                   </label>
+                  <label className="mt-3 block">
+                    <span className="diy-field-label">{t.wheelModel}</span>
+                    <select
+                      data-testid="diy-caster-wheel-model"
+                      value={normalizeWheelGrade(selected.wheelGrade)}
+                      onChange={(event) => {
+                        const wheelGrade = normalizeWheelGrade(event.target.value);
+                        updateSelected({
+                          wheelGrade,
+                          accessoryPrice: getCasterUnitPrice({ ...selected, wheelGrade }),
+                        });
+                      }}
+                      className="diy-select"
+                    >
+                      <option value="standard">{t.wheelStandard}</option>
+                      <option value="upgraded">{t.wheelUpgraded}</option>
+                    </select>
+                  </label>
                   <p className="mt-3 rounded-xl bg-white px-3 py-2 text-[10px] font-black text-slate-600">{t.fixedBlack}</p>
-                  <p className="mt-3 rounded-xl bg-emerald-50 px-3 py-2 text-[10px] font-black text-emerald-700">{t.confirmedPrice}：{currency}{getCasterUnitPrice(selected)}</p>
+                  <p className="mt-3 rounded-xl bg-emerald-50 px-3 py-2 text-[10px] font-black text-emerald-700">
+                    {t.confirmedPrice}：{currency}{getCasterUnitPrice(selected)}
+                    {normalizeWheelGrade(selected.wheelGrade) === 'upgraded' && (
+                      <span className="ml-2 font-bold text-emerald-600">{t.wheelUpgradedNote}</span>
+                    )}
+                  </p>
+                </div>
+              )}
+
+              {selected.kind === 'imported_component' && (
+                <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4" data-testid="diy-imported-component-panel">
+                  <div className="mb-3 flex items-center gap-2">
+                    <Box className="h-4 w-4 text-blue-600" />
+                    <h3 className="text-xs font-black uppercase tracking-widest text-slate-700">{t.importedSourcePart}</h3>
+                  </div>
+                  <div className="rounded-xl bg-white px-3 py-2 text-[10px] font-black leading-relaxed text-slate-600">
+                    {getItemLabel(selected, language)}
+                    <br />
+                    {selected.sourceMesh?.source.semanticType || t.importedSourceUnknown}
+                  </div>
+                  {selectedImportedIsWheel && (
+                    <label className="mt-3 block">
+                      <span className="diy-field-label">{t.wheelModel}</span>
+                      <select
+                        data-testid="diy-imported-wheel-model"
+                        value={normalizeWheelGrade(selected.wheelGrade)}
+                        onChange={(event) => updateSelected({ wheelGrade: normalizeWheelGrade(event.target.value) })}
+                        className="diy-select"
+                      >
+                        <option value="standard">{t.wheelStandard}</option>
+                        <option value="upgraded">{t.wheelUpgraded}</option>
+                      </select>
+                    </label>
+                  )}
+                  {selectedImportedPrice?.status === 'confirmed' ? (
+                    <p className="mt-3 rounded-xl bg-emerald-50 px-3 py-2 text-[10px] font-black text-emerald-700">
+                      {t.confirmedPrice}：{currency}{selectedImportedPrice.unitPrice.toFixed(2)}
+                      {selectedImportedPrice.basis === 'length' && selectedImportedPrice.lengthMm
+                        ? ` · ${selectedImportedPrice.lengthMm}mm × ${currency}${SHAFT_UNIT_PRICE_PER_M}/m`
+                        : ''}
+                    </p>
+                  ) : (
+                    <p className="mt-3 rounded-xl bg-amber-50 px-3 py-2 text-[10px] font-black text-amber-700">{t.priceNotYetAvailable}</p>
+                  )}
+                  <p className="mt-2 rounded-xl bg-white px-3 py-2 text-[10px] font-bold leading-relaxed text-slate-500">
+                    {t.importedSourcePriceNote}
+                    <br />
+                    {`光轴 ¥${IMPORTED_COMPONENT_PRICING_SCHEME.shaftUnitPriceCny}/m · 支座 ¥${IMPORTED_COMPONENT_PRICING_SCHEME.supportUnitPriceCny}/件 · 普通轮 ¥${IMPORTED_COMPONENT_PRICING_SCHEME.standardWheelBasePriceCny} 起 · 升级诺贝轮 ¥${IMPORTED_COMPONENT_PRICING_SCHEME.upgradedWheelUnitPriceCny}/个`}
+                  </p>
                 </div>
               )}
 
@@ -13120,6 +13294,13 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({
                         selected.screwHead,
                         Math.max(1, Math.round(selected.height || 35)),
                       );
+                      const screwPricing = resolveDesignerScrewPrice({
+                        profileSize: selected.accessoryProfileSize,
+                        screwHead: selected.screwHead,
+                        threadSize: orderSpec.threadSize,
+                        lengthMm: orderSpec.lengthMm,
+                      });
+                      const pricedFromCatalog = screwPricing.source !== 'default';
                       return <>
                       <div className="rounded-xl border border-blue-100 bg-white px-3 py-3">
                         <div className="text-[10px] font-black uppercase tracking-widest text-slate-400">{t.screwOrderSpec}</div>
@@ -13138,6 +13319,24 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({
                               : t.buttonSocketScrew}
                           {selected.linkedHoleId ? ` · ${t.linkedHole}` : ''}
                         </div>
+                      )}
+                      <p
+                        className={`mt-2 rounded-xl px-3 py-2 text-[10px] font-black ${pricedFromCatalog ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700'}`}
+                        data-testid="diy-screw-price"
+                        data-price-source={screwPricing.source}
+                      >
+                        {t.confirmedPrice}：{currency}{screwPricing.unitPrice.toFixed(2)}
+                        {' · '}
+                        {screwPricing.source === 'catalog_exact'
+                          ? t.screwPriceFromCatalog
+                          : screwPricing.source === 'catalog_series'
+                            ? t.screwPriceFromSeriesCatalog
+                            : t.screwPriceDefault}
+                      </p>
+                      {screwPricing.accessoryDefinitionId && (
+                        <p className="mt-1 text-[10px] font-bold leading-relaxed text-slate-400">
+                          {t.screwCatalogReference}：{screwPricing.accessoryDefinitionId}
+                        </p>
                       )}
                       <p className="mt-2 text-[10px] font-bold leading-relaxed text-slate-400">{t.screwRenderLengthHint}</p>
                     </>;

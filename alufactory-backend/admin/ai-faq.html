@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>AI 问答规则库</title>
+<style>
+*{box-sizing:border-box}body{font:15px/1.6 system-ui,sans-serif;color:#19302c;background:#f4f7f6;margin:0;padding:24px}main{max-width:1240px;margin:auto}a{color:#175c50}h1,h2,p{margin:0 0 12px}h1{font-size:28px}h2{font-size:19px}.muted{color:#64756f;font-size:13px}.layout{display:grid;grid-template-columns:minmax(280px,1fr) minmax(360px,1.3fr);gap:20px}.panel{background:white;border:1px solid #dce5e1;border-radius:16px;padding:22px;margin:18px 0}.toolbar{display:flex;flex-wrap:wrap;align-items:center;gap:8px}input,textarea,select,button{font:inherit;border:1px solid #cbd8d2;border-radius:8px;padding:9px 11px}input,textarea,select{background:white;max-width:100%}textarea{width:100%;resize:vertical}button{background:#eff5f2;color:#174e42;cursor:pointer}button.primary{background:#195e50;color:white;border-color:#195e50}button:disabled{opacity:.5;cursor:wait}label{display:block;margin:12px 0 5px}.full{width:100%}.cards{max-height:820px;overflow:auto;margin-top:14px}.card{padding:14px;border:1px solid #e0e7e3;border-radius:10px;margin:8px 0}.card h3{font-size:15px;margin:0 0 6px}.card p{font-size:13px;white-space:pre-wrap;margin:5px 0}.badge{font-size:12px;color:#176143;background:#e4f3e9;padding:3px 7px;border-radius:5px}.draft{background:#fff2d9;color:#87591a}#notice{white-space:pre-wrap;color:#b32323}#notice.ok{color:#176143}#previewResult{white-space:pre-wrap;background:#f5f8f6;border-radius:8px;padding:14px;min-height:65px}input[type=checkbox]{width:auto}.check{display:flex;align-items:center;gap:8px}.small{font-size:12px}#editorTitle{overflow-wrap:anywhere}.editing{border-color:#23846a;background:#f6fbf8}@media(max-width:800px){body{padding:12px}.layout{display:block}.panel{padding:16px}.cards{max-height:500px}}
+</style></head>
+<body><main>
+<a href="/admin/">← 返回后台</a> · <a href="/admin/ai.html">额度与充值管理</a>
+<div class="panel"><h1>AI 问答规则库</h1><p>把常见问题和正确回答维护在这里。保存并启用后立即参与匹配，无需重启服务。</p><p class="muted">完整问题或同义问法命中时直接回答，不调用模型、不扣人民币额度；游客和普通用户仍计一条试用消息。未命中才交给已配置的 AI。聊天服务仍受全局与客户开关控制。</p>
+<div class="toolbar"><button id="newRule" class="primary">新增问答</button><button id="exportRules">导出 JSON 备份</button><button id="reloadRules">刷新列表</button><span id="counts" class="muted"></span></div></div>
+<p id="notice" role="status" aria-live="polite"></p>
+<div class="layout">
+<section class="panel"><h2>全部条目</h2><div class="toolbar"><input id="search" aria-label="搜索问题或回答" placeholder="搜索问题、回答、备注"><select id="filter" aria-label="筛选状态"><option value="all">全部状态</option><option value="enabled">已启用</option><option value="disabled">未启用 / 待补充</option></select></div><div id="cards" class="cards"></div></section>
+<section class="panel"><h2 id="editorTitle">新增问答</h2><p id="versionInfo" class="muted">新条目默认不启用，确认答案后再勾选。</p>
+<form id="editor">
+<label for="category">分类</label><input id="category" class="full" maxlength="60" required placeholder="例如：加工说明 / 配送 / 售后">
+<label for="question">标准问题</label><input id="question" class="full" maxlength="300" required placeholder="例如：两端攻丝是什么意思">
+<label for="aliases">同义问法（每行一条，最多 30 条）</label><textarea id="aliases" rows="4" placeholder="什么叫两端攻丝&#10;什么是端面攻丝"></textarea>
+<p class="muted small">仅忽略空白、大小写和句末常用标点，不做关键词模糊匹配。请填写完整问法，不要只填“多少钱”“退款”等过宽关键词。</p>
+<label for="answer">发送给客户的回答</label><textarea id="answer" rows="7" maxlength="6000" required placeholder="填写确认过的事实。价格、库存和订单状态不要写成固定承诺。"></textarea>
+<label for="notes">内部备注 / 待确认事项（不发送给客户）</label><textarea id="notes" rows="2" maxlength="3000"></textarea>
+<label for="source">核对依据（不发送给客户）</label><input id="source" class="full" maxlength="1000" placeholder="政策文档、产品页面或确认记录">
+<label class="check"><input type="checkbox" id="enabled">启用此条问答</label><div class="toolbar"><button id="saveRule" type="submit" class="primary">保存问答</button><button type="button" id="cancelEdit">清空并新建</button></div>
+</form>
+</section></div>
+<section class="panel"><h2>测试匹配</h2><p class="muted">测试已保存且启用的规则。不会调用 API，也不会消耗消息次数。先保存修改再测试。</p><form id="previewForm" class="toolbar"><input id="previewInput" aria-label="测试问题" class="full" maxlength="2000" required placeholder="输入客户可能会问的问题"><button type="submit">测试这句话</button></form><div id="previewResult" aria-live="polite">等待测试。</div></section>
+</main>
+<script>
+const el=id=>document.getElementById(id);
+let rules=[],editingId=crypto.randomUUID(),editingVersion=0,saving=false;
+const fields=['category','question','aliases','answer','notes','source'];
+async function api(path,data){const token=localStorage.getItem('authToken');if(!token){location.href='/admin/login.html';throw Error('请先登录管理员账号。');}const res=await fetch('/api/ai/admin/faq'+path,{method:data===undefined?'GET':'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+token},body:data===undefined?undefined:JSON.stringify(data)});const result=await res.json();if(!res.ok)throw Error(result.error||'请求失败');return result;}
+function notice(message,ok=false){el('notice').textContent=message;el('notice').className=ok?'ok':'';}
+const run=fn=>async event=>{if(event)event.preventDefault();try{await fn();}catch(error){notice(error.message);}};
+function render(){const query=el('search').value.trim().toLowerCase(),filter=el('filter').value;el('cards').replaceChildren();const visible=rules.filter(r=>(filter==='all'||r.enabled===(filter==='enabled'))&&[r.question,r.answer,r.category,r.notes,...r.aliases].join(' ').toLowerCase().includes(query));el('counts').textContent=`共 ${rules.length} 条 · 已启用 ${rules.filter(r=>r.enabled).length} 条 · 未启用 ${rules.filter(r=>!r.enabled).length} 条`;
+for(const r of visible){const card=document.createElement('article');card.className='card'+(r.id===editingId?' editing':'');const title=document.createElement('h3');title.textContent=r.question;const tag=document.createElement('span');tag.className='badge'+(r.enabled?'':' draft');tag.textContent=r.category+' · '+(r.enabled?'已启用':'未启用');const text=document.createElement('p');text.textContent=r.answer;const btn=document.createElement('button');btn.textContent='编辑';btn.onclick=()=>edit(r);card.append(title,tag,text,btn);el('cards').append(card);}if(!visible.length){const p=document.createElement('p');p.textContent='没有匹配条目。';el('cards').append(p);}}
+function edit(rule){editingId=rule.id;editingVersion=rule.version;for(const field of fields)el(field).value=field==='aliases'?rule.aliases.join('\n'):rule[field];el('enabled').checked=rule.enabled;el('editorTitle').textContent='编辑：'+rule.question;el('versionInfo').textContent=`版本 ${rule.version} · 最后更新 ${new Date(rule.updated_at).toLocaleString()}`;render();el('question').focus();}
+function reset(){editingId=crypto.randomUUID();editingVersion=0;el('editor').reset();el('editorTitle').textContent='新增问答';el('versionInfo').textContent='新条目默认不启用，确认答案后再勾选。';render();}
+async function load(){const data=await api('');rules=data.rules;render();}
+el('search').oninput=render;el('filter').onchange=render;el('newRule').onclick=reset;el('cancelEdit').onclick=reset;el('reloadRules').onclick=run(load);
+el('editor').onsubmit=run(async()=>{if(saving)return;saving=true;el('saveRule').disabled=true;try{const payload={version:editingVersion,enabled:el('enabled').checked};for(const field of fields)payload[field]=field==='aliases'?el(field).value.split('\n').map(s=>s.trim()).filter(Boolean):el(field).value;const result=await api('/'+encodeURIComponent(editingId),payload);await load();edit(result.rule);notice(result.rule.enabled?'已保存并启用，下一条匹配消息立即生效。':'已保存为未启用条目，不会回答客户。',true);}finally{saving=false;el('saveRule').disabled=false;}});
+el('previewForm').onsubmit=run(async()=>{const result=await api('/preview',{message:el('previewInput').value});el('previewResult').textContent=result.matched?`命中：${result.rule.question}（版本 ${result.rule.version}）\n\n${result.rule.answer}\n\n${result.note}`:`未命中：可能未添加该问法、条目未启用，或存在重复问法冲突。\n${result.note}`;});
+el('exportRules').onclick=run(async()=>{await load();const blob=new Blob([JSON.stringify({exported_at:new Date().toISOString(),rules},null,2)],{type:'application/json'});const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download='mengkaile-ai-faq.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);});
+run(load)();
+</script></body></html>

@@ -1,7 +1,7 @@
 import {
   ACCESSORY_CODE_IMAGE_MAP,
   ACCESSORY_IMAGE,
-  ACCESSORY_ROWS,
+  CUSTOMER_ACCESSORY_ROWS,
   ACCESSORY_UNIVERSAL_SERIES,
   buildAccessoryRowKey,
   getAccessoryRowSeriesLabel,
@@ -225,8 +225,8 @@ const AccessoryQuoteEditor: React.FC<{
 
   const filteredRows = useMemo(() => {
     const needle = normalizeSearch(search);
-    if (!needle) return ACCESSORY_ROWS;
-    return ACCESSORY_ROWS.filter((row) => {
+    if (!needle) return CUSTOMER_ACCESSORY_ROWS;
+    return CUSTOMER_ACCESSORY_ROWS.filter((row) => {
       const haystack = [
         String(row.code),
         row.codeLabel?.[language] || '',
