@@ -1,3 +1,4 @@
+import {aiText} from '../utils/aiLocale';
 
 // Add missing React import to fix namespace errors
 import React, { useState, useEffect } from 'react';
@@ -13,6 +14,9 @@ import { ApiService } from '../services/apiService';
 import { SHOW_STOREFRONT_INVENTORY } from '../utils/storefrontFeatures';
 
 interface ProfileEditorProps {
+  onSaveConfiguration?: (item: CartItem) => void;
+  onCancelConfiguration?: () => void;
+  saving?: boolean;
   language: Language;
   product: Product;
   user?: User | null;
@@ -53,7 +57,8 @@ const normalizeTappingForVariant = (
   };
 };
 
-const ProfileEditor: React.FC<ProfileEditorProps> = ({ language, product, user, initialItem, returnCartPath = '/cart', onAddBatchToCart, onUpdateItem, draftProfiles, setDraftProfiles }) => {
+const ProfileEditor: React.FC<ProfileEditorProps> = ({ onSaveConfiguration, onCancelConfiguration, saving=false, language, product, user, initialItem, returnCartPath = '/cart', onAddBatchToCart, onUpdateItem, draftProfiles, setDraftProfiles }) => {
+  const tr=(text:string)=>aiText(language,text);
   const t = TRANSLATIONS[language];
   const currency = getCurrency(language);
   const navigate = useNavigate();
@@ -265,6 +270,10 @@ const ProfileEditor: React.FC<ProfileEditorProps> = ({ language, product, user, 
       remark: remark.trim(),
     };
     
+    if (initialItem && onSaveConfiguration) {
+      onSaveConfiguration({ ...initialItem, config, totalPrice: parseFloat((unitPrice * initialItem.quantity).toFixed(1)) });
+      return;
+    }
     if (initialItem) {
       onUpdateItem({ ...initialItem, config, totalPrice: parseFloat((unitPrice * initialItem.quantity).toFixed(1)) });
       navigate(returnCartPath);
@@ -299,6 +308,7 @@ const ProfileEditor: React.FC<ProfileEditorProps> = ({ language, product, user, 
   };
 
   const handleBatchConfirm = () => {
+
     const hasTooShortProfile = draftProfiles.some(item => {
       const cfg = item.config as ProfileConfig;
       return cfg.length <= MIN_PROFILE_LENGTH_MM;
@@ -330,14 +340,14 @@ const ProfileEditor: React.FC<ProfileEditorProps> = ({ language, product, user, 
 
   return (
     <div className="space-y-8">
-      <div className={`bg-white p-8 rounded-3xl shadow-xl border ${initialItem || editingId ? 'border-blue-400 ring-4 ring-blue-50' : 'border-slate-100'}`}>
+      <div className={`bg-white p-4 sm:p-6 rounded-3xl shadow-xl border ${initialItem || editingId ? 'border-blue-400 ring-4 ring-blue-50' : 'border-slate-100'}`}>
         <div className="flex justify-between items-center mb-6">
           <h3 className="text-2xl font-black text-slate-800 flex items-center gap-3">
             <Settings2 className="w-6 h-6 text-blue-600" />
-            {initialItem ? 'Update Configuration' : (editingId ? 'Edit Item' : t.configure)}
+            {onSaveConfiguration ? tr("编辑型材加工") : initialItem ? 'Update Configuration' : (editingId ? 'Edit Item' : t.configure)}
           </h3>
           {(editingId || initialItem) && (
-            <button onClick={() => { setEditingId(null); if (initialItem) navigate(returnCartPath); }} className="text-sm text-red-500 hover:text-red-700 font-bold flex items-center gap-1"><X className="w-4 h-4" /> {t.cancelEdit}</button>
+            <button onClick={() => { if(onCancelConfiguration){onCancelConfiguration();return;} setEditingId(null); if (initialItem) navigate(returnCartPath); }} className="text-sm text-red-500 hover:text-red-700 font-bold flex items-center gap-1"><X className="w-4 h-4" /> {t.cancelEdit}</button>
           )}
         </div>
 
@@ -349,7 +359,7 @@ const ProfileEditor: React.FC<ProfileEditorProps> = ({ language, product, user, 
             </select>
           </div>
           <div>
-            <label className="block text-xs font-black text-slate-400 uppercase mb-2">{t.finish}</label>
+            <div className="flex items-center justify-between text-xs font-black text-slate-400 uppercase mb-2"><span>{t.finish}</span><ProfileSectionGuide language={language} compact showPalette={!hasChosenColor}/></div>
             <select value={finish} onChange={(e) => setFinish(e.target.value as ProfileFinish)} className="w-full border border-slate-200 rounded-xl px-4 py-3 outline-none bg-slate-50 font-black text-slate-700">
               <option value="oxidized">{t.finishOxidized}</option>
               {!colorOnlyColoredSection && <option value="electrophoretic">{t.finishElectrophoretic}</option>}
@@ -367,10 +377,45 @@ const ProfileEditor: React.FC<ProfileEditorProps> = ({ language, product, user, 
           </div>
         )}
 
+
+        {(finish === 'powder' || finish === 'electrophoretic') && (
         <div className="mb-8">
-          <ProfileSectionGuide language={language} showPalette={!hasChosenColor} />
+            <label className="block text-xs font-black text-slate-400 uppercase mb-2">{t.color}</label>
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
+              {PROFILE_COLORS.filter(c => c.id !== 'natural').map(color => (
+                <button
+                  key={color.id}
+                  onClick={() => {
+                    setColorId(color.id);
+                    setHasChosenColor(true);
+                  }}
+                  className={`px-3 py-3 rounded-xl border-2 text-[10px] font-black transition-all uppercase tracking-tighter text-center flex flex-col items-center justify-center gap-1 ${
+                    colorId === color.id 
+                      ? 'border-blue-500 bg-blue-50 text-blue-700 shadow-md' 
+                      : 'border-slate-100 hover:border-slate-200 text-slate-500 bg-white'
+                  }`}
+                >
+                  <span>{color.name[language]}</span>
+                  <span className="block opacity-60 text-[8px] font-normal lowercase tracking-normal">max: {color.maxLength}mm</span>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        <div className="mb-8">
+            <label className="block text-xs font-black text-slate-400 uppercase mb-2">{t.length} </label>
+            <div className="relative">
+              <input type="number" min={MIN_PROFILE_LENGTH_MM + 1} max={MAX_PROFILE_LENGTH_MM} value={length} onChange={(e) => setLength(Math.min(MAX_PROFILE_LENGTH_MM, Math.max(0, parseFloat(e.target.value))))} className={`w-full border rounded-xl px-4 py-3 outline-none font-black text-xl ${isTooLong || isTooShort ? 'border-red-300 text-red-600 bg-red-50' : isDangerous ? 'border-amber-300 text-amber-700 bg-amber-50' : 'border-slate-200 bg-slate-50'}`} />
+              <div className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 text-sm font-black">MM</div>
+            </div>
+            {isTooShort && <div className="text-red-600 text-xs mt-2 font-black">{t.minLengthDangerous} (&gt;{MIN_PROFILE_LENGTH_MM}mm)</div>}
+            {isDangerous && <div className="text-amber-600 text-xs mt-2 font-black flex items-center gap-1">⚠️ {t.dangerFeeSurcharge}</div>}
+            {isTooLong && <div className="text-red-500 text-xs mt-2 font-bold">{t.maxLengthExceeded} ({MAX_PROFILE_LENGTH_MM}mm)</div>}
         </div>
 
+        <details className="mb-4 rounded-xl border border-slate-200 p-3">
+          <summary className="cursor-pointer text-sm font-bold text-slate-600">{language==='cn'?'查看型材截面与颜色图片':language==='jp'?'断面・色の写真':'View profile and color photos'}</summary>
         {/* Profile Cross-Section Image + Color Swatch */}
         <div className="mb-8 flex justify-center gap-4 flex-wrap">
           {/* Cross-section diagram */}
@@ -430,49 +475,17 @@ const ProfileEditor: React.FC<ProfileEditorProps> = ({ language, product, user, 
           )}
         </div>
 
-        {(finish === 'powder' || finish === 'electrophoretic') && (
-          <div className="mb-8">
-            <label className="block text-xs font-black text-slate-400 uppercase mb-2">{t.color}</label>
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
-              {PROFILE_COLORS.filter(c => c.id !== 'natural').map(color => (
-                <button
-                  key={color.id}
-                  onClick={() => {
-                    setColorId(color.id);
-                    setHasChosenColor(true);
-                  }}
-                  className={`px-3 py-3 rounded-xl border-2 text-[10px] font-black transition-all uppercase tracking-tighter text-center flex flex-col items-center justify-center gap-1 ${
-                    colorId === color.id 
-                      ? 'border-blue-500 bg-blue-50 text-blue-700 shadow-md' 
-                      : 'border-slate-100 hover:border-slate-200 text-slate-500 bg-white'
-                  }`}
-                >
-                  <span>{color.name[language]}</span>
-                  <span className="block opacity-60 text-[8px] font-normal lowercase tracking-normal">max: {color.maxLength}mm</span>
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
+        </details>
+
+
 
         <div className="mb-8">
-            <label className="block text-xs font-black text-slate-400 uppercase mb-2">{t.length} </label>
-            <div className="relative">
-              <input type="number" min={MIN_PROFILE_LENGTH_MM + 1} max={MAX_PROFILE_LENGTH_MM} value={length} onChange={(e) => setLength(Math.min(MAX_PROFILE_LENGTH_MM, Math.max(0, parseFloat(e.target.value))))} className={`w-full border rounded-xl px-4 py-3 outline-none font-black text-xl ${isTooLong || isTooShort ? 'border-red-300 text-red-600 bg-red-50' : isDangerous ? 'border-amber-300 text-amber-700 bg-amber-50' : 'border-slate-200 bg-slate-50'}`} />
-              <div className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 text-sm font-black">MM</div>
-            </div>
-            {isTooShort && <div className="text-red-600 text-xs mt-2 font-black">{t.minLengthDangerous} (&gt;{MIN_PROFILE_LENGTH_MM}mm)</div>}
-            {isDangerous && <div className="text-amber-600 text-xs mt-2 font-black flex items-center gap-1">⚠️ {t.dangerFeeSurcharge}</div>}
-            {isTooLong && <div className="text-red-500 text-xs mt-2 font-bold">{t.maxLengthExceeded} ({MAX_PROFILE_LENGTH_MM}mm)</div>}
-        </div>
-
-        <div className="mb-8">
-          <label className="block text-xs font-black text-slate-400 uppercase mb-2">客户备注</label>
+          <label className="block text-xs font-black text-slate-400 uppercase mb-2">{tr("客户备注")}</label>
           <input
             type="text"
             value={remark}
             onChange={(e) => setRemark(e.target.value)}
-            placeholder="例如：客厅左侧立柱 / 玄关右上横梁"
+            placeholder={tr("例如：客厅左侧立柱 / 玄关右上横梁")}
             maxLength={100}
             className="w-full border border-slate-200 rounded-xl px-4 py-3 outline-none bg-slate-50 font-bold text-slate-700"
           />
@@ -490,7 +503,7 @@ const ProfileEditor: React.FC<ProfileEditorProps> = ({ language, product, user, 
                 <select value={newHoleType} onChange={e => setNewHoleType(e.target.value as HoleType)} className="w-full border rounded-xl px-3 py-2 text-sm bg-white font-black">
                   <option value="through">{t.typeThrough}</option>
                   <option value="countersunk">{t.typeCountersunk}</option>
-                  <option value="threaded">{t.typeThreaded || '螺纹孔'}</option>
+                  <option value="threaded">{t.typeThreaded || tr("螺纹孔")}</option>
                 </select>
               </div>
               {newHoleType === 'threaded' && (
@@ -508,7 +521,7 @@ const ProfileEditor: React.FC<ProfileEditorProps> = ({ language, product, user, 
            </div>
 
            <div className="mt-4 border-t border-slate-200 pt-4">
-              <label className="block text-[10px] font-black text-slate-400 uppercase mb-2">批量位置 (mm) · 最多10个（空白会自动忽略）</label>
+              <label className="block text-[10px] font-black text-slate-400 uppercase mb-2">{language==='cn'?'批量位置 (mm) · 最多10个（空白会自动忽略）':language==='en'?'Batch positions (mm) · Up to 10; blank fields are ignored':'一括位置 (mm) · 最大10個・空欄は無視されます'}</label>
               <div className="grid grid-cols-2 md:grid-cols-5 gap-2 mb-3">
                 {batchHolePositions.map((value, idx) => (
                   <input
@@ -525,7 +538,7 @@ const ProfileEditor: React.FC<ProfileEditorProps> = ({ language, product, user, 
                   />
                 ))}
               </div>
-              <button onClick={addBatchHoles} className="bg-blue-600 text-white px-4 py-2 rounded-xl text-xs font-black hover:bg-blue-700 transition-all uppercase">批量添加打孔</button>
+              <button onClick={addBatchHoles} className="bg-blue-600 text-white px-4 py-2 rounded-xl text-xs font-black hover:bg-blue-700 transition-all uppercase">{language==='cn'?'批量添加打孔':language==='en'?'Add batch holes':'穴を一括追加'}</button>
            </div>
         </div>
         {grooveCount >= 2 && (
@@ -658,8 +671,20 @@ const ProfileEditor: React.FC<ProfileEditorProps> = ({ language, product, user, 
           </div>
         </div>
 
-        <button onClick={addToBatch} disabled={isTooLong || isTooShort} className={`w-full py-5 font-black rounded-2xl shadow-xl transition-all flex items-center justify-center gap-3 uppercase tracking-widest ${isTooLong || isTooShort ? 'bg-slate-200 text-slate-400 cursor-not-allowed shadow-none' : (initialItem || editingId ? 'bg-blue-600 hover:bg-blue-700 text-white shadow-blue-600/20' : 'bg-slate-900 hover:bg-slate-800 text-white shadow-slate-900/10')}`}>
-          {initialItem ? 'Save Updates' : (editingId ? t.updateBatchItem : t.addToBatch)}
+        {onSaveConfiguration&&holes.length>0&&<div className="my-4 space-y-3">
+          <h4 className="font-bold text-slate-700">{tr("孔位明细 · 可直接修改或删除")}</h4>
+          {holes.map((hole,i)=><div key={hole.id} className="flex flex-wrap items-center gap-2 rounded-xl bg-slate-50 p-3">
+            <span className="text-sm">{i+1}.</span>
+            <select aria-label={language==='cn'?`孔${i+1}加工面`:language==='en'?`Hole ${i+1} face`:`穴${i+1} 加工面`} value={hole.side} onChange={e=>setHoles(prev=>prev.map(h=>h.id===hole.id?{...h,side:e.target.value as ProfileSide,physicalGrooveIndex:0}:h))} className="rounded-lg border p-2">{(['A','B','C','D'] as const).map(s=><option key={s} value={s}>{s} {language==='en'?'face':'面'}</option>)}</select>
+            <input aria-label={language==='cn'?`孔${i+1}位置毫米`:language==='en'?`Hole ${i+1} position in millimeters`:`穴${i+1} 位置（mm）`} type="number" step="1" min="5" max={length-5} value={hole.positionMm} onChange={e=>setHoles(prev=>prev.map(h=>h.id===hole.id?{...h,positionMm:Math.round(Number(e.target.value))}:h))} className="w-24 rounded-lg border p-2"/><span className="text-xs">mm</span>
+            <select aria-label={language==='cn'?`孔${i+1}类型`:language==='en'?`Hole ${i+1} type`:`穴${i+1} 種類`} value={hole.type} onChange={e=>setHoles(prev=>prev.map(h=>h.id===hole.id?{...h,type:e.target.value as HoleType,threadSize:e.target.value==='threaded'?(h.threadSize||'M3'):undefined}:h))} className="rounded-lg border p-2"><option value="through">{tr("通孔")}</option><option value="countersunk">{tr("沉头孔")}</option><option value="threaded">{tr("螺纹孔")}</option></select>
+            {hole.type==='threaded'&&<select aria-label={language==='cn'?`孔${i+1}螺纹规格`:language==='en'?`Hole ${i+1} thread size`:`穴${i+1} ねじサイズ`} value={hole.threadSize||'M3'} onChange={e=>setHoles(prev=>prev.map(h=>h.id===hole.id?{...h,threadSize:e.target.value as ThreadSize}:h))} className="rounded-lg border p-2">{['M3','M4','M5','M6',...(variantId.startsWith('30')||variantId.startsWith('40')?['M8']:[])].map(v=><option key={v}>{v}</option>)}</select>}
+            {getProfileGrooveCount(variantId,hole.side)>1&&<select aria-label={language==='cn'?`孔${i+1}槽位`:language==='en'?`Hole ${i+1} groove`:`穴${i+1} 溝`} value={hole.physicalGrooveIndex||0} onChange={e=>setHoles(prev=>prev.map(h=>h.id===hole.id?{...h,physicalGrooveIndex:Number(e.target.value)}:h))} className="rounded-lg border p-2">{Array.from({length:getProfileGrooveCount(variantId,hole.side)},(_,n)=><option key={n} value={n}>{language==='cn'?`第${n+1}槽`:language==='en'?`Groove ${n+1}`:`溝${n+1}`}</option>)}</select>}
+            <button type="button" aria-label={language==='cn'?`删除孔${i+1}`:language==='en'?`Delete hole ${i+1}`:`穴${i+1}を削除`} onClick={()=>setHoles(prev=>prev.filter(h=>h.id!==hole.id))} className="rounded-lg p-2 text-red-500"><Trash2 size={16}/></button>
+          </div>)}
+        </div>}
+        <button onClick={addToBatch} disabled={saving || isTooLong || isTooShort} className={`w-full py-5 font-black rounded-2xl shadow-xl transition-all flex items-center justify-center gap-3 uppercase tracking-widest ${isTooLong || isTooShort ? 'bg-slate-200 text-slate-400 cursor-not-allowed shadow-none' : (initialItem || editingId ? 'bg-blue-600 hover:bg-blue-700 text-white shadow-blue-600/20' : 'bg-slate-900 hover:bg-slate-800 text-white shadow-slate-900/10')}`}>
+          {saving ? tr("正在保存…") : onSaveConfiguration ? tr("保存加工配置") : initialItem ? 'Save Updates' : (editingId ? t.updateBatchItem : t.addToBatch)}
         </button>
       </div>
 
@@ -709,7 +734,7 @@ const ProfileEditor: React.FC<ProfileEditorProps> = ({ language, product, user, 
                         </td>
                         <td className="px-4 font-black text-blue-600">{currency}{item.totalPrice.toFixed(1)}</td>
                         <td className="px-4 text-right">
-                          <div className="flex gap-1 justify-end opacity-0 group-hover:opacity-100 transition-opacity">
+                          <div className="flex gap-1 justify-end opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
                             <button onClick={() => duplicateDraftItem(item)} title={t.copy} className="p-2 text-slate-400 hover:text-emerald-600 hover:bg-white rounded-xl transition-all"><Copy className="w-4 h-4"/></button>
                             <button onClick={() => { setEditingId(item.id); setVariantId(item.config.variantId); setLength(item.config.length); setHoles(roundHolePositionsToWholeMm(item.config.holes)); setTapping(normalizeTappingForVariant(item.config.variantId, item.config.tapping)); setFinish(item.config.finish); setColorId(item.config.colorId); setRemark(item.config.remark || ''); const mc = item.config.miterCut || { left: { enabled: false, direction: 'up', side: 'AC' }, right: { enabled: false, direction: 'up', side: 'AC' } }; setMiterCut(mc); setShowMiterCut(!!(mc.left?.enabled || mc.right?.enabled)); }} className="p-2 text-slate-400 hover:text-blue-600 hover:bg-white rounded-xl transition-all"><Pencil className="w-4 h-4"/></button>
                             <button onClick={() => setDraftProfiles(draftProfiles.filter(x => x.id !== item.id))} className="p-2 text-slate-400 hover:text-red-500 hover:bg-white rounded-xl transition-all"><Trash2 className="w-4 h-4"/></button>

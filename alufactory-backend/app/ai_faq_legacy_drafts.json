@@ -1,5 +1,19 @@
 [
   {
+    "id": "design-image",
+    "category": "方案咨询",
+    "question": "能做和图片一样的吗",
+    "aliases": [
+      "可以根据照片做吗",
+      "能看图报价吗",
+      "我要和图片一样的能做吗"
+    ],
+    "answer": "评估需要参考图片、整体尺寸、用途、材料颜色、数量和收货省份。单张图片通常无法确定隐藏连接和准确尺寸，需进一步确认。目前聊天图片自动识别尚未开放，请联系人工评估，或从现有设计器模板开始。",
+    "source": "docs/AI_SALES_ASSISTANT_PLAN.md",
+    "enabled": true,
+    "notes": ""
+  },
+  {
     "id": "draft-leadtime",
     "category": "待补充政策",
     "question": "多久发货",

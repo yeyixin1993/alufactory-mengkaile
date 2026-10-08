@@ -1,21 +1,60 @@
+import {AILanguageContext,aiText} from '../utils/aiLocale';
 import React, { useEffect, useRef, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { ApiService } from '../services/apiService';
-import { User } from '../types';
-import { ArrowUp, Sparkles, ArrowUpRight, MessageSquare, Plus } from 'lucide-react';
+import { CartItem, User, Language } from '../types';
+import { ArrowUp, Sparkles, ArrowUpRight, MessageSquare, Plus, ImagePlus, FileText, X, PanelLeft, BookOpen, Box, ShoppingBag, Home, MessageCircle } from 'lucide-react';
 import './AIChatBar.css';
+import AIManufacturingReview from './AIManufacturingReview';
+import AIQuoteCard from './AIQuoteCard';
+import AIOrderConfirmation from './AIOrderConfirmation';
+import AIResponseReveal from './AIResponseReveal';
+import { saveChatDraft, takeChatDraft, ChatAttachment } from '../utils/aiChatHandoff';
 
 const VISITOR_KEY = 'mengkaile-ai-visitor';
 const visitor = () => { try { return localStorage.getItem(VISITOR_KEY) || ''; } catch { return ''; } };
 const saveVisitor = (token: string) => { if (token) try { localStorage.setItem(VISITOR_KEY, token); } catch { /* server still limits new visitors */ } };
 const money = (value: number) => value.toFixed(4);
 
-export default function AIChatBar({ user }: { user: User | null; key?: string }) {
-  const home = useLocation().pathname === '/';
+export default function AIChatBar({ user, onAddToCart, cart=[], language, onLanguageChange }: { language:Language;onLanguageChange:(language:Language)=>void; user: User | null; key?: string; cart?:CartItem[]; onAddToCart?: (items: CartItem[], mode?: 'append'|'replace') => void }) {
+  const tr=(text:string)=>aiText(language,text);
+  const location = useLocation();
+  const home = location.pathname === '/';
+  const workspace = location.pathname === '/ai-chat';
+  const handoffStarted = useRef(false);
+  const endRef = useRef<HTMLDivElement>(null);
+  const [sidebar, setSidebar] = useState(false);
+  useEffect(()=>{setOpen(workspace);setSidebar(false);},[workspace]);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const [status, setStatus] = useState<any>(null);
   const [input, setInput] = useState('');
-  const [messages, setMessages] = useState<{ role: string; content: string }[]>([]);
+  const [attachment, setAttachment] = useState<ChatAttachment[]>([]);
+  const [uploadMenu,setUploadMenu]=useState(false);
+  const [reading,setReading]=useState(false);
+  const fileRef = useRef<HTMLInputElement>(null);
+  const documentRef = useRef<HTMLInputElement>(null);
+  const label=(cn:string,en:string,jp:string)=>language==='cn'?cn:language==='en'?en:jp;
+  const chooseFiles = async (files:FileList|null) => {
+    if (!files?.length) return;
+    setUploadMenu(false);setReading(true);setError('');
+    try {
+      const selected=Array.from(files);
+      if(attachment.length+selected.length>8) throw new Error(label('每条消息最多8个附件','Up to 8 attachments per message','1通につき添付は8件まで'));
+      const added:ChatAttachment[]=[];
+      for(const file of selected){
+        const isImage=['image/jpeg','image/png','image/webp'].includes(file.type);
+        if(!isImage&&!/\.(pdf|docx|xlsx|csv|txt)$/i.test(file.name)) throw new Error(label('支持 JPG/PNG/WebP、PDF、DOCX、XLSX、CSV、TXT','Supported: JPG/PNG/WebP, PDF, DOCX, XLSX, CSV, TXT','対応：JPG/PNG/WebP、PDF、DOCX、XLSX、CSV、TXT'));
+        if(file.size>(isImage?4:10)*1024*1024) throw new Error(label('图片最大4MB，文件最大10MB','Images up to 4MB; files up to 10MB','画像は4MB、ファイルは10MBまで'));
+        const data=await new Promise<string>((resolve,reject)=>{const reader=new FileReader();reader.onload=()=>resolve(String(reader.result));reader.onerror=()=>reject(new Error(label('附件读取失败','Unable to read attachment','添付を読み込めません')));reader.readAsDataURL(file);});
+        added.push({name:file.name,data,kind:isImage?'image':'file'});
+      }
+      const all=[...attachment,...added];
+      if(all.reduce((sum,a)=>sum+(a.data.split(',')[1]?.length||0)*.75,0)>20*1024*1024) throw new Error(label('附件总大小最多20MB','Attachments must total 20MB or less','添付の合計は20MBまで'));
+      setAttachment(all);setPending(null);
+    } catch(e:any){setError(e.message);} finally {setReading(false);}
+  };
+  const freshReplies = useRef(new Set<string>());
+  const [messages, setMessages] = useState<{ role: string; content: string; quote?: any; request_id?: string; image?: string | null; attachments?:ChatAttachment[]; review?: any; order_confirmed?:number[]; order_revision?:number }[]>([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [open, setOpen] = useState(false);
@@ -28,12 +67,13 @@ export default function AIChatBar({ user }: { user: User | null; key?: string })
     const data = await ApiService.aiRequest('/status', { visitor_token: visitor() });
     saveVisitor(data.visitor_token);
     setStatus(data);
+    setMessages(data.history || []);
     setError('');
     return data;
   };
   useEffect(() => {
     let active = true;
-    setMessages([]); setStatus(null); setError(''); setPending(null); setEntries(null); setOpen(false);
+    setMessages([]); setAttachment([]); setInput(''); setStatus(null); setError(''); setPending(null); setEntries(null); setOpen(workspace);
     ApiService.aiRequest('/status', { visitor_token: visitor() }).then(data => {
       if (active) { saveVisitor(data.visitor_token); setStatus(data); setMessages(data.history || []); }
     }).catch(() => { if (active) setError('咨询服务暂时连接不上，请稍后重试，或先使用快速报价。'); });
@@ -44,19 +84,62 @@ export default function AIChatBar({ user }: { user: User | null; key?: string })
     window.addEventListener('focus', focus);
     return () => window.removeEventListener('focus', focus);
   }, [user?.id]);
-  const send = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (busy || !input.trim()) return;
-    const text = input.trim();
-    const id = pending?.text === text ? pending.id : crypto.randomUUID();
-    setPending({ id, text }); setBusy(true); setError(''); setOpen(true);
+  const submit = async (text: string, picture: ChatAttachment[] | null, fixedId?: string) => {
+    const id = fixedId || (pending?.text === text ? pending.id : crypto.randomUUID());
+    setInput(text); setAttachment(picture || []); setPending({ id, text }); setBusy(true); setError(''); setOpen(true);
     try {
-      const result = await ApiService.aiRequest('/chat', { message: text, request_id: id, visitor_token: visitor() });
+      const result = await ApiService.aiRequest('/chat', { message: text, request_id: id, visitor_token: visitor(), attachments: picture || [], conversation_id: status?.conversation_id });
       saveVisitor(result.visitor_token);
-      setMessages(previous => [...previous, { role: 'user', content: text }, { role: 'assistant', content: result.reply }]);
-      setInput(''); setPending(null);
+      freshReplies.current.add(id);
+      setMessages(previous => [...previous, { role: 'user', content: text, attachments: picture || [] }, { role: 'assistant', content: result.reply, quote: result.quote, request_id: id, review: result.review }]);
+      setInput(''); setAttachment([]); setPending(null);
       await refresh();
     } catch (err: any) { setError(err.message || '发送失败，请重试。'); }
+    finally { setBusy(false); }
+  };
+  useEffect(() => { if (workspace) endRef.current?.scrollIntoView({behavior:'auto',block:'end'}); }, [messages, busy]);
+  useEffect(() => {
+    const id = new URLSearchParams(location.search).get('draft');
+    if (!workspace || !status || !id || handoffStarted.current || (ApiService.isAuthenticated() && !user)) return;
+    handoffStarted.current = true;
+    takeChatDraft(id).then(draft => {
+      if (!draft) throw new Error('这条待发送消息已接收或过期，请直接输入新需求。');
+      if (draft.owner !== (user?.id || 'guest')) throw new Error('登录账号已变化，请重新发送需求。');
+      window.history.replaceState(null, '', '#/ai-chat');
+      return submit(draft.text, draft.attachments || (draft.image?[{name:"图片",data:draft.image,kind:"image"}]:[]), id);
+    }).catch(e => setError(e.message));
+  }, [workspace, status, user?.id]);
+  const send = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (busy || reading || (!input.trim() && !attachment.length)) return;
+    const text = input.trim() || label('请读取这些附件中的需求，列出需要确认或补充的信息。','Read these attachments and ask about any missing or unclear requirements.','添付の要望を読み取り、不明点を質問してください。');
+    if (workspace) { await submit(text, attachment); return; }
+    const tab = window.open('about:blank', '_blank');
+    if (!tab) { setError('浏览器拦截了新窗口，请允许弹出窗口后重新发送。'); return; }
+    tab.opener = null;
+    setBusy(true); setError('');
+    try {
+      const id = crypto.randomUUID();
+      await saveChatDraft(id, {text, attachments: attachment, owner:user?.id || 'guest', created:Date.now()});
+      tab.location.href = `${window.location.origin}${window.location.pathname}#/ai-chat?draft=${id}`;
+      setInput(''); setAttachment([]);
+    } catch(e:any) { tab.close(); setError(e.message || '新窗口打开失败，消息尚未发送。'); }
+    finally { setBusy(false); }
+  };
+  const newChat = async () => {
+    setBusy(true);
+    try { await ApiService.aiRequest('/reset', {visitor_token:visitor()}); setMessages([]); setInput(''); setAttachment([]); setPending(null); await refresh(); setSidebar(false); }
+    catch(e:any) { setError(e.message); }
+    finally { setBusy(false); }
+  };
+  const openConversation = async (id:string) => {
+    if (busy || id === status?.conversation_id) return;
+    setBusy(true); setError('');
+    try {
+      const data = await ApiService.aiRequest('/conversations/open', {visitor_token:visitor(), conversation_id:id});
+      saveVisitor(data.visitor_token); setStatus(data); setMessages(data.history || []);
+      setInput(''); setAttachment([]); setPending(null); freshReplies.current.clear(); setSidebar(false);
+    } catch(e:any) { setError(e.message); }
     finally { setBusy(false); }
   };
   const pay = async () => {
@@ -69,7 +152,20 @@ export default function AIChatBar({ user }: { user: User | null; key?: string })
     } catch (err: any) { setError(err.message); }
     finally { setPaying(false); }
   };
-  return <section className={`ai-entry ${home ? 'ai-entry-home' : 'ai-entry-compact'}`} aria-label="AI 设计与咨询">
+  return <AILanguageContext.Provider value={language}><section className={`ai-entry ${workspace ? 'ai-chat-workspace' : home ? 'ai-entry-home' : 'ai-entry-compact'}`} aria-label={tr("AI 设计与咨询")}>
+    {workspace && <>
+      {sidebar&&<button className="ai-sidebar-scrim" aria-label={tr("关闭咨询导航")} onClick={()=>setSidebar(false)}/>}
+      <aside className={`ai-chat-sidebar ${sidebar?'is-open':''}`}>
+        <div className="ai-sidebar-heading"><Link to="/" className="ai-chat-brand"><span className="ai-brand-mark">M</span>萌开了</Link><button className="ai-sidebar-close" aria-label={tr("关闭侧栏")} onClick={()=>setSidebar(false)}><PanelLeft size={19}/></button></div>
+        <button className="ai-new-chat" disabled={busy} onClick={newChat}><Plus size={18}/>{tr("新对话")}</button>
+        <p className="ai-sidebar-label">{language==='cn'?'历史对话':language==='en'?'Chat history':'チャット履歴'}</p>
+        <div className="ai-history-list">
+          {(status?.conversations || []).map((conversation:any)=><button key={conversation.id} disabled={busy} className={`ai-current-chat ${conversation.id===status?.conversation_id?'is-selected':''}`} aria-current={conversation.id===status?.conversation_id?'page':undefined} title={conversation.title} onClick={()=>void openConversation(conversation.id)}><MessageCircle size={16}/><span>{conversation.title==='新对话'?tr('新对话'):conversation.title}</span></button>)}
+        </div>
+        <div className="ai-sidebar-links"><Link to="/catalog" target="_blank" rel="noopener noreferrer"><BookOpen size={17}/>{tr("价格画册")}</Link><Link to="/diy-designer" target="_blank"><Box size={17}/>{tr("3D 设计器")}</Link><Link to="/cart"><ShoppingBag size={17}/>{tr("购物车")}</Link><Link to="/"><Home size={17}/>{tr("返回首页")}</Link></div>
+        <Link to={user?'/history':'/login'} className="ai-sidebar-user"><span>{user?'M':tr("访")}</span>{user?tr("我的账户"):tr("登录 / 注册")}</Link>
+      </aside>
+    </>}
     {home && <header className="ai-entry-heading">
       <span className="ai-entry-eyebrow"><Sparkles size={14} /> 萌开了 · AI 设计顾问</span>
       <h1>你的想法，<span>从这里开始。</span></h1>
@@ -77,47 +173,59 @@ export default function AIChatBar({ user }: { user: User | null; key?: string })
     </header>}
     <div className="ai-entry-card">
       <div className="ai-entry-toolbar">
-        <button className="ai-entry-history" onClick={() => setOpen(!open)} aria-expanded={open}><MessageSquare size={15} /> {home ? '咨询记录' : 'AI 设计顾问'} {open ? '▴' : '▾'}</button>
+        <select className="ai-language-select" aria-label="Language" value={language} onChange={e=>onLanguageChange(e.target.value as Language)}><option value="cn">中文</option><option value="en">English</option><option value="jp">日本語</option></select>
+        {workspace&&<button className="ai-sidebar-toggle" aria-label={tr("打开咨询导航")} onClick={()=>setSidebar(!sidebar)}><PanelLeft size={20}/></button>}
+        <button className="ai-entry-history" onClick={() => { if (!workspace) setOpen(!open); }} aria-expanded={open}><MessageSquare size={15} /> {home ? tr("咨询记录") : tr("AI 设计顾问")} {!workspace&&(open ? '▴' : '▾')}</button>
         <div className="ai-entry-account">
-          <span aria-live="polite">{status ? status.trial_mode ? `剩余 ${status.trial_remaining} 条免费消息` : `AI 余额 ¥${money(status.balance_cny)}` : error ? '额度暂不可用' : '正在读取额度…'}</span>
-          <button className="text-blue-700 underline" onClick={() => setRecharge(!recharge)}>充值</button>
-          {user && <button className="underline" onClick={async () => { try { const data = await ApiService.aiRequest('/ledger'); setEntries(data.entries); } catch (e: any) { setError(e.message); } }}>收支记录</button>}
-          <button className="underline" onClick={() => refresh().catch(err => setError(err.message))}>刷新余额</button>
+          <span aria-live="polite">{status ? status.local_unlimited ? tr("本地测试 · 不限额度") : status.trial_mode ? (language==='cn'?`剩余 ${status.trial_remaining} 条免费消息`:language==='en'?`${status.trial_remaining} free messages left`:`無料メッセージ残り ${status.trial_remaining} 通`) : `${language==='cn'?'AI 余额':language==='en'?'AI balance':'AI 残高'} ¥${money(status.balance_cny)}` : error ? tr("额度暂不可用") : tr("正在读取额度…")}</span>
+          <button className="text-blue-700 underline" onClick={() => setRecharge(!recharge)}>{tr("充值")}</button>
+          {user && <button className="underline" onClick={async () => { try { const data = await ApiService.aiRequest('/ledger'); setEntries(data.entries); } catch (e: any) { setError(e.message); } }}>{tr("收支记录")}</button>}
+          <button className="underline" onClick={() => refresh().catch(err => setError(err.message))}>{tr("刷新余额")}</button>
         </div>
       </div>
-      {open && <div className="max-h-80 overflow-y-auto space-y-3 mb-3" role="log" aria-label="咨询记录">
-        {!messages.length && <p className="text-sm text-slate-500">描述型号、颜色、长度和加工需求，我会追问缺少的信息。首版支持单种型材文字估价。</p>}
-        {messages.map((message, i) => <div key={i} className={`rounded-xl p-3 text-sm whitespace-pre-wrap ${message.role === 'user' ? 'bg-blue-50 ml-8' : 'bg-slate-50 mr-8'}`}><strong>{message.role === 'user' ? '你' : 'AI 顾问'}</strong><p>{message.content}</p></div>)}
-        <button disabled={busy} className="text-xs underline" onClick={async () => { try { await ApiService.aiRequest('/reset', { visitor_token: visitor() }); setMessages([]); } catch (e: any) { setError(e.message); } }}>开始新咨询（不重置额度）</button>
+      {(open || workspace) && <div id="ai-conversation" className={workspace ? "ai-conversation" : "max-h-80 overflow-y-auto space-y-3 mb-3"} role="log" aria-label={tr("咨询记录")}>
+        {!messages.length && <p className="ai-chat-welcome">{tr("想做点什么？可以直接发清单或图片，我们一起确认规格和加工。")}</p>}
+        {messages.map((message, i) => <div key={i} className={`ai-chat-message ai-chat-message-${message.role} rounded-xl p-3 text-sm whitespace-pre-wrap ${message.role === 'user' ? 'bg-blue-50 ml-8' : 'bg-slate-50 mr-8'}`}><strong>{message.role === 'user' ? tr("你") : tr("AI 顾问")}</strong>{message.image&&<img className="ai-message-image" src={message.image} alt={tr("本条需求附图")}/>}{!!message.attachments?.length&&<div className="ai-attachments">{message.attachments.map((a,n)=>a.kind==='image'?<a key={n} href={a.data} download={a.name}><img className="ai-message-image" src={a.data} alt={a.name}/></a>:<a key={n} className="ai-attachment-chip" href={a.data} download={a.name}><FileText size={20}/><span>{a.name}</span></a>)}</div>}<AIResponseReveal text={[message.quote?message.content.split('\n')[0]:message.content, ...(message.review?.blocking_questions || []).slice(0,2)].filter(Boolean).join('\n\n')} animate={message.role==='assistant' && !!message.request_id && freshReplies.current.has(message.request_id)}>{message.quote&&message.request_id&&<AIQuoteCard quote={message.quote} canContinue={i===messages.length-1&&!busy&&(!message.review||!message.review.order_review)} requestId={message.request_id} visitorToken={visitor()} onReview={()=>{if(!busy) void submit('价格可以，请帮我确认打孔、攻丝和配件等下单配置。',null);}}/>}{message.quote?.items?.some((r:any)=>r.spec.product&&r.spec.product!=='profile')&&message.request_id&&<AIOrderConfirmation message={message} active={i===messages.length-1&&!busy} user={user} cart={cart} onAdd={onAddToCart} visitorToken={visitor()} onEdited={result=>setMessages(previous=>previous.map((m,n)=>n===i?{...m,content:result.reply,...result}:m))}/>}{message.review&&message.request_id&&<AIManufacturingReview review={message.review} active={i===messages.length-1&&!busy} requestId={message.request_id} visitorToken={visitor()} onReply={text=>{if(!busy) void submit(text,null);}} user={user} onEdited={result=>setMessages(previous=>previous.map((m,n)=>n===i?{...m,content:result.reply,quote:result.quote,review:result.review}:m))} cart={cart} onAdd={onAddToCart}/>}</AIResponseReveal></div>)}
+        {busy&&<p className="ai-chat-thinking" role="status">{tr("正在整理你的需求…")}</p>}
+        <div ref={endRef}/>
+        {!workspace&&<button disabled={busy} className="text-xs underline" onClick={newChat}>{tr("开始新咨询（不重置额度）")}</button>}
       </div>}
+      {status?.needs_confirmation && <button type="button" disabled={busy || reading || !!attachment.length} className="ai-image-confirm" onClick={() => { setInput(tr("确认以上识别信息")); inputRef.current?.focus(); }}>{tr("确认识别信息（填入后发送）")}</button>}
       <form onSubmit={send} className="ai-entry-form">
-        <label htmlFor="ai-design-request" className="sr-only">描述你的设计或型材需求</label>
-        <textarea id="ai-design-request" ref={inputRef} enterKeyHint="send" maxLength={2000} rows={2} value={input} onChange={e => setInput(e.target.value)} onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) { e.preventDefault(); e.currentTarget.form?.requestSubmit(); } }} placeholder="想做点什么？例如：2020 粉色型材，1000mm，两端攻丝…" />
+        <input ref={fileRef} type="file" multiple accept="image/jpeg,image/png,image/webp" hidden onChange={e => { void chooseFiles(e.target.files); e.target.value = ''; }} />
+        <input ref={documentRef} type="file" multiple accept=".pdf,.docx,.xlsx,.csv,.txt" hidden onChange={e => { void chooseFiles(e.target.files); e.target.value = ''; }} />
+        {!!attachment.length && <div className="ai-attachments">{attachment.map((a,i)=><div key={i} className="ai-attachment-chip">{a.kind==='image'?<img src={a.data} alt={a.name}/>:<FileText size={24}/>}<span title={a.name}>{a.name}</span><button type="button" disabled={busy||reading} aria-label={label('移除 ','Remove ','削除 ')+a.name} onClick={()=>{setAttachment(previous=>previous.filter((_,n)=>n!==i));setPending(null);}}><X size={16}/></button></div>)}</div>}
+        <label htmlFor="ai-design-request" className="sr-only">{tr("描述你的设计或型材需求")}</label>
+        <textarea id="ai-design-request" ref={inputRef} enterKeyHint="send" maxLength={2000} rows={2} value={input} onChange={e => setInput(e.target.value)} onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) { e.preventDefault(); e.currentTarget.form?.requestSubmit(); } }} placeholder={tr("想做点什么？例如：2020 粉色型材，1000mm，两端攻丝…")} />
         <div className="ai-entry-form-footer">
-          <span><Sparkles size={14} /> 从一句话开始</span>
-          <button aria-label={busy ? '正在处理' : '发送需求'} disabled={busy || !status?.enabled || (!status?.configured && !status?.local_answers_available) || !input.trim()} className="ai-entry-send">{busy ? <span className="ai-entry-loading">···</span> : <><span>开始咨询</span><ArrowUp size={19} /></>}</button>
+          <div className="ai-upload-control" onBlur={e=>{if(!e.currentTarget.contains(e.relatedTarget as Node))setUploadMenu(false);}} onKeyDown={e=>{if(e.key==='Escape')setUploadMenu(false);}}>
+            <button type="button" className="ai-upload-plus" disabled={busy||reading} aria-label={label('添加图片或文件','Add images or files','画像・ファイルを追加')} aria-expanded={uploadMenu} aria-haspopup="menu" onClick={()=>setUploadMenu(!uploadMenu)}><Plus size={23}/></button>
+            {uploadMenu&&<div className="ai-upload-menu" role="menu"><button type="button" role="menuitem" disabled={!status?.vision_enabled} onClick={()=>fileRef.current?.click()}><ImagePlus size={18}/>{label('图片','Images','画像')}</button><button type="button" role="menuitem" onClick={()=>documentRef.current?.click()}><FileText size={18}/>{label('文件','Files','ファイル')}</button><small>PDF · DOCX · XLSX · CSV · TXT</small><small>{label("最多8个附件，合计20MB", "Up to 8 attachments, 20MB total", "添付8件・合計20MBまで")}</small></div>}
+            {reading&&<span role="status">{label('读取附件…','Reading…','読み込み中…')}</span>}
+          </div>
+          <button aria-label={busy ? tr("正在处理") : tr("发送需求")} disabled={busy || reading || !status?.enabled || (!status?.configured && !status?.local_answers_available) || (!input.trim() && !attachment.length)} className="ai-entry-send">{busy ? <span className="ai-entry-loading">···</span> : <><span>{tr("开始咨询")}</span><ArrowUp size={19} /></>}</button>
         </div>
       </form>
       {home && !messages.length && <div className="ai-entry-suggestions" aria-label="试试这些问题">
         {['报价需要提供什么信息', '两端攻丝是什么意思', '能做和图片一样的吗'].map(example => <button key={example} onClick={() => { setInput(example); inputRef.current?.focus(); }}><Plus size={13} />{example}</button>)}
       </div>}
       <div className="ai-entry-notices">
-      <p className="text-xs text-slate-500 mb-3">游客及普通用户免费发送 3 条消息，回复追问也计入次数。VIP/VIP+ 使用账户额度。</p>
-      {status && (!status.enabled || (!status.configured && !status.local_answers_available)) && <p className="text-sm text-amber-800 mb-3">AI 咨询暂未开通，您可以先使用<Link to="/quick-quote" className="underline">快速报价</Link>。</p>}
-      {status?.enabled && !status.configured && status.local_answers_available && <p className="text-sm text-slate-600 mb-3">目前可回答已收录的常见问题；智能规格识别暂未开通，估价请使用<Link to="/quick-quote" className="underline">快速报价</Link>。</p>}
+      <p className="text-xs text-slate-500 mb-3">{status?.local_unlimited ? tr("本地测试不限额度 · AI 识别结果请核对") : tr("游客及普通用户免费发送 3 条消息，回复追问也计入次数。VIP/VIP+ 使用账户额度。")}</p>
+      {status && (!status.enabled || (!status.configured && !status.local_answers_available)) && <p className="text-sm text-amber-800 mb-3">AI 咨询暂未开通，您可以先使用<Link to="/quick-quote" className="underline">{tr("快速报价")}</Link>。</p>}
+      {status?.enabled && !status.configured && status.local_answers_available && <p className="text-sm text-slate-600 mb-3">目前可回答已收录的常见问题；智能规格识别暂未开通，估价请使用<Link to="/quick-quote" className="underline">{tr("快速报价")}</Link>。</p>}
       </div>
       {error && <p className="text-sm text-red-700 mt-3" role="alert">{error}</p>}
       {recharge && <div className="mt-4 border-t pt-4 text-sm space-y-3">
-        <p className="font-bold">AI 额度充值 · 充多少到账多少</p>
-        {!user ? <p>请先<Link to="/login" className="text-blue-700 underline">登录</Link>，方便将充值额度记入您的账号。</p> : <>
-          <div className="flex gap-2 items-center"><select aria-label="充值金额" value={amount} onChange={e => setAmount(Number(e.target.value))} className="border rounded-lg p-2">{[10, 30, 100].map(n => <option key={n} value={n}>¥{n}</option>)}</select><button disabled={paying} onClick={pay} className="rounded-lg bg-blue-600 text-white p-2">{paying ? '正在创建付款…' : '支付宝充值'}</button></div>
-          <p>支付宝确认支付成功后自动到账。微信扫码付款由管理员核实后手动增加额度。</p>
-          {status?.wechat_qr && <img src={status.wechat_qr} alt="微信收款码" className="w-44 h-44 object-contain border" />}
-          <p>微信付款后请提供账号手机号、付款金额及交易凭证。{status?.wechat_contact ? `联系：${status.wechat_contact}` : '请联系网站客服核实到账。'}</p>
+        <p className="font-bold">{tr("AI 额度充值 · 充多少到账多少")}</p>
+        {!user ? <p>{tr("请先")}<Link to="/login" className="text-blue-700 underline">{tr("登录")}</Link>{tr("，方便将充值额度记入您的账号。")}</p> : <>
+          <div className="flex gap-2 items-center"><select aria-label={tr("充值金额")} value={amount} onChange={e => setAmount(Number(e.target.value))} className="border rounded-lg p-2">{[10, 30, 100].map(n => <option key={n} value={n}>¥{n}</option>)}</select><button disabled={paying} onClick={pay} className="rounded-lg bg-blue-600 text-white p-2">{paying ? tr("正在创建付款…") : tr("支付宝充值")}</button></div>
+          <p>{tr("支付宝确认支付成功后自动到账。微信扫码付款由管理员核实后手动增加额度。")}</p>
+          {status?.wechat_qr && <img src={status.wechat_qr} alt={tr("微信收款码")} className="w-44 h-44 object-contain border" />}
+          <p>{tr("微信付款后请提供账号手机号、付款金额及交易凭证。")}{status?.wechat_contact ? `联系：${status.wechat_contact}` : tr("请联系网站客服核实到账。")}</p>
         </>}
       </div>}
-      {entries && <div className="mt-4 border-t pt-3 text-xs"><button onClick={() => setEntries(null)} className="underline">关闭收支记录</button>{!entries.length && <p>暂无记录。</p>}{entries.map((entry, i) => <p key={i} className="mt-2">{new Date(entry.created_at).toLocaleString()} · {({ grant: '赠送', usage: '使用', trial: '试用', faq: '常见问答（免费）', manual: '人工调整', recharge: '充值' } as Record<string, string>)[entry.kind] || entry.kind} · {entry.amount_cny >= 0 ? '+' : ''}¥{money(entry.amount_cny)}</p>)}</div>}
+      {entries && <div className="mt-4 border-t pt-3 text-xs"><button onClick={() => setEntries(null)} className="underline">{tr("关闭收支记录")}</button>{!entries.length && <p>{tr("暂无记录。")}</p>}{entries.map((entry, i) => <p key={i} className="mt-2">{new Date(entry.created_at).toLocaleString()} · {({ grant: tr("赠送"), usage: tr("使用"), trial: tr("试用"), faq: tr("常见问答（免费）"), manual: tr("人工调整"), recharge: tr("充值") } as Record<string, string>)[entry.kind] || entry.kind} · {entry.amount_cny >= 0 ? '+' : ''}¥{money(entry.amount_cny)}</p>)}</div>}
     </div>
-    {home && <div className="ai-entry-shortcuts"><span>也可以直接</span><Link to="/quick-quote">快速报价 <ArrowUpRight size={14} /></Link><Link to="/diy-designer">打开 3D 设计器 <ArrowUpRight size={14} /></Link><button onClick={() => document.getElementById('profile-products')?.scrollIntoView({ behavior: 'smooth', block: 'start' })}>浏览商品 <ArrowUpRight size={14} /></button></div>}
-  </section>;
+    {home && <div className="ai-entry-shortcuts"><span>也可以直接</span><Link to="/quick-quote">{tr("快速报价")}<ArrowUpRight size={14} /></Link><Link to="/diy-designer">打开 3D 设计器 <ArrowUpRight size={14} /></Link><button onClick={() => document.getElementById('profile-products')?.scrollIntoView({ behavior: 'smooth', block: 'start' })}>浏览商品 <ArrowUpRight size={14} /></button></div>}
+  </section></AILanguageContext.Provider>;
 }

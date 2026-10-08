@@ -83,7 +83,7 @@ class DeepSeekTest(unittest.TestCase):
         self.status();db.session.get(AIAccount,'u:vip').balance=1000000;db.session.commit()
         self.assertEqual(self.chat().status_code,409)
         upstream.assert_not_called()
-        self.assertEqual(str(maximum_cost()),'0.0704')
+        self.assertEqual(str(maximum_cost()),'0.096768')
 
     @patch.dict('os.environ', {'AI_PROVIDER':'deepseek','DEEPSEEK_API_KEY':'fake'})
     @patch('app.routes.ai_chat.urllib.request.urlopen', side_effect=TimeoutError())

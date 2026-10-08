@@ -4991,6 +4991,7 @@ const createProfileObject = (
   machiningEmphasis = 0.72,
   interfering = false,
   linkedScrewHoleIds: ReadonlySet<string> = new Set(),
+  tappingPorts?: {left:boolean[];right:boolean[]},
 ) => {
   const group = new THREE.Group();
   const [sectionWidth, sectionHeight] = profileSize(item.variantId);
@@ -5157,7 +5158,8 @@ const createProfileObject = (
   const addTappingMarkers = (end: 'left' | 'right') => {
     const endX = end === 'left' ? -length / 2 - 0.018 : length / 2 + 0.018;
     const normalRotation = end === 'left' ? -Math.PI / 2 : Math.PI / 2;
-    tapXCenters.forEach((sectionX) => tapYCenters.forEach((sectionY) => {
+    tapXCenters.forEach((sectionX, xIndex) => tapYCenters.forEach((sectionY, yIndex) => {
+      if (tappingPorts && !tappingPorts[end][xIndex * tapYCenters.length + yIndex]) return;
       const marker = new THREE.Group();
       const centerRadius = Math.min(cellSize * 0.065, 0.016);
       const outerRadius = Math.min(cellSize * 0.145, 0.032);
@@ -13767,3 +13769,10 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({
 };
 
 export default DIYDesigner;
+
+// Read-only chat preview uses the exact designer profile/machining renderer.
+export const createChatProfilePreview = (config: import('../types').ProfileConfig, transparentProfile = false) => createProfileObject({
+  id:'ai-profile-preview',kind:'profile',name:config.variantId||'2020',position:[0,0,0],rotation:[0,0,0],
+  colorId:config.colorId||'natural',quantity:1,variantId:config.variantId,length:config.length,
+  holes:config.holes,tappingLeft:config.tapping.left.some(Boolean),tappingRight:config.tapping.right.some(Boolean),finish:config.finish,
+}, false, transparentProfile, true, 1, false, new Set(), config.tapping);

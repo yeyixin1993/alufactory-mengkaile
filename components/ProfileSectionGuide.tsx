@@ -1,4 +1,5 @@
-import React from 'react';
+import React, {useState, useId, useRef, useEffect} from 'react';
+import { CircleAlert } from 'lucide-react';
 import { Language } from '../types';
 
 const COPY: Record<Language, { title: string; natural: string; colored: string; palette: string }> = {
@@ -22,10 +23,14 @@ const COPY: Record<Language, { title: string; natural: string; colored: string; 
   },
 };
 
-const ProfileSectionGuide: React.FC<{ language: Language; showPalette?: boolean }> = ({ language, showPalette = true }) => {
+const ProfileSectionGuide: React.FC<{ language: Language; showPalette?: boolean; compact?: boolean }> = ({ language, showPalette = true, compact=false }) => {
   const copy = COPY[language];
 
-  return (
+  const [hover,setHover]=useState(false),[pinned,setPinned]=useState(false);
+  const id=useId();const root=useRef<HTMLDivElement>(null);
+  useEffect(()=>{if(!pinned)return;const close=(e:PointerEvent)=>{if(!root.current?.contains(e.target as Node))setPinned(false);};document.addEventListener('pointerdown',close);return()=>document.removeEventListener('pointerdown',close);},[pinned]);
+  const content=(
+
     <aside className="space-y-3 rounded-xl border border-amber-200 bg-amber-50/70 p-3">
       <div className="flex items-center gap-3">
         <img
@@ -56,6 +61,11 @@ const ProfileSectionGuide: React.FC<{ language: Language; showPalette?: boolean 
       )}
     </aside>
   );
+  if(!compact)return content;
+  return <div ref={root} className="relative inline-flex" onMouseEnter={()=>setHover(true)} onMouseLeave={()=>setHover(false)} onKeyDown={e=>{if(e.key==='Escape'){setPinned(false);setHover(false);}}}>
+    <button type="button" aria-label={copy.title} aria-expanded={hover||pinned} aria-controls={id} onClick={()=>{setPinned(v=>!v);setHover(false);}} className="rounded-full p-1 text-slate-400 hover:text-blue-600 focus-visible:outline-blue-500"><CircleAlert size={16}/></button>
+    {(hover||pinned)&&<div id={id} role="region" aria-label={copy.title} className="absolute right-0 top-full z-50 w-[min(320px,80vw)] max-h-[60vh] overflow-y-auto rounded-xl bg-white shadow-xl normal-case tracking-normal">{content}</div>}
+  </div>;
 };
 
 export default ProfileSectionGuide;

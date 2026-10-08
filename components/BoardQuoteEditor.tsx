@@ -18,9 +18,11 @@ interface BoardQuoteEditorProps {
   returnCartPath?: string;
   onAddToCart: (item: CartItem) => void;
   onUpdateItem: (item: CartItem) => void;
+  onSaveConfiguration?: (item: CartItem) => void;
+  saving?: boolean;
 }
 
-import { PEGBOARD_PRICE_PER_SQM, ALUMINUM_PLATE_PRICE_PER_SQM, VIP_PLUS_PEGBOARD_PRICE_PER_SQM, VIP_PLUS_ALUMINUM_PLATE_PRICE_PER_SQM, MARINE_BOARD_SPEC_PRICE_PER_SQM, MARINE_BOARD_COLORED_SURCHARGE_PER_SQM, MIN_BOARD_CHARGE_AREA_SQM, MAX_BOARD_WIDTH_MM, MAX_BOARD_HEIGHT_MM, MARINE_BOARD_MAX_WIDTH_MM, MARINE_BOARD_MAX_HEIGHT_MM, MAX_DOOR_HEIGHT_MM, MAX_DOOR_WIDTH_MM, DOOR_HINGE_UNIT_PRICE } from '../data/boardPricing';
+import { ENABLED_METAL_BOARD_THICKNESSES, PEGBOARD_PRICE_PER_SQM, ALUMINUM_PLATE_PRICE_PER_SQM, VIP_PLUS_PEGBOARD_PRICE_PER_SQM, VIP_PLUS_ALUMINUM_PLATE_PRICE_PER_SQM, MARINE_BOARD_SPEC_PRICE_PER_SQM, MARINE_BOARD_COLORED_SURCHARGE_PER_SQM, MIN_BOARD_CHARGE_AREA_SQM, MAX_BOARD_WIDTH_MM, MAX_BOARD_HEIGHT_MM, MARINE_BOARD_MAX_WIDTH_MM, MARINE_BOARD_MAX_HEIGHT_MM, MAX_DOOR_HEIGHT_MM, MAX_DOOR_WIDTH_MM, DOOR_HINGE_UNIT_PRICE } from '../data/boardPricing';
 
 const getCurrency = (lang: Language) => (lang === 'cn' ? '￥' : '$');
 
@@ -124,7 +126,7 @@ const getDoorHingePositions = (heightMm: number): number[] => {
   return [100, (h - 200) * 0.25 + 100, h / 2, (h - 200) * 0.75 + 100, h - 100];
 };
 
-const BoardQuoteEditor: React.FC<BoardQuoteEditorProps> = ({ language, product, user, initialItem, returnCartPath = '/cart', onAddToCart, onUpdateItem }) => {
+const BoardQuoteEditor: React.FC<BoardQuoteEditorProps> = ({ language, product, user, initialItem, returnCartPath = '/cart', onAddToCart, onUpdateItem, onSaveConfiguration, saving=false }) => {
   const t = TRANSLATIONS[language];
   const ui = UI_TEXT[language];
   const navigate = useNavigate();
@@ -172,7 +174,7 @@ const BoardQuoteEditor: React.FC<BoardQuoteEditorProps> = ({ language, product, 
   const allThicknessOptions = isMarineBoard ? [6, 9, 12, 15, 18] : [1, 2, 3, 4, 5];
   const allowedThicknessSet = new Set<number>(
     isPegboard || isAluminumPlate
-      ? (isVipPlus ? [1, 2, 3, 4, 5] : [2, 5])
+      ? ENABLED_METAL_BOARD_THICKNESSES
       : isMarineBoard
         ? [12, 18]
         : isDoor
@@ -345,6 +347,7 @@ const BoardQuoteEditor: React.FC<BoardQuoteEditorProps> = ({ language, product, 
       return;
     }
 
+    if (onSaveConfiguration) { onSaveConfiguration(buildItem()); return; }
     if (initialItem) {
       onUpdateItem(buildItem());
     } else {
@@ -666,10 +669,10 @@ const BoardQuoteEditor: React.FC<BoardQuoteEditorProps> = ({ language, product, 
 
       <button
         onClick={handleSubmit}
-        disabled={hasRangeError}
+        disabled={hasRangeError || saving || !allowedThicknessSet.has(effectiveThickness)}
         className="w-full bg-blue-600 text-white py-4 rounded-2xl font-black hover:bg-blue-500 transition-all"
       >
-        {initialItem ? (language === 'cn' ? '更新并返回购物车' : language === 'jp' ? '更新してカートへ戻る' : 'Update & Back to Cart') : (language === 'cn' ? '加入购物车并去支付' : language === 'jp' ? 'カートに追加して支払いへ' : 'Add to Cart and Pay')}
+        {saving ? (language==='cn'?'保存中…':language==='en'?'Saving…':'保存中…') : onSaveConfiguration ? (language==='cn'?'保存并确认此项配置':language==='en'?'Save and confirm this item':'保存してこの項目を確認') : initialItem ? (language === 'cn' ? '更新并返回购物车' : language === 'jp' ? '更新してカートへ戻る' : 'Update & Back to Cart') : (language === 'cn' ? '加入购物车并去支付' : language === 'jp' ? 'カートに追加して支払いへ' : 'Add to Cart and Pay')}
       </button>
     </div>
   );

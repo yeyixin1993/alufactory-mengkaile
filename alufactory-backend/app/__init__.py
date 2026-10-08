@@ -20,13 +20,13 @@ from app.profile_inventory import seed_profile_inventory
 from app.accessory_inventory import seed_accessory_inventory
 import os
 
-def create_app(config_name='development'):
+def create_app(config_name='development', instance_path=None):
     """Application factory"""
     # Get the base directory of the app
     base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     admin_dir = os.path.join(base_dir, 'admin')
     
-    app = Flask(__name__, static_folder=admin_dir, static_url_path='/admin')
+    app = Flask(__name__, static_folder=admin_dir, static_url_path='/admin', instance_path=instance_path)
     
     # Load configuration
     app.config.from_object(config[config_name])

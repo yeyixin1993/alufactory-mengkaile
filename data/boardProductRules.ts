@@ -10,13 +10,13 @@ export const BOARD_PRODUCT_RULES = {
     maxWidthMm: 2400,
     maxHeightMm: 1200,
     publicThicknessesMm: [2, 5] as const,
-    extendedThicknessesMm: [1, 2, 3, 4, 5] as const,
+    extendedThicknessesMm: [2, 5] as const,
   },
   pegboard: {
     maxShortSideMm: 1200,
     maxLongSideMm: 2400,
     publicThicknessesMm: [2, 5] as const,
-    extendedThicknessesMm: [1, 2, 3, 4, 5] as const,
+    extendedThicknessesMm: [2, 5] as const,
     holePatternId: 'ikea' as const,
     holePatternNames: {
       cn: '宜家孔（竖向长圆孔）',

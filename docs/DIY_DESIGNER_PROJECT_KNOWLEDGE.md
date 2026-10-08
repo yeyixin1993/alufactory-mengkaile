@@ -620,3 +620,65 @@ Before releasing a designer change, verify at minimum:
 ### 组装服务确认（2026-10-04）
 
 店主确认：不含组装服务。对应问答已启用，35 条初始问答现全部启用，替代此前组装服务待确认状态。不将此政策扩大为不销售成品或不提供其他安装服务。
+
+- **2026-10-04 — AI color changes:** When a consultation changes profile color, do not inherit the former color’s automatically chosen end-section finish. Unless the new message explicitly specifies a finish, clear it and ask if the new color supports multiple choices; a sole supported choice remains automatic.
+
+### AI image consultation (2026-10-04)
+DeepSeek Flash accepts one JPG/PNG/WebP attachment per message (4MB limit). Server validates and normalizes images, strips metadata and sends them inline without retaining originals. Image-derived specifications remain an unconfirmed draft, including after text corrections. Customer explicitly confirms the displayed extraction before the deterministic single-profile quote runs. Missing fields still require clarification; complex assemblies require human review. This does not generate designer scenes or authorize production. Image tokens use the same provider usage accounting and markup; confirmation itself makes no provider call.
+
+### Multi-line AI quote correction (2026-10-04)
+Ordinary lists of profile lengths, quantities and colors are supported quotation input, not complex assemblies. Extract all rows; 原色/本色 maps to natural, 紫色 to purple, 米白 to beige. Customer-visible catalog IDs are never required. For multi-row requests without machining details, provide a provisional no-tapping/no-drilling estimate and explicitly state that assumption instead of blocking the entire quotation. Combine shipping once over the complete order weight and any overlength member, using the existing QuickQuote rules. Image drafts show an estimate immediately but remain marked for confirmation; confirmation may include the customer's request for the combined total. Reference example: 19 rows, 114 pieces, 55.31m; VIP material 893.3 + Tianjin Aneng freight 59.7 = 953.0 RMB, with per-piece rounding matching QuickQuote.
+
+### AI chat workspace and quote-to-order flow (2026-10-04)
+Homepage send opens a separate browser tab at /ai-chat, carrying text and attachment via short-lived IndexedDB handoff. Preserve the pale blue/white storefront language; dedicated chat has navigation, scrolling conversation and persistent composer, with collapsed mobile navigation. AI quote output reuses QuickQuote's profile detail component and profile calculation helper, showing grouped lengths, machining counts, line details and estimated shipping, without unit prices. PDF is a quick estimate, not a production sheet.
+Accepting an estimate starts a conversation to fill missing machining and accessories. Do not send users away to configure from scratch. AI fills an embedded Product/p2 ProfileVisualizer for ABCD confirmation. Multiple-face or explicitly spatial confirmation uses the actual DIY designer profile renderer in a rotatable embedded view, not a guessed replacement geometry. Each line must be confirmed before cart transfer; count-only holes cannot enter cart until faces, positions, types and grooves are known. Accessory selection can be deferred or purchased elsewhere with explicit customer choice; this does not block the profile-only order. Miter cuts pass to cart once their ends, AC/BD planes and up/down directions are confirmed. Final address, shipping, optional services and payment remain in the existing cart. This version does not yet resolve arbitrary accessory SKUs or assembly designs automatically.
+
+### Dual machining confirmation (2026-10-05)
+Every completed AI manufacturing configuration shows both the embedded P2 ABCD view and rotatable designer-rendered 3D view, not only when the model suggests 3D. AI quote details reuse QuickQuoteProfileDetails: both-end tapping is shown as 2 per piece plus the quantity-weighted order total (114 pieces means 228 tapped ends). Do not rely on price changes alone to communicate machining changes.
+
+### AI 图片清单澄清（2026-10-05）
+图片清单保留原编号和备注；同一行不同加工的两根拆开记录。模糊封槽文字、颜色、多孔端面攻丝要具体提问，不跳转编辑器、不用泛泛确认代替客户选择。影响估价的问题不阻止展示已知部分的暂估，未计价项和未包含加工必须明确列出；仅孔位方向等问题保留到下单确认。多孔攻丝数组贯穿估价、快速报价详情、二维/三维确认及购物车。
+
+### 渐进报价与型材优先下单（2026-10-05）
+缺省份先报材料与已知加工，运费显示待定，不能显示为免费；地址配送在购物车计算。任一行缺项不阻止其他行报价，保留原行号并明确未计价内容，未处理行不得悄悄从订单消失。模型 unsupported 不应阻断整个对话；目录外部分继续澄清、已知目录型材可暂估。
+加工未完整时即展示已知二维/三维配置，明确未定位孔和未确认斜切尚未画出，不能声称未画出即不加工。完整生产配置和图片识别确认后才可加入购物车，支持整单核对确认。
+配件允许客户明确选择不配、自行购买或稍后另配，型材先下单；未选择时给出快捷对话选项，不擅自丢弃客户的配件要求。不承诺自动匹配任意配件 SKU。
+斜切复用 P2 miterCut（左右端、enabled、AC/BD、up/down），贯穿计价、二维图和购物车。现有 DIY 三维渲染器没有斜切实体裁剪；聊天在同一三维型材上叠加橙色切割平面示意并明确说明，以二维图和字段核对为准，不假称已显示切除后的成品。
+
+### AI 全屏对话与确认交互（2026-10-05）
+聊天页采用全屏白色主区、浅灰侧栏、居中消息列和底部输入框，手机侧栏收起；只保留一个消息滚动区。3D 框内默认可直接拖动旋转和滚轮缩放，框外正常滚动聊天，不再需要进入或退出查看模式。显示拖动、滚轮及手机双指操作说明，并提供恢复初始角度和大小的重置视角按钮。移除聊天快速报价 PDF 及重复的加工草稿说明，直接展示二维和三维图、必要的简短追问。
+最终单项/整单勾选可用于确认已展示的配置，不再被模型的 machining_confirmed 标记反向锁死。服务器仍校验最新清单、实际孔位、端面、斜切及未处理项目；勾选不填补未知生产信息。本次仅加入型材的范围在按钮附近明确展示，配件另购/后配可继续。
+模型上下文传递最新完整结构化清单和近期用户消息，去除重复旧清单，避免正常多轮对话要求重新开咨询；不截断清单行、孔位或待确认信息。
+
+### AI 报价到购物车金额边界（2026-10-05）
+AI 仅传递客户确认的型材及加工，不因孔位自动添加螺丝或标签；这些服务由客户在购物车选择，明确提出的配件需求继续澄清。购物车非空时先显示原有商品与本次报价金额，提供追加、替换、取消；不能静默追加造成报价与购物车小计混淆，也不能未经选择删除原有商品。替换仅保留本次清单；追加保留原有商品（包括之前设计器的配件）。运费在购物车根据最终地址计算，与 AI 按省份预估分开。
+
+2026-10-06：AI 加入非空购物车时复用设计器的居中遮罩弹窗格式：购物车图标、蓝色追加、红色覆盖、整行取消，保留原有和本次金额。弹窗不占聊天流，支持手机纵向按钮、Esc 取消和键盘焦点约束。
+
+2026-10-06：聊天型材三维预览提供「不透视 / 透视」两种显示方式，默认不透视，复用设计器透明型材渲染；切换仅更新模型，不重置旋转角度、缩放或加工配置。
+
+2026-10-06：AI 最新清单的二维图上方提供「编辑加工」弹窗，直接复用 P2 ProfileEditor，可增删改孔位、攻丝及斜切并保存。本项数量大于一时整项同步修改。服务器按账号当前售价重新计算，不采用客户端价格；更新持久化清单与后续对话上下文，刷新后保留，保存后重新核对配置才可进购物车。历史清单不允许编辑。
+
+2026-10-07：移除聊天三维预览的旋转/缩放与完成查看按钮。OrbitControls 仅绑定模型画布，默认启用；画布内操作模型，画布外滚动聊天。保留重置视角、默认不透视和透视切换，提示手机单指旋转、双指缩放。
+
+2026-10-07：AI 侧栏入口改为价格画册，在新标签打开。P2 及聊天复用编辑器将截面本色/彩色说明与色板收进断面字段旁的感叹号，悬停或点击展开；长度优先显示，型材和颜色实物图默认折叠，保留原图可随时展开核对。
+
+2026-10-07：AI 聊天界面提供中文、English、日本語切换，与网站 Language 状态共用并在本地保存偏好；侧栏、额度、输入栏、报价详情、三维控制和加工确认同步切换。P2 编辑器沿用现有三语文案，历史用户消息及 AI 原始回复保留原文，不冒充已翻译对话。
+
+### AI QuickQuote category coverage (2026-10-07)
+
+AI quoting must support every QuickQuote category: profiles, aluminum plates, pegboards, marine boards, picture frames, and catalog accessories. Cabinet doors use the BoardQuoteEditor door section, not picture-frame pricing: 2mm plate tariff, minimum 0.2㎡ per door, and height-based 2/3/4/5 hinges at the shared hinge rate. Reuse data/boardPricing.ts and exported accessory rows; do not accept model-supplied prices. Missing material dimensions/thickness/quantity produce targeted questions and preserve multi-turn/mixed-list state. Marine boards additionally require surface spec and color. Aluminum plate/pegboard/picture-frame shipping is included (owner clarification); cabinet doors also have zero shipping weight in the current storefront cart. Marine boards and profiles retain existing shipping weights/tariffs. Color of aluminum plate/pegboard/door does not block the initial estimate.
+
+Non-profile quotes show dimensions, quantity, actual area, minimum area and hinges where relevant. P2 manufacturing review remains profile-only: never render a board as a profile or silently add a partial mixed list to cart. This change enables material estimates and clarification; non-profile manufacturing/cart configuration must use its own product section before ordering.
+
+### AI material order configuration (2026-10-08)
+
+The owner requested in-chat configuration and cart handoff for marine boards, pegboards, aluminum plates, aluminum-frame doors and picture frames. Reuse BoardQuoteEditor inside a dialog, saving back into the quote instead of navigating on each save. Each row must be explicitly saved/confirmed, followed by final cart confirmation; nonempty carts offer append or replace. Preserve request ownership, latest-response and revision checks. Reprice on the server and carry canonical dimensions, color, board surface, door opening/hinge/handle configuration into the existing cart. No unsolicited screws or label service. Mixed profile/material lists must not silently drop rows.
+
+Picture frames did not have a storefront configuration editor; add a shared FrameQuoteEditor and reuse it for p4 and AI. QuickQuote inputs are cm (its detail label incorrectly said mm); the shared frame pricing accepts mm, divides width+height by 10. AI's earlier direct addition of mm values was incorrect and must be corrected.
+
+Aluminum plates and pegboards now offer ONLY 2mm and 5mm to every membership level, including VIP+. Keep 1/3/4mm visible but disabled in product configuration and QuickQuote. AI/server validation must reject these thicknesses with a 2/5mm clarification, never substitute automatically. Designer board constraint catalogs share this temporary availability. Marine-board 12/18mm and fixed 2mm door panels remain unchanged.
+
+### Persistent AI conversations (2026-10-08)
+
+Save separate conversations in the server database, with request membership and uploaded image data. New chat archives the previous model context instead of deleting it; switching restores that conversation's complete transcript, latest quote/configuration and bounded model context. History is scoped to the authenticated account or signed browser visitor identity. Conversation switching and new-chat creation share the account busy lock; stale-tab sends must reject a mismatched conversation ID. Keep quota and balances account-wide. Preserve legacy request records as one recovered conversation where original session boundaries are unavailable.

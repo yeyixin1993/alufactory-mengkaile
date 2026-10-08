@@ -68,3 +68,20 @@ class AIFaqRule(db.Model):
     version = db.Column(db.Integer, nullable=False, default=1)
     updated_by = db.Column(db.String(100), nullable=False, default='seed')
     updated_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+
+
+class AIConversation(db.Model):
+    __tablename__ = 'ai_conversations'
+    id = db.Column(db.String(36), primary_key=True)
+    account_id = db.Column(db.String(100), nullable=False, index=True)
+    title = db.Column(db.String(100), nullable=False, default='新对话')
+    active = db.Column(db.Boolean, nullable=False, default=True)
+    context = db.Column(db.JSON, nullable=False, default=list)
+    created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+
+class AIConversationMessage(db.Model):
+    __tablename__ = 'ai_conversation_messages'
+    request_id = db.Column(db.String(100), primary_key=True)
+    conversation_id = db.Column(db.String(36), nullable=False, index=True)
+    image = db.Column(db.JSON, nullable=True)

@@ -36,8 +36,8 @@ def connection():
 
 
 def maximum_cost():
-    # Full 32K uncached input + 800 output at the highest applicable tariff.
-    return Decimal('0.0704') if provider_name() == 'deepseek' else Decimal('0.00704')
+    # Full 32K uncached input + 4096 output at the highest applicable tariff.
+    return Decimal('0.096768') if provider_name() == 'deepseek' else Decimal('0.0096768')
 
 
 def deepseek_period(timestamp):
@@ -54,7 +54,7 @@ def deepseek_cost(result, started, finished):
     cached = usage.get('prompt_cache_hit_tokens', (usage.get('prompt_tokens_details') or {}).get('cached_tokens'))
     miss = usage.get('prompt_cache_miss_tokens')
     if (type(incoming) is not int or not 0 <= incoming <= 32000 or
-            type(outgoing) is not int or not 0 <= outgoing <= 800 or
+            type(outgoing) is not int or not 0 <= outgoing <= 4096 or
             type(cached) is not int or not 0 <= cached <= incoming):
         raise RuntimeError('DeepSeek usage requires reconciliation')
     details = (usage.get('prompt_tokens_details') or {}).get('cached_tokens', cached)

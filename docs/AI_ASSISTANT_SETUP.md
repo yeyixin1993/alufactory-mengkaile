@@ -24,11 +24,11 @@ No live request has been made by this change. Use ordinary paid API service; pro
 
 ### DeepSeek tariff and safeguards
 
-Tariff snapshot: 2026-10-04. RMB per million tokens: peak uncached input 2, cached input 0.04, output 8; off-peak 1, 0.02, 4. The API uses JSON output with `thinking.type=disabled`, max 800 output tokens, and at most 32K reported input tokens. Text length is additionally bounded before sending.
+Tariff snapshot: 2026-10-04. RMB per million tokens: peak uncached input 2, cached input 0.04, output 8; off-peak 1, 0.02, 4. The API uses JSON output with `thinking.type=disabled`, max 4096 output tokens, and at most 32K reported input tokens. Text length is additionally bounded before sending.
 
 Peak periods are Beijing weekdays 09:00–12:00 and 14:00–18:00, excluding holidays; weekends are off-peak including make-up working weekends. The bundled 2026 calendar uses the published State Council holiday ranges. Verify the provider's interpretation of holiday/adjusted days against the account bill at live acceptance. Calendar years beyond 2026 require review; unknown year, contradictory usage, truncated response or a request within the 60-second price-boundary tolerance is marked for reconciliation without customer debit. Uncertain provider costs are absorbed by the merchant under the existing recovery policy.
 
-Before calling, balance must cover the maximum bounded request at peak tariff (¥0.0704 before markup, approximately ¥0.07744 at 10%). This is a sufficiency check, not the actual debit; completed valid responses are billed by usage. FAQ hits bypass that monetary check. No automatic cross-provider retry occurs, preventing duplicate provider spend.
+Before calling, balance must cover the maximum bounded request at peak tariff (¥0.096768 before markup, approximately ¥0.1064448 at 10%). This is a sufficiency check, not the actual debit; completed valid responses are billed by usage. FAQ hits bypass that monetary check. No automatic cross-provider retry occurs, preventing duplicate provider spend.
 
 Sources: [DeepSeek API schema](https://api-docs.deepseek.com/api/create-chat-completion/), [DeepSeek prices](https://api-docs.deepseek.com/zh-cn/quick_start/pricing/), [2026 holiday calendar](https://www.beijing.gov.cn/fuwu/bmfw/sy/jrts/202511/t20251104_4258838.html).
 
@@ -111,3 +111,11 @@ Tests: `cd alufactory-backend && .venv-local/bin/python -m unittest discover -s 
 ### 组装服务确认（2026-10-04）
 
 店主确认：不含组装服务。对应问答已启用，35 条初始问答现全部启用，替代此前组装服务待确认状态。不将此政策扩大为不销售成品或不提供其他安装服务。
+
+## Conversation history
+
+`ai_conversations` stores account-scoped chat titles and archived model context; `ai_conversation_messages` associates existing requests with conversations and preserves new image attachments. Startup `db.create_all()` creates these additive tables. Back up the database before production rollout. Existing requests are recovered into one conversation because older data has no session boundaries; old image hashes cannot reconstruct original attachments. New-chat and conversation switching preserve the account-wide balance and trial usage. Signed visitor tokens must be retained by the browser; registered accounts use their authenticated identity across devices. No extra model calls are used for chat titles.
+
+## Multiple attachments
+
+The chat composer supports up to 8 JPG/PNG/WebP or PDF/DOCX/XLSX/CSV/TXT attachments per message. Images are limited to 4MB each, documents 10MB each, total 20MB. PDFs are rendered by the pinned pypdfium2 dependency; combined PDF pages and image count is limited to 8. Extracted document text is limited to 12,000 characters, rejecting oversized content rather than silently truncating. Office files containing images/charts require PDF export or separate images. Original documents and sanitized images persist in the conversation message JSON. Install backend requirements on deployment and allow at least 30MB JSON request bodies in Nginx (base64 overhead); Flask's existing limit is 50MB. Attachment contents are untrusted requirement data, never executable instructions.

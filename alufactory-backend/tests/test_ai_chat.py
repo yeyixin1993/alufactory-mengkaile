@@ -96,7 +96,16 @@ class AIChatTest(unittest.TestCase):
         self.assertEqual(result['subtotal'],50)
         self.assertGreater(result['shipping_fee'],0)
         self.assertIsNone(quote_profile({**SPEC,'length':3001},'vip')[1])
-        self.assertIsNone(quote_profile({**SPEC,'unsupported':True},'vip')[1])
+        self.assertIsNotNone(quote_profile({**SPEC,'unsupported':True},'vip')[1])
+
+    @patch('app.routes.ai_chat.provider_extract')
+    def test_color_change_does_not_inherit_automatic_finish(self, provider):
+        provider.return_value=(json.dumps(SPEC),100000,{})
+        self.chat(index=1)
+        provider.return_value=(json.dumps({**SPEC,'color':'black'}),100000,{})
+        response=self.chat(index=2)
+        self.assertIsNone(response.json['quote'])
+        self.assertIn('本色还是彩色',response.json['reply'])
 
     def test_only_ask_finish_when_catalog_offers_a_choice(self):
         reply, result = quote_profile({**SPEC, 'section': None}, 'vip')
@@ -151,5 +160,22 @@ class AIChatTest(unittest.TestCase):
         self.assertEqual(self.status().json['balance_cny'],110)
         self.assertEqual(AILedger.query.filter_by(kind='recharge').count(),1)
         self.assertEqual(self.client.post(endpoint,data={**data,'trade_no':'different'}).text,'failure')
+
+
+
+    @patch('app.routes.ai_chat.provider_extract', return_value=(json.dumps(SPEC), 100000, {}))
+    def test_local_unlimited_preserves_production_limits(self, provider):
+        self.app.config['AI_LOCAL_UNLIMITED'] = True
+        self.status('standard')
+        account = db.session.get(AIAccount, 'u:standard')
+        account.trial_used = 3
+        db.session.commit()
+        self.assertTrue(self.status('standard').json['local_unlimited'])
+        self.assertEqual(self.chat('standard', 41).status_code, 200)
+        self.assertEqual(self.chat('standard', 42).json['charged_cny'], 0)
+        db.session.refresh(account)
+        self.assertEqual((account.balance, account.trial_used), (0, 3))
+        self.app.config['AI_LOCAL_UNLIMITED'] = False
+        self.assertEqual(self.chat('standard', 43).status_code, 409)
 
 if __name__ == '__main__':unittest.main()

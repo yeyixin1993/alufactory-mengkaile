@@ -1,3 +1,4 @@
+import { frameTypeName } from '../utils/framePricing';
 
 import React from 'react';
 import { CartItem, User, ProductType, ProfileConfig, Language, ProfileSide, Address } from '../types';
@@ -905,7 +906,7 @@ const FactorySheet: React.FC<FactorySheetProps> = ({ cart, user, language, order
                   <div className="bg-slate-50 p-4 rounded-xl border border-slate-100">
                     <h4 className="text-xs font-black text-slate-400 uppercase tracking-widest border-b border-slate-200 pb-2 mb-3">{t.specs}</h4>
                     <div className="grid grid-cols-2 md:grid-cols-3 gap-3 text-xs">
-                      <div><span className="text-slate-400">{language === 'cn' ? '厚度' : language === 'jp' ? '厚さ' : 'Thickness'}:</span> <span className="font-black">{cfg.thickness ?? '-'}mm</span></div>
+                      {item.product.type === ProductType.FRAME ? <div>{frameTypeName(cfg.frameType, language)}</div> : <div><span className="text-slate-400">{language === 'cn' ? '厚度' : language === 'jp' ? '厚さ' : 'Thickness'}:</span> <span className="font-black">{cfg.thickness ?? '-'}mm</span></div>}
                       <div><span className="text-slate-400">{language === 'cn' ? '宽' : language === 'jp' ? '幅' : 'Width'}:</span> <span className="font-black">{cfg.width ?? '-'}mm</span></div>
                       <div><span className="text-slate-400">{language === 'cn' ? '高' : language === 'jp' ? '高さ' : 'Height'}:</span> <span className="font-black">{cfg.height ?? '-'}mm</span></div>
                       <div><span className="text-slate-400">{language === 'cn' ? '颜色' : language === 'jp' ? '色' : 'Color'}:</span> <span className="font-black">{resolveBoardColorLabel(cfg, language, item.product.type)}</span></div>
@@ -923,7 +924,7 @@ const FactorySheet: React.FC<FactorySheetProps> = ({ cart, user, language, order
                         <div><span className="text-slate-400">{language === 'cn' ? '海洋板规格' : language === 'jp' ? '海洋板仕様' : 'Marine Spec'}:</span> <span className="font-black">{cfg.marineSpecName || (cfg.marineSpecId === 'marine_bbb_plain' ? (language === 'cn' ? 'BBB素板' : language === 'jp' ? 'BBB素板' : 'BBB plain board') : (language === 'cn' ? 'BBB两面UV清漆+覆膜' : language === 'jp' ? 'BBB両面UVクリア+フィルム' : 'BBB double-side UV varnish + film'))}</span></div>
                       )}
                       {showComponentPrice && <div><span className="text-slate-400">{language === 'cn' ? '单价' : language === 'jp' ? '単価' : 'Unit Price'}:</span> <span className="font-black">{currency}{Number(cfg.unitPrice || (item.totalPrice / Math.max(1, item.quantity))).toFixed(1)}</span></div>}
-                      <div><span className="text-slate-400">{language === 'cn' ? '面积' : language === 'jp' ? '面積' : 'Area'}:</span> <span className="font-black">{Number(cfg.areaSqm || 0).toFixed(3)}㎡</span></div>
+                      {item.product.type !== ProductType.FRAME && <div><span className="text-slate-400">{language === 'cn' ? '面积' : language === 'jp' ? '面積' : 'Area'}:</span> <span className="font-black">{Number(cfg.areaSqm || 0).toFixed(3)}㎡</span></div>}
                     </div>
                     {cfg.openingSide && (
                       <div className="mt-3 text-xs font-bold text-slate-700">
