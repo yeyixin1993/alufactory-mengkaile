@@ -2,6 +2,10 @@ import React,{createContext,useContext} from 'react';
 import {Language} from '../types';
 export const AILanguageContext=createContext<Language>('cn');
 const messages:Record<string,[string,string]>={
+  "萌开了 · AI 设计顾问": ["Mengkaile · AI Design Advisor", "Mengkaile · AI 設計アドバイザー"],
+  "你的想法，": ["Your ideas, ", "あなたのアイデアは、"],
+  "从这里开始。": ["start here.", "ここから。"],
+  "聊聊你想做什么。选型、加工、报价，一起把需求说清楚。": ["Tell us what you'd like to make. We'll help you choose materials, define machining details, and get a quote.", "作りたいものを教えてください。材料選びから加工・お見積もりまで、一緒にご要望を整理しましょう。"],
   "AI 设计顾问": [
     "AI Design Advisor",
     "AI 設計アドバイザー"

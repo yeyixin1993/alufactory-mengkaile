@@ -682,3 +682,5 @@ Aluminum plates and pegboards now offer ONLY 2mm and 5mm to every membership lev
 ### Persistent AI conversations (2026-10-08)
 
 Save separate conversations in the server database, with request membership and uploaded image data. New chat archives the previous model context instead of deleting it; switching restores that conversation's complete transcript, latest quote/configuration and bounded model context. History is scoped to the authenticated account or signed browser visitor identity. Conversation switching and new-chat creation share the account busy lock; stale-tab sends must reject a mismatched conversation ID. Keep quota and balances account-wide. Preserve legacy request records as one recovered conversation where original session boundaries are unavailable.
+
+2026-10-08：首页及非聊天页入口发送（回车或发送按钮）创建新会话后提交首条消息；聊天工作区继续当前会话。首页不显示上一会话的图片确认按钮。保留原对话历史及账户额度，不能通过新会话重置试用。

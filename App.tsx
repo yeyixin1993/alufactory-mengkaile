@@ -2280,7 +2280,7 @@ const ProductDetail: React.FC<{
 
 const App: React.FC = () => {
   const [language, setLanguage] = useState<Language>(()=>{try{const saved=localStorage.getItem('mengkaile-language');return saved==='en'||saved==='jp'?saved:'cn';}catch{return 'cn';}});
-  useEffect(()=>{try{localStorage.setItem('mengkaile-language',language);}catch{}},[language]);
+  useEffect(()=>{document.documentElement.lang=language==='cn'?'zh-CN':language==='jp'?'ja':'en';try{localStorage.setItem('mengkaile-language',language);}catch{}},[language]);
   const [showWeChatBrowserNotice, setShowWeChatBrowserNotice] = useState(() => (
     typeof navigator !== 'undefined' && /MicroMessenger/i.test(navigator.userAgent)
   ));

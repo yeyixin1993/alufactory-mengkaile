@@ -43,6 +43,8 @@
     "dev:deepseek": "node scripts/dev-deepseek.mjs"
   },
   "dependencies": {
+    "@fontsource-variable/noto-sans-jp": "5.3.0",
+    "@fontsource-variable/noto-sans-sc": "5.3.0",
     "@types/three": "^0.185.1",
     "fflate": "^0.8.3",
     "html2canvas": "^1.4.1",

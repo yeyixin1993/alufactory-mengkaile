@@ -84,11 +84,11 @@ export default function AIChatBar({ user, onAddToCart, cart=[], language, onLang
     window.addEventListener('focus', focus);
     return () => window.removeEventListener('focus', focus);
   }, [user?.id]);
-  const submit = async (text: string, picture: ChatAttachment[] | null, fixedId?: string) => {
+  const submit = async (text: string, picture: ChatAttachment[] | null, fixedId?: string, conversationId?:string) => {
     const id = fixedId || (pending?.text === text ? pending.id : crypto.randomUUID());
     setInput(text); setAttachment(picture || []); setPending({ id, text }); setBusy(true); setError(''); setOpen(true);
     try {
-      const result = await ApiService.aiRequest('/chat', { message: text, request_id: id, visitor_token: visitor(), attachments: picture || [], conversation_id: status?.conversation_id });
+      const result = await ApiService.aiRequest('/chat', { message: text, request_id: id, visitor_token: visitor(), attachments: picture || [], conversation_id: conversationId || status?.conversation_id });
       saveVisitor(result.visitor_token);
       freshReplies.current.add(id);
       setMessages(previous => [...previous, { role: 'user', content: text, attachments: picture || [] }, { role: 'assistant', content: result.reply, quote: result.quote, request_id: id, review: result.review }]);
@@ -102,11 +102,22 @@ export default function AIChatBar({ user, onAddToCart, cart=[], language, onLang
     const id = new URLSearchParams(location.search).get('draft');
     if (!workspace || !status || !id || handoffStarted.current || (ApiService.isAuthenticated() && !user)) return;
     handoffStarted.current = true;
-    takeChatDraft(id).then(draft => {
+    takeChatDraft(id).then(async draft => {
       if (!draft) throw new Error('这条待发送消息已接收或过期，请直接输入新需求。');
       if (draft.owner !== (user?.id || 'guest')) throw new Error('登录账号已变化，请重新发送需求。');
       window.history.replaceState(null, '', '#/ai-chat');
-      return submit(draft.text, draft.attachments || (draft.image?[{name:"图片",data:draft.image,kind:"image"}]:[]), id);
+      const attachments=draft.attachments || (draft.image?[{name:"图片",data:draft.image,kind:'image' as const}]:[]);
+      setInput(draft.text); setAttachment(attachments);
+      let conversationId=status.conversation_id;
+      if(draft.newConversation){
+        setBusy(true);
+        try {
+          const created=await ApiService.aiRequest('/reset',{visitor_token:visitor()});
+          conversationId=created.conversation_id;
+          setMessages([]);
+        } catch(e){setBusy(false);throw e;}
+      }
+      return submit(draft.text, attachments, id, conversationId);
     }).catch(e => setError(e.message));
   }, [workspace, status, user?.id]);
   const send = async (e: React.FormEvent) => {
@@ -120,7 +131,7 @@ export default function AIChatBar({ user, onAddToCart, cart=[], language, onLang
     setBusy(true); setError('');
     try {
       const id = crypto.randomUUID();
-      await saveChatDraft(id, {text, attachments: attachment, owner:user?.id || 'guest', created:Date.now()});
+      await saveChatDraft(id, {text, attachments: attachment, newConversation:true, owner:user?.id || 'guest', created:Date.now()});
       tab.location.href = `${window.location.origin}${window.location.pathname}#/ai-chat?draft=${id}`;
       setInput(''); setAttachment([]);
     } catch(e:any) { tab.close(); setError(e.message || '新窗口打开失败，消息尚未发送。'); }
@@ -167,9 +178,9 @@ export default function AIChatBar({ user, onAddToCart, cart=[], language, onLang
       </aside>
     </>}
     {home && <header className="ai-entry-heading">
-      <span className="ai-entry-eyebrow"><Sparkles size={14} /> 萌开了 · AI 设计顾问</span>
-      <h1>你的想法，<span>从这里开始。</span></h1>
-      <p>聊聊你想做什么。选型、加工、报价，一起把需求说清楚。</p>
+      <span className="ai-entry-eyebrow"><Sparkles size={14} /> {tr("萌开了 · AI 设计顾问")}</span>
+      <h1>{tr("你的想法，")}<span>{tr("从这里开始。")}</span></h1>
+      <p>{tr("聊聊你想做什么。选型、加工、报价，一起把需求说清楚。")}</p>
     </header>}
     <div className="ai-entry-card">
       <div className="ai-entry-toolbar">
@@ -190,7 +201,7 @@ export default function AIChatBar({ user, onAddToCart, cart=[], language, onLang
         <div ref={endRef}/>
         {!workspace&&<button disabled={busy} className="text-xs underline" onClick={newChat}>{tr("开始新咨询（不重置额度）")}</button>}
       </div>}
-      {status?.needs_confirmation && <button type="button" disabled={busy || reading || !!attachment.length} className="ai-image-confirm" onClick={() => { setInput(tr("确认以上识别信息")); inputRef.current?.focus(); }}>{tr("确认识别信息（填入后发送）")}</button>}
+      {workspace && status?.needs_confirmation && <button type="button" disabled={busy || reading || !!attachment.length} className="ai-image-confirm" onClick={() => { setInput(tr("确认以上识别信息")); inputRef.current?.focus(); }}>{tr("确认识别信息（填入后发送）")}</button>}
       <form onSubmit={send} className="ai-entry-form">
         <input ref={fileRef} type="file" multiple accept="image/jpeg,image/png,image/webp" hidden onChange={e => { void chooseFiles(e.target.files); e.target.value = ''; }} />
         <input ref={documentRef} type="file" multiple accept=".pdf,.docx,.xlsx,.csv,.txt" hidden onChange={e => { void chooseFiles(e.target.files); e.target.value = ''; }} />

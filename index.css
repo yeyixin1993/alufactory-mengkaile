@@ -8,9 +8,21 @@ html, body, #root {
   min-height: 100%;
 }
 
-body {
-  font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
+:root {
+  --site-font-sans: "Noto Sans SC Variable", "PingFang SC", "Microsoft YaHei", sans-serif;
 }
+html:lang(ja) {
+  --site-font-sans: "Noto Sans JP Variable", "Hiragino Sans", "Yu Gothic", sans-serif;
+}
+html {
+  font-family: var(--site-font-sans);
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+body, button, input, textarea, select {
+  font-family: var(--site-font-sans);
+}
+
 
 ::-webkit-scrollbar {
   width: 8px;

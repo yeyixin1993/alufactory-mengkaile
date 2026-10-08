@@ -1,6 +1,6 @@
 // Short-lived, same-origin handoff; attachments never appear in URLs.
 export type ChatAttachment = {name:string; data:string; kind:'image'|'file'};
-export type ChatDraft = { text: string; image?: string | null; attachments?:ChatAttachment[]; owner: string; created: number };
+export type ChatDraft = { text: string; image?: string | null; attachments?:ChatAttachment[]; newConversation?:boolean; owner: string; created: number };
 const openDb = () => new Promise<IDBDatabase>((resolve, reject) => {
   const req = indexedDB.open('mengkaile-ai-handoff', 1);
   req.onupgradeneeded = () => req.result.createObjectStore('drafts');
