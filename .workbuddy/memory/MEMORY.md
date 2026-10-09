@@ -15,6 +15,26 @@
   （完整 build + 打 ZIP）才推，所以很慢且在沙箱里易撞批量删除拦截 —— 用 `dangerouslyDisableSandbox` + 后台跑。
 - 端到端冒烟用 `agent-browser`；配方见本文末「浏览器冒烟配方」。
 
+## AI 聊天（AI 顾问）本地调试 —— 只在 `codex/ai-sales-assistant`
+
+- **必须用 `npm run dev:deepseek`**（`scripts/dev-deepseek.mjs`：同时起 Flask `127.0.0.1:5001`
+  和 Vite `127.0.0.1:3000`，并给 Vite 注入 `VITE_API_URL=http://127.0.0.1:5001/api`）。
+  只跑 `npm run dev`（`vite.config.ts` 的 proxy `/api → 127.0.0.1:5001`）不会有 AI 后端。
+  该脚本会**先探测 3000/5001 是否空闲，被占用就直接退出**，不会自动换端口/杀进程。
+- 后端起不来最常见的原因：`alufactory-backend/.env.deepseek.local` 缺 `DEEPSEEK_API_KEY`
+  （`run_deepseek_local.py` 会 `SystemExit(1)`，wrapper 连带把 Vite 也停掉）。
+  本地 AI 库在 `alufactory-backend/instance/deepseek-local/ai-test.db`（账号/AI 数据独立，不是线上库）。
+- **「开始咨询」按钮灰掉 ≠ 游客被限制**。`components/AIChatBar.tsx` 的禁用条件是
+  `busy || reading || !status.enabled || (!status.configured && !status.local_answers_available) || 无输入`；
+  `/api/ai/status` 打不通时 `status` 为 `null` ⇒ `!status?.enabled` 为真 ⇒ 灰。
+  **先看 Console 有没有 `ERR_CONNECTION_REFUSED`，再谈业务规则。**
+- 后端 `account_view`：`enabled = AISettings.enabled and AIAccount.enabled`；
+  `settings()` 在缺行时会**建一条 `enabled=False`**（`run_deepseek_local.py` 启动时会强制置 True）；
+  `local_answers_available = 存在 enabled 的 AIFaqRule`。游客（无 JWT）靠 `visitor_token` 建 `g:` 账号，
+  新账号 `trial_limit=3`；同一 IP 每天最多新建 10 个游客账号（超了报「当前网络试用申请过于频繁」）。
+- `run_deepseek_local.py` 开 `AI_LOCAL_UNLIMITED=True`（且要 `remote_addr` 是回环）⇒ 本地游客/会员都不限额度，
+  页面显示「本地测试 · 不限额度」。但**真发消息会真实扣 DeepSeek 余额**，验证按钮状态时不要真提交。
+
 ## 分支 / worktree 现状（2026-10-09 核对）
 
 - `main` 与 `origin/main` 同步，本地领先量**用 `git log --oneline origin/main..main` 核对，别信快照**。
