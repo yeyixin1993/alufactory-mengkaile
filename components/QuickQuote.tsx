@@ -1,3 +1,5 @@
+import { ENABLED_METAL_BOARD_THICKNESSES, PEGBOARD_PRICE_PER_SQM, ALUMINUM_PLATE_PRICE_PER_SQM, VIP_PLUS_PEGBOARD_PRICE_PER_SQM, VIP_PLUS_ALUMINUM_PLATE_PRICE_PER_SQM, MARINE_BOARD_SPEC_PRICE_PER_SQM, MARINE_BOARD_COLORED_SURCHARGE_PER_SQM, MARINE_BOARD_WEIGHT_PER_SQM, MIN_BOARD_CHARGE_AREA_SQM, MAX_PROFILE_LENGTH_MM, MAX_BOARD_WIDTH_MM, MAX_BOARD_HEIGHT_MM, MARINE_BOARD_MAX_WIDTH_MM, MARINE_BOARD_MAX_HEIGHT_MM } from '../utils/quickQuoteCatalog';
+import { calculateFrameUnitPrice } from '../utils/framePricing';
 import React, { useMemo, useState } from 'react';
 import { Plus, Trash2 } from 'lucide-react';
 import { Language, User } from '../types';
@@ -26,6 +28,8 @@ import {
   summarizeAccessoryQuote,
 } from '../utils/accessoryQuote';
 import { normalizeMembershipLevel } from '../utils/membership';
+import { calculateQuickProfileRow } from '../utils/quickQuoteProfile';
+import QuickQuoteProfileDetails from './QuickQuoteProfileDetails';
 import ProfileSectionGuide from './ProfileSectionGuide';
 
 type QuickQuoteProduct = 'profile' | 'aluminum_plate' | 'pegboard' | 'marine_board' | 'frame' | 'accessory';
@@ -83,23 +87,6 @@ const PROFILE_DANGER_FEE_THRESHOLD_MM = 100;
 const PROFILE_DANGER_FEE = 5;
 const PROFILE_VIP_DISCOUNT_PER_METER = 2;
 const PROFILE_VIP_PLUS_DISCOUNT_PER_METER = 4;
-
-const PEGBOARD_PRICE_PER_SQM: Record<number, number> = { 1: 780, 2: 1080, 3: 1380, 4: 1680, 5: 1980 };
-const ALUMINUM_PLATE_PRICE_PER_SQM: Record<number, number> = { 1: 500, 2: 700, 3: 1000, 4: 1300, 5: 1600 };
-const VIP_PLUS_PEGBOARD_PRICE_PER_SQM: Record<number, number> = { 1: 400, 2: 520, 3: 720, 4: 920, 5: 1120 };
-const VIP_PLUS_ALUMINUM_PLATE_PRICE_PER_SQM: Record<number, number> = { 1: 300, 2: 420, 3: 600, 4: 780, 5: 960 };
-const MARINE_BOARD_SPEC_PRICE_PER_SQM: Record<MarineSpecId, Record<number, number>> = {
-  marine_bbb_uv_film: { 12: 155, 18: 200 },
-  marine_bbb_plain: { 12: 136, 18: 176 },
-};
-const MARINE_BOARD_COLORED_SURCHARGE_PER_SQM = 100;
-const MARINE_BOARD_WEIGHT_PER_SQM: Record<number, number> = { 12: 8, 18: 12 };
-const MIN_BOARD_CHARGE_AREA_SQM = 0.2;
-const MAX_PROFILE_LENGTH_MM = 3000;
-const MAX_BOARD_WIDTH_MM = 2400;
-const MAX_BOARD_HEIGHT_MM = 1200;
-const MARINE_BOARD_MAX_WIDTH_MM = 2440;
-const MARINE_BOARD_MAX_HEIGHT_MM = 1220;
 
 const MARINE_SPECS: Record<MarineSpecId, { id: MarineSpecId; name: Record<Language, string> }> = {
   marine_bbb_uv_film: {
@@ -292,27 +279,7 @@ const QuickQuote: React.FC<{ language: Language; user?: User | null }> = ({ lang
   }, []);
 
   const profileRowsCalculated = useMemo(() => {
-    return profileRows.map((row) => {
-      const variant = PROFILE_VARIANTS.find((v) => v.id === row.model) || PROFILE_VARIANTS[0];
-      const finish = getProfileFinishByRow(row);
-      const effectiveLength = Math.min(MAX_PROFILE_LENGTH_MM, safeNonNegative(row.length));
-      const basePricePerMeter = variant.price[finish];
-      const effectivePricePerMeter = Math.max(0, basePricePerMeter - profileDiscountPerMeter);
-      const materialPrice = (effectiveLength / 1000) * effectivePricePerMeter;
-      const processPrice =
-        safeNonNegative(row.tappingCount) * PROFILE_PRICE_TAPPING +
-        safeNonNegative(row.throughHoleCount) * PROFILE_PRICE_THROUGH_HOLE +
-        safeNonNegative(row.countersunkHoleCount) * PROFILE_PRICE_COUNTERSUNK +
-        safeNonNegative(row.threadedHoleCount) * PROFILE_PRICE_COUNTERSUNK +
-        safeNonNegative(row.miter45CutCount) * PROFILE_PRICE_THROUGH_HOLE;
-      const dangerFee = row.length > 0 && row.length <= PROFILE_DANGER_FEE_THRESHOLD_MM ? PROFILE_DANGER_FEE : 0;
-      const unitPrice = round1(materialPrice + processPrice + dangerFee);
-      const qty = safeNonNegative(row.quantity || 0);
-      const subtotal = round1(unitPrice * qty);
-      const weightPerMeter = PROFILE_WEIGHTS[row.model] || 0.6;
-      const totalWeightKg = weightPerMeter * (effectiveLength / 1000) * qty;
-      return { row, unitPrice, subtotal, totalWeightKg };
-    });
+    return profileRows.map(row => calculateQuickProfileRow(row, profileDiscountPerMeter));
   }, [profileRows, profileDiscountPerMeter]);
 
   const profileSummary = useMemo(() => {
@@ -428,7 +395,7 @@ const QuickQuote: React.FC<{ language: Language; user?: User | null }> = ({ lang
   const frameCalculated = useMemo(() => {
     return frameRows.map((row) => {
       const qty = Math.max(0, row.quantity || 0);
-      const unitPrice = round1(Math.max(0, row.innerWidth) + Math.max(0, row.innerHeight));
+      const unitPrice = calculateFrameUnitPrice(row.innerWidth * 10, row.innerHeight * 10);
       const subtotal = round1(unitPrice * qty);
       return { row, unitPrice, subtotal };
     });
@@ -543,7 +510,7 @@ const QuickQuote: React.FC<{ language: Language; user?: User | null }> = ({ lang
           row.frameType === 'wood' ? t.qq_woodFrame : row.frameType === 'aluminum' ? t.qq_aluFrame : t.qq_aluWoodFrame;
         return {
           id: row.id,
-          text: `${frameTypeLabel} · ${w}×${h}mm × ${qty}`,
+          text: `${frameTypeLabel} · ${w*10}×${h*10}mm × ${qty}`,
         };
       })
       .filter((x): x is { id: string; text: string } => Boolean(x));
@@ -716,8 +683,8 @@ const QuickQuote: React.FC<{ language: Language; user?: User | null }> = ({ lang
                     className="w-full border border-slate-200 rounded-xl px-3 py-2.5 bg-white"
                   >
                     {thicknessOptions.map((v) => (
-                      <option key={v} value={v}>
-                        {v}mm
+                      <option key={v} value={v} disabled={!showMarineSpecSelector && !ENABLED_METAL_BOARD_THICKNESSES.includes(v)}>
+                        {v}mm{!showMarineSpecSelector && !ENABLED_METAL_BOARD_THICKNESSES.includes(v) ? (language==='cn'?'（暂未开放）':language==='en'?' (Unavailable)':'（選択不可）') : ''}
                       </option>
                     ))}
                   </select>
@@ -1481,30 +1448,7 @@ const QuickQuote: React.FC<{ language: Language; user?: User | null }> = ({ lang
                   </div>
                 )}
 
-                {compactSummary.profileMeters.length > 0 && (
-                  <div className="text-sm text-slate-700">
-                    <div className="font-bold text-slate-800">{t.qq_profileMetersByModelColor}</div>
-                    <ul className="list-disc pl-5 mt-1 space-y-1 font-semibold text-slate-700">
-                      {compactSummary.profileMeters.map((x) => (
-                        <li key={x.name}>{x.name}: {x.meters.toFixed(1)} {t.qq_meter}</li>
-                      ))}
-                    </ul>
-                    <ul className="list-disc pl-5 mt-2 space-y-1 font-semibold text-slate-700">
-                      {compactSummary.profileProcessTotals.tapping > 0 && <li>{t.qq_tappingCount}: {compactSummary.profileProcessTotals.tapping}</li>}
-                      {compactSummary.profileProcessTotals.through > 0 && <li>{t.qq_throughHoleCount}: {compactSummary.profileProcessTotals.through}</li>}
-                      {compactSummary.profileProcessTotals.countersunk > 0 && <li>{t.qq_countersunkCount}: {compactSummary.profileProcessTotals.countersunk}</li>}
-                      {compactSummary.profileProcessTotals.threaded > 0 && <li>{t.qq_threadedHoleCount}: {compactSummary.profileProcessTotals.threaded}</li>}
-                      {compactSummary.profileProcessTotals.miter45 > 0 && <li>{t.qq_miter45CutCount}: {compactSummary.profileProcessTotals.miter45}</li>}
-                    </ul>
-                    {compactSummary.profileDetails.length > 0 && (
-                      <ul className="list-disc pl-5 mt-2 space-y-1 text-xs text-slate-500">
-                        {compactSummary.profileDetails.map((x) => (
-                          <li key={`profile-detail-${x.id}`}>{x.text}</li>
-                        ))}
-                      </ul>
-                    )}
-                  </div>
-                )}
+                {compactSummary.profileMeters.length > 0 && <QuickQuoteProfileDetails language={language} meters={compactSummary.profileMeters} process={compactSummary.profileProcessTotals} details={compactSummary.profileDetails} />}
 
                 {compactSummary.aluminumPlateArea.length > 0 && (
                   <div className="text-sm text-slate-700">

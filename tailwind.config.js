@@ -7,7 +7,7 @@ export default {
     './utils/**/*.{js,ts,jsx,tsx}',
   ],
   theme: {
-    extend: {},
+    extend: {fontFamily: {sans: ['var(--site-font-sans)']}},
   },
   plugins: [],
 };

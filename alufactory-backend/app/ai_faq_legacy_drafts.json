@@ -1,0 +1,133 @@
+[
+  {
+    "id": "design-image",
+    "category": "方案咨询",
+    "question": "能做和图片一样的吗",
+    "aliases": [
+      "可以根据照片做吗",
+      "能看图报价吗",
+      "我要和图片一样的能做吗"
+    ],
+    "answer": "评估需要参考图片、整体尺寸、用途、材料颜色、数量和收货省份。单张图片通常无法确定隐藏连接和准确尺寸，需进一步确认。目前聊天图片自动识别尚未开放，请联系人工评估，或从现有设计器模板开始。",
+    "source": "docs/AI_SALES_ASSISTANT_PLAN.md",
+    "enabled": true,
+    "notes": ""
+  },
+  {
+    "id": "draft-leadtime",
+    "category": "待补充政策",
+    "question": "多久发货",
+    "aliases": [
+      "几天能发货",
+      "交期多久"
+    ],
+    "answer": "请补充并确认不同产品、加工复杂度及数量对应的备货或生产时间，以及交期从付款还是图纸确认开始计算。",
+    "source": "",
+    "enabled": false,
+    "notes": "待店主填写正式回复。未启用，不会自动回答客户。"
+  },
+  {
+    "id": "draft-returns",
+    "category": "待补充政策",
+    "question": "定制产品可以退换吗",
+    "aliases": [
+      "能退货吗",
+      "做错尺寸能退吗"
+    ],
+    "answer": "请补充定制与非定制产品的退换条件、质量问题处理方式、申请时限和运费承担规则。",
+    "source": "",
+    "enabled": false,
+    "notes": "经营政策待店主确认。"
+  },
+  {
+    "id": "draft-invoice",
+    "category": "待补充政策",
+    "question": "可以开发票吗",
+    "aliases": [
+      "怎么开发票",
+      "支持专票吗"
+    ],
+    "answer": "请补充支持的发票类型、开票信息、申请渠道及开票时间。",
+    "source": "",
+    "enabled": false,
+    "notes": "开票政策待店主确认。"
+  },
+  {
+    "id": "draft-delivery-area",
+    "category": "待补充政策",
+    "question": "可以寄到国外吗",
+    "aliases": [
+      "可以寄香港吗",
+      "海外能发货吗"
+    ],
+    "answer": "请补充可配送国家或地区、运输方式、清关与税费承担、是否支持代收转运。",
+    "source": "",
+    "enabled": false,
+    "notes": "配送范围未经确认，不自动承诺。"
+  },
+  {
+    "id": "draft-tolerance",
+    "category": "待补充政策",
+    "question": "切割精度是多少",
+    "aliases": [
+      "长度公差多少",
+      "打孔公差是多少"
+    ],
+    "answer": "请补充切割长度、端面垂直度、孔位和孔径的正式公差标准及适用范围。",
+    "source": "",
+    "enabled": false,
+    "notes": "整数毫米录入不是制造公差承诺。"
+  },
+  {
+    "id": "draft-assembly",
+    "category": "待补充政策",
+    "question": "可以帮我组装吗",
+    "aliases": [
+      "提供安装服务吗",
+      "可以买成品吗"
+    ],
+    "answer": "请补充哪些产品支持工厂组装、是否散件发货、安装服务范围和费用。",
+    "source": "",
+    "enabled": false,
+    "notes": "组装和安装服务待店主确认。"
+  },
+  {
+    "id": "draft-recharge-refund",
+    "category": "待补充政策",
+    "question": "充值余额能退款吗",
+    "aliases": [
+      "AI充值可以退吗",
+      "余额可以提现吗"
+    ],
+    "answer": "请补充已充值未使用额度的退款申请条件、处理方式和时效。",
+    "source": "",
+    "enabled": false,
+    "notes": "不要自动承诺可退或不可退，待店主确认。"
+  },
+  {
+    "id": "draft-delivery-area",
+    "category": "待补充政策",
+    "question": "可以寄到国外吗",
+    "aliases": [
+      "可以寄香港吗",
+      "海外能发货吗"
+    ],
+    "answer": "海外订单可以通过境内转运仓发货，我们负责发到境内转运仓。后续海外运输请与转运服务方确认。",
+    "source": "店主确认：2026-10-03（运费范围待补充）",
+    "enabled": false,
+    "notes": "店主已确认可发境内转运仓；待确认国内段是承担运费还是仅负责发货。范围确认前暂不启用。"
+  },
+  {
+    "id": "draft-recharge-refund",
+    "category": "待补充政策",
+    "question": "充值余额能退款吗",
+    "aliases": [
+      "AI充值可以退吗",
+      "余额可以提现吗"
+    ],
+    "answer": "充值余额支持退款，余额支持提现。具体可退、可提现余额范围请联系管理员核实。",
+    "source": "店主确认：2026-10-03（范围待补充）",
+    "enabled": false,
+    "notes": "店主已确认可退、可提现；待确认是否仅限未使用的实充余额、是否排除赠送额度。尚未实现自动退款或提现。范围确认前暂不启用。"
+  }
+]

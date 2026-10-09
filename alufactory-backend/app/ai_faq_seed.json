@@ -1,0 +1,481 @@
+[
+  {
+    "id": "profile-length",
+    "category": "型材规格",
+    "question": "型材最长能做多长",
+    "aliases": [
+      "型材最大长度是多少",
+      "最长能切多少毫米",
+      "型材长度范围"
+    ],
+    "answer": "网站当前支持 21–3000mm 的定长型材，具体颜色还受该颜色可选长度限制。请告诉我型号、颜色、每根长度和数量，再确认是否需要加工。",
+    "source": "components/ProfileEditor.tsx; constants.ts",
+    "enabled": true,
+    "notes": ""
+  },
+  {
+    "id": "profile-short",
+    "category": "型材规格",
+    "question": "可以切很短的型材吗",
+    "aliases": [
+      "短型材能做吗",
+      "型材最短多少",
+      "型材可以切20mm吗"
+    ],
+    "answer": "当前网站型材长度需大于 20mm。21–100mm 的短料有额外加工费用，具体金额由报价页面计算；请提供型号、颜色、长度、数量和加工要求。",
+    "source": "components/ProfileEditor.tsx",
+    "enabled": true,
+    "notes": ""
+  },
+  {
+    "id": "profile-model",
+    "category": "型材规格",
+    "question": "2020是什么意思",
+    "aliases": [
+      "2020是多大",
+      "2020型材是什么尺寸"
+    ],
+    "answer": "2020 表示 20×20mm 截面的型材型号，不是长度。订购时还需要每根长度、数量、颜色及加工要求。",
+    "source": "docs/DIY_DESIGNER_PROJECT_KNOWLEDGE.md; constants.ts",
+    "enabled": true,
+    "notes": ""
+  },
+  {
+    "id": "profile-sealed",
+    "category": "型材规格",
+    "question": "N1和N2是什么意思",
+    "aliases": [
+      "N1 N2有什么区别",
+      "型材N1N2是什么",
+      "封边型材是什么意思"
+    ],
+    "answer": "N1 表示一面封边，N2 表示两面封边。选型还要区分封边面的排列；例如 2020 N2 对边与普通 N2 不是同一个型号，请按商品截面图确认。",
+    "source": "constants.ts; docs/DIY_DESIGNER_PROJECT_KNOWLEDGE.md",
+    "enabled": true,
+    "notes": ""
+  },
+  {
+    "id": "color-pink",
+    "category": "颜色与表面",
+    "question": "有粉色型材吗",
+    "aliases": [
+      "有没有粉色",
+      "pink是什么颜色",
+      "粉色叫什么"
+    ],
+    "answer": "目录中的粉色名称是“丁香粉”。它仅支持彩色截面，选这个颜色时会自动使用彩色截面，无需额外选择。请提供型材型号、长度和数量以便报价。",
+    "source": "constants.ts: PROFILE_COLORS / COLOR_ONLY_COLORED_SECTION_IDS",
+    "enabled": true,
+    "notes": ""
+  },
+  {
+    "id": "color-section",
+    "category": "颜色与表面",
+    "question": "本色截面和彩色截面有什么区别",
+    "aliases": [
+      "切口本色和彩色区别",
+      "截面颜色怎么选"
+    ],
+    "answer": "这里的截面指切割端面的颜色。本色截面保留切口金属本色，彩色截面选择对应彩色加工方式，价格可能不同。若某个颜色只有一种截面选项，会自动采用；只有确实有多个选项时才需要您选择。",
+    "source": "components/QuickQuote.tsx; docs/DIY_DESIGNER_PROJECT_KNOWLEDGE.md",
+    "enabled": true,
+    "notes": ""
+  },
+  {
+    "id": "color-section-meaning",
+    "category": "颜色与表面",
+    "question": "截面本色/彩色是什么意思",
+    "aliases": [
+      "截面本色是什么意思",
+      "截面彩色是什么意思",
+      "截面本色和彩色分别是什么意思"
+    ],
+    "answer": "“截面”指型材切割后的端面。截面本色保留切口铝材的银白本色；截面彩色则表面与切口都是所选颜色（价格表称“截面同色”），加工方式与价格可能不同。若某个颜色只有一种截面选项会自动采用，只有确实有多个选项时才需要您选择。",
+    "source": "components/ProfileSectionGuide.tsx; components/PrintableCatalog.tsx; docs/DIY_DESIGNER_PROJECT_KNOWLEDGE.md",
+    "enabled": true,
+    "notes": "与 color-section 同一话题、只是问法不同（首页引导词）。修改答案时请与 color-section 一并同步。"
+  },
+  {
+    "id": "color-screen",
+    "category": "颜色与表面",
+    "question": "颜色以图片为准吗",
+    "aliases": [
+      "图片颜色和实物一样吗",
+      "屏幕上颜色准确吗"
+    ],
+    "answer": "请参考商品页的实物颜色照片和具体色名。屏幕和光线会影响显示，不能仅凭聊天中的颜色词保证与您已有物品完全同色；有严格配色要求时请先联系人工确认。",
+    "source": "docs/DIY_DESIGNER_PROJECT_KNOWLEDGE.md: color rules",
+    "enabled": true,
+    "notes": ""
+  },
+  {
+    "id": "machining-tapping",
+    "category": "加工说明",
+    "question": "两端攻丝是什么意思",
+    "aliases": [
+      "什么叫两端攻丝",
+      "什么是端面攻丝"
+    ],
+    "answer": "两端攻丝是在型材两个端面的指定孔位加工螺纹，便于螺丝连接。它与型材侧面钻孔不同；有多个端面孔位的型号还需要确认具体攻丝位置。",
+    "source": "utils/profileMachining.ts; components/ProfileEditor.tsx",
+    "enabled": true,
+    "notes": ""
+  },
+  {
+    "id": "machining-side",
+    "category": "加工说明",
+    "question": "侧面打孔需要什么信息",
+    "aliases": [
+      "打孔要提供什么",
+      "钻孔需要哪些参数"
+    ],
+    "answer": "请提供型材型号和长度、打孔面 A/B/C/D、槽位、孔中心距基准端的距离，以及通孔、沉孔或螺纹孔类型。螺纹孔还需螺纹规格。可以在型材编辑器或设计器中核对，不能只凭“打几个孔”确定加工。",
+    "source": "docs/DIY_DESIGNER_PROJECT_KNOWLEDGE.md: machining semantics",
+    "enabled": true,
+    "notes": ""
+  },
+  {
+    "id": "machining-tap-hole",
+    "category": "加工说明",
+    "question": "攻丝和打孔一样吗",
+    "aliases": [
+      "端面攻丝和侧面打孔有什么区别"
+    ],
+    "answer": "不一样。端面攻丝指定型材端面的螺纹孔；侧面打孔还要指定面、槽位、位置和孔型。报价与生产记录会分别保存这两类加工要求。",
+    "source": "components/ProfileEditor.tsx; docs/DIY_DESIGNER_PROJECT_KNOWLEDGE.md",
+    "enabled": true,
+    "notes": ""
+  },
+  {
+    "id": "quote-needed",
+    "category": "报价咨询",
+    "question": "报价需要提供什么信息",
+    "aliases": [
+      "怎么询价",
+      "报价要哪些信息",
+      "怎么才能快速报价"
+    ],
+    "answer": "型材报价请提供：型号、颜色、每根长度、数量、是否攻丝或其他加工，以及收货省份。截面有多种选项时还需确认截面颜色。您可以分几条消息补充，或直接使用网站“快速报价”。",
+    "source": "components/QuickQuote.tsx; app/ai_quote.py",
+    "enabled": true,
+    "notes": ""
+  },
+  {
+    "id": "quote-province",
+    "category": "报价咨询",
+    "question": "为什么要问发哪个省",
+    "aliases": [
+      "为什么报价要收货省份",
+      "报价为什么需要地址"
+    ],
+    "answer": "收货省份用于估算运费；重量、长度和运输方式也会影响费用。估价阶段先提供省份即可，正式下单时再填写完整收货信息。",
+    "source": "components/QuickQuote.tsx; App.tsx shipping",
+    "enabled": true,
+    "notes": ""
+  },
+  {
+    "id": "quote-price",
+    "category": "报价咨询",
+    "question": "型材多少钱",
+    "aliases": [
+      "2020多少钱",
+      "2020型材多少钱一米",
+      "怎么计算型材价格"
+    ],
+    "answer": "价格取决于具体型号、颜色与截面方式、长度、数量、加工要求和会员等级，配送费用还与目的地有关。请提供这些信息后按当前目录计算，不会仅凭“2020”给出一个通用总价。",
+    "source": "components/QuickQuote.tsx; components/ProfileEditor.tsx",
+    "enabled": true,
+    "notes": ""
+  },
+  {
+    "id": "quote-quantity",
+    "category": "报价咨询",
+    "question": "为什么还要问数量",
+    "aliases": [
+      "数量对报价有什么影响"
+    ],
+    "answer": "数量会影响材料总价、总重量和运费；部分配件也有批量价格规则。请说明每种规格分别需要多少，不能默认按一根计算。",
+    "source": "components/QuickQuote.tsx; data/accessoryCatalog.ts",
+    "enabled": true,
+    "notes": ""
+  },
+  {
+    "id": "quote-shipping",
+    "category": "配送",
+    "question": "运费怎么算",
+    "aliases": [
+      "怎么计算运费",
+      "运费是多少",
+      "包邮吗"
+    ],
+    "answer": "需按商品类型、数量、重量、长度、收货省份、配送方式及适用会员规则计算。请提供具体商品和收货省份，不能在这些信息缺失时承诺包邮或固定运费。",
+    "source": "components/QuickQuote.tsx; utils/membership.ts; App.tsx",
+    "enabled": true,
+    "notes": ""
+  },
+  {
+    "id": "quote-membership",
+    "category": "账户与额度",
+    "question": "会员价格一样吗",
+    "aliases": [
+      "VIP和VIP+报价一样吗",
+      "不同会员价格有区别吗"
+    ],
+    "answer": "部分商品有不同会员价格或配送规则。网站会按您当前登录账号的会员等级计算；具体优惠以对应商品的实时报价为准。",
+    "source": "utils/membership.ts; components/QuickQuote.tsx",
+    "enabled": true,
+    "notes": ""
+  },
+  {
+    "id": "design-entry",
+    "category": "设计器",
+    "question": "设计器在哪里",
+    "aliases": [
+      "怎么打开3D设计器",
+      "在哪里设计"
+    ],
+    "answer": "在首页点击“进入 3D DIY 设计器”。您可以编辑型材、板材、加工和配件，并核对尺寸及材料明细；报价咨询和三维设计是不同的入口。",
+    "source": "App.tsx; DIY_DESIGNER_IMPLEMENTATION.md",
+    "enabled": true,
+    "notes": ""
+  },
+  {
+    "id": "design-save",
+    "category": "设计器",
+    "question": "设计可以保存吗",
+    "aliases": [
+      "怎么保存设计",
+      "下次还能继续编辑吗"
+    ],
+    "answer": "设计器支持保存可编辑 JSON 文件，之后可重新导入继续修改。“回到主页”也会保存当前账号的浏览器草稿，但清理浏览器数据可能丢失本地草稿，重要设计请下载 JSON 备份。",
+    "source": "docs/DIY_DESIGNER_PROJECT_KNOWLEDGE.md: 13.1",
+    "enabled": true,
+    "notes": ""
+  },
+  {
+    "id": "design-import",
+    "category": "设计器",
+    "question": "导入会覆盖原来的设计吗",
+    "aliases": [
+      "已有设计还能导入吗",
+      "导入模型会清空画布吗"
+    ],
+    "answer": "向非空设计器导入时，会让您选择添加到当前设计、替换当前设计或取消。请先保存重要设计的 JSON 备份，再按需要选择。",
+    "source": "docs/DIY_DESIGNER_PROJECT_KNOWLEDGE.md: 13.1",
+    "enabled": true,
+    "notes": ""
+  },
+  {
+    "id": "design-pdf",
+    "category": "设计器",
+    "question": "能导出PDF吗",
+    "aliases": [
+      "可以生成生产PDF吗",
+      "能打印加工单吗"
+    ],
+    "answer": "现有生产单流程支持 PDF 输出，并保留材料和加工信息。聊天直接生成模型、PDF 并下单的完整流程仍在分阶段接入；目前请先在商品编辑器或设计器核对完整方案。",
+    "source": "DIY_DESIGNER_IMPLEMENTATION.md; docs/AI_SALES_ASSISTANT_PLAN.md",
+    "enabled": true,
+    "notes": ""
+  },
+  {
+    "id": "design-image",
+    "category": "方案咨询",
+    "question": "能做和图片一样的吗",
+    "aliases": [
+      "可以根据照片做吗",
+      "能看图报价吗",
+      "我要和图片一样的能做吗"
+    ],
+    "answer": "可以点击聊天输入框旁的「上传图片」，附上参考图、草图或标注尺寸的截图。AI 会列出识别结果，请补充整体尺寸、用途、材料颜色、数量和收货省份，再确认信息。照片不能可靠确定隐藏连接、准确尺寸或承重，复杂方案仍需人工评估；聊天暂不直接生成 3D 模型。",
+    "source": "docs/AI_SALES_ASSISTANT_PLAN.md",
+    "enabled": true,
+    "notes": ""
+  },
+  {
+    "id": "design-load",
+    "category": "方案咨询",
+    "question": "能承重多少",
+    "aliases": [
+      "承重能保证吗",
+      "这个架子能放多重"
+    ],
+    "answer": "承重取决于整体尺寸、型材截面、连接方式、支撑跨度和载荷分布，不能仅凭一个型号或效果图保证。请提供完整方案和预期载荷，由人工确认结构及验证要求。",
+    "source": "docs/DIY_DESIGNER_PROJECT_KNOWLEDGE.md: manufacturing truth / production review",
+    "enabled": true,
+    "notes": ""
+  },
+  {
+    "id": "quota-trial",
+    "category": "账户与额度",
+    "question": "免费能问几次",
+    "aliases": [
+      "游客可以问几次",
+      "三次是三条消息吗",
+      "免费咨询次数"
+    ],
+    "answer": "游客及普通注册用户目前有 3 条免费用户消息，回复追问也算一条，不是 3 个完整会话。聊天栏会显示剩余次数；当前新注册账号默认是 VIP，按 VIP 额度规则使用。",
+    "source": "docs/DIY_DESIGNER_PROJECT_KNOWLEDGE.md: AI consultation entry",
+    "enabled": true,
+    "notes": ""
+  },
+  {
+    "id": "quota-vip",
+    "category": "账户与额度",
+    "question": "VIP有多少AI额度",
+    "aliases": [
+      "VIP送多少额度",
+      "VIP+有多少AI额度",
+      "AI额度每月重置吗"
+    ],
+    "answer": "当前 VIP 一次性赠送 ¥10 AI 额度，VIP+ 一次性赠送 ¥100，没有每月自动重置。此前已领取 VIP ¥10 的账号升级到 VIP+ 时，累计赠送补足至 ¥100。剩余额度可在聊天栏查看。",
+    "source": "app/routes/ai_chat.py: identity",
+    "enabled": true,
+    "notes": ""
+  },
+  {
+    "id": "quota-recharge",
+    "category": "账户与额度",
+    "question": "怎么充值AI额度",
+    "aliases": [
+      "AI额度用完怎么办",
+      "如何增加AI余额"
+    ],
+    "answer": "登录后点击聊天栏“充值”。充值多少元，就增加多少元额度。支付宝确认付款成功后自动增加；微信扫码付款后，请提供账号手机号、金额和交易凭证，由管理员核实后手动增加。",
+    "source": "components/AIChatBar.tsx; app/routes/ai_chat.py",
+    "enabled": true,
+    "notes": ""
+  },
+  {
+    "id": "quota-wechat",
+    "category": "付款与充值",
+    "question": "可以微信充值吗",
+    "aliases": [
+      "支持微信扫码充值吗",
+      "微信付款后额度什么时候到账"
+    ],
+    "answer": "可以。登录后在聊天栏打开“充值”，使用页面的微信收款码。付款后请联系管理员并提供账号手机号、付款金额和交易凭证；核实实际到账后，管理员会手动增加额度。",
+    "source": "components/AIChatBar.tsx",
+    "enabled": true,
+    "notes": ""
+  },
+  {
+    "id": "quota-alipay",
+    "category": "付款与充值",
+    "question": "支付宝充值多久到账",
+    "aliases": [
+      "支付宝付完款余额没变",
+      "支付宝充值没到账怎么办"
+    ],
+    "answer": "系统收到支付宝确认支付成功的通知后会自动增加额度。付款后可点击“刷新余额”；若仍未更新，请提供账号及支付宝交易凭证联系管理员核对，避免重复付款。",
+    "source": "app/routes/ai_chat.py: recharge_notify",
+    "enabled": true,
+    "notes": ""
+  },
+  {
+    "id": "quota-records",
+    "category": "账户与额度",
+    "question": "在哪里看额度消费记录",
+    "aliases": [
+      "怎么查看AI余额",
+      "能查充值记录吗"
+    ],
+    "answer": "登录后可在聊天栏查看剩余 AI 余额，点击“收支记录”查看最近的使用、赠送、充值和人工调整记录。",
+    "source": "components/AIChatBar.tsx",
+    "enabled": true,
+    "notes": ""
+  },
+  {
+    "id": "draft-leadtime",
+    "category": "配送",
+    "question": "多久发货",
+    "aliases": [
+      "几天能发货",
+      "交期多久"
+    ],
+    "answer": "发货时间为 3–5 个工作日。",
+    "source": "店主确认：2026-10-03",
+    "enabled": true,
+    "notes": "尚未明确交期起算点，不自动补充付款或图纸确认起算；不承诺送达时间。"
+  },
+  {
+    "id": "draft-returns",
+    "category": "售后政策",
+    "question": "定制产品可以退换吗",
+    "aliases": [
+      "定制颜色可以退换吗",
+      "定制产品能退货吗"
+    ],
+    "answer": "定制产品和定制颜色不支持退换。请在下单前核对尺寸、颜色和加工要求；如有质量问题或收到的商品与订单不符，请联系人工核实处理。",
+    "source": "店主确认：2026-10-03",
+    "enabled": true,
+    "notes": "定制不退换不应被用于自动拒绝质量问题；非定制商品退换规则仍待补充。"
+  },
+  {
+    "id": "draft-invoice",
+    "category": "发票",
+    "question": "可以开发票吗",
+    "aliases": [
+      "怎么开发票",
+      "支持专票吗"
+    ],
+    "answer": "可以开发票。普通发票免费；专用发票需加收 10%。请在下单前联系人工确认开票信息及含票金额。",
+    "source": "店主确认：2026-10-03",
+    "enabled": true,
+    "notes": "10% 是商家确认的专票加价，不表述为法定税率；本轮仅更新问答，未改变订单计价。"
+  },
+  {
+    "id": "draft-delivery-area",
+    "category": "配送",
+    "question": "可以寄到国外吗",
+    "aliases": [
+      "可以寄香港吗",
+      "海外能发货吗"
+    ],
+    "answer": "海外订单可以通过境内转运仓发货，我们负责国内段发货至转运仓，但不代表包邮。国内段运费按转运仓所在省份及现有运费价格模板计算。请提供转运仓所在省份和商品规格、数量以便报价；海外段运输请与转运服务方确认。",
+    "source": "店主确认：2026-10-03",
+    "enabled": true,
+    "notes": "“承担国内段”指负责国内段发货，不承诺免运费；国内段按现有运费模板报价，不新增统一包邮或固定运费。"
+  },
+  {
+    "id": "draft-tolerance",
+    "category": "加工说明",
+    "question": "切割精度是多少",
+    "aliases": [
+      "长度公差多少",
+      "加工精度是多少",
+      "精度能到毫米吗"
+    ],
+    "answer": "公差控制在 1mm 以内，尺寸可精确到毫米。若有更高精度要求，请在下单前联系人工确认。",
+    "source": "店主确认：2026-10-03",
+    "enabled": true,
+    "notes": "不将该描述改写成 ±1mm，也不自动延伸为孔径或垂直度标准；设计器几何精度和吸附容差不是制造公差。"
+  },
+  {
+    "id": "draft-assembly",
+    "category": "组装服务",
+    "question": "可以帮我组装吗",
+    "aliases": [
+      "包含组装服务吗",
+      "包组装吗",
+      "提供组装服务吗"
+    ],
+    "answer": "不含组装服务。",
+    "source": "店主确认：2026-10-04",
+    "enabled": true,
+    "notes": "仅确认不含组装服务，不推断是否销售成品或是否提供其他安装服务。"
+  },
+  {
+    "id": "draft-recharge-refund",
+    "category": "付款与充值",
+    "question": "充值余额能退款吗",
+    "aliases": [
+      "AI充值可以退吗",
+      "余额可以提现吗"
+    ],
+    "answer": "仅未使用的实际充值余额支持退款或提现，赠送额度不支持退款或提现。请联系管理员核实可退金额并办理。",
+    "source": "店主确认：2026-10-03",
+    "enabled": true,
+    "notes": "商家确认仅限实际充值剩余金额；当前无自动退款、提现功能。处理前须核对充值、消费及历史退款记录，不可直接将包含赠送额度的总余额当作可提现余额。"
+  }
+]

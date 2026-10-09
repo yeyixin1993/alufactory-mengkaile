@@ -72,6 +72,9 @@ const resolveApiBaseUrl = () => {
 };
 
 class ApiServiceClass {
+  async aiRequest(endpoint: string, data?: unknown) {
+    return this.request(data === undefined ? 'GET' : 'POST', `/ai${endpoint}`, data);
+  }
   private authToken: string | null = localStorage.getItem('authToken');
   private apiBaseUrl: string | null = null;
   private hasLoggedApiBase = false;
@@ -187,7 +190,12 @@ class ApiServiceClass {
         this.authToken = null;
         window.location.href = '/#/login';
       }
-      throw new Error(responsePayload?.error || responsePayload?.message || `API request failed (${response.status})`);
+      const failure = new Error(responsePayload?.error || responsePayload?.message || `API request failed (${response.status})`) as Error & { payload?: any; status?: number };
+      // Keep the body reachable: the AI advisor switches on the machine-readable `reason`
+      // (why a visitor was refused), which the message text alone cannot express.
+      failure.payload = responsePayload;
+      failure.status = response.status;
+      throw failure;
     }
 
     return responsePayload ?? {};

@@ -17,3 +17,6 @@ export const MAX_DOOR_HEIGHT_MM = 3000;
 export const MAX_DOOR_WIDTH_MM = 1500;
 export const DOOR_HINGE_UNIT_PRICE = 10;
 
+
+// Temporarily offered to all customer tiers, including VIP+.
+export const ENABLED_METAL_BOARD_THICKNESSES: readonly number[] = [2, 5];

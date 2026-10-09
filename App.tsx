@@ -1,5 +1,8 @@
+import { frameTypeName } from './utils/framePricing';
+import FrameQuoteEditor from './components/FrameQuoteEditor';
 
 import React, { useState, useEffect, useRef } from 'react';
+import AIChatBar from './components/AIChatBar';
 import { HashRouter, Routes, Route, Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { ShoppingCart, User as UserIcon, LogOut, Menu, X, Globe, Home, Package, History, Settings, FileDown, Eye, Truck, MapPin, Plus, Trash2, Edit2, CheckCircle, ArrowLeft, Lock, Save, UserCheck, Key, Info, Pencil, ChevronRight, Download, ExternalLink, BookOpen } from 'lucide-react';
 import { Language, User, CartItem, Product, ProductType, ProfileConfig, Order, ProfileSide, DrillHole, Address, ProfileVariant, ColorDef } from './types';
@@ -599,7 +602,7 @@ const Catalog: React.FC<{ language: Language }> = ({ language }) => {
       {/*<h2 className="text-5xl font-black text-slate-900 mb-12 tracking-tight">{t.catalog}</h2>*/}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
         {INITIAL_PRODUCTS.map(product => (
-          <div key={product.id} className="bg-white rounded-[2.5rem] overflow-hidden shadow-xl border border-slate-100 hover:shadow-2xl transition-all duration-300 group">
+          <div key={product.id} id={product.id === 'p2' ? 'profile-products' : undefined} className="scroll-mt-28 bg-white rounded-[2.5rem] overflow-hidden shadow-xl border border-slate-100 hover:shadow-2xl transition-all duration-300 group">
             <div className="h-64 overflow-hidden relative">
               <img src={product.imageUrl} alt={product.name[language]} loading="lazy" decoding="async" className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-1000" />
               <div className="absolute inset-0 bg-gradient-to-t from-black/40 via-transparent to-transparent" />
@@ -632,16 +635,16 @@ const Catalog: React.FC<{ language: Language }> = ({ language }) => {
       </div>
 
       {/* 快速报价（首页最底部） */}
-      <Link to="/quick-quote" className="mt-12 group flex flex-col items-center justify-between gap-4 rounded-[2rem] border-2 border-dashed border-blue-200 bg-gradient-to-r from-blue-50 via-white to-blue-50 px-6 py-8 text-center text-blue-700 shadow-lg shadow-blue-600/5 transition-all hover:-translate-y-1 hover:border-blue-400 hover:bg-blue-50 sm:flex-row sm:text-left">
+      <Link to="/quick-quote" className="mt-12 group flex flex-col items-center justify-between gap-4 rounded-[2rem] border-2 border-dashed border-blue-200 ai-soft-surface px-6 py-8 text-center text-blue-700 shadow-lg shadow-blue-600/5 transition-all hover:-translate-y-1 hover:border-blue-400 hover:bg-blue-50 sm:flex-row sm:text-left">
         <div className="flex items-center gap-4">
           <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-blue-600 text-white shadow-xl shadow-blue-600/25 transition group-hover:scale-105"><ChevronRight className="h-6 w-6" /></span>
           <div>
-            <div className="text-[10px] uppercase tracking-widest text-blue-400">Fast pricing</div>
-            <div className="mt-1 text-2xl font-black">{t.quickQuote}</div>
-            <div className="mt-1 text-sm text-slate-500">{language === 'cn' ? '不进入设计器，直接按尺寸与数量估算价格' : language === 'jp' ? 'デザイナーを使わず、サイズと数量だけで価格を見積もる' : 'Estimate prices by dimensions & quantity without opening the designer'}</div>
+            <div className="text-[10px] uppercase tracking-widest text-blue-600">Fast pricing</div>
+            <div className="mt-1 text-2xl font-black text-slate-900">{t.quickQuote}</div>
+            <div className="mt-1 text-sm text-slate-600">{language === 'cn' ? '不进入设计器，直接按尺寸与数量估算价格' : language === 'jp' ? 'デザイナーを使わず、サイズと数量だけで価格を見積もる' : 'Estimate prices by dimensions & quantity without opening the designer'}</div>
           </div>
         </div>
-        <span className="inline-flex shrink-0 items-center justify-center gap-2 rounded-2xl bg-blue-600 px-6 py-3 text-sm font-black shadow-xl shadow-blue-600/30 transition group-hover:bg-blue-500">
+        <span className="inline-flex shrink-0 items-center justify-center gap-2 rounded-2xl bg-blue-600 text-white px-6 py-3 text-sm font-black shadow-xl shadow-blue-600/30 transition group-hover:bg-blue-500">
           {language === 'cn' ? '开始快速报价' : language === 'jp' ? '見積もりを開始' : 'Start quick quote'}
         </span>
       </Link>
@@ -1650,7 +1653,7 @@ const Cart: React.FC<{
                         ) : null;
                       })()}
                       <div className="grid grid-cols-2 md:grid-cols-3 gap-2 text-xs font-bold">
-                        <span className="px-3 py-1.5 rounded-xl bg-slate-100 text-slate-700">{language === 'cn' ? '厚度' : language === 'jp' ? '厚さ' : 'Thickness'}: {(item.config as any)?.thickness ?? '-' }mm</span>
+                        <span className="px-3 py-1.5 rounded-xl bg-slate-100 text-slate-700">{item.product.type === ProductType.FRAME ? frameTypeName((item.config as any)?.frameType, language) : <>{language === 'cn' ? '厚度' : language === 'jp' ? '厚さ' : 'Thickness'}: {(item.config as any)?.thickness ?? '-'}mm</>}</span>
                         <span className="px-3 py-1.5 rounded-xl bg-slate-100 text-slate-700">{language === 'cn' ? '宽' : language === 'jp' ? '幅' : 'Width'}: {(item.config as any)?.width ?? '-'}mm</span>
                         <span className="px-3 py-1.5 rounded-xl bg-slate-100 text-slate-700">{language === 'cn' ? '高' : language === 'jp' ? '高さ' : 'Height'}: {(item.config as any)?.height ?? '-'}mm</span>
                         <span className="px-3 py-1.5 rounded-xl bg-slate-100 text-slate-700">
@@ -1665,7 +1668,7 @@ const Cart: React.FC<{
                             : (language === 'cn' ? 'BBB两面UV清漆+覆膜' : language === 'jp' ? 'BBB両面UVクリア+フィルム' : 'BBB double-side UV varnish + film')))}</span>
                         )}
                         <span className="px-3 py-1.5 rounded-xl bg-blue-50 text-blue-700">{language === 'cn' ? '单价' : language === 'jp' ? '単価' : 'Unit'}: {currency}{Number((item.config as any)?.unitPrice || (item.totalPrice / Math.max(1, item.quantity))).toFixed(1)}</span>
-                        <span className="px-3 py-1.5 rounded-xl bg-emerald-50 text-emerald-700">{language === 'cn' ? '面积' : language === 'jp' ? '面積' : 'Area'}: {Number((item.config as any)?.areaSqm || 0).toFixed(3)}㎡</span>
+                        {item.product.type !== ProductType.FRAME && <span className="px-3 py-1.5 rounded-xl bg-emerald-50 text-emerald-700">{language === 'cn' ? '面积' : language === 'jp' ? '面積' : 'Area'}: {Number((item.config as any)?.areaSqm || 0).toFixed(3)}㎡</span>}
                         {(item.config as any)?.openingSide && (
                           <span className="px-3 py-1.5 rounded-xl bg-amber-50 text-amber-700">{language === 'cn' ? '开门方向' : language === 'jp' ? '開閉方向' : 'Opening'}: {(item.config as any).openingSide === 'left' ? (language === 'cn' ? '左开' : language === 'jp' ? '左開き' : 'Left Open') : (language === 'cn' ? '右开' : language === 'jp' ? '右開き' : 'Right Open')}</span>
                         )}
@@ -2182,6 +2185,7 @@ const ProductDetail: React.FC<{
   setDraftProfiles: React.Dispatch<React.SetStateAction<CartItem[]>>
 }> = ({ language, user, onAddToCart, onAddBatchToCart, onUpdateCartItem, draftProfiles, setDraftProfiles }) => {
   const { id } = useParams();
+  const navigate = useNavigate();
   const location = useLocation();
   const product = INITIAL_PRODUCTS.find(p => p.id === id) || (id === ACCESSORY_PRODUCT.id ? ACCESSORY_PRODUCT : undefined);
   const t = TRANSLATIONS[language];
@@ -2241,6 +2245,8 @@ const ProductDetail: React.FC<{
               onAddToCart={onAddToCart}
               onUpdateItem={onUpdateCartItem}
             />
+          ) : product.type === ProductType.FRAME ? (
+            <FrameQuoteEditor language={language} product={product} initialItem={editItem} onSave={item=>{if(editItem)onUpdateCartItem(item);else onAddToCart(item);navigate(returnCartPath);}} />
           ) : product.type === ProductType.ACCESSORY ? (
             <AccessoryQuoteEditor
               language={language}
@@ -2273,7 +2279,8 @@ const ProductDetail: React.FC<{
 };
 
 const App: React.FC = () => {
-  const [language, setLanguage] = useState<Language>('cn');
+  const [language, setLanguage] = useState<Language>(()=>{try{const saved=localStorage.getItem('mengkaile-language');return saved==='en'||saved==='jp'?saved:'cn';}catch{return 'cn';}});
+  useEffect(()=>{document.documentElement.lang=language==='cn'?'zh-CN':language==='jp'?'ja':'en';try{localStorage.setItem('mengkaile-language',language);}catch{}},[language]);
   const [showWeChatBrowserNotice, setShowWeChatBrowserNotice] = useState(() => (
     typeof navigator !== 'undefined' && /MicroMessenger/i.test(navigator.userAgent)
   ));
@@ -2288,6 +2295,22 @@ const App: React.FC = () => {
   const skipNextCartPersistRef = useRef(false);
   const skipNextDraftPersistRef = useRef(false);
   const skipNextServerSyncRef = useRef(false);
+
+  useEffect(() => {
+    const syncTabCart = (event: StorageEvent) => {
+      if (event.key !== getCacheKey(CART_CACHE_PREFIX, user?.id)) return;
+      try {
+        const next = event.newValue ? JSON.parse(event.newValue) : [];
+        if (!Array.isArray(next)) return;
+        skipNextCartPersistRef.current = true;
+        skipNextServerSyncRef.current = true;
+        setCart(next);
+      } catch { /* Retain the current cart if another tab writes invalid data. */ }
+    };
+    window.addEventListener('storage', syncTabCart);
+    return () => window.removeEventListener('storage', syncTabCart);
+  }, [user?.id]);
+
 
   useEffect(() => {
     if (!currentHash.startsWith('#/product/')) return;
@@ -2469,6 +2492,7 @@ const App: React.FC = () => {
   };
 
   const isPreviewRoute = currentHash.startsWith('#/preview');
+  const isAIChatRoute = currentHash.startsWith('#/ai-chat');
   const isDesignerRoute = currentHash.startsWith('#/diy-designer');
   const weChatNotice = {
     cn: {
@@ -2493,7 +2517,7 @@ const App: React.FC = () => {
 
   return (
     <HashRouter>
-      <div className={`min-h-screen font-sans text-slate-900 selection:bg-blue-100 selection:text-blue-900 ${isPreviewRoute || isDesignerRoute ? '' : 'bg-slate-50 pb-20'}`}>
+      <div className={`min-h-screen font-sans text-slate-900 selection:bg-blue-100 selection:text-blue-900 ${isPreviewRoute || isDesignerRoute || isAIChatRoute ? '' : 'bg-slate-50 pb-20'}`}>
         {showWeChatBrowserNotice && (
           <div className="fixed inset-0 z-[10000] flex items-start justify-center bg-slate-950/65 px-4 pt-16 backdrop-blur-sm" role="dialog" aria-modal="true" aria-labelledby="wechat-browser-title">
             <div className="relative w-full max-w-md rounded-[2rem] border border-amber-200 bg-white p-6 shadow-2xl">
@@ -2521,7 +2545,7 @@ const App: React.FC = () => {
             </div>
           </div>
         )}
-        {!isPreviewRoute && !isDesignerRoute && <nav className="bg-white/90 backdrop-blur-xl sticky top-0 z-40 border-b border-slate-100 shadow-sm">
+        {!isPreviewRoute && !isDesignerRoute && !isAIChatRoute && <nav className="bg-white/90 backdrop-blur-xl sticky top-0 z-40 border-b border-slate-100 shadow-sm">
           <div className="max-w-7xl mx-auto px-2 sm:px-6 min-h-[72px] sm:h-24 flex items-center gap-2 sm:gap-6">
             <Link to="/" className="flex min-w-0 shrink items-center gap-2 sm:gap-5 group">
               <div className="w-9 h-9 sm:w-14 sm:h-14 shrink-0 bg-slate-900 rounded-xl sm:rounded-[1.25rem] flex items-center justify-center text-white font-black text-xl sm:text-3xl shadow-2xl shadow-slate-900/20 group-hover:scale-105 group-hover:bg-blue-600 transition-all duration-500">M</div>
@@ -2574,8 +2598,10 @@ const App: React.FC = () => {
           </div>
         </nav>}
 
+        {!isPreviewRoute && !isDesignerRoute && <AIChatBar language={language} onLanguageChange={setLanguage} key={user?.id || 'guest'} user={user} cart={cart} onAddToCart={(items, mode) => setCart(previous => mode === 'replace' ? mergeCartItems([], items) : mergeCartItems(previous, items.filter(item => !previous.some(existing => existing.id === item.id))))} />}
         <Routes>
-          <Route path="/" element={<Catalog language={language} />} />
+          <Route path="/ai-chat" element={null} />
+          <Route path="/" element={<div id="product-catalog" className="scroll-mt-28"><Catalog language={language} /></div>} />
           <Route path="/catalog" element={<React.Suspense fallback={<div className="p-12 text-center">正在加载画册…</div>}><PrintableCatalog user={user} language={language} /></React.Suspense>} />
           <Route path="/diy-designer" element={(
             <React.Suspense fallback={<div className="min-h-[70vh] flex items-center justify-center text-slate-400 font-black">{language === 'cn' ? '正在加载 3D 设计器…' : language === 'jp' ? '3D デザイナーを読み込み中…' : 'Loading 3D designer…'}</div>}>

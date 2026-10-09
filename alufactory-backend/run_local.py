@@ -21,6 +21,7 @@ os.environ["VITE_API_URL"] = "http://127.0.0.1:5001/api"
 os.environ.pop("ALIPAY_PUBLIC_BASE_URL", None)
 os.environ["ENABLE_MAYCAD_AI_IMPORT"] = "0"
 os.environ.pop("DASHSCOPE_API_KEY", None)
+os.environ.pop("DEEPSEEK_API_KEY", None)
 
 from app import create_app  # noqa: E402
 

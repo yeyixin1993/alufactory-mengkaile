@@ -12,19 +12,21 @@ from app.routes.profiles import profile_bp
 from app.routes.accessories import accessory_bp
 from app.routes.payments import payment_bp
 from app.routes.ai_import import ai_import_bp
+from app.routes.ai_chat import ai_bp
+from app.ai_faq import seed_faq_rules
 from app.product_order_db import init_product_order_db
 from app.security import init_payload_encryption
 from app.profile_inventory import seed_profile_inventory
 from app.accessory_inventory import seed_accessory_inventory
 import os
 
-def create_app(config_name='development'):
+def create_app(config_name='development', instance_path=None):
     """Application factory"""
     # Get the base directory of the app
     base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     admin_dir = os.path.join(base_dir, 'admin')
     
-    app = Flask(__name__, static_folder=admin_dir, static_url_path='/admin')
+    app = Flask(__name__, static_folder=admin_dir, static_url_path='/admin', instance_path=instance_path)
     
     # Load configuration
     app.config.from_object(config[config_name])
@@ -55,6 +57,7 @@ def create_app(config_name='development'):
     app.register_blueprint(profile_bp)
     app.register_blueprint(accessory_bp)
     app.register_blueprint(payment_bp)
+    app.register_blueprint(ai_bp)
     # AI reconstruction stays off unless a future deployment explicitly opts
     # in after its provider and API keys are ready.
     if os.getenv('ENABLE_MAYCAD_AI_IMPORT', '0') == '1':
@@ -63,6 +66,7 @@ def create_app(config_name='development'):
     # Create database tables and run auto-migrations
     with app.app_context():
         db.create_all()
+        seed_faq_rules()
         init_product_order_db(app.instance_path)
         seed_profile_inventory()
         seed_accessory_inventory()
@@ -131,6 +135,29 @@ def create_app(config_name='development'):
                                 print(f'  ✅ Auto-migrated: added {col_name} to profiles')
                             except Exception:
                                 pass
+
+            if 'ai_accounts' in inspector.get_table_names():
+                # Chat-log origin: recorded once per account so the admin chat log can tell two
+                # anonymous guests apart. Existing rows stay NULL and read as 「—」.
+                existing_account_cols = [col['name'] for col in inspector.get_columns('ai_accounts')]
+                account_migrations = [
+                    ('first_ip', 'VARCHAR(45)'),
+                    ('first_user_agent', 'VARCHAR(300)'),
+                    ('first_seen_at', 'DATETIME'),
+                ]
+                # Run the DDL on the session connection: the seeded inventory above still holds
+                # SQLite's write lock, so a second connection gets "database is locked" and the
+                # column would silently never appear on local/dev databases.
+                for col_name, col_type in account_migrations:
+                    if col_name in existing_account_cols:
+                        continue
+                    try:
+                        db.session.execute(text(f'ALTER TABLE ai_accounts ADD COLUMN {col_name} {col_type}'))
+                        db.session.commit()
+                        print(f'  ✅ Auto-migrated: added {col_name} to ai_accounts')
+                    except Exception as exc:
+                        db.session.rollback()
+                        print(f'  ⚠️ ai_accounts.{col_name} not added: {exc}')
         except Exception as e:
             print(f'  ⚠️ Auto-migration check skipped: {e}')
     
