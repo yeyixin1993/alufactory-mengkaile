@@ -84,6 +84,12 @@
 
 ## 制造放行门禁（2026-10-03）
 
+- **几何检查的窗口必须 ≥ 文件自己的精度**（2026-10-09 踩过）：业主导出的设计文件坐标会被
+  外部流程四舍五入到 4 位小数（0.1 µm），任何 < 0.1 µm 的窗口或 5 位小数的 key 都会把
+  「同一个零件」判成「几何已变」，进而变成**打钩也放不掉的 blocking**。本项目统一按 **1 µm** 取容差；
+  **不要要求离散圆环恰好 N 个点**（那是导出器选择）。`utils/stoolAssemblyReview.ts` 的
+  `hasMeasuredMountGeometry` 是范例。另外：**文件里的 `productionRelease` 只是存它那次的记录**，
+  门禁在导入后是重新算的，别拿文件里的 `status: blocked` 当结论。
 - `inspectDesignerManufacturingPrecheck(items)` → `DesignerManufacturingRelease { applies, valid, scopes,
   blocking, advisories, issues }`。两类「还没好」必须分开：
   - `blocking` = **算出来的失败**（源件无目录身份 ⇒ 无价、真实装配错误）。**客户点同意也清不掉。**
