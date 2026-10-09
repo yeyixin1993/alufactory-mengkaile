@@ -24,12 +24,24 @@ const money = (value: number) => value.toFixed(4);
 // instead sends the reader hunting for a network problem that does not exist.
 const CONNECTION_FAILURE = /failed to fetch|networkerror|load failed|connection (refused|closed)|api request failed \((500|502|503|504)\)/i;
 
-const statusFailure = (error: any) => {
+// Why the advisor stopped serving this visitor. Signing in is the fix for every locked
+// state except a stale visitor token, which a reload clears.
+type AdvisorLock = '' | 'trial_exhausted' | 'trial_claimed' | 'guest_rate_limited' | 'visitor_token_stale';
+const LOCK_BY_REASON: Record<string, AdvisorLock> = {
+  trial_exhausted: 'trial_exhausted',
+  trial_claimed: 'trial_claimed',
+  guest_rate_limited: 'guest_rate_limited',
+  visitor_token_invalid: 'visitor_token_stale',
+  visitor_token_expired: 'visitor_token_stale',
+};
+const LOCKED = (lock: AdvisorLock) => !!lock && lock !== 'visitor_token_stale';
+
+const statusFailure = (error: any): { message: string; lock: AdvisorLock } => {
   const message = String(error?.message || '').trim();
   // An expired session already redirects to /#/login inside the API client.
-  if (/\(401\)$/.test(message)) return '';
-  if (!message || CONNECTION_FAILURE.test(message)) return '咨询服务暂时连接不上，请稍后重试，或先使用快速报价。';
-  return message;
+  if (/\(401\)$/.test(message)) return { message: '', lock: '' };
+  if (!message || CONNECTION_FAILURE.test(message)) return { message: '咨询服务暂时连接不上，请稍后重试，或先使用快速报价。', lock: '' };
+  return { message, lock: LOCK_BY_REASON[String(error?.payload?.reason || '')] || '' };
 };
 
 export default function AIChatBar({ user, onAddToCart, cart=[], language, onLanguageChange }: { language:Language;onLanguageChange:(language:Language)=>void; user: User | null; key?: string; cart?:CartItem[]; onAddToCart?: (items: CartItem[], mode?: 'append'|'replace') => void }) {
@@ -45,6 +57,7 @@ export default function AIChatBar({ user, onAddToCart, cart=[], language, onLang
   useEffect(()=>{setOpen(workspace);setSidebar(false);},[workspace]);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const [status, setStatus] = useState<any>(null);
+  const [lock, setLock] = useState<AdvisorLock>('');
   const [input, setInput] = useState('');
   const [attachment, setAttachment] = useState<ChatAttachment[]>([]);
   const [uploadMenu,setUploadMenu]=useState(false);
@@ -104,18 +117,19 @@ export default function AIChatBar({ user, onAddToCart, cart=[], language, onLang
     setStatus(data);
     setMessages(data.history || []);
     setError('');
+    setLock('');
     return data;
   };
   useEffect(() => {
     let active = true;
-    setMessages([]); setAttachment([]); setInput(''); setStatus(null); setError(''); setPending(null); setEntries(null); setOpen(workspace);
+    setMessages([]); setAttachment([]); setInput(''); setStatus(null); setError(''); setLock(''); setPending(null); setEntries(null); setOpen(workspace);
     ApiService.aiRequest('/status', { visitor_token: visitor() }).then(data => {
-      if (active) { saveVisitor(data.visitor_token); setStatus(data); setMessages(data.history || []); }
-    }).catch((err: any) => { const message = statusFailure(err); if (active && message) setError(message); });
+      if (active) { saveVisitor(data.visitor_token); setStatus(data); setMessages(data.history || []); setLock(''); }
+    }).catch((err: any) => { const failure = statusFailure(err); if (active) { setError(failure.message); setLock(failure.lock); } });
     return () => { active = false; };
   }, [user?.id]);
   useEffect(() => {
-    const focus = () => { refresh().catch((err: any) => { const message = statusFailure(err); if (message) setError(message); }); };
+    const focus = () => { refresh().catch((err: any) => { const failure = statusFailure(err); setError(failure.message); setLock(failure.lock); }); };
     window.addEventListener('focus', focus);
     return () => window.removeEventListener('focus', focus);
   }, [user?.id]);
@@ -129,7 +143,10 @@ export default function AIChatBar({ user, onAddToCart, cart=[], language, onLang
       setMessages(previous => [...previous, { role: 'user', content: text, attachments: picture || [] }, { role: 'assistant', content: result.reply, quote: result.quote, request_id: id, review: result.review }]);
       setInput(''); setAttachment([]); setPending(null);
       await refresh();
-    } catch (err: any) { setError(err.message || '发送失败，请重试。'); }
+    } catch (err: any) {
+      setError(err.message || '发送失败，请重试。');
+      const failure = statusFailure(err); if (failure.lock) setLock(failure.lock);
+    }
     finally { setBusy(false); }
   };
   useEffect(() => { if (workspace) endRef.current?.scrollIntoView({behavior:'auto',block:'end'}); }, [messages, busy]);
@@ -198,6 +215,40 @@ export default function AIChatBar({ user, onAddToCart, cart=[], language, onLang
     } catch (err: any) { setError(err.message); }
     finally { setPaying(false); }
   };
+  // Visitors always see how much of the free allowance is left (3/3 → 0/3); at 0/3 the
+  // composer stops accepting messages and offers signing in instead of a dead button.
+  const trialRemaining = status?.trial_mode ? Math.max(0, Number(status.trial_remaining) || 0) : null;
+  const trialLimit = Number(status?.trial_limit) > 0 ? Number(status.trial_limit) : 3;
+  const trialExhausted = trialRemaining !== null && trialRemaining <= 0;
+  const lockKind: AdvisorLock = lock || (trialExhausted ? 'trial_exhausted' : '');
+  const needsLogin = !user && LOCKED(lockKind);
+  const quotaText = status
+    ? status.local_unlimited
+      ? tr('本地测试 · 不限额度')
+      : trialRemaining !== null
+        ? label(
+            trialExhausted ? `游客试用已用完（${trialRemaining}/${trialLimit}）` : `剩余 ${trialRemaining}/${trialLimit} 条免费消息`,
+            trialExhausted ? `Guest trial used up (${trialRemaining}/${trialLimit})` : `${trialRemaining}/${trialLimit} free messages left`,
+            trialExhausted ? `ゲスト試用は使い切りました（${trialRemaining}/${trialLimit}）` : `無料メッセージ残り ${trialRemaining}/${trialLimit} 通`)
+        : `${label('AI 余额','AI balance','AI 残高')} ¥${money(status.balance_cny)}`
+    : LOCKED(lock)
+      ? label(
+          lock === 'guest_rate_limited' ? '本机今日试用名额已满' : '游客试用已转入账号',
+          lock === 'guest_rate_limited' ? 'No guest trial left on this network' : 'Guest trial moved to your account',
+          lock === 'guest_rate_limited' ? 'この回線の試用枠は使い切りました' : 'ゲスト試用はアカウントに引き継がれました')
+      : error ? tr('额度暂不可用') : tr('正在读取额度…');
+  const lockNotice = LOCKED(lockKind)
+    ? label(
+        lockKind === 'guest_rate_limited' ? '本机今日的游客试用名额已满，登录后可继续。'
+          : lockKind === 'trial_claimed' ? '游客试用已转入你的账号，登录后可继续。'
+          : '游客试用已用完，登录后可继续。',
+        lockKind === 'guest_rate_limited' ? 'No guest trial left on this network. Sign in to continue.'
+          : lockKind === 'trial_claimed' ? 'Your guest trial moved to your account. Sign in to continue.'
+          : 'Your guest trial is used up. Sign in to continue.',
+        lockKind === 'guest_rate_limited' ? 'この回線のゲスト試用枠は使い切りました。ログインで続行できます。'
+          : lockKind === 'trial_claimed' ? 'ゲスト試用はアカウントに引き継がれました。ログインで続行できます。'
+          : 'ゲスト試用を使い切りました。ログインで続行できます。')
+    : '';
   return <AILanguageContext.Provider value={language}>
     {aiHidden && !home && <div className={`ai-restore-bar ${workspace?'ai-restore-workspace':''}`}><button type="button" className="ai-visibility-button" onClick={()=>aiVisibility.setHidden(false)}><Sparkles size={17}/>{label('显示 AI 顾问','Show AI advisor','AIアドバイザーを表示')}</button>{workspace&&<Link to="/">{label('返回首页','Back to home','ホームへ')}</Link>}</div>}
     <section hidden={aiHidden && !home} className={`ai-entry ${workspace ? 'ai-chat-workspace' : home ? 'ai-entry-home' : 'ai-entry-compact'}`} aria-label={tr("AI 设计与咨询")}>
@@ -226,7 +277,7 @@ export default function AIChatBar({ user, onAddToCart, cart=[], language, onLang
         <button className="ai-entry-history" onClick={() => { if (!workspace) setOpen(!open); }} aria-expanded={open}><MessageSquare size={15} /> {home ? tr("咨询记录") : tr("AI 设计顾问")} {!workspace&&(open ? '▴' : '▾')}</button>
         <div className="ai-entry-account">
           {workspace && <button type="button" className="ai-visibility-button" onClick={()=>{aiVisibility.setHidden(true);setSidebar(false);}} title={label('隐藏后全站生效，返回首页自动恢复','Hide across the site; returning home restores it','サイト全体で非表示。ホームに戻ると再表示')}><X size={15}/>{label('隐藏 AI','Hide AI','AIを非表示')}</button>}
-          <span aria-live="polite">{status ? status.local_unlimited ? tr("本地测试 · 不限额度") : status.trial_mode ? (language==='cn'?`剩余 ${status.trial_remaining} 条免费消息`:language==='en'?`${status.trial_remaining} free messages left`:`無料メッセージ残り ${status.trial_remaining} 通`) : `${language==='cn'?'AI 余额':language==='en'?'AI balance':'AI 残高'} ¥${money(status.balance_cny)}` : error ? tr("额度暂不可用") : tr("正在读取额度…")}</span>
+          <span aria-live="polite">{quotaText}</span>
           <button className="text-blue-700 underline" onClick={() => setRecharge(!recharge)}>{tr("充值")}</button>
           {user && <button className="underline" onClick={async () => { try { const data = await ApiService.aiRequest('/ledger'); setEntries(data.entries); } catch (e: any) { setError(e.message); } }}>{tr("收支记录")}</button>}
           <button className="underline" onClick={() => refresh().catch(err => setError(err.message))}>{tr("刷新余额")}</button>
@@ -252,7 +303,10 @@ export default function AIChatBar({ user, onAddToCart, cart=[], language, onLang
             {uploadMenu&&<div className="ai-upload-menu" role="menu"><button type="button" role="menuitem" disabled={!status?.vision_enabled} onClick={()=>fileRef.current?.click()}><ImagePlus size={18}/>{label('图片','Images','画像')}</button><button type="button" role="menuitem" onClick={()=>documentRef.current?.click()}><FileText size={18}/>{label('文件','Files','ファイル')}</button><small>PDF · DOCX · XLSX · CSV · TXT</small><small>{label("最多8个附件，合计20MB", "Up to 8 attachments, 20MB total", "添付8件・合計20MBまで")}</small></div>}
             {reading&&<span role="status">{label('读取附件…','Reading…','読み込み中…')}</span>}
           </div>
-          <button aria-label={busy ? tr("正在处理") : tr("发送需求")} disabled={busy || reading || !status?.enabled || (!status?.configured && !status?.local_answers_available) || (!input.trim() && !attachment.length)} className="ai-entry-send">{busy ? <span className="ai-entry-loading">···</span> : <><span>{tr("开始咨询")}</span><ArrowUp size={19} /></>}</button>
+          <div className="ai-entry-actions">
+            <button aria-label={busy ? tr("正在处理") : tr("发送需求")} disabled={busy || reading || trialExhausted || !status?.enabled || (!status?.configured && !status?.local_answers_available) || (!input.trim() && !attachment.length)} className="ai-entry-send">{busy ? <span className="ai-entry-loading">···</span> : <><span>{tr("开始咨询")}</span><ArrowUp size={19} /></>}</button>
+            {needsLogin && <Link to="/login" className="ai-entry-login">{tr("登录")}</Link>}
+          </div>
         </div>
       </form>
       {home && !messages.length && <div className="ai-entry-suggestions" aria-label="试试这些问题">
@@ -260,6 +314,7 @@ export default function AIChatBar({ user, onAddToCart, cart=[], language, onLang
       </div>}
       <div className="ai-entry-notices">
       <p className="text-xs text-slate-500 mb-3">{status?.local_unlimited ? tr("本地测试不限额度 · AI 识别结果请核对") : tr("游客及普通用户免费发送 3 条消息，回复追问也计入次数。VIP/VIP+ 使用账户额度。")}</p>
+      {lockNotice && <p className="ai-entry-lock mb-3">{lockNotice} <Link to="/login" className="underline">{tr("登录")}</Link></p>}
       {status && (!status.enabled || (!status.configured && !status.local_answers_available)) && <p className="text-sm text-amber-800 mb-3">AI 咨询暂未开通，您可以先使用<Link to="/quick-quote" className="underline">{tr("快速报价")}</Link>。</p>}
       {status?.enabled && !status.configured && status.local_answers_available && <p className="text-sm text-slate-600 mb-3">目前可回答已收录的常见问题；智能规格识别暂未开通，估价请使用<Link to="/quick-quote" className="underline">{tr("快速报价")}</Link>。</p>}
       </div>

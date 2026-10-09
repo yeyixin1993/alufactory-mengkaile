@@ -130,3 +130,13 @@
 .ai-restore-workspace{min-height:100dvh;justify-content:center;flex-direction:column}
 .ai-restore-workspace>a{font-size:14px;color:#64748b}
 @media(max-width:640px){.ai-restore-bar{padding:8px 16px}.ai-visibility-button{min-height:36px}}
+
+/* Out of free messages: the composer keeps the send button disabled and offers signing in
+   next to it, and the notice line says which allowance ran out. */
+.ai-entry-actions{display:flex;align-items:center;gap:8px;flex-shrink:0}
+.ai-entry-login{display:inline-flex;align-items:center;justify-content:center;min-height:36px;padding:0 16px;border-radius:999px;background:#4d6bfe;color:#fff;font-size:13px;font-weight:600;white-space:nowrap}
+.ai-entry-login:hover{background:#3b55dc}
+.ai-entry-home .ai-entry-login{min-height:42px}
+.ai-entry-notices p.ai-entry-lock{color:#b45309;margin-bottom:10px}
+.ai-entry-home .ai-entry-notices p.ai-entry-lock,.ai-chat-workspace .ai-entry-notices p.ai-entry-lock{color:#b45309;font-size:12px;margin-bottom:10px}
+@media(max-width:640px){.ai-entry-login{min-height:44px;padding:0 14px}}

@@ -60,7 +60,25 @@ class AIChatTest(unittest.TestCase):
         self.assertEqual(self.status('standard', token).json['trial_remaining'], 2)
         self.assertEqual(self.status(None, token).status_code, 400)
         for i in (2,3): self.assertEqual(self.chat('standard', i).status_code, 200)
-        self.assertEqual(self.chat('standard', 4).status_code, 409)
+        spent = self.chat('standard', 4)
+        self.assertEqual(spent.status_code, 409)
+        self.assertEqual(spent.json['reason'], 'trial_exhausted')
+
+    def test_guest_lock_reasons_reach_the_client(self):
+        # The composer switches on `reason`, never on the Chinese copy, so a refused guest
+        # gets "sign in to continue" (and a disabled send button) instead of a dead end.
+        self.assertEqual(self.status('standard').json['trial_limit'], 3)
+        token = self.status(None).json['visitor_token']
+        guest = AIAccount.query.filter(AIAccount.id.like('g:%')).one()
+        guest.claimed_by = 'u:standard'
+        db.session.commit()
+        claimed = self.status(None, token)
+        self.assertEqual(claimed.status_code, 400)
+        self.assertEqual(claimed.json['reason'], 'trial_claimed')
+        for _ in range(12):
+            throttled = self.status(None)
+        self.assertEqual(throttled.status_code, 400)
+        self.assertEqual(throttled.json['reason'], 'guest_rate_limited')
 
     @patch('app.routes.ai_chat.provider_extract', side_effect=TimeoutError())
     def test_timeout_not_charged(self, _):

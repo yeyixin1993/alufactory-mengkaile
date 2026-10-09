@@ -86,29 +86,46 @@ def rate_limit(bucket, limit):
     return bool(changed)
 
 
+class IdentityError(ValueError):
+    """Identity problem the advisor UI has to tell apart.
+
+    The message stays the human copy; the reason is the machine-readable switch the UI
+    uses to choose between "sign in to continue" and "reload the page". Copy edits must
+    not change behaviour, so the UI never parses the message.
+    """
+
+    def __init__(self, message, reason):
+        super().__init__(message)
+        self.reason = reason
+
+
+def identity_error(exc):
+    return jsonify(error=str(exc), reason=getattr(exc, 'reason', '')), 400
+
+
 def identity(data):
     uid = get_jwt_identity()
     user = db.session.get(User, uid) if uid else None
     if uid and (not user or not user.is_active):
-        raise ValueError('账号不可用。')
+        raise IdentityError('账号不可用。', 'account_disabled')
     token = data.get('visitor_token', '')
     guest_id = None
     if token:
         try:
             guest_id = signer().loads(token, max_age=365 * 86400)
             if not isinstance(guest_id, str) or not guest_id.startswith('g:'):
-                raise ValueError('访客凭据无效。')
+                raise IdentityError('访客凭据无效。', 'visitor_token_invalid')
         except BadSignature:
-            raise ValueError('访客凭据已失效，请刷新页面重试。')
+            raise IdentityError('访客凭据已失效，请刷新页面重试。', 'visitor_token_expired')
     if not user and not guest_id:
         day = datetime.utcnow().strftime('%Y-%m-%d')
         if not rate_limit(f'guest:{request.remote_addr}:{day}', 10):
-            raise ValueError('当前网络试用申请过于频繁，请登录后使用。')
+            raise IdentityError('当前网络试用申请过于频繁，请登录后使用。', 'guest_rate_limited')
         guest_id = 'g:' + str(uuid.uuid4())
         token = signer().dumps(guest_id)
     account = ensure_account('u:' + user.id if user else guest_id)
     if not user and account.claimed_by:
-        raise ValueError('试用次数已转入注册账号，请登录使用。')
+        raise IdentityError('试用次数已转入注册账号，请登录使用。', 'trial_claimed')
     if user and guest_id:
         guest = db.session.get(AIAccount, guest_id)
         if guest and not guest.claimed_by and not guest.busy:
@@ -141,6 +158,7 @@ def account_view(account, user, membership):
     history = transcript(account)
     db.session.commit()
     return {'balance_cny': account.balance / SCALE, 'trial_remaining': max(0, account.trial_limit-account.trial_used),
+            'trial_limit': account.trial_limit,
             'local_answers_available': AIFaqRule.query.filter_by(enabled=True).first() is not None,
             'trial_mode': trial, 'enabled': conf.enabled and account.enabled, 'configured': configured(),
             'signed_in': bool(user), 'history': history, 'conversation_id': conversation.id, 'conversations': conversation_list(account), 'local_unlimited': local_unlimited(), 'vision_enabled': provider_name() == 'deepseek' and configured(),
@@ -158,7 +176,7 @@ def status():
         return jsonify(**account_view(account, user, membership), visitor_token=token,
                        wechat_qr=qr, wechat_contact=conf.get('wechat_contact', ''))
     except ValueError as exc:
-        return jsonify(error=str(exc)), 400
+        return identity_error(exc)
 
 
 def image_input(value):
@@ -335,7 +353,7 @@ def chat():
         request_id = str(uuid.UUID(str(data.get('request_id'))))
         account, user, token, membership = identity(data)
     except (ValueError, TypeError) as exc:
-        return jsonify(error=str(exc)), 400
+        return identity_error(exc)
     try:
         attachments, file_text = [], ''
         if 'attachments' in data:
@@ -384,7 +402,12 @@ def chat():
     changed = query.update({'busy': request_id})
     if not changed:
         db.session.rollback()
-        return jsonify(error='余额不足、试用已用完或上一条消息仍在处理中。'), 409
+        # Tell "the three free messages are gone" apart from "the last one is still running",
+        # so the composer can offer signing in instead of a retry.
+        fresh = db.session.get(AIAccount, account.id)
+        spent = bool(trial and fresh and fresh.trial_used >= fresh.trial_limit)
+        return jsonify(error='余额不足、试用已用完或上一条消息仍在处理中。',
+                       reason='trial_exhausted' if spent else ''), 409
     db.session.expire(conversation)
     if not conversation.active:
         db.session.rollback()
@@ -511,7 +534,7 @@ def quote_snapshot():
         account, _, _, membership = identity(data)
         request_id = str(uuid.UUID(str(data.get('request_id'))))
     except (ValueError, TypeError) as exc:
-        return jsonify(error=str(exc)), 400
+        return identity_error(exc)
     row = db.session.get(AIRequest, account.id + ':' + request_id)
     quote = row.response.get('quote') if row and row.status == 'completed' and row.response else None
     if not quote:
@@ -543,7 +566,7 @@ def edit_profile():
         account, _, _, membership = identity(data)
         request_id = str(uuid.UUID(str(data.get('request_id'))))
     except (ValueError, TypeError) as exc:
-        return jsonify(error=str(exc)), 400
+        return identity_error(exc)
     # Lock before reading state so chat and editor saves cannot overwrite each other.
     if not AIAccount.query.filter_by(id=account.id,busy=None).update({'busy':'profile-edit'}):
         db.session.rollback()
@@ -609,7 +632,7 @@ def order_configuration():
         account, _, _, membership = identity(data)
         request_id = str(uuid.UUID(str(data.get('request_id'))))
     except (ValueError, TypeError) as exc:
-        return jsonify(error=str(exc)),400
+        return identity_error(exc)
     if not AIAccount.query.filter_by(id=account.id,busy=None).update({'busy':'order-config'}):
         db.session.rollback()
         return jsonify(error='对话正在更新，请稍后重试。'),409
@@ -657,7 +680,7 @@ def reset():
     try:
         account, _, _, _ = identity(request.get_json(silent=True) or {})
     except ValueError as exc:
-        return jsonify(error=str(exc)), 400
+        return identity_error(exc)
     if not AIAccount.query.filter_by(id=account.id, busy=None).update({'busy': 'conversation-switch'}):
         return jsonify(error='请等待当前消息处理完成。'), 409
     old = current_conversation(account)
@@ -676,7 +699,7 @@ def reset():
 def open_conversation():
     data=request.get_json(silent=True) or {}
     try: account,user,token,membership=identity(data)
-    except ValueError as exc: return jsonify(error=str(exc)),400
+    except ValueError as exc: return identity_error(exc)
     target=db.session.get(AIConversation,data.get('conversation_id',''))
     if not target or target.account_id != account.id: return jsonify(error='找不到该对话。'),404
     if not AIAccount.query.filter_by(id=account.id,busy=None).update({'busy':'conversation-switch'}):
