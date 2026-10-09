@@ -256,7 +256,7 @@ export default function AIChatBar({ user, onAddToCart, cart=[], language, onLang
         </div>
       </form>
       {home && !messages.length && <div className="ai-entry-suggestions" aria-label="试试这些问题">
-        {['报价需要提供什么信息', '两端攻丝是什么意思', '能做和图片一样的吗'].map(example => <button key={example} onClick={() => { setInput(example); inputRef.current?.focus(); }}><Plus size={13} />{example}</button>)}
+        {['报价需要提供什么信息', '截面本色/彩色是什么意思', '能做和图片一样的吗'].map(example => <button key={example} onClick={() => { setInput(example); inputRef.current?.focus(); }}><Plus size={13} />{example}</button>)}
       </div>}
       <div className="ai-entry-notices">
       <p className="text-xs text-slate-500 mb-3">{status?.local_unlimited ? tr("本地测试不限额度 · AI 识别结果请核对") : tr("游客及普通用户免费发送 3 条消息，回复追问也计入次数。VIP/VIP+ 使用账户额度。")}</p>

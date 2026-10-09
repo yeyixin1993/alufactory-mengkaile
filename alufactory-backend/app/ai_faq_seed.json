@@ -82,6 +82,20 @@
     "notes": ""
   },
   {
+    "id": "color-section-meaning",
+    "category": "颜色与表面",
+    "question": "截面本色/彩色是什么意思",
+    "aliases": [
+      "截面本色是什么意思",
+      "截面彩色是什么意思",
+      "截面本色和彩色分别是什么意思"
+    ],
+    "answer": "“截面”指型材切割后的端面。截面本色保留切口铝材的银白本色；截面彩色则表面与切口都是所选颜色（价格表称“截面同色”），加工方式与价格可能不同。若某个颜色只有一种截面选项会自动采用，只有确实有多个选项时才需要您选择。",
+    "source": "components/ProfileSectionGuide.tsx; components/PrintableCatalog.tsx; docs/DIY_DESIGNER_PROJECT_KNOWLEDGE.md",
+    "enabled": true,
+    "notes": "与 color-section 同一话题、只是问法不同（首页引导词）。修改答案时请与 color-section 一并同步。"
+  },
+  {
     "id": "color-screen",
     "category": "颜色与表面",
     "question": "颜色以图片为准吗",

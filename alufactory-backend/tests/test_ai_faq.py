@@ -1,5 +1,7 @@
 import json
+import re
 import unittest
+from pathlib import Path
 from unittest.mock import patch
 from flask import Flask
 from flask_jwt_extended import JWTManager, create_access_token
@@ -41,18 +43,33 @@ class FAQTest(unittest.TestCase):
         return self.client.post('/api/ai/chat', headers=self.headers(uid), json={'message':text, 'request_id':f'00000000-0000-4000-8000-{index:012d}'})
 
     def test_seed_and_exact_matching(self):
-        self.assertEqual(AIFaqRule.query.count(),35)
-        self.assertEqual(AIFaqRule.query.filter_by(enabled=True).count(),35)
+        self.assertEqual(AIFaqRule.query.count(),36)
+        self.assertEqual(AIFaqRule.query.filter_by(enabled=True).count(),36)
         self.assertEqual(match_faq('  两端攻丝是什么意思？ ').id,'machining-tapping')
         self.assertEqual(match_faq('什么叫两端攻丝').id,'machining-tapping')
         self.assertIsNone(match_faq('不要两端攻丝是什么意思'))
         self.assertIsNone(match_faq('两端攻丝是什么意思，另外我要100根'))
+        self.assertEqual(match_faq('  截面本色/彩色是什么意思？ ').id,'color-section-meaning')
+        self.assertEqual(match_faq('截面本色是什么意思').id,'color-section-meaning')
         self.assertIn('3–5 个工作日', match_faq('多久发货').answer)
         self.assertNotEqual(normalize_question('1.5mm'), normalize_question('15mm'))
         self.assertNotEqual(normalize_question('两端攻丝是什么意思，另外我要100根'), normalize_question('两端攻丝是什么意思'))
         response = self.client.get('/api/ai/admin/faq', headers={**self.headers(), 'Content-Type':'application/json'})
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(len(response.json['rules']), 35)
+        self.assertEqual(len(response.json['rules']), 36)
+
+    def test_home_suggestion_chips_have_verified_answers(self):
+        # The three chips under the home-page composer must be exact FAQ hits.
+        # A chip without a rule silently falls through to the paid model instead.
+        source = (Path(__file__).resolve().parents[2] / 'components' / 'AIChatBar.tsx').read_text(encoding='utf-8')
+        chips = re.search(r'ai-entry-suggestions.*?\[([^\]]+)\]', source, re.S)
+        self.assertIsNotNone(chips, '首页引导词列表不见了，请同步本用例')
+        questions = re.findall(r"'([^']+)'", chips.group(1))
+        self.assertEqual(len(questions), 3)
+        for question in questions:
+            rule = match_faq(question)
+            self.assertIsNotNone(rule, f'首页引导词没有已核实答案：{question}')
+            self.assertTrue(rule.enabled)
 
     @patch('app.routes.ai_chat.provider_extract')
     def test_local_answer_without_provider_and_idempotency(self, provider):
