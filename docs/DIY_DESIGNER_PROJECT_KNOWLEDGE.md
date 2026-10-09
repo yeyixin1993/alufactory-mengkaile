@@ -684,3 +684,13 @@ Aluminum plates and pegboards now offer ONLY 2mm and 5mm to every membership lev
 Save separate conversations in the server database, with request membership and uploaded image data. New chat archives the previous model context instead of deleting it; switching restores that conversation's complete transcript, latest quote/configuration and bounded model context. History is scoped to the authenticated account or signed browser visitor identity. Conversation switching and new-chat creation share the account busy lock; stale-tab sends must reject a mismatched conversation ID. Keep quota and balances account-wide. Preserve legacy request records as one recovered conversation where original session boundaries are unavailable.
 
 2026-10-08：首页及非聊天页入口发送（回车或发送按钮）创建新会话后提交首条消息；聊天工作区继续当前会话。首页不显示上一会话的图片确认按钮。保留原对话历史及账户额度，不能通过新会话重置试用。
+
+
+### 2026-10-09 — 客户确认的导入配件术语
+后续 JSON 转换沿用 [导入配件术语映射](IMPORTED_ACCESSORY_TERMS.md)：Three-way connector S30 / 本次 threeway cube 对应3030三通（tee_connector）；Angle bracket S30 对应3030 1号角码（connector）。这是用户确认的配件身份，不解除装配与生产审核限制。当前记录为人工转换依据，尚未接入通用导入自动映射。
+
+- **2026-10-09 补充：** 客户确认 Source fixed support / fixed_support 在本次3030模型中对应3030 3号角码（商品目录 ID 3）。设计器尚无独立原生类型，保留其源网格并记录人工确认，不套用其他角码几何；详见导入配件术语映射。
+
+- **2026-10-09 角码转换纠正：** Angle bracket S30与原生No.1的局部安装平面和原点不同。转换采用源旋转右乘Ry(90°)，并以源旋转转换[0,-14.265,15]mm原点偏移；禁止仅保留旧变换后替换kind。原生No.1基准不变。详见术语表和scripts/fix-stool-no1-basis.mjs。
+
+- **2026-10-09 — 人工审核放行：** 用户要求源模型/凳子设计可人工放行，替代此前无人工出口的固定阻断。工具栏提供审核按钮，逐项确认自动检查未决事项并填写审核人及说明；状态为manually_released，自动检查结果不伪装为通过。当前内存模型修改即失效；重新导入必须再次确认。设计JSON、生产JSON与购物车配置保留放行记录。源配件采购/未计价项仍须单独核价；人工放行不是承载认证。

@@ -730,6 +730,9 @@ def admin_account(user_id):
             if not delta_decimal.is_finite() or abs(delta_decimal) > 100000:
                 raise ValueError()
             delta = int(delta_decimal * SCALE)
+            method = data.get('payment_method', 'adjustment')
+            if method not in ('adjustment', 'wechat') or (method == 'wechat' and delta <= 0):
+                raise ValueError()
             limit = data.get('trial_limit', account.trial_limit)
             enabled = data.get('enabled', account.enabled)
             reason = str(data.get('reason', '')).strip()
@@ -745,7 +748,7 @@ def admin_account(user_id):
             db.session.rollback()
             return jsonify(error='余额不能为负，或用户当前有消息正在处理。'), 409
         db.session.add(AILedger(id=ledger_id, account_id=account.id, kind='manual', delta=delta,
-            detail={'operator': get_jwt_identity(), 'reason': reason, 'enabled': enabled, 'trial_limit': limit}))
+            detail={'operator': get_jwt_identity(), 'reason': reason, 'enabled': enabled, 'trial_limit': limit, 'method': method}))
         try:
             db.session.commit()
         except IntegrityError:
@@ -769,9 +772,11 @@ def recharge():
     if not user or not user.is_active:
         return jsonify(error='请登录有效账号。'), 403
     data = request.get_json(silent=True) or {}
-    amount = data.get('amount_cny')
-    if type(amount) is not int or amount not in (10, 30, 100):
-        return jsonify(error='请选择 ¥10、¥30 或 ¥100。'), 400
+    try:
+        amount_fen = recharge_amount(data.get('amount_cny'))
+        amount = Decimal(amount_fen) / 100
+    except ValueError:
+        return jsonify(error='请输入 ¥1 至 ¥100000 的金额，最多两位小数。'), 400
     try:
         operation = str(uuid.UUID(str(data.get('operation_id'))))
     except ValueError:
@@ -786,12 +791,12 @@ def recharge():
     ensure_account('u:' + user.id)
     key = 'AI' + operation.replace('-', '')
     row = db.session.get(AIRecharge, key)
-    if row and (row.account_id != 'u:' + user.id or row.amount_fen != amount*100):
+    if row and (row.account_id != 'u:' + user.id or row.amount_fen != amount_fen):
         return jsonify(error='充值请求编号冲突。'), 409
     if row and row.paid:
         return jsonify(error='该充值已到账，请刷新余额。'), 409
     if not row:
-        row = AIRecharge(id=key, account_id='u:' + user.id, amount_fen=amount*100)
+        row = AIRecharge(id=key, account_id='u:' + user.id, amount_fen=amount_fen)
         db.session.add(row)
         try:
             db.session.commit()
@@ -921,3 +926,141 @@ def faq_preview():
     matched = match_faq(message)
     return jsonify(matched=bool(matched), rule=serialize_rule(matched) if matched else None,
                    note='只测试已保存且启用的规则，不调用模型、不扣任何额度或试用次数。')
+
+
+@ai_bp.route('/admin/recharges', methods=['GET'])
+@admin_required
+def admin_recharges():
+    from sqlalchemy import or_, and_
+    try:
+        page=max(1,int(request.args.get('page',1)))
+    except ValueError:
+        return jsonify(error='页码无效。'),400
+    method=request.args.get('method','all')
+    if method not in ('all','alipay','wechat','adjustment'):
+        return jsonify(error='充值方式无效。'),400
+    q=AILedger.query.outerjoin(User,AILedger.account_id == db.literal('u:') + User.id).filter(AILedger.kind.in_(['recharge','manual']),AILedger.delta != 0)
+    keyword=request.args.get('q','').strip()[:100]
+    if keyword:
+        term='%'+keyword.replace('\\','\\\\').replace('%','\\%').replace('_','\\_')+'%'
+        q=q.filter(or_(User.phone.like(term,escape='\\'),User.username.like(term,escape='\\'),AILedger.account_id==keyword))
+    is_wechat=and_(AILedger.kind=='manual',AILedger.detail['method'].as_string()=='wechat')
+    cash=or_(AILedger.kind=='recharge',is_wechat)
+    if method=='alipay':q=q.filter(AILedger.kind=='recharge')
+    elif method=='wechat':q=q.filter(is_wechat)
+    elif method=='adjustment':q=q.filter(AILedger.kind=='manual',or_(AILedger.detail['method'].as_string().is_(None),AILedger.detail['method'].as_string()!='wechat'))
+    count=q.count()
+    paid=q.filter(cash,AILedger.delta>0)
+    total=db.session.query(db.func.coalesce(db.func.sum(AILedger.delta),0)).filter(AILedger.id.in_(paid.with_entities(AILedger.id))).scalar()
+    records=[]
+    for row in q.order_by(AILedger.created_at.desc(),AILedger.id.desc()).offset((page-1)*30).limit(30):
+        user=db.session.get(User,row.account_id[2:]) if row.account_id.startswith('u:') else None
+        detail=row.detail or {}
+        channel='alipay' if row.kind=='recharge' else 'wechat' if detail.get('method')=='wechat' else 'adjustment'
+        records.append({'id':row.id,'account_id':row.account_id,'username':user.username if user else '', 'phone':user.phone if user else '', 'amount_cny':row.delta/SCALE,'method':channel,'status':'credited' if channel!='adjustment' else 'adjusted','time':row.created_at.isoformat()+'Z','trade_no':detail.get('trade_no',''),'reason':detail.get('reason',''),'operator':detail.get('operator','支付宝回调')})
+    return jsonify(records=records,page=page,total=count,pages=max(1,(count+29)//30),paid_count=paid.count(),paid_cny=total/SCALE)
+
+
+def recharge_amount(value):
+    try:
+        amount = Decimal(str(value))
+        if not amount.is_finite() or not 1 <= amount <= 100000 or amount * 100 != (amount * 100).to_integral_value():
+            raise ValueError()
+        return int(amount * 100)
+    except Exception:
+        raise ValueError('invalid amount')
+
+
+def wechat_application(row):
+    user = db.session.get(User, row.account_id[2:])
+    return dict(id=row.id, amount_cny=row.amount_fen/100, phone=row.phone,
+        account_phone=user.phone if user else '', username=user.username if user else '',
+        wechat_id=row.note, status=row.status, trade_no=row.trade_no, review_note=row.review_note,
+        created_at=row.created_at.isoformat()+'Z')
+
+
+@ai_bp.route('/wechat-applications', methods=['GET', 'POST'])
+@jwt_required()
+def wechat_applications():
+    from app.ai_models import AIWechatApplication
+    user = db.session.get(User, get_jwt_identity())
+    if not user or not user.is_active:
+        return jsonify(error='请登录有效账号。'), 403
+    account_id = 'u:' + user.id
+    if request.method == 'GET':
+        page = max(1, request.args.get('page', 1, type=int) or 1)
+        query = AIWechatApplication.query.filter_by(account_id=account_id)
+        count = query.count()
+        rows = query.order_by(AIWechatApplication.created_at.desc()).offset((page-1)*30).limit(30)
+        return jsonify(records=[wechat_application(row) for row in rows], page=page, pages=max(1,(count+29)//30))
+    data = request.get_json(silent=True) or {}
+    try:
+        operation = str(uuid.UUID(str(data.get('operation_id'))))
+        fen = recharge_amount(data.get('amount_cny'))
+        phone = str(data.get('phone', '')).strip()
+        note = str(data.get('wechat_id', '')).strip()
+        if not re.fullmatch(r'[+0-9 ()-]{6,30}', phone) or len(note) > 100:
+            raise ValueError()
+    except ValueError:
+        return jsonify(error='请填写有效金额及手机号；微信号选填，最多100字。'), 400
+    old = db.session.get(AIWechatApplication, operation)
+    if old:
+        if (old.account_id,old.amount_fen,old.phone,old.note) != (account_id,fen,phone,note):
+            return jsonify(error='申请编号冲突。'),409
+        return jsonify(record=wechat_application(old))
+    ensure_account(account_id)
+    row = AIWechatApplication(id=operation,account_id=account_id,amount_fen=fen,phone=phone,note=note)
+    db.session.add(row)
+    try:
+        db.session.commit()
+    except IntegrityError:
+        db.session.rollback()
+        return jsonify(error='申请已提交，请刷新记录。'),409
+    return jsonify(record=wechat_application(row)),201
+
+
+@ai_bp.route('/admin/wechat-applications', methods=['GET'])
+@admin_required
+def admin_wechat_applications():
+    from app.ai_models import AIWechatApplication
+    page = request.args.get('page',1,type=int)
+    page = max(1,page or 1)
+    query = AIWechatApplication.query
+    count = query.count()
+    rows = query.order_by((AIWechatApplication.status=='pending').desc(),AIWechatApplication.created_at.desc()).offset((page-1)*30).limit(30)
+    return jsonify(records=[wechat_application(row) for row in rows],page=page,pages=max(1,(count+29)//30))
+
+
+@ai_bp.route('/admin/wechat-applications/<application_id>/review', methods=['POST'])
+@admin_required
+def review_wechat_application(application_id):
+    from app.ai_models import AIWechatApplication
+    data = request.get_json(silent=True) or {}
+    decision = data.get('decision')
+    trade = str(data.get('trade_no','')).strip()
+    note = str(data.get('note','')).strip()
+    if decision not in ('approve','reject') or len(note)>500 or (decision=='approve' and not 1<=len(trade)<=100) or (decision=='reject' and not note):
+        return jsonify(error='通过需填写核实的微信交易号，拒绝需填写原因。'),400
+    row = db.session.get(AIWechatApplication,application_id)
+    if not row:
+        return jsonify(error='申请不存在。'),404
+    if row.status != 'pending':
+        return jsonify(error='该申请已处理，请刷新。'),409
+    status = 'credited' if decision=='approve' else 'rejected'
+    try:
+        changed = AIWechatApplication.query.filter_by(id=application_id,status='pending').update(dict(status=status,trade_no=trade if decision=='approve' else None,reviewer=get_jwt_identity(),review_note=note,reviewed_at=datetime.utcnow()),synchronize_session=False)
+        if not changed:
+            db.session.rollback()
+            return jsonify(error='该申请已处理。'),409
+        if decision=='approve':
+            delta = row.amount_fen * (SCALE//100)
+            updated = AIAccount.query.filter_by(id=row.account_id).update({'balance':AIAccount.balance+delta},synchronize_session=False)
+            if not updated:
+                db.session.rollback()
+                return jsonify(error='账户不存在，无法入账。'),409
+            db.session.add(AILedger(id='wechat:'+row.id,account_id=row.account_id,kind='manual',delta=delta,detail={'method':'wechat','trade_no':trade,'reason':'微信充值申请审核通过','wechat_id':row.note,'operator':get_jwt_identity(),'application_id':row.id}))
+        db.session.commit()
+    except IntegrityError:
+        db.session.rollback()
+        return jsonify(error='此微信交易号已入账，或申请已处理，请核对。'),409
+    return jsonify(status=status)

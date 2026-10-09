@@ -1504,11 +1504,20 @@ export const buildProductionData = (items: DIYSceneItem[], language: Language) =
   return { parts, holes };
 };
 
+export interface DesignerManualRelease {
+  status: 'manually_released';
+  reviewer: string;
+  reviewedAt: string;
+  note: string;
+  acknowledgedIssues: string[];
+}
+
 export const buildDesignDocument = (
   items: DIYSceneItem[],
   language: Language,
   provenance: DesignSourceInfo,
   finishedFurniture?: FinishedFurnitureQuote | null,
+  manualRelease?: DesignerManualRelease | null,
 ) => ({
   format: 'mengkaile-diy',
   schemaVersion: 2,
@@ -1524,7 +1533,8 @@ export const buildDesignDocument = (
   },
   items: normalizeDesignItems(items),
   ...(inspectDesignerManufacturingPrecheck(items).applies ? {
-    productionRelease: { status: 'blocked' as const, ...inspectDesignerManufacturingPrecheck(items) },
+    productionRelease: { ...inspectDesignerManufacturingPrecheck(items), status: 'blocked' as const, ...(manualRelease || {}) },
+    ...(manualRelease ? { production: buildProductionData(items, language) } : {}),
     stoolAssemblyReview: reviewStoolAssembly(items),
   } : { production: buildProductionData(items, language) }),
 });
@@ -10588,6 +10598,17 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({
     }
   });
   const [items, setItems] = useState<DIYSceneItem[]>(initialDraft.items);
+  const [releaseDialog, setReleaseDialog] = useState(false);
+  const [releaseChecks, setReleaseChecks] = useState<number[]>([]);
+  const [releaseReviewer, setReleaseReviewer] = useState('');
+  const [releaseNote, setReleaseNote] = useState('');
+  const [manualRelease, setManualRelease] = useState<{ items: DIYSceneItem[]; record: DesignerManualRelease } | null>(null);
+  const activeRelease = manualRelease?.items === items ? manualRelease.record : null;
+  const releasePrecheck = useMemo(() => inspectDesignerManufacturingPrecheck(items), [items]);
+  const releaseLabel = (cn: string, en: string, jp: string) => language === 'cn' ? cn : language === 'en' ? en : jp;
+  const openReleaseReview = () => { setReleaseChecks([]); setReleaseNote(''); setReleaseDialog(true); };
+  useEffect(() => { setReleaseChecks([]); }, [items]);
+
   const [draftError, setDraftError] = useState(initialDraft.failed ? t.draftReadFailed : '');
   const [designSource, setDesignSource] = useState<DesignSourceInfo>(() => (
     createDesignSourceInfo('manual_designer')
@@ -11612,7 +11633,7 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({
 
   const save = () => {
     downloadTextFile(
-      JSON.stringify(buildDesignDocument(items, language, designSource, finishedFurnitureQuote)),
+      JSON.stringify(buildDesignDocument(items, language, designSource, finishedFurnitureQuote, activeRelease)),
       'application/json;charset=utf-8',
       `mengkaile-design-${new Date().toISOString().slice(0, 10)}.json`,
     );
@@ -11632,19 +11653,20 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({
 
   const productionAllowed = () => {
     const release = inspectDesignerManufacturingPrecheck(items);
-    if (release.applies && !release.valid) { showNotice(release.issues.join(' ')); return false; }
+    if (release.applies && !release.valid && !activeRelease) { openReleaseReview(); return false; }
     return true;
   };
 
   const exportJson = () => {
     if (!productionAllowed()) return;
-    const document = buildDesignDocument(items, language, designSource, finishedFurnitureQuote);
+    const document = buildDesignDocument(items, language, designSource, finishedFurnitureQuote, activeRelease);
     downloadTextFile(
       JSON.stringify({
         format: document.format,
         schemaVersion: document.schemaVersion,
         exportedAt: new Date().toISOString(),
         provenance: document.provenance,
+        productionRelease: activeRelease || undefined,
         ...(document.finishedFurniture ? { finishedFurniture: document.finishedFurniture } : {}),
         grooveConvention: document.grooveConvention,
         production: 'production' in document ? document.production : undefined,
@@ -12150,7 +12172,7 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({
       showNotice(t.importCancelled);
       return;
     }
-    onAddBatchToCart(toCartItems(), choice);
+    onAddBatchToCart(toCartItems().map(item => activeRelease ? { ...item, config: { ...item.config, designerManualRelease: activeRelease } } : item), choice);
     showNotice(t.cartAdded);
     window.setTimeout(() => navigate('/cart'), 450);
   };
@@ -12253,6 +12275,18 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({
 
   return (
     <div className="min-h-[calc(100vh-88px)] bg-slate-100 xl:flex xl:h-screen xl:min-h-0 xl:flex-col xl:overflow-hidden">
+      {releaseDialog && <div className="fixed inset-0 z-[200] flex items-center justify-center bg-slate-950/50 p-4" onKeyDown={e=>{if(e.key==='Escape')setReleaseDialog(false);}}>
+        <section role="dialog" aria-modal="true" aria-labelledby="manual-release-title" className="max-h-[85dvh] w-full max-w-2xl overflow-y-auto rounded-2xl bg-white p-6 shadow-xl">
+          <h2 id="manual-release-title" className="text-xl font-bold">{releaseLabel('人工审核放行当前模型','Manually release this model','現在のモデルを手動承認')}</h2>
+          <p className="my-3 text-sm text-slate-600">{releaseLabel('以下是自动检查尚未确认的项目。确认表示你已完成核对，或已明确交由工厂确认；不代表系统验证通过。源部件的采购和未计价项目仍须单独核价。','Confirm that each unresolved check has been reviewed or explicitly assigned to the factory. This is manual approval, not automated verification. Source parts and unpriced items still require separate pricing.','未確認項目を確認済み、または工場に確認を依頼した場合に承認してください。自動検証の合格ではありません。未価格部品は別途見積もりが必要です。')}</p>
+          {releasePrecheck.issues.map((issue,index)=><label key={issue} className="my-3 flex items-start gap-3 rounded-xl border border-slate-200 p-3 text-sm"><input type="checkbox" checked={releaseChecks.includes(index)} onChange={e=>setReleaseChecks(v=>e.target.checked?[...v,index]:v.filter(n=>n!==index))}/><span>{issue}</span></label>)}
+          <label className="my-3 block text-sm">{releaseLabel('审核人','Reviewer','確認者')}<input autoFocus className="mt-1 w-full rounded-lg border p-2" maxLength={80} value={releaseReviewer} onChange={e=>setReleaseReviewer(e.target.value)}/></label>
+          <label className="my-3 block text-sm">{releaseLabel('确认说明 / 交由工厂确认的事项','Review notes / items assigned to the factory','確認内容・工場への確認事項')}<textarea className="mt-1 w-full rounded-lg border p-2" maxLength={1000} value={releaseNote} onChange={e=>setReleaseNote(e.target.value)}/></label>
+          {activeRelease&&<p className="my-3 text-sm text-slate-600">{activeRelease.reviewer} · {new Date(activeRelease.reviewedAt).toLocaleString()} · {activeRelease.note}</p>}
+          <div className="flex flex-wrap justify-end gap-3"><button type="button" className="diy-toolbar-button" onClick={()=>setReleaseDialog(false)}>{releaseLabel('取消','Cancel','キャンセル')}</button>{activeRelease&&<button type="button" className="diy-toolbar-button" onClick={()=>{setManualRelease(null);setReleaseDialog(false);}}>{releaseLabel('撤销放行','Revoke release','承認を取り消す')}</button>}<button type="button" className="rounded-xl bg-blue-600 px-4 py-2 text-white disabled:opacity-40" disabled={releaseChecks.length!==releasePrecheck.issues.length||!releaseReviewer.trim()||!releaseNote.trim()} onClick={()=>{setManualRelease({items,record:{status:'manually_released',reviewer:releaseReviewer.trim(),reviewedAt:new Date().toISOString(),note:releaseNote.trim(),acknowledgedIssues:[...releasePrecheck.issues]}});setReleaseDialog(false);}}>{releaseLabel('确认并放行当前版本','Release this version','この版を承認')}</button></div>
+          <p className="mt-3 text-xs text-slate-500">{releaseLabel('修改模型后自动失效；重新导入的文件需再次确认。','Changes invalidate this approval. Imported files require a new review.','モデル変更後は無効になります。再読み込み後は再確認が必要です。')}</p>
+        </section>
+      </div>}
       <div className="shrink-0 border-b border-slate-200 bg-white px-4 py-4 sm:px-6">
         <div className="mx-auto flex max-w-[1800px] flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
           <div>
@@ -12261,6 +12295,7 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({
             {draftError && <p role="alert" className="mt-2 max-w-xl text-sm font-bold text-red-700">{draftError}</p>}
           </div>
           <div className="flex flex-wrap items-center gap-2">
+            {releasePrecheck.applies && <button type="button" data-testid="diy-manual-release" onClick={openReleaseReview} className="diy-toolbar-button gap-2">{activeRelease ? releaseLabel('已人工放行 · 查看','Released · Review','手動承認済み・確認') : releaseLabel('人工审核放行','Review and release','手動確認・承認')}</button>}
             <button type="button" data-testid="diy-return-home" onClick={returnHome} className="diy-toolbar-button gap-2"><Home className="h-4 w-4" />{t.backHome}</button>
             <label className="flex items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-2 py-1.5 text-[10px] font-black text-slate-500">
               <span className="hidden sm:inline">{t.language}</span>

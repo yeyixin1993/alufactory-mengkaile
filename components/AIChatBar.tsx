@@ -1,10 +1,11 @@
 import {AILanguageContext,aiText} from '../utils/aiLocale';
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { ApiService } from '../services/apiService';
 import { CartItem, User, Language } from '../types';
 import { ArrowUp, Sparkles, ArrowUpRight, MessageSquare, Plus, ImagePlus, FileText, X, PanelLeft, BookOpen, Box, ShoppingBag, Home, MessageCircle } from 'lucide-react';
 import './AIChatBar.css';
+import { aiVisibility } from '../utils/aiVisibility';
 import AIManufacturingReview from './AIManufacturingReview';
 import AIQuoteCard from './AIQuoteCard';
 import AIOrderConfirmation from './AIOrderConfirmation';
@@ -20,6 +21,8 @@ export default function AIChatBar({ user, onAddToCart, cart=[], language, onLang
   const tr=(text:string)=>aiText(language,text);
   const location = useLocation();
   const home = location.pathname === '/';
+  const aiHidden = useSyncExternalStore(aiVisibility.subscribe, aiVisibility.getSnapshot);
+  useEffect(() => { if (home) aiVisibility.setHidden(false); }, [home, location.key]);
   const workspace = location.pathname === '/ai-chat';
   const handoffStarted = useRef(false);
   const endRef = useRef<HTMLDivElement>(null);
@@ -60,6 +63,23 @@ export default function AIChatBar({ user, onAddToCart, cart=[], language, onLang
   const [open, setOpen] = useState(false);
   const [recharge, setRecharge] = useState(false);
   const [amount, setAmount] = useState(10);
+  const [customAmount, setCustomAmount] = useState(false);
+  const [wechatPhone, setWechatPhone] = useState(user?.phone || '');
+  const [wechatNote, setWechatNote] = useState('');
+  const [wechatRecords, setWechatRecords] = useState<any[]>([]);
+  const [wechatPage, setWechatPage] = useState(1);
+  const [wechatPages, setWechatPages] = useState(1);
+  const wechatOperation = useRef(crypto.randomUUID());
+  useEffect(() => { setWechatPhone(user?.phone || ''); setWechatRecords([]); wechatOperation.current=crypto.randomUUID(); }, [user?.id, user?.phone]);
+  useEffect(() => { if (recharge && user) void loadWechat(); }, [recharge, user?.id]);
+  const loadWechat = async (page=1) => { try { const r = await ApiService.aiRequest('/wechat-applications?page='+page); setWechatRecords(r.records); setWechatPage(r.page); setWechatPages(r.pages); } catch (e:any) { setError(e.message); } };
+  const submitWechat = async () => {
+    setPaying(true); setError('');
+    try {
+      await ApiService.aiRequest('/wechat-applications', { operation_id:wechatOperation.current, amount_cny:amount, phone:wechatPhone, wechat_id:wechatNote });
+      wechatOperation.current = crypto.randomUUID(); setWechatNote(''); await loadWechat();
+    } catch(e:any) { setError(e.message); } finally { setPaying(false); }
+  };
   const [paying, setPaying] = useState(false);
   const [entries, setEntries] = useState<any[] | null>(null);
   const [pending, setPending] = useState<{ id: string; text: string } | null>(null);
@@ -163,7 +183,9 @@ export default function AIChatBar({ user, onAddToCart, cart=[], language, onLang
     } catch (err: any) { setError(err.message); }
     finally { setPaying(false); }
   };
-  return <AILanguageContext.Provider value={language}><section className={`ai-entry ${workspace ? 'ai-chat-workspace' : home ? 'ai-entry-home' : 'ai-entry-compact'}`} aria-label={tr("AI 设计与咨询")}>
+  return <AILanguageContext.Provider value={language}>
+    {aiHidden && !home && <div className={`ai-restore-bar ${workspace?'ai-restore-workspace':''}`}><button type="button" className="ai-visibility-button" onClick={()=>aiVisibility.setHidden(false)}><Sparkles size={17}/>{label('显示 AI 顾问','Show AI advisor','AIアドバイザーを表示')}</button>{workspace&&<Link to="/">{label('返回首页','Back to home','ホームへ')}</Link>}</div>}
+    <section hidden={aiHidden && !home} className={`ai-entry ${workspace ? 'ai-chat-workspace' : home ? 'ai-entry-home' : 'ai-entry-compact'}`} aria-label={tr("AI 设计与咨询")}>
     {workspace && <>
       {sidebar&&<button className="ai-sidebar-scrim" aria-label={tr("关闭咨询导航")} onClick={()=>setSidebar(false)}/>}
       <aside className={`ai-chat-sidebar ${sidebar?'is-open':''}`}>
@@ -184,10 +206,11 @@ export default function AIChatBar({ user, onAddToCart, cart=[], language, onLang
     </header>}
     <div className="ai-entry-card">
       <div className="ai-entry-toolbar">
-        <select className="ai-language-select" aria-label="Language" value={language} onChange={e=>onLanguageChange(e.target.value as Language)}><option value="cn">中文</option><option value="en">English</option><option value="jp">日本語</option></select>
+        {(home || workspace) ? <select className="ai-language-select" aria-label="Language" value={language} onChange={e=>onLanguageChange(e.target.value as Language)}><option value="cn">中文</option><option value="en">English</option><option value="jp">日本語</option></select> : <button type="button" className="ai-visibility-button" onClick={()=>{aiVisibility.setHidden(true);setSidebar(false);}} title={label('隐藏后全站生效，返回首页自动恢复','Hide across the site; returning home restores it','サイト全体で非表示。ホームに戻ると再表示')}><X size={15}/>{label('隐藏 AI','Hide AI','AIを非表示')}</button>}
         {workspace&&<button className="ai-sidebar-toggle" aria-label={tr("打开咨询导航")} onClick={()=>setSidebar(!sidebar)}><PanelLeft size={20}/></button>}
         <button className="ai-entry-history" onClick={() => { if (!workspace) setOpen(!open); }} aria-expanded={open}><MessageSquare size={15} /> {home ? tr("咨询记录") : tr("AI 设计顾问")} {!workspace&&(open ? '▴' : '▾')}</button>
         <div className="ai-entry-account">
+          {workspace && <button type="button" className="ai-visibility-button" onClick={()=>{aiVisibility.setHidden(true);setSidebar(false);}} title={label('隐藏后全站生效，返回首页自动恢复','Hide across the site; returning home restores it','サイト全体で非表示。ホームに戻ると再表示')}><X size={15}/>{label('隐藏 AI','Hide AI','AIを非表示')}</button>}
           <span aria-live="polite">{status ? status.local_unlimited ? tr("本地测试 · 不限额度") : status.trial_mode ? (language==='cn'?`剩余 ${status.trial_remaining} 条免费消息`:language==='en'?`${status.trial_remaining} free messages left`:`無料メッセージ残り ${status.trial_remaining} 通`) : `${language==='cn'?'AI 余额':language==='en'?'AI balance':'AI 残高'} ¥${money(status.balance_cny)}` : error ? tr("额度暂不可用") : tr("正在读取额度…")}</span>
           <button className="text-blue-700 underline" onClick={() => setRecharge(!recharge)}>{tr("充值")}</button>
           {user && <button className="underline" onClick={async () => { try { const data = await ApiService.aiRequest('/ledger'); setEntries(data.entries); } catch (e: any) { setError(e.message); } }}>{tr("收支记录")}</button>}
@@ -227,15 +250,22 @@ export default function AIChatBar({ user, onAddToCart, cart=[], language, onLang
       </div>
       {error && <p className="text-sm text-red-700 mt-3" role="alert">{error}</p>}
       {recharge && <div className="mt-4 border-t pt-4 text-sm space-y-3">
-        <p className="font-bold">{tr("AI 额度充值 · 充多少到账多少")}</p>
+        <div className="flex items-center justify-between gap-3"><p className="font-bold">{tr("AI 额度充值 · 充多少到账多少")}</p><button type="button" className="ai-visibility-button" onClick={()=>setRecharge(false)}><X size={15}/>{label('关闭充值','Close recharge','チャージを閉じる')}</button></div>
         {!user ? <p>{tr("请先")}<Link to="/login" className="text-blue-700 underline">{tr("登录")}</Link>{tr("，方便将充值额度记入您的账号。")}</p> : <>
-          <div className="flex gap-2 items-center"><select aria-label={tr("充值金额")} value={amount} onChange={e => setAmount(Number(e.target.value))} className="border rounded-lg p-2">{[10, 30, 100].map(n => <option key={n} value={n}>¥{n}</option>)}</select><button disabled={paying} onClick={pay} className="rounded-lg bg-blue-600 text-white p-2">{paying ? tr("正在创建付款…") : tr("支付宝充值")}</button></div>
+          <div className="flex flex-wrap gap-2" aria-label={tr("充值金额")}>{[10,20,50,100,300,500].map(n=><button type="button" key={n} disabled={paying} aria-pressed={!customAmount&&amount===n} onClick={()=>{setCustomAmount(false);setAmount(n);}} className={`rounded-xl px-5 py-3 border ${!customAmount&&amount===n?'bg-blue-600 text-white border-blue-600':'bg-slate-100 text-slate-700 border-slate-200'}`}>¥{n}</button>)}<button type="button" disabled={paying} aria-pressed={customAmount} onClick={()=>setCustomAmount(true)} className={`rounded-xl px-5 py-3 border ${customAmount?'bg-blue-600 text-white':'bg-slate-100 text-slate-700'}`}>{label('自定义','Custom','カスタム')}</button></div>
+          {customAmount&&<label className="block">{label('充值金额（元）','Amount (CNY)','金額（人民元）')}<input type="number" min="1" max="100000" step="0.01" value={amount||''} onChange={e=>setAmount(Number(e.target.value))} className="border rounded-lg p-2 ml-2"/></label>}
+          <button disabled={paying||amount<1||amount>100000} onClick={pay} className="rounded-lg bg-blue-600 text-white p-2">{paying ? tr("正在创建付款…") : tr("支付宝充值")}</button>
           <p>{tr("支付宝确认支付成功后自动到账。微信扫码付款由管理员核实后手动增加额度。")}</p>
           {status?.wechat_qr && <img src={status.wechat_qr} alt={tr("微信收款码")} className="w-44 h-44 object-contain border" />}
-          <p>{tr("微信付款后请提供账号手机号、付款金额及交易凭证。")}{status?.wechat_contact ? `联系：${status.wechat_contact}` : tr("请联系网站客服核实到账。")}</p>
+          <p>{label('微信付款后提交以下申请，客服核实后到账。额度记入当前登录账号。','Submit after paying by WeChat. Credits go to this signed-in account after verification.','WeChatで支払い後、申請してください。確認後、ログイン中のアカウントに反映されます。')}</p>
+          <div className="flex flex-col gap-2 max-w-xl"><label>{label('联系手机号','Contact phone','連絡先電話番号')}<input className="block w-full border rounded-lg p-2" type="tel" value={wechatPhone} onChange={e=>setWechatPhone(e.target.value)} maxLength={30}/></label><label>{label('微信号（选填）','WeChat ID (optional)','WeChat ID（任意）')}<input className="block w-full border rounded-lg p-2" value={wechatNote} onChange={e=>setWechatNote(e.target.value)} maxLength={100}/></label><button type="button" disabled={paying||!wechatPhone.trim()||amount<1||amount>100000} onClick={submitWechat} className="rounded-lg bg-blue-600 text-white p-3 disabled:opacity-50">{label('提交微信充值申请','Submit WeChat payment','WeChat入金を申請')} · ¥{amount}</button></div>
+          <button type="button" onClick={()=>loadWechat()} className="text-blue-600 underline">{label('充值申请历史 · 刷新','Recharge history · Refresh','入金申請履歴・更新')}</button>
+          {wechatRecords.map(r=><p key={r.id}>¥{r.amount_cny.toFixed(2)} · {r.status==='pending'?label('待审核','Pending review','確認待ち'):r.status==='credited'?label('已到账','Credited','入金済み'):label('已拒绝','Rejected','却下')} · {new Date(r.created_at).toLocaleString()} · {r.phone}{r.wechat_id ? ` · ${r.wechat_id}` : ''} {r.review_note||''}</p>)}
+          {!wechatRecords.length&&<p>{label('暂无充值申请','No recharge applications yet','申請履歴はありません')}</p>}
+          {wechatPages>1&&<div className="flex gap-3"><button disabled={wechatPage<=1} onClick={()=>loadWechat(wechatPage-1)}>{label('上一页','Previous','前へ')}</button><span>{wechatPage} / {wechatPages}</span><button disabled={wechatPage>=wechatPages} onClick={()=>loadWechat(wechatPage+1)}>{label('下一页','Next','次へ')}</button></div>}
         </>}
       </div>}
-      {entries && <div className="mt-4 border-t pt-3 text-xs"><button onClick={() => setEntries(null)} className="underline">{tr("关闭收支记录")}</button>{!entries.length && <p>{tr("暂无记录。")}</p>}{entries.map((entry, i) => <p key={i} className="mt-2">{new Date(entry.created_at).toLocaleString()} · {({ grant: tr("赠送"), usage: tr("使用"), trial: tr("试用"), faq: tr("常见问答（免费）"), manual: tr("人工调整"), recharge: tr("充值") } as Record<string, string>)[entry.kind] || entry.kind} · {entry.amount_cny >= 0 ? '+' : ''}¥{money(entry.amount_cny)}</p>)}</div>}
+      {entries && <div className="mt-4 border-t pt-3 text-xs"><div className="flex items-center justify-between gap-3"><p className="font-bold">{tr("收支记录")}</p><button type="button" className="ai-visibility-button" onClick={() => setEntries(null)}><X size={15}/>{tr("关闭收支记录")}</button></div>{!entries.length && <p>{tr("暂无记录。")}</p>}{entries.map((entry, i) => <p key={i} className="mt-2">{new Date(entry.created_at).toLocaleString()} · {({ grant: tr("赠送"), usage: tr("使用"), trial: tr("试用"), faq: tr("常见问答（免费）"), manual: tr("人工调整"), recharge: tr("充值") } as Record<string, string>)[entry.kind] || entry.kind} · {entry.amount_cny >= 0 ? '+' : ''}¥{money(entry.amount_cny)}</p>)}</div>}
     </div>
     {home && <div className="ai-entry-shortcuts"><span>也可以直接</span><Link to="/quick-quote">{tr("快速报价")}<ArrowUpRight size={14} /></Link><Link to="/diy-designer">打开 3D 设计器 <ArrowUpRight size={14} /></Link><button onClick={() => document.getElementById('profile-products')?.scrollIntoView({ behavior: 'smooth', block: 'start' })}>浏览商品 <ArrowUpRight size={14} /></button></div>}
   </section></AILanguageContext.Provider>;

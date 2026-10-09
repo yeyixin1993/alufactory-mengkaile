@@ -39,6 +39,9 @@
         }
         
         .nav-item {
+            display: block;
+            color: inherit;
+            text-decoration: none;
             padding: 12px 15px;
             margin-bottom: 8px;
             cursor: pointer;
@@ -355,7 +358,8 @@
             color: white;
             border-color: #3b82f6;
         }
-    </style>
+    #ai_recharges .filters{display:flex;flex-wrap:wrap;gap:10px;margin:18px 0}#ai_recharges input,#ai_recharges select,#ai_recharges button{padding:10px;border:1px solid #d1d5db;border-radius:7px}#ai_recharges .summary{padding:20px;background:#eff6ff;border-radius:10px;font-size:20px;font-weight:700}#ai_recharges .table-wrap{overflow:auto;margin:20px 0}#ai_recharges table{min-width:900px}#ai_recharges p{color:#64748b;line-height:1.7}#ai_recharges td{max-width:260px;overflow-wrap:anywhere}#ai-recharge-error{color:#b91c1c}#ai_recharges button:disabled{opacity:.4}
+</style>
 </head>
 <body>
     <div class="container">
@@ -365,8 +369,6 @@
             <nav>
                 <div class="nav-item active" onclick="switchTab('dashboard')">📊 仪表板</div>
                 <div class="nav-item" onclick="switchTab('users')">👥 用户管理</div>
-                <a class="nav-item" href="/admin/ai.html">AI 额度与充值管理</a>
-                <a class="nav-item" href="/admin/ai-faq.html">AI 问答规则库</a>
                 <div class="nav-item" onclick="switchTab('profile_inventory')">📏 型材库存</div>
                 <div class="nav-item" onclick="switchTab('accessory_inventory')">🔧 配件库存</div>
                 <!-- <div class="nav-item" onclick="switchTab('profiles')">📋 用户资料</div> -->
@@ -379,6 +381,9 @@
                 <div class="nav-item" onclick="switchTab('orders_wardrobe')">📦 衣柜订单管理</div>
                 <div class="nav-item" onclick="switchTab('orders_display_rack')">📦 展示架订单管理</div>
                 <div class="nav-item" onclick="switchTab('orders_accessory')">📦 配件订单管理</div>
+                <a class="nav-item" href="/admin/ai.html">🤖 AI额度管理</a>
+                <a class="nav-item" href="/admin/ai-faq.html">📚 AI问答规则库</a>
+                <div class="nav-item" onclick="switchTab('ai_recharges')">💳 AI充值订单管理</div>
                 <div class="nav-item logout-btn" onclick="logout()">🚪 退出</div>
             </nav>
         </div>
@@ -390,6 +395,7 @@
                 <div id="userInfo" style="font-size: 14px; color: #6b7280;"></div>
             </div>
             
+            <div id="ai_recharges" class="content hidden"><h2>微信充值申请</h2><p>核对微信实际收款及交易号后通过，额度记入提交申请的登录账号。请勿再到额度管理重复手动增加。</p><div class="table-wrap"><table><thead><tr><th>申请时间</th><th>账号 / 联系手机号</th><th>金额</th><th>微信号（选填）</th><th>状态 / 审核</th></tr></thead><tbody id="wechat-applications"></tbody></table></div><button id="wechat-prev">上一页</button> <span id="wechat-page"></span> <button id="wechat-next">下一页</button><h2 style="margin-top:28px">已到账记录</h2><p>独立记录已到账的支付宝充值、已核实的微信手动充值及额度调整，不计入商品总订单数或商品销售额。赠送额度与非收款调整不计入充值金额。</p><form id="ai-recharge-filters" class="filters"><input id="ai-recharge-query" placeholder="手机号 / 用户名 / 账户ID" aria-label="搜索客户"><select id="ai-recharge-method" aria-label="记录类型"><option value="all">全部记录</option><option value="alipay">支付宝充值</option><option value="wechat">微信充值</option><option value="adjustment">额度调整（非收款）</option></select><button>查询 / 刷新</button></form><div id="ai-recharge-summary" class="summary"></div><p id="ai-recharge-error" role="alert"></p><div class="table-wrap"><table><thead><tr><th>到账 / 调整时间</th><th>用户</th><th>类型</th><th>金额 / 额度变动</th><th>状态</th><th>交易号 / 备注</th><th>操作人</th><th>流水ID</th></tr></thead><tbody id="ai-recharge-rows"></tbody></table><p id="ai-recharge-empty" hidden>暂无记录</p></div><button id="ai-recharge-previous">上一页</button> <span id="ai-recharge-page"></span> <button id="ai-recharge-next">下一页</button><p>历史手动调整未标注支付方式，按“额度调整”展示，避免把赠送额度误算为实际收款。未支付的充值请求不计入已到账记录。</p></div>
             <!-- Dashboard -->
             <div id="dashboard" class="content">
                 <div class="stats-grid">
@@ -894,10 +900,11 @@
             
             // Update nav
             document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
-            event.target.classList.add('active');
+            document.querySelectorAll('.nav-item').forEach(el => { if (el.getAttribute('onclick') === `switchTab('${tab}')`) el.classList.add('active'); });
             
             // Update title
             const titles = {
+                'ai_recharges': 'AI充值订单管理',
                 'dashboard': '仪表板',
                 'users': '用户管理',
                 'profiles': '用户资料',
@@ -917,6 +924,7 @@
             document.getElementById('pageTitle').textContent = titles[tab];
             
             // Load data
+            if (tab === 'ai_recharges') window.loadAIRecharges();
             if (tab === 'users') loadUsers();
             if (tab === 'profiles') loadProfiles();
             if (tab === 'profile_inventory') loadProfileInventory();
@@ -2328,5 +2336,11 @@
             window.location.href = 'login.html';
         }
     </script>
+<script>(()=>{
+const el=id=>document.getElementById("ai-recharge-"+id);let page=1,pages=1;async function load(){el('error').textContent='';try{const token=localStorage.getItem('authToken');if(!token){location.href='/admin/login.html';return;}const params=new URLSearchParams({page:String(page),q:el('query').value,method:el('method').value});const response=await fetch('/api/ai/admin/recharges?'+params,{headers:{Authorization:'Bearer '+token}});const result=await response.json();if(!response.ok)throw Error(result.error||'读取失败');pages=result.pages;el('summary').textContent=`当前筛选：已到账充值 ¥${result.paid_cny.toFixed(2)} · ${result.paid_count} 笔`;el('rows').replaceChildren();for(const r of result.records){const tr=document.createElement('tr');for(const text of [new Date(r.time).toLocaleString('zh-CN',{timeZone:'Asia/Shanghai'}),[r.username,r.phone,r.account_id].filter(Boolean).join(' / '),{alipay:'支付宝',wechat:'微信（人工核实）',adjustment:'额度调整'}[r.method],'¥'+r.amount_cny.toFixed(2),r.status==='credited'?'已到账':'已调整',[r.trade_no,r.reason].filter(Boolean).join(' · '),r.operator,r.id]){const td=document.createElement('td');td.textContent=text;tr.append(td);}el('rows').append(tr);}el('empty').hidden=!!result.records.length;el('page').textContent=`第 ${page} / ${pages} 页 · ${result.total} 条`;el('previous').disabled=page<=1;el('next').disabled=page>=pages;}catch(e){el('error').textContent=e.message;}}el('filters').onsubmit=e=>{e.preventDefault();page=1;load();};el('previous').onclick=()=>{if(page>1){page--;load();}};el('next').onclick=()=>{if(page<pages){page++;load();}};let reviewPage=1,reviewPages=1;
+async function loadApplications(){try{const response=await fetch('/api/ai/admin/wechat-applications?page='+reviewPage,{headers:{Authorization:'Bearer '+localStorage.getItem('authToken')}});const result=await response.json();if(!response.ok)throw Error(result.error);reviewPages=result.pages;document.getElementById('wechat-page').textContent=`${reviewPage} / ${reviewPages}`;document.getElementById('wechat-prev').disabled=reviewPage<=1;document.getElementById('wechat-next').disabled=reviewPage>=reviewPages;const body=document.getElementById('wechat-applications');body.replaceChildren();for(const r of result.records){const tr=document.createElement('tr');for(const value of [new Date(r.created_at).toLocaleString(),`${r.username} / 账号 ${r.account_phone} / 联系 ${r.phone}`,'¥'+r.amount_cny.toFixed(2),r.wechat_id||'—']){const td=document.createElement('td');td.textContent=value;tr.append(td);}const td=document.createElement('td');td.textContent={pending:'待审核',credited:'已到账',rejected:'已拒绝'}[r.status];if(r.status==='pending'){for(const decision of ['approve','reject']){const b=document.createElement('button');b.textContent=decision==='approve'?'核实通过并入账':'拒绝';b.onclick=async()=>{const text=prompt(decision==='approve'?`确认已收到 ¥${r.amount_cny.toFixed(2)}？请填写微信交易号：`:'请填写拒绝原因：');if(!text?.trim())return;b.disabled=true;try{const response=await fetch('/api/ai/admin/wechat-applications/'+r.id+'/review',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+localStorage.getItem('authToken')},body:JSON.stringify({decision,trade_no:decision==='approve'?text.trim():'',note:decision==='reject'?text.trim():''})});const result=await response.json();if(!response.ok)throw Error(result.error);await loadApplications();await load();}catch(e){el('error').textContent=e.message;b.disabled=false;}};td.append(b);}}else{td.append(document.createTextNode(' · '+(r.trade_no||r.review_note||'')));}tr.append(td);body.append(tr);}}catch(e){el('error').textContent=e.message;}}
+document.getElementById('wechat-prev').onclick=()=>{if(reviewPage>1){reviewPage--;loadApplications();}};document.getElementById('wechat-next').onclick=()=>{if(reviewPage<reviewPages){reviewPage++;loadApplications();}};
+const oldSubmit=el('filters').onsubmit;el('filters').onsubmit=e=>{oldSubmit(e);loadApplications();};window.loadAIRecharges=()=>{load();loadApplications();};
+if(location.hash==='#ai-recharges') switchTab('ai_recharges');})();</script>
 </body>
 </html>

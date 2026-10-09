@@ -85,3 +85,18 @@ class AIConversationMessage(db.Model):
     request_id = db.Column(db.String(100), primary_key=True)
     conversation_id = db.Column(db.String(36), nullable=False, index=True)
     image = db.Column(db.JSON, nullable=True)
+
+
+class AIWechatApplication(db.Model):
+    __tablename__ = 'ai_wechat_applications'
+    id = db.Column(db.String(36), primary_key=True)
+    account_id = db.Column(db.String(100), nullable=False, index=True)
+    amount_fen = db.Column(db.Integer, nullable=False)
+    phone = db.Column(db.String(30), nullable=False)
+    note = db.Column(db.String(500), nullable=False, default='')
+    status = db.Column(db.String(20), nullable=False, default='pending', index=True)
+    trade_no = db.Column(db.String(100), unique=True, nullable=True)
+    reviewer = db.Column(db.String(100), nullable=True)
+    review_note = db.Column(db.String(500), nullable=True)
+    created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+    reviewed_at = db.Column(db.DateTime, nullable=True)

@@ -119,3 +119,16 @@ Tests: `cd alufactory-backend && .venv-local/bin/python -m unittest discover -s 
 ## Multiple attachments
 
 The chat composer supports up to 8 JPG/PNG/WebP or PDF/DOCX/XLSX/CSV/TXT attachments per message. Images are limited to 4MB each, documents 10MB each, total 20MB. PDFs are rendered by the pinned pypdfium2 dependency; combined PDF pages and image count is limited to 8. Extracted document text is limited to 12,000 characters, rejecting oversized content rather than silently truncating. Office files containing images/charts require PDF export or separate images. Original documents and sanitized images persist in the conversation message JSON. Install backend requirements on deployment and allow at least 30MB JSON request bodies in Nginx (base64 overhead); Flask's existing limit is 50MB. Attachment contents are untrusted requirement data, never executable instructions.
+
+## Independent AI recharge records
+
+Admin sidebar switches to the embedded `AI充值订单管理` tab (`/admin/#ai-recharges`); the former standalone page redirects there, backed by the admin-only `/api/ai/admin/recharges` endpoint. It paginates and filters posted Alipay/WeChat credits and nonzero manual adjustments. Cash totals include successful Alipay credits and explicitly marked WeChat receipts only; gifts, usage and legacy unclassified manual adjustments are excluded. Pending/unpaid payment intents are not posted receipts. The quota editor requires selecting WeChat receipt after verification; normal adjustments remain non-cash. Records stay in AILedger/AIRecharge, never in product Order tables or product sales/order totals.
+
+
+### 微信充值申请与审核
+- 充值选项：10、20、50、100、300、500 元及自定义（1–100000 元，最多两位小数），支付宝及微信共用金额校验。
+- 客户登录后扫码支付，提交金额、自动带出但可修改的联系手机号、选填微信号；不要求客户填写交易号。服务器记录提交时间，申请持久化在 ai_wechat_applications。
+- 客户充值区域保留申请历史及待审核、已到账、已拒绝状态；修改联系手机号不会改变额度归属，额度始终归提交申请的登录账号。
+- 后台「AI充值订单管理」内审核申请。管理员核实实际收款，填写微信交易号后通过并原子增加额度、生成账本；重复申请审核和重复交易号不会再次入账。拒绝需写原因。
+- 待审核、已拒绝不计入已到账金额；所有 AI 充值均不计入商品订单。旧手动微信记录未强制记录交易号，审核时仍须核对旧账，避免与历史手动入账重复。
+- 本地允许测试申请和人工审核，支付宝真实付款仍禁用。生产启动 create_all 自动创建新增表，不需修改现有表。
