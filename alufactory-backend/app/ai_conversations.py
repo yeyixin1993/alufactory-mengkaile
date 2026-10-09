@@ -2,7 +2,7 @@
 import uuid
 from sqlalchemy.exc import IntegrityError
 from app.models.user import db
-from app.ai_models import AIConversation, AIConversationMessage, AIRequest
+from app.ai_models import AIAccount, AIConversation, AIConversationMessage, AIRequest
 
 def _initialize_conversation(account):
     current = AIConversation.query.filter_by(account_id=account.id, active=True).first()
@@ -58,3 +58,28 @@ def transcript(account):
 
 def conversation_list(account):
     return [{'id':c.id,'title':c.title,'updated_at':c.updated_at.isoformat()+'Z'} for c in AIConversation.query.filter_by(account_id=account.id).order_by(AIConversation.updated_at.desc()).all()]
+
+
+def adopt_orphan_requests(limit=500):
+    """Give pre-archive requests a home so the admin chat log can never hide a question.
+
+    A request only gains its conversation link when its owner is next touched (see
+    _initialize_conversation, which /status triggers). The audit view must not wait for that:
+    an account whose owner never comes back would otherwise keep its questions invisible to
+    the shop forever. Idempotent, and bounded so one read never walks the whole table.
+    """
+    orphans = AIRequest.query.outerjoin(AIConversationMessage, AIRequest.id == AIConversationMessage.request_id) \
+        .filter(AIConversationMessage.request_id.is_(None)).order_by(AIRequest.created_at).limit(limit).all()
+    adopted = 0
+    for account_id in dict.fromkeys(row.account_id for row in orphans):
+        account = db.session.get(AIAccount, account_id)
+        if account is None:
+            continue
+        conversation = current_conversation(account)
+        for request in orphans:
+            if request.account_id == account_id and db.session.get(AIConversationMessage, request.id) is None:
+                db.session.add(AIConversationMessage(request_id=request.id, conversation_id=conversation.id))
+        adopted += 1
+    if adopted:
+        db.session.commit()
+    return adopted

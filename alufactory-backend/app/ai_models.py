@@ -14,6 +14,12 @@ class AIAccount(db.Model):
     enabled = db.Column(db.Boolean, nullable=False, default=True)
     busy = db.Column(db.String(36), nullable=True)
     history = db.Column(db.JSON, nullable=False, default=list)
+    # First-touch origin, written once when the account is created. Guests are otherwise
+    # anonymous rows keyed by a device token, and the admin chat log has nothing to show
+    # to tell one visitor from another.
+    first_ip = db.Column(db.String(45), nullable=True)
+    first_user_agent = db.Column(db.String(300), nullable=True)
+    first_seen_at = db.Column(db.DateTime, nullable=True)
 
 class AISettings(db.Model):
     __tablename__ = 'ai_settings'

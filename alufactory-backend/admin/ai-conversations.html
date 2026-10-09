@@ -1,0 +1,160 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>AI 聊天记录</title>
+<style>
+*{box-sizing:border-box}body{font:15px/1.6 system-ui,sans-serif;color:#19302c;background:#f4f7f6;margin:0;padding:24px}main{max-width:1320px;margin:auto}a{color:#175c50}h1,h2,p{margin:0 0 12px}h1{font-size:28px}h2{font-size:18px}.muted{color:#64756f;font-size:13px}.small{font-size:12px}
+.layout{display:grid;grid-template-columns:minmax(320px,1fr) minmax(420px,1.5fr);gap:20px}.panel{background:white;border:1px solid #dce5e1;border-radius:16px;padding:20px;margin:18px 0}
+.toolbar{display:flex;flex-wrap:wrap;align-items:center;gap:8px}input,select,button{font:inherit;border:1px solid #cbd8d2;border-radius:8px;padding:9px 11px}input,select{background:white;max-width:100%}input#query{min-width:260px}button{background:#eff5f2;color:#174e42;cursor:pointer}button.primary{background:#195e50;color:white;border-color:#195e50}button:disabled{opacity:.45;cursor:not-allowed}
+#notice{white-space:pre-wrap;color:#b32323}
+.cards{max-height:760px;overflow:auto;margin-top:14px;display:grid;gap:10px}
+.card{display:block;width:100%;text-align:left;padding:14px;border:1px solid #e0e7e3;border-radius:12px;background:white;cursor:pointer}.card:hover{border-color:#a9cfc4}.card.selected{border-color:#23846a;background:#f6fbf8}.card h3{font-size:15px;margin:0 0 6px;overflow-wrap:anywhere}.card p{margin:3px 0;font-size:13px}.card .who{color:#175c50;font-weight:600}.card .preview{color:#3f544e;overflow-wrap:anywhere}
+.flag{display:inline-block;font-size:12px;color:#8a4b0a;background:#fff2d9;padding:2px 7px;border-radius:5px;margin-top:4px}
+.thread{margin-top:8px;max-height:760px;overflow:auto;display:grid;gap:10px}
+.message{border:1px solid #e0e7e3;border-left-width:4px;border-radius:10px;padding:12px 14px;background:#fbfdfc}.message.from-user{border-left-color:#3b82f6}.message.from-assistant{border-left-color:#23846a}
+.message .meta{font-size:12px;color:#64756f;margin:0 0 6px}.message .body{margin:0;white-space:pre-wrap;overflow-wrap:anywhere}
+.message details{margin-top:8px}.message summary{cursor:pointer;font-size:13px;color:#175c50}.message pre{margin:8px 0 0;background:#f1f6f4;border-radius:8px;padding:12px;font-size:12px;max-height:420px;overflow:auto;white-space:pre-wrap;overflow-wrap:anywhere}
+.images{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px}.images img{max-width:220px;max-height:220px;border:1px solid #dce5e1;border-radius:8px}
+.pager{justify-content:flex-end;margin-top:14px}
+@media(max-width:900px){body{padding:12px}.layout{display:block}.panel{padding:14px}.cards,.thread{max-height:460px}input#query{min-width:0;width:100%}}
+</style>
+</head>
+<body><main>
+<p class="muted"><a href="/admin/">← 返回后台</a> · <a href="/admin/ai.html">额度与充值管理</a> · <a href="/admin/ai-faq.html">AI 问答规则库</a> · <a href="/admin/#ai-recharges">AI充值订单管理</a></p>
+<h1>AI 聊天记录</h1>
+<p class="muted">客户与 AI 顾问的每一句问答都保存在服务器上：已登录客户归到账号，未登录游客归到设备（首次访问的 IP 与浏览器在首次出现时记录一次）。这里是只读审计视图，客户在页面上看不到别人的记录。</p>
+<p id="notice" role="alert"></p>
+<div class="toolbar">
+<input id="query" placeholder="手机号 / 用户名 / 游客ID / IP" aria-label="搜索客户">
+<select id="audience" aria-label="客户类型"><option value="all">全部客户</option><option value="user">已登录客户</option><option value="guest">游客</option></select>
+<button id="search" class="primary">查询</button>
+<button id="reload">刷新</button>
+<span id="counts" class="muted"></span>
+</div>
+<div class="layout">
+<section class="panel">
+<h2>会话列表</h2>
+<div id="list" class="cards"></div>
+<div class="toolbar pager"><button id="previous">上一页</button><span id="page" class="muted"></span><button id="next">下一页</button></div>
+</section>
+<section class="panel">
+<h2 id="detailTitle">问答明细</h2>
+<p id="customer" class="muted">从左侧选择一条会话。</p>
+<div id="thread" class="thread"></div>
+</section>
+</div>
+</main>
+<script>
+const el = id => document.getElementById(id);
+const STATUS = {pending:'处理中', completed:'已完成', invalid:'未识别', failed:'失败', reconcile:'待人工核对', closed:'已关闭'};
+let page = 1, pages = 0;
+async function api(path){
+  const token = localStorage.getItem('authToken');
+  if(!token){ location.href = '/admin/login.html'; throw Error('请先登录管理员账号。'); }
+  const response = await fetch('/api/ai' + path, {headers:{Authorization:'Bearer ' + token}});
+  const result = await response.json().catch(()=>({}));
+  if(!response.ok) throw Error(result.error || '请求失败');
+  return result;
+}
+const run = fn => async event => { if(event) event.preventDefault(); el('notice').textContent = ''; try { await fn(); } catch(error){ el('notice').textContent = error.message; } };
+const when = value => value ? new Date(value).toLocaleString() : '—';
+const label = actor => !actor ? '未知客户' : actor.kind === 'guest' ? '游客' + (actor.ip ? ' · ' + actor.ip : '') : (actor.phone || actor.name || actor.account_id) + (actor.phone && actor.name ? ' · ' + actor.name : '');
+
+function renderList(items){
+  el('list').replaceChildren();
+  if(!items.length){
+    const empty = document.createElement('p');
+    empty.className = 'muted';
+    empty.textContent = '没有符合条件的会话。';
+    el('list').append(empty);
+    return;
+  }
+  for(const item of items){
+    const card = document.createElement('button');
+    card.type = 'button'; card.className = 'card'; card.dataset.id = item.id;
+    const title = document.createElement('h3'); title.textContent = item.title || '新对话';
+    const who = document.createElement('p'); who.className = 'who'; who.textContent = label(item.actor);
+    if(item.actor && item.actor.membership && item.actor.membership !== 'standard') who.textContent += ' · ' + item.actor.membership;
+    const meta = document.createElement('p'); meta.className = 'muted small';
+    meta.textContent = item.messages + ' 条问答 · 最近 ' + when(item.last_at);
+    const preview = document.createElement('p'); preview.className = 'preview';
+    preview.textContent = item.question ? '问：' + item.question : '（无文字内容，见附件）';
+    card.append(title, who, meta, preview);
+    if(item.issues){ const flag = document.createElement('span'); flag.className = 'flag'; flag.textContent = item.issues + ' 条待人工核对'; card.append(flag); }
+    if(item.actor && item.actor.kind === 'guest' && item.actor.user_agent){
+      const agent = document.createElement('p'); agent.className = 'muted small'; agent.textContent = item.actor.user_agent; card.append(agent);
+    }
+    card.onclick = () => void open(item.id, card);
+    el('list').append(card);
+  }
+}
+
+async function open(id, card){
+  const data = await api('/admin/conversations/' + encodeURIComponent(id));
+  document.querySelectorAll('#list .card').forEach(node => node.classList.toggle('selected', node.dataset.id === id));
+  const actor = data.actor || {};
+  el('detailTitle').textContent = data.title || '新对话';
+  el('customer').textContent = [label(actor), data.messages.length / 2 + ' 条问答', '首次访问 ' + when(actor.first_seen_at), actor.user_agent].filter(Boolean).join(' · ');
+  const thread = el('thread');
+  thread.replaceChildren();
+  for(const message of data.messages){
+    const row = document.createElement('article');
+    row.className = 'message ' + (message.role === 'user' ? 'from-user' : 'from-assistant');
+    const head = document.createElement('p'); head.className = 'meta';
+    head.textContent = (message.role === 'user' ? '客户' : 'AI 顾问') + ' · ' + when(message.at) + ' · ' + (STATUS[message.status] || message.status || '');
+    const body = document.createElement('p'); body.className = 'body'; body.textContent = message.content || '（无文字内容）';
+    row.append(head, body);
+    if(message.role === 'user' && message.images){
+      const openImages = document.createElement('button');
+      openImages.type = 'button'; openImages.className = 'small'; openImages.textContent = '查看客户附件（' + message.images + '）';
+      openImages.onclick = run(async () => {
+        const loaded = await api('/admin/messages/' + encodeURIComponent(message.request_id) + '/images');
+        const box = document.createElement('div'); box.className = 'images';
+        for(const image of loaded.images){
+          if(image.kind === 'file'){ const file = document.createElement('p'); file.className = 'muted small'; file.textContent = '文件：' + (image.name || '附件'); box.append(file); continue; }
+          const picture = document.createElement('img'); picture.src = image.data; picture.alt = image.name || '客户上传'; box.append(picture);
+        }
+        if(!box.childNodes.length) box.textContent = '（该消息没有可显示的附件）';
+        openImages.replaceWith(box);
+      });
+      row.append(openImages);
+    }
+    if(message.role === 'assistant'){
+      const facts = [];
+      if(message.charged_cny) facts.push('扣费 ¥' + Number(message.charged_cny).toFixed(4));
+      if(message.source === 'faq') facts.push('命中问答规则 ' + message.rule_id);
+      if(facts.length){ const note = document.createElement('p'); note.className = 'muted small'; note.textContent = facts.join(' · '); row.append(note); }
+      if(message.quote || message.review){
+        const details = document.createElement('details');
+        const summary = document.createElement('summary'); summary.textContent = '报价与加工明细';
+        const pre = document.createElement('pre'); pre.textContent = JSON.stringify({quote:message.quote, review:message.review}, null, 2);
+        details.append(summary, pre); row.append(details);
+      }
+    }
+    thread.append(row);
+  }
+}
+
+async function load(){
+  const params = new URLSearchParams({page:String(page)});
+  if(el('query').value.trim()) params.set('q', el('query').value.trim());
+  if(el('audience').value !== 'all') params.set('kind', el('audience').value);
+  const data = await api('/admin/conversations?' + params.toString());
+  pages = data.pages;
+  el('counts').textContent = '共 ' + data.total + ' 条会话';
+  el('page').textContent = data.page + ' / ' + Math.max(1, data.pages);
+  el('previous').disabled = data.page <= 1;
+  el('next').disabled = data.page >= data.pages;
+  renderList(data.conversations);
+  if(data.conversations.length) await open(data.conversations[0].id);
+}
+
+el('search').onclick = run(() => { page = 1; return load(); });
+el('reload').onclick = run(load);
+el('query').onkeydown = event => { if(event.key === 'Enter'){ page = 1; return void run(load)(); } };
+el('audience').onchange = run(() => { page = 1; return load(); });
+el('previous').onclick = run(() => { if(page > 1){ page -= 1; return load(); } });
+el('next').onclick = run(() => { if(page < pages){ page += 1; return load(); } });
+run(load)();
+</script></body>
+</html>

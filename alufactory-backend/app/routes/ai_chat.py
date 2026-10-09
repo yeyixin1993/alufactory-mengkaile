@@ -1,5 +1,5 @@
 from app.ai_attachments import parse_attachments
-from app.ai_conversations import current_conversation, conversation_requests, latest_request, transcript, conversation_list
+from app.ai_conversations import current_conversation, conversation_requests, latest_request, transcript, conversation_list, adopt_orphan_requests
 from app.ai_models import AIConversation, AIConversationMessage
 """Metered text consultation. Provider secrets and all accounting stay server-side."""
 import re
@@ -18,6 +18,7 @@ from decimal import Decimal, ROUND_CEILING
 from flask import Blueprint, jsonify, request, current_app
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from itsdangerous import URLSafeTimedSerializer, BadSignature
+from sqlalchemy import func, or_
 from sqlalchemy.exc import IntegrityError
 from app.models.user import db, User, normalize_membership_level
 from app.ai_models import AIAccount, AISettings, AILedger, AIRequest, AIRateWindow, AIFaqRule, SCALE
@@ -137,6 +138,14 @@ def identity(data):
             db.session.add(AILedger(id=str(uuid.uuid4()), account_id=account.id, kind='grant', delta=grant-old_grant, detail={'membership': membership}))
         db.session.commit()
     db.session.refresh(account)
+    if account.first_seen_at is None:
+        # Written once and never overwritten: it is the account's *first* sighting, not its
+        # last activity. Guests are otherwise anonymous rows keyed by a device token, so this
+        # is the only handle the admin chat log has to tell two visitors apart.
+        account.first_seen_at = datetime.utcnow()
+        account.first_ip = (request.remote_addr or '')[:45] or None
+        account.first_user_agent = (request.headers.get('User-Agent') or '')[:300] or None
+        db.session.commit()
     return account, user, token, membership
 
 
@@ -777,6 +786,168 @@ def admin_account(user_id):
         granted_cny=account.granted/SCALE, trial_limit=account.trial_limit, trial_used=account.trial_used, busy=account.busy,
         entries=[{'kind': r.kind, 'delta_cny': r.delta/SCALE, 'api_cost_cny': r.api_cost/SCALE, 'detail': r.detail, 'time': r.created_at.isoformat()+'Z'} for r in entries],
         pending=[{'id': r.id, 'status': r.status, 'created_at': r.created_at.isoformat()+'Z'} for r in pending])
+
+
+def stamp(value):
+    """UTC ISO-8601 with the same trailing Z the other admin endpoints use."""
+    return value.isoformat() + 'Z' if value else None
+
+
+def chat_actor(account_id, account, user):
+    """One customer descriptor, shared by the conversation list and the detail view."""
+    guest = not account_id.startswith('u:')
+    return {'account_id': account_id, 'kind': 'guest' if guest else 'user',
+        'name': '' if guest else (user.username or '') if user else account_id[2:],
+        'phone': '' if guest else (user.phone or '') if user else '',
+        'membership': 'standard' if guest or not user else normalize_membership_level(user.membership_level),
+        'ip': (account.first_ip if account else None) or '',
+        'user_agent': (account.first_user_agent if account else None) or '',
+        'first_seen_at': stamp(account.first_seen_at) if account else None}
+
+
+def chat_actors(account_ids):
+    """Resolve every account id in one query each for accounts and users."""
+    keys = list(dict.fromkeys(account_ids))
+    accounts = {row.id: row for row in AIAccount.query.filter(AIAccount.id.in_(keys)).all()} if keys else {}
+    user_ids = [key[2:] for key in keys if key.startswith('u:')]
+    users = {row.id: row for row in User.query.filter(User.id.in_(user_ids)).all()} if user_ids else {}
+    return {key: chat_actor(key, accounts.get(key), users.get(key[2:]) if key.startswith('u:') else None) for key in keys}
+
+
+def chat_quote(quote):
+    """Trimmed quote so the admin thread stays readable; the reply already spells it out."""
+    if not isinstance(quote, dict):
+        return None
+    rows = quote.get('items') if isinstance(quote.get('items'), list) else []
+    lines = []
+    for row in rows[:60]:
+        spec = row.get('spec') if isinstance(row, dict) and isinstance(row.get('spec'), dict) else {}
+        lines.append({'model': spec.get('model'), 'color': spec.get('color'), 'length': spec.get('length'),
+                      'quantity': spec.get('quantity'), 'subtotal': row.get('subtotal') if isinstance(row, dict) else None})
+    return {'subtotal': quote.get('subtotal'), 'shipping_fee': quote.get('shipping_fee'), 'total': quote.get('total'),
+            'shipping_method': quote.get('shipping_method'), 'shipping_pending': quote.get('shipping_pending'),
+            'quantity': quote.get('quantity'), 'length_m': quote.get('length_m'), 'partial': quote.get('partial'),
+            'questions': quote.get('questions') if isinstance(quote.get('questions'), list) else [], 'items': lines}
+
+
+def chat_review(review):
+    if not isinstance(review, dict):
+        return None
+    return {'ready': review.get('ready'), 'view': review.get('view'),
+            'questions': review.get('questions') if isinstance(review.get('questions'), list) else [],
+            'blocking_questions': review.get('blocking_questions') if isinstance(review.get('blocking_questions'), list) else [],
+            'items': len(review.get('items')) if isinstance(review.get('items'), list) else 0}
+
+
+def chat_images(value):
+    """Normalize the two stored shapes: a single data URL, or a list of attachment dicts."""
+    if isinstance(value, str):
+        return [{'name': '图片', 'kind': 'image', 'data': value}]
+    if not isinstance(value, list):
+        return []
+    return [{'name': item.get('name') or '附件', 'kind': item.get('kind') or 'image', 'data': item.get('data')}
+            for item in value if isinstance(item, dict) and isinstance(item.get('data'), str)]
+
+
+@ai_bp.route('/admin/conversations', methods=['GET'])
+@admin_required
+def admin_conversations():
+    """Every archived customer chat — signed-in accounts and anonymous guests alike.
+
+    Read-only. The customer-facing transcript is capped at the 8-message working context and
+    only ever shows the caller their own account; this endpoint is the full audit view and is
+    what makes 「问答都存下来」 actually inspectable.
+    """
+    query = str(request.args.get('q') or '').strip()[:80]
+    audience = request.args.get('kind') if request.args.get('kind') in ('guest', 'user') else 'all'
+    # Every request created before the archive existed is invisible until its owner is next
+    # touched. Adopt them here so the shop can audit a customer who never comes back.
+    adopt_orphan_requests()
+    try:
+        page = max(1, int(request.args.get('page', 1)))
+    except (TypeError, ValueError):
+        page = 1
+    per_page = 20
+    filters = []
+    if query:
+        like = '%' + query.replace('\\', '').replace('%', '').replace('_', '') + '%'
+        keys = {'u:' + row.id for row in User.query.filter(or_(User.phone.ilike(like), User.username.ilike(like))).limit(500).all()}
+        keys.update(row.id for row in AIAccount.query.filter(or_(AIAccount.id.ilike(like), AIAccount.first_ip.ilike(like))).limit(500).all())
+        # The raw account id is matched directly as well, so a guest id copied out of a log
+        # still resolves even when its AIAccount row is gone.
+        direct = AIConversation.account_id.ilike(like)
+        filters.append(AIConversation.account_id.in_(keys) | direct if keys else direct)
+    if audience != 'all':
+        filters.append(AIConversation.account_id.like('g:%' if audience == 'guest' else 'u:%'))
+    grouped = db.session.query(AIConversation.id, AIConversation.account_id, AIConversation.title,
+            func.count(AIRequest.id).label('messages'), func.max(AIRequest.created_at).label('last_at'),
+            func.min(AIRequest.created_at).label('started_at')) \
+        .join(AIConversationMessage, AIConversationMessage.conversation_id == AIConversation.id) \
+        .join(AIRequest, AIRequest.id == AIConversationMessage.request_id)
+    if filters:
+        grouped = grouped.filter(*filters)
+    grouped = grouped.group_by(AIConversation.id)
+    total = db.session.query(func.count()).select_from(grouped.subquery()).scalar() or 0
+    rows = grouped.order_by(func.max(AIRequest.created_at).desc()).offset((page - 1) * per_page).limit(per_page).all()
+    ids = [row.id for row in rows]
+    actors = chat_actors([row.account_id for row in rows])
+    previews, issues = {}, {}
+    if ids:
+        # Bounded newest-first scan is enough for a page of 20 conversations, and it avoids a
+        # correlated subquery per row.
+        for conversation_id, message, status, created_at in db.session.query(
+                AIConversationMessage.conversation_id, AIRequest.message, AIRequest.status, AIRequest.created_at) \
+                .join(AIRequest, AIRequest.id == AIConversationMessage.request_id) \
+                .filter(AIConversationMessage.conversation_id.in_(ids)) \
+                .order_by(AIRequest.created_at.desc(), AIRequest.id.desc()).limit(400).all():
+            previews.setdefault(conversation_id, (message, status, created_at))
+        for conversation_id, count in db.session.query(AIConversationMessage.conversation_id, func.count(AIRequest.id)) \
+                .join(AIRequest, AIRequest.id == AIConversationMessage.request_id) \
+                .filter(AIConversationMessage.conversation_id.in_(ids), AIRequest.status.in_(['pending', 'reconcile', 'failed'])) \
+                .group_by(AIConversationMessage.conversation_id).all():
+            issues[conversation_id] = count
+    conversations = []
+    for row in rows:
+        message, status, last_at = previews.get(row.id, ('', '', row.last_at))
+        conversations.append({'id': row.id, 'actor': actors.get(row.account_id), 'title': row.title,
+            'messages': row.messages, 'issues': issues.get(row.id, 0), 'status': status,
+            'question': message.split('\n[图片:')[0][:120],
+            'started_at': stamp(row.started_at), 'last_at': stamp(last_at)})
+    return jsonify(total=total, page=page, per_page=per_page, pages=(total + per_page - 1) // per_page, conversations=conversations)
+
+
+@ai_bp.route('/admin/conversations/<conversation_id>', methods=['GET'])
+@admin_required
+def admin_conversation(conversation_id):
+    conversation = db.session.get(AIConversation, conversation_id)
+    if not conversation:
+        return jsonify(error='找不到该对话。'), 404
+    rows = db.session.query(AIRequest, AIConversationMessage) \
+        .join(AIConversationMessage, AIRequest.id == AIConversationMessage.request_id) \
+        .filter(AIConversationMessage.conversation_id == conversation.id) \
+        .order_by(AIRequest.created_at.asc(), AIRequest.id.asc()).all()
+    messages = []
+    for record, link in rows:
+        response = record.response or {}
+        # Images never travel with the thread: a customer upload is up to 4MB of base64 each,
+        # and the list/detail payload must stay small. The page fetches them per message.
+        messages.append({'role': 'user', 'content': record.message.split('\n[图片:')[0], 'at': stamp(record.created_at),
+            'status': record.status, 'request_id': record.id, 'images': len(chat_images(link.image))})
+        messages.append({'role': 'assistant', 'content': response.get('reply', ''), 'at': stamp(record.created_at),
+            'status': record.status, 'charged_cny': response.get('charged_cny', 0), 'quote': chat_quote(response.get('quote')),
+            'review': chat_review(response.get('review')), 'source': response.get('source') or '', 'rule_id': response.get('rule_id') or ''})
+    return jsonify(id=conversation.id, title=conversation.title, active=conversation.active,
+        actor=chat_actors([conversation.account_id]).get(conversation.account_id),
+        created_at=stamp(conversation.created_at), updated_at=stamp(conversation.updated_at), messages=messages)
+
+
+@ai_bp.route('/admin/messages/<path:request_id>/images', methods=['GET'])
+@admin_required
+def admin_message_images(request_id):
+    link = db.session.get(AIConversationMessage, request_id)
+    if not link:
+        return jsonify(error='找不到该消息。'), 404
+    return jsonify(images=chat_images(link.image))
 
 
 @ai_bp.route('/recharge', methods=['POST'])

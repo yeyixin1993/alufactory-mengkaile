@@ -135,6 +135,29 @@ def create_app(config_name='development', instance_path=None):
                                 print(f'  ✅ Auto-migrated: added {col_name} to profiles')
                             except Exception:
                                 pass
+
+            if 'ai_accounts' in inspector.get_table_names():
+                # Chat-log origin: recorded once per account so the admin chat log can tell two
+                # anonymous guests apart. Existing rows stay NULL and read as 「—」.
+                existing_account_cols = [col['name'] for col in inspector.get_columns('ai_accounts')]
+                account_migrations = [
+                    ('first_ip', 'VARCHAR(45)'),
+                    ('first_user_agent', 'VARCHAR(300)'),
+                    ('first_seen_at', 'DATETIME'),
+                ]
+                # Run the DDL on the session connection: the seeded inventory above still holds
+                # SQLite's write lock, so a second connection gets "database is locked" and the
+                # column would silently never appear on local/dev databases.
+                for col_name, col_type in account_migrations:
+                    if col_name in existing_account_cols:
+                        continue
+                    try:
+                        db.session.execute(text(f'ALTER TABLE ai_accounts ADD COLUMN {col_name} {col_type}'))
+                        db.session.commit()
+                        print(f'  ✅ Auto-migrated: added {col_name} to ai_accounts')
+                    except Exception as exc:
+                        db.session.rollback()
+                        print(f'  ⚠️ ai_accounts.{col_name} not added: {exc}')
         except Exception as e:
             print(f'  ⚠️ Auto-migration check skipped: {e}')
     

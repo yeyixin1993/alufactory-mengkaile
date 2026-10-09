@@ -105,3 +105,17 @@ Implemented explicit backend `AI_PROVIDER=deepseek` with `DEEPSEEK_API_KEY`, off
 - 防刷闸门不变：每个出口 IP 每天最多**新建 10 个**游客身份（`ai_rate_windows` 的 `guest:<ip>:<utc-day>`），即单 IP 每天上限 30 条。清除 `localStorage` 能换回三条，但受这个闸门约束；上限与改动前相同，未新增成本敞口。
 - 界面：始终显示 `剩余 3/3 → 0/3`；`0/3` 时提交键禁用并在旁边给「登录」入口与一行提示。已登录账号不显示登录引导（走账户充余额），避免让登录用户「再登录一次」。
 - 本地与线上同规则（2026-10-09 店主确认）：删除 `AI_LOCAL_UNLIMITED` 开关（`local_unlimited()`、`/status` 的 `local_unlimited` 字段、「本地测试 · 不限额度」文案）。`run_deepseek_local.py` 只剩隔离数据库与拦截真实支付两点差异，额度/扣费与生产完全一致。
+
+### 后台可查全部问答记录（2026-10-09，店主确认）
+
+店主口径：**客户的问答必须都留在后台、能查看**（含游客）。落点选**独立后台页**，范围选**全部客户**，游客额外记一份**首次访问 IP/浏览器**。
+
+- 归档本身早在 `app/ai_conversations.py` + `ai_requests` 里：每条消息写 `ai_requests.message` 与 `ai_requests.response`（含 reply / quote / review / 状态），并靠 `ai_conversation_messages` 归到某个会话。游客存 `g:<设备UUID>`，登录用户存 `u:<用户ID>`。客户侧只能看到自己的（`/status` 的 `history` 只给本人，且只留最近 8 条工作上下文）。
+- 新增只读后台接口（`app/routes/ai_chat.py`，全部 `@admin_required`）：
+  - `GET /api/ai/admin/conversations?q=&kind=&page=` —— 跨用户与游客分页列会话（20/页），可按**手机号 / 用户名 / 游客ID / 首次访问 IP** 搜索，`kind=user|guest` 过滤；每行带问答条数、最后提问、最近时间、待人工核对条数。
+  - `GET /api/ai/admin/conversations/<id>` —— 完整问答明细（逐条时间/状态/扣费/命中规则/报价与加工摘要）。
+  - `GET /api/ai/admin/messages/<request_id>/images` —— 按需取该消息附件。**明细里绝不内联 base64**（单张最多 4MB），页面点「查看客户附件」才拉取。
+- `ai_accounts` 新增 `first_ip / first_user_agent / first_seen_at`，由 `identity()` **首次见到账号时写一次**（`app/__init__.py` 自动迁移补列）。这是后台区分两个匿名游客的唯一抓手；历史行为 NULL，显示「—」。
+- **「一条都不能漏」**：归档功能上线前写的 `ai_requests` 没有会话链接，只有该账号下次被访问时才补（`_initialize_conversation`）。后台列表读取时会先跑 `adopt_orphan_requests()`（幂等、限 500 条）收编这些孤儿，否则「问了就再也不回来的客户」的问答会永远看不见。
+- 页面：`alufactory-backend/admin/ai-conversations.html`，左侧会话列表 + 右侧问答明细；左侧导航新增「💬 AI聊天记录」，与额度管理、问答规则库互相加链接。客户文本一律走 `textContent` 渲染，不拼 HTML。
+- 回归：`npm run`/后台测试新增 `tests/test_ai_conversations_admin.py`（6 项：权限、游客来源与明细、搜索与过滤、附件按需、分页与空会话隐藏、孤儿收编幂等）。
