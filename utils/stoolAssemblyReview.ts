@@ -146,6 +146,21 @@ export const STOOL_ASSEMBLY_INSTALLATION_STEPS = [
 ] as const;
 
 const TOLERANCE_MM = 0.02;
+/**
+ * The mounting geometry is read back out of the design file, so its precision is the
+ * file's, not the CAD's: a re-serialised document can round every coordinate to 0.1 µm
+ * (the owner's 凳子-精简版 exports do exactly that), which is a hundred times finer than
+ * anything manufacturable. A window of 1 µm absorbs that rounding while staying a
+ * thousandth of the 4 mm plate and the Ø6.5 hole it is checking, so a part that really
+ * changed still fails. Judging a coordinate against a window tighter than the file's own
+ * precision is what turned a rounded-but-identical bracket into a permanent block.
+ */
+const MOUNT_GEOMETRY_TOLERANCE_MM = 0.001;
+/** A hole rim is a discretised circle; how many segments the exporter used is not a physical property. */
+const MOUNT_RIM_MIN_POINTS = 24;
+const MOUNT_FACE_MM = -15;
+const MOUNT_INNER_FACE_MM = -11;
+const MOUNT_RIM_RADIUS_MM = 3.25;
 const sideLabels: Record<number, string> = { 5: '前侧', 6: '后侧', 7: '左侧', 8: '右侧' };
 const SOURCE_PATH = /^root\/instances-([5-8])\/instances-([1-4])$/;
 const expectedPaths = [5, 6, 7, 8].flatMap((side) => [1, 2, 3, 4].map((part) => `root/instances-${side}/instances-${part}`));
@@ -174,21 +189,22 @@ function hasMeasuredMountGeometry(mesh: ImportedSourceMesh): boolean {
     || ![1, 2].every((axis) => close(mesh.boundsMm.min[axis], -15) && close(mesh.boundsMm.max[axis], 15))) return false;
   const positions = mesh.positionsMm;
   if (positions.length % 3 !== 0 || mesh.indices.length % 3 !== 0) return false;
+  const onPlane = (value: number, plane: number) => Math.abs(value - plane) <= MOUNT_GEOMETRY_TOLERANCE_MM;
   return ([1, 2] as const).every((axis) => {
     const across = axis === 1 ? 2 : 1;
     const rim = new Set<string>(); let outerTriangles = 0; let innerTriangles = 0;
     for (let n = 0; n < positions.length; n += 3) {
-      if (Math.abs(positions[n + axis] + 15) < 0.00002
-        && Math.abs(Math.hypot(positions[n], positions[n + across]) - 3.25) < 0.00002) {
-        rim.add(`${positions[n].toFixed(5)},${positions[n + across].toFixed(5)}`);
+      if (onPlane(positions[n + axis], MOUNT_FACE_MM)
+        && Math.abs(Math.hypot(positions[n], positions[n + across]) - MOUNT_RIM_RADIUS_MM) <= MOUNT_GEOMETRY_TOLERANCE_MM) {
+        rim.add(`${positions[n].toFixed(3)},${positions[n + across].toFixed(3)}`);
       }
     }
     for (let n = 0; n < mesh.indices.length; n += 3) {
       const coordinates = mesh.indices.slice(n, n + 3).map((index) => positions[index * 3 + axis]);
-      if (coordinates.every((value) => Math.abs(value + 15) < 0.00002)) outerTriangles++;
-      if (coordinates.every((value) => Math.abs(value + 11) < 0.00002)) innerTriangles++;
+      if (coordinates.every((value) => onPlane(value, MOUNT_FACE_MM))) outerTriangles++;
+      if (coordinates.every((value) => onPlane(value, MOUNT_INNER_FACE_MM))) innerTriangles++;
     }
-    return rim.size === 42 && outerTriangles >= 46 && innerTriangles >= 46;
+    return rim.size >= MOUNT_RIM_MIN_POINTS && outerTriangles >= 46 && innerTriangles >= 46;
   });
 }
 

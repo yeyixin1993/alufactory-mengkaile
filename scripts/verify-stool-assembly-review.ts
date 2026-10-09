@@ -139,6 +139,42 @@ const changedSupport = baseline.map((item) => item.id !== support.id ? item : {
 });
 assert.ok(reviewStoolAssembly(changedSupport).assemblies[0].supports.find((item) => item.itemId === support.id)!
   .holes.every((hole) => hole.matchStatus === 'source_geometry_changed'));
+// A design file that was re-serialised rounds every coordinate to 0.1 µm — a hundred
+// times finer than anything manufacturable — while keeping the same physical bracket.
+// Judging that against a tighter window than the file's own precision blocked a correct
+// design permanently, with no checkbox able to clear it.
+const roundedSupport = baseline.map((item) => item.id !== support.id ? item : {
+  ...item,
+  sourceMesh: {
+    ...item.sourceMesh!,
+    positionsMm: item.sourceMesh!.positionsMm.map((value) => Number(value.toFixed(4))),
+  },
+});
+assert.equal(reviewStoolAssembly(roundedSupport).totals.unmatchedMounts, 0,
+  'Rounded coordinates are serialisation noise, not a changed mounting face');
+assert.ok(reviewStoolAssembly(roundedSupport).assemblies[0].supports
+  .find((item) => item.itemId === support.id)!.holes.every((hole) => hole.matchStatus === 'matched'));
+// The window is still 1 µm: a hole that really changed is still a changed bracket.
+const reamedSupport = baseline.map((item) => item.id !== support.id ? item : {
+  ...item,
+  sourceMesh: {
+    ...item.sourceMesh!,
+    positionsMm: (() => {
+      const positions = [...item.sourceMesh!.positionsMm];
+      for (let n = 0; n < positions.length; n += 3) {
+        const radius = Math.hypot(positions[n], positions[n + 2]);
+        if (Math.abs(positions[n + 1] + 15) <= 0.001 && Math.abs(radius - 3.25) <= 0.001) {
+          const scale = 3.5 / radius;
+          positions[n] *= scale; positions[n + 2] *= scale;
+        }
+      }
+      return positions;
+    })(),
+  },
+});
+assert.ok(reviewStoolAssembly(reamedSupport).assemblies[0].supports
+  .find((item) => item.itemId === support.id)!.holes.every((hole) => hole.matchStatus === 'source_geometry_changed'),
+'Reaming the measured Ø6.5 mount hole is still a changed bracket');
 const allRemoved = baseline.filter((item) => item.sourceMesh?.source.semanticType !== 'fixed_support');
 assert.equal(reviewStoolAssembly(allRemoved).totals.missingSupports, 16);
 assert.equal(reviewStoolAssembly([]).applicable, false);
@@ -213,4 +249,4 @@ assertPriceFree(production, 'productionProjection');
 assertPriceFree(materialList, 'materialList');
 
 assert.equal(JSON.stringify(asset), originalAsset, 'Source asset remains unchanged');
-console.log('Stool assembly review passed: default/asymmetric geometry, 32 measured mounts, 3 frame components versus one planned bridge graph, re-keyed/overlapping scopes and repeated whole-document appends, moved/deleted parents, missing/changed support, no computed blocker on a placed model, and 32 owner-confirmed fastener sets priced from the accessory catalog.');
+console.log('Stool assembly review passed: default/asymmetric geometry, 32 measured mounts, 3 frame components versus one planned bridge graph, re-keyed/overlapping scopes and repeated whole-document appends, moved/deleted parents, missing/changed support, coordinates rounded to 0.1 µm read as unchanged while a reamed mount hole still fails, no computed blocker on a placed model, and 32 owner-confirmed fastener sets priced from the accessory catalog.');
