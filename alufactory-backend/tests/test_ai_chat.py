@@ -54,30 +54,33 @@ class AIChatTest(unittest.TestCase):
         self.assertEqual(AILedger.query.filter_by(kind='usage').count(), 1)
 
     @patch('app.routes.ai_chat.provider_extract', return_value=(json.dumps(SPEC), 100000, {}))
-    def test_three_message_trial_and_carryover(self, _):
-        token=self.status(None).json['visitor_token']
+    def test_guest_and_account_allowances_are_separate(self, _):
+        # Not signed in means guest (the browser token, three messages); signed in means the
+        # account's own status. Nothing is copied between the two, so signing in neither
+        # spends nor restores the device's messages — that mixing is what used to answer a
+        # visitor with 「试用次数已转入注册账号，请登录使用。」.
+        token = self.status(None).json['visitor_token']
         self.assertEqual(self.chat(None, 1, token).status_code, 200)
-        self.assertEqual(self.status('standard', token).json['trial_remaining'], 2)
-        # The allowance follows the device, so signing in absorbs the spent message into the
-        # account but leaves the device its own two — the browser is never locked out of the
-        # token it already holds, which is what used to strand visitors at "请登录使用".
         self.assertEqual(self.status(None, token).json['trial_remaining'], 2)
+        # The account starts from its own untouched allowance.
+        self.assertEqual(self.status('standard', token).json['trial_remaining'], 3)
+        # The device keeps serving on its own token, without and with a session present.
         self.assertEqual(self.chat(None, 2, token).status_code, 200)
-        for i in (3,4): self.assertEqual(self.chat('standard', i).status_code, 200)
-        spent = self.chat('standard', 5)
+        self.assertEqual(self.chat(None, 3, token).status_code, 200)
+        spent = self.chat(None, 4, token)
         self.assertEqual(spent.status_code, 409)
         self.assertEqual(spent.json['reason'], 'trial_exhausted')
+        # Exhausting the device leaves the account's allowance untouched and usable.
+        self.assertEqual(self.status('standard', token).json['trial_remaining'], 3)
+        self.assertEqual(self.chat('standard', 5).status_code, 200)
 
     def test_guest_lock_reasons_reach_the_client(self):
         # The composer switches on `reason`, never on the Chinese copy, so a refused guest
         # gets "sign in to continue" (and a disabled send button) instead of a dead end.
         self.assertEqual(self.status('standard').json['trial_limit'], 3)
         token = self.status(None).json['visitor_token']
-        guest = AIAccount.query.filter(AIAccount.id.like('g:%')).one()
-        guest.claimed_by = 'u:standard'
-        db.session.commit()
-        # An absorbed device is audited, not refused: only the per-network cap on new guest
-        # accounts can still turn a visitor away.
+        # Holding a device token never depends on having signed in with it before; only the
+        # per-network cap on brand-new guest identities can still turn a visitor away.
         self.assertEqual(self.status(None, token).status_code, 200)
         for _ in range(12):
             throttled = self.status(None)

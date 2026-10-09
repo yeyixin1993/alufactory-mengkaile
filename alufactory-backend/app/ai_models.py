@@ -14,7 +14,6 @@ class AIAccount(db.Model):
     enabled = db.Column(db.Boolean, nullable=False, default=True)
     busy = db.Column(db.String(36), nullable=True)
     history = db.Column(db.JSON, nullable=False, default=list)
-    claimed_by = db.Column(db.String(100), nullable=True)  # audit only: which account absorbed this device's trial
 
 class AISettings(db.Model):
     __tablename__ = 'ai_settings'

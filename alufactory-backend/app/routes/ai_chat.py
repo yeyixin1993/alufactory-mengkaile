@@ -119,19 +119,13 @@ def identity(data):
         guest_id = 'g:' + str(uuid.uuid4())
         token = signer().dumps(guest_id)
     account = ensure_account('u:' + user.id if user else guest_id)
-    # The free allowance belongs to the device: the visitor token in the browser *is* the
-    # guest identity, and it never wears out. Signing in used to stamp `claimed_by` and then
-    # refuse every later guest request from that browser, which turned a spent trial into a
-    # permanent dead end ("已转入账号，请登录"). Absorption still happens so one device
-    # cannot collect the allowance twice, but `claimed_by` is now bookkeeping only and is
-    # never the reason a request is refused.
-    if user and guest_id:
-        guest = db.session.get(AIAccount, guest_id)
-        if guest and not guest.claimed_by and not guest.busy:
-            claimed = AIAccount.query.filter_by(id=guest_id, claimed_by=None, busy=None).update({'claimed_by': account.id})
-            if claimed:
-                AIAccount.query.filter_by(id=account.id).update({'trial_used': db.func.max(AIAccount.trial_used, guest.trial_used)} if db.engine.dialect.name == 'sqlite' else {'trial_used': db.func.greatest(AIAccount.trial_used, guest.trial_used)})
-            db.session.commit()
+    # Two identities, two allowances, nothing copied between them: not signed in means the
+    # browser token *is* the guest and owns its own three messages, signed in means the
+    # account owns its allowance and the device token is ignored entirely. An earlier design
+    # merged the device's spent messages into the account and stamped the row `claimed_by`,
+    # so a browser that had spent its three and signed in once was answered with
+    # 「试用次数已转入注册账号，请登录使用。」 forever — a visitor being counted against the
+    # signed-in allowance and then asked to sign in, which is what customers found confusing.
     membership = normalize_membership_level(user.membership_level) if user else 'standard'
     grant = {'vip': 10, 'vip_plus': 100}.get(membership, 0) * SCALE
     # Compare-and-swap makes lazy one-time grants and upgrade top-ups idempotent.
