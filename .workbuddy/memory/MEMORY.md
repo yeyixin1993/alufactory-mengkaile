@@ -27,6 +27,12 @@
 - **`git push` 会跑 `.githooks/pre-push`**（`core.hooksPath=.githooks`）：先 `npm run package:dist`
   （完整 build + 打 ZIP）才推，所以很慢且在沙箱里易撞批量删除拦截 —— 用 `dangerouslyDisableSandbox` + 后台跑。
 - 端到端冒烟用 `agent-browser`；配方见本文末「浏览器冒烟配方」。
+- **后端跑测试/脚本用 `alufactory-backend/.venv-local/bin/python`**（Flask 2.3.2 / SQLAlchemy 2.0，
+  在 worktree 的 `alufactory-backend/.venv-local/`；托管 Python 和 brew Python 都**没有** flask）。
+  全量回归：`cd alufactory-backend && ./.venv-local/bin/python -m pytest tests -q`（2026-10-09 基线 105 passed）。
+- **`curl` 访问本地服务要加 `--noproxy '*'`**：不加会走本机代理，返回 502 让人误判「服务没起来」。
+- `run_deepseek_local.py` 端口被占就 `Address already in use` 直接退出，**不换端口**；业主可能正跑着
+  旧代码的 5001，验证新改动要么请他重启，要么另起隔离实例（见 AI 聊天一节）。
 
 ## AI 聊天（AI 顾问）本地调试 —— 只在 `codex/ai-sales-assistant`
 
@@ -45,10 +51,10 @@
   `settings()` 在缺行时会**建一条 `enabled=False`**（`run_deepseek_local.py` 启动时会强制置 True）；
   `local_answers_available = 存在 enabled 的 AIFaqRule`。游客（无 JWT）靠 `visitor_token` 建 `g:` 账号，
   新账号 `trial_limit=3`；同一 IP 每天最多新建 10 个游客账号（超了报「当前网络试用申请过于频繁」）。
-- `run_deepseek_local.py` 开 `AI_LOCAL_UNLIMITED=True`（且要 `remote_addr` 是回环）⇒ 本地游客/会员都不限额度，
-  页面显示「本地测试 · 不限额度」。但**真发消息会真实扣 DeepSeek 余额**，验证按钮状态时不要真提交。
-  FAQ 命中的消息不调模型、不花钱（`docs/AI_FAQ_STARTER.md` 里的标准问题，如「两端攻丝是什么意思」），
-  要端到端验证就用它。
+- **本地与线上同规则（2026-10-09 业主决定，`AI_LOCAL_UNLIMITED` 已删）**：本地游客同样只有 3 条、登录后
+  看账号自己的余额，页面不再有「本地测试 · 不限额度」。`run_deepseek_local.py` 与生产的差别只剩
+  **隔离数据库 + 拦截真实支付**。**真发消息会真实扣 DeepSeek 余额**，验证按钮状态时不要真提交；
+  FAQ 命中的消息不调模型、不花钱（`docs/AI_FAQ_STARTER.md` 的标准问题，如「多久发货」），端到端验证用它。
 - **游客被「当前网络试用申请过于频繁，请登录后使用。」挡住（2026-10-09 真踩到）**：`identity()` 里
   `rate_limit('guest:{remote_addr}:{UTC day}', 10)` —— **同一 IP 每天只能新建 10 个游客账号**。
   只要 localStorage 里没有有效 `mengkaile-ai-visitor`（新 profile / 无痕 / 清过 storage / 换了 launcher
@@ -56,10 +62,55 @@
   `ai_rate_windows` 的 key 是 `sha256(bucket)`，bucket = `guest:127.0.0.1:<UTC日期>`；要放行就
   `update ai_rate_windows set count=0 where id=<该 hash>`（**只动本地 `instance/deepseek-local/ai-test.db`**）。
   顺手把 3 条试用规则改回「游客可试用」是业主 2026-10-09 明确否掉的，不要再提议去改。
+- **游客与账号是两套完全独立的额度（2026-10-09 业主最终口径，已实现）**：**没登录就是游客，登录了就看账号
+  自己的 status**，互不掺和 —— 业主原话「明明没登录又算登录额度让客户登录，very confusing」。
+  游客身份 = 浏览器签名 token（`g:<uuid>`），三条用完即止；`identity()` 里**既不合并**设备已用次数、
+  **也不写 `claimed_by`**（**该字段已从 `app/ai_models.py` 删除**，`claimed_by`/`trial_claimed` 只剩文档与
+  注释里的历史说明）。旧的两层行为都已删：① 带游客 token 登录过就永久 400 `trial_claimed`
+  「试用次数已转入注册账号，请登录使用。」；② 登录时把设备已用次数 `max()` 进账号。
+  **已知代价（业主明确接受）**：同一台设备可以「游客用满 3 条 → 注册/登录 → 再用账号自己的 3 条」。
+  想重置某台设备的游客额度：删 `localStorage['mengkaile-ai-visitor']`（受同 IP 每日 10 个新游客限制）。
+  回归 `alufactory-backend/tests/test_ai_chat.py::test_guest_and_account_allowances_are_separate`。
+- **AI 首页引导词 ↔ 已核实问答必须一一对应**：`.ai-entry-suggestions` 的三个引导词硬编码在
+  `components/AIChatBar.tsx`（**raw 中文、不走多语言**），且**必须是 FAQ 精确命中**，否则会走模型
+  （花钱且答案不可控）。`match_faq` 只做 normalize 后的**集合精确匹配**（无子串），所以新引导词
+  必须**新增/复用一个问法完全一致**的规则；回归 `alufactory-backend/tests/test_ai_faq.py::
+  test_home_suggestion_chips_have_verified_answers`（直接从 TSX 抠数组断言全部命中）。
+- **`seed_faq_rules()` 只补缺失 id、不更新已有行**（例外：`ai_faq_legacy_drafts.json` 的
+  version+CAS 升级）。⇒ 给现有问答**加同义问法/改答案，改 seed 无效**；要么**新建 id**，
+  要么让业主在「后台 → AI 问答规则库」改（后台改动不会被重启覆盖）。AI 问答规则库共 36 条（全启用）。
+- **访客停服状态一律用 `reason` 码传递，前端不解析中文文案**（2026-10-09 落地）：`ai_chat.py` 的
+  `IdentityError(ValueError)`（带 `.reason`）+ `identity_error(exc)` 统一 400 返回
+  `{error, reason}`，码值 `account_disabled / visitor_token_invalid / visitor_token_expired /
+  guest_rate_limited`，`/chat` 的「试用已用完」409 带 `trial_exhausted`。
+  `apiService.request` 把响应体挂到 `Error.payload`（否则 reason 被丢掉）。前端 `statusFailure()` →
+  `{message, lock}`；额度区显示 `剩余 X/trial_limit 条`，`0/3` 或 lock 时提交键灰 + `登录` 链接
+  （`.ai-entry-actions` / `.ai-entry-login` / `.ai-entry-lock`）。
+- 本地直接能看到 3/3 → 0/3（不再需要另起 5002/3001 那套「关掉不限额度」的后端）；用 FAQ 问题连发 3 条
+  零成本走到 0/3。**`agent-browser network route --body` 在本环境不生效**，别用它打桩。
+  **`agent-browser` 报 `✗ CDP response channel closed` 时**：`agent-browser close --all` 再 `open` 即可恢复
+  （必要时先删 `~/.agent-browser/default.*` 陈旧状态；`agent-browser doctor --fix` 可验证启动链路正常）。
 - **前端曾把后端的真实原因吞掉（2026-10-09 已修）**：`AIChatBar` 的 `/status` 失败分支原先把所有异常
   都写成「咨询服务暂时连接不上，请稍后重试，或先使用快速报价。」，于是「游客名额已满」「访客凭据已失效」
   这类**服务端明确给了原因**的失败看起来跟「后端没开」一模一样 —— 业主就是这样误判成「游客不能进 AI chat」。
   现在用 `statusFailure()` 区分：只有 fetch `TypeError` / 5xx 才说连接不上，其余一律原样透出后端文案。
+- **后台查全部问答记录（2026-10-09 新增，未提交）**：归档一直在 `ai_requests` + `ai_conversation_messages`
+  （游客 `g:<uuid>`、登录 `u:<userId>`），缺的只是后台查看口。接口全在 `app/routes/ai_chat.py`：
+  `GET /api/ai/admin/conversations`（`q` 搜手机号/用户名/游客ID/首次 IP，`kind=user|guest`，20/页）、
+  `.../conversations/<id>`（完整明细）、`.../messages/<request_id>/images`（附件**按需**取，
+  明细绝不内联 base64）。页面 `alufactory-backend/admin/ai-conversations.html`。
+  `ai_accounts` 加 `first_ip / first_user_agent / first_seen_at`（`identity()` 首次见到账号写一次）。
+  **归档前的老 `ai_requests` 没有会话链接**，后台列表读取时靠 `ai_conversations.adopt_orphan_requests()`
+  （幂等、限 500）收编 —— 否则「问完再也不回来」的客户问答永远看不见。
+- **`app/__init__.py` 自动迁移的坑（SQLite）**：照抄 orders/profiles 的
+  `with db.engine.connect() as conn: conn.execute(text('ALTER TABLE ...'))` 会 **`database is locked`** ——
+  前面 `seed_*_inventory()` 的事务占着写锁，而 `except Exception: pass` 把异常吞掉 ⇒ 列**静默没加上**
+  （非 tty 时 print 还在缓冲里，更难发现）。**新加列要用 `db.session.execute(text(...)) + db.session.commit()`**。
+  orders/profiles 两段很可能同样有隐患，只是列早就存在才没暴露。2026-10-09 实测：改法生效、重启幂等。
+- **不想打扰业主正在跑的 5001 时**：复制 `instance/deepseek-local/{ai-test.db,session-secret.local}` 到
+  `/tmp/<dir>/`，写个小 `serve.py` 设 `DATABASE_URL=sqlite:////tmp/<dir>/ai-test.db`、`SECRET_KEY`/`JWT_SECRET_KEY`
+  = 复制的 secret，`create_app('development', instance_path='/tmp/<dir>')` 后 `app.run(port=5002)`。
+  用同一 secret 造管理员 JWT（`create_access_token(identity=<users.is_admin=1 的 id>)`）即可直接调后台接口。
 
 ## 分支 / worktree 现状（2026-10-09 核对）
 
