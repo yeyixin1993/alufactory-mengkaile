@@ -58,9 +58,13 @@ class AIChatTest(unittest.TestCase):
         token=self.status(None).json['visitor_token']
         self.assertEqual(self.chat(None, 1, token).status_code, 200)
         self.assertEqual(self.status('standard', token).json['trial_remaining'], 2)
-        self.assertEqual(self.status(None, token).status_code, 400)
-        for i in (2,3): self.assertEqual(self.chat('standard', i).status_code, 200)
-        spent = self.chat('standard', 4)
+        # The allowance follows the device, so signing in absorbs the spent message into the
+        # account but leaves the device its own two — the browser is never locked out of the
+        # token it already holds, which is what used to strand visitors at "请登录使用".
+        self.assertEqual(self.status(None, token).json['trial_remaining'], 2)
+        self.assertEqual(self.chat(None, 2, token).status_code, 200)
+        for i in (3,4): self.assertEqual(self.chat('standard', i).status_code, 200)
+        spent = self.chat('standard', 5)
         self.assertEqual(spent.status_code, 409)
         self.assertEqual(spent.json['reason'], 'trial_exhausted')
 
@@ -72,9 +76,9 @@ class AIChatTest(unittest.TestCase):
         guest = AIAccount.query.filter(AIAccount.id.like('g:%')).one()
         guest.claimed_by = 'u:standard'
         db.session.commit()
-        claimed = self.status(None, token)
-        self.assertEqual(claimed.status_code, 400)
-        self.assertEqual(claimed.json['reason'], 'trial_claimed')
+        # An absorbed device is audited, not refused: only the per-network cap on new guest
+        # accounts can still turn a visitor away.
+        self.assertEqual(self.status(None, token).status_code, 200)
         for _ in range(12):
             throttled = self.status(None)
         self.assertEqual(throttled.status_code, 400)
@@ -182,18 +186,15 @@ class AIChatTest(unittest.TestCase):
 
 
     @patch('app.routes.ai_chat.provider_extract', return_value=(json.dumps(SPEC), 100000, {}))
-    def test_local_unlimited_preserves_production_limits(self, provider):
-        self.app.config['AI_LOCAL_UNLIMITED'] = True
+    def test_free_allowance_applies_locally_too(self, provider):
+        # The local launcher used to enable an unlimited switch, so loopback traffic behaved
+        # differently from production. Owner decision 2026-10-09: no such switch — the
+        # three-message allowance and the balance rule apply on every host, local included.
         self.status('standard')
         account = db.session.get(AIAccount, 'u:standard')
         account.trial_used = 3
         db.session.commit()
-        self.assertTrue(self.status('standard').json['local_unlimited'])
-        self.assertEqual(self.chat('standard', 41).status_code, 200)
-        self.assertEqual(self.chat('standard', 42).json['charged_cny'], 0)
-        db.session.refresh(account)
-        self.assertEqual((account.balance, account.trial_used), (0, 3))
-        self.app.config['AI_LOCAL_UNLIMITED'] = False
-        self.assertEqual(self.chat('standard', 43).status_code, 409)
+        self.assertNotIn('local_unlimited', self.status('standard').json)
+        self.assertEqual(self.chat('standard', 41).status_code, 409)
 
 if __name__ == '__main__':unittest.main()

@@ -43,7 +43,7 @@ Sources: [Qwen pricing](https://help.aliyun.com/zh/model-studio/model-pricing), 
 ## Implemented defaults and next acceptance
 
 - VIP receives RMB 10 once. Upgrading to VIP+ brings cumulative grants to RMB 100 (adds RMB 90 if RMB 10 was granted); downgrading/re-upgrading never repeats a grant.
-- Guests carry used trial messages into a standard account when signing in on the same browser; new VIP registrations receive the VIP allowance. Resetting a conversation does not reset allowance.
+- Guests carry used trial messages into a standard account when signing in on the same browser; the device keeps its own remaining messages (see the 2026-10-09 section below); new VIP registrations receive the VIP allowance. Resetting a conversation does not reset allowance.
 - Money uses integer hundred-millionths of RMB; provider usage and markup are stored separately in the admin ledger. Malformed/failed responses do not debit customers. A locked per-account request prevents parallel overspend; uncertain/crashed requests have an admin reconciliation path, with uncertain provider costs absorbed by the merchant.
 - The first provider is pinned Qwen3.7 Flash Beijing with <=32K input and 800 output token limits. Cache usage receives its applicable input discount. The credential is server-only. Provider discounts/free credits are not inferable from API token usage; the metered tariff must be reconciled with the merchant account before launch.
 - Generated `app/ai_catalog.json` comes from frontend catalog constants on `npm run build`. Deploy this file with the backend. The deterministic single-profile estimate follows QuickQuote material, end-tapping, short-piece surcharge, membership and courier rules. It is not a payable order; unsupported/multi-port machining is referred to the existing editors.
@@ -91,3 +91,16 @@ AI consultation is the primary homepage entry: centered headline, large multilin
 ## DeepSeek adapter (2026-10-04)
 
 Implemented explicit backend `AI_PROVIDER=deepseek` with `DEEPSEEK_API_KEY`, official Flash JSON/non-thinking API, time-period/cached-token metering and provider-specific reserve. Qwen remains the default for compatibility. See AI_ASSISTANT_SETUP.md for deployment, billing assumptions and live acceptance. Requests with uncertain billing are not charged to customers. Real-key integration has not been exercised. No image, designer-generation or checkout capability was added by this adapter.
+
+### 游客额度按设备，不再「转入账号」（2026-10-09，店主确认）
+
+店主口径：游客的三条免费按**设备**算 —— 一台浏览器三条，用完即止；同一网络下的其他设备互不影响。**登录不再作废该设备的游客身份。**
+
+实现（`app/routes/ai_chat.py` 的 `identity()`）：
+
+- 游客身份 = 浏览器里的签名 token（`g:<uuid>`，`ai-visitor-v1` salt），存在 `localStorage['mengkaile-ai-visitor']`。额度记在 `ai_accounts.trial_used / trial_limit`，不随新会话、不随时间重置。
+- 带游客身份登录时，仍把该设备**已用**的次数并入账号（`trial_used = max(账号, 设备)`，幂等），防止同一台设备靠登录再拿三条；但 `claimed_by` 现在**只作审计**，不再作为拒绝理由。
+- **已取消**：旧行为会以 `reason: 'trial_claimed'` 返回 400「试用次数已转入注册账号，请登录使用。」——它会让「用过三条 + 登录过一次」的浏览器永久只能登录，是 2026-10-09 店主报障的根因。前端也删掉了对应的锁态与文案。
+- 防刷闸门不变：每个出口 IP 每天最多**新建 10 个**游客身份（`ai_rate_windows` 的 `guest:<ip>:<utc-day>`），即单 IP 每天上限 30 条。清除 `localStorage` 能换回三条，但受这个闸门约束；上限与改动前相同，未新增成本敞口。
+- 界面：始终显示 `剩余 3/3 → 0/3`；`0/3` 时提交键禁用并在旁边给「登录」入口与一行提示。已登录账号不显示登录引导（走账户充余额），避免让登录用户「再登录一次」。
+- 本地与线上同规则（2026-10-09 店主确认）：删除 `AI_LOCAL_UNLIMITED` 开关（`local_unlimited()`、`/status` 的 `local_unlimited` 字段、「本地测试 · 不限额度」文案）。`run_deepseek_local.py` 只剩隔离数据库与拦截真实支付两点差异，额度/扣费与生产完全一致。

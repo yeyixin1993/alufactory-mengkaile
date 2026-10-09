@@ -39,11 +39,6 @@ def validate_body():
         return jsonify(error='请求必须为 JSON 对象。'), 400
 
 
-def local_unlimited():
-    # Enabled only by the isolated loopback launcher, never by client input.
-    return current_app.config.get('AI_LOCAL_UNLIMITED') is True and request.remote_addr in ('127.0.0.1', '::1')
-
-
 def settings():
     row = db.session.get(AISettings, 1)
     if row is None:
@@ -124,8 +119,12 @@ def identity(data):
         guest_id = 'g:' + str(uuid.uuid4())
         token = signer().dumps(guest_id)
     account = ensure_account('u:' + user.id if user else guest_id)
-    if not user and account.claimed_by:
-        raise IdentityError('试用次数已转入注册账号，请登录使用。', 'trial_claimed')
+    # The free allowance belongs to the device: the visitor token in the browser *is* the
+    # guest identity, and it never wears out. Signing in used to stamp `claimed_by` and then
+    # refuse every later guest request from that browser, which turned a spent trial into a
+    # permanent dead end ("已转入账号，请登录"). Absorption still happens so one device
+    # cannot collect the allowance twice, but `claimed_by` is now bookkeeping only and is
+    # never the reason a request is refused.
     if user and guest_id:
         guest = db.session.get(AIAccount, guest_id)
         if guest and not guest.claimed_by and not guest.busy:
@@ -153,7 +152,7 @@ def configured():
 
 def account_view(account, user, membership):
     conf = settings()
-    trial = membership == 'standard' and account.balance == 0 and not local_unlimited()
+    trial = membership == 'standard' and account.balance == 0
     conversation = current_conversation(account)
     history = transcript(account)
     db.session.commit()
@@ -161,7 +160,7 @@ def account_view(account, user, membership):
             'trial_limit': account.trial_limit,
             'local_answers_available': AIFaqRule.query.filter_by(enabled=True).first() is not None,
             'trial_mode': trial, 'enabled': conf.enabled and account.enabled, 'configured': configured(),
-            'signed_in': bool(user), 'history': history, 'conversation_id': conversation.id, 'conversations': conversation_list(account), 'local_unlimited': local_unlimited(), 'vision_enabled': provider_name() == 'deepseek' and configured(),
+            'signed_in': bool(user), 'history': history, 'conversation_id': conversation.id, 'conversations': conversation_list(account), 'vision_enabled': provider_name() == 'deepseek' and configured(),
             'needs_confirmation': bool(visual_draft(account.history) and quote_profile(visual_draft(account.history), membership)[1] is not None)}
 
 
@@ -393,11 +392,11 @@ def chat():
         return jsonify(error='请求过于频繁，请稍后再试。'), 429
     markup = conf.markup_bps
     reserve = int(maximum_cost() * SCALE * (10000+markup) / 10000) + 1
-    trial = membership == 'standard' and account.balance == 0 and not local_unlimited()
+    trial = membership == 'standard' and account.balance == 0
     query = AIAccount.query.filter_by(id=account.id, enabled=True, busy=None)
     if trial:
         query = query.filter(AIAccount.trial_used < AIAccount.trial_limit)
-    elif not faq and not confirmation and not local_unlimited():
+    elif not faq and not confirmation:
         query = query.filter(AIAccount.balance >= reserve)
     changed = query.update({'busy': request_id})
     if not changed:
@@ -494,7 +493,7 @@ def chat():
             valid = False
         else:
             valid = True
-        charged = (cost * (10000+markup) + 9999)//10000 if valid and not trial and not local_unlimited() else 0
+        charged = (cost * (10000+markup) + 9999)//10000 if valid and not trial else 0
         try:
             review = build_review(spec, quote) if valid else None
         except (ValueError, TypeError, KeyError):
@@ -513,7 +512,7 @@ def chat():
             db.session.rollback()
             return jsonify(error='扣费待核对，请联系管理员。'), 409
         db.session.add(AILedger(id=key, account_id=account.id, kind='trial' if trial else 'usage', delta=-charged,
-            api_cost=cost, detail={'usage': usage, 'model': model_name(), 'provider': provider_name(), 'markup_bps': markup, 'valid': valid, 'local_unlimited': local_unlimited()}))
+            api_cost=cost, detail={'usage': usage, 'model': model_name(), 'provider': provider_name(), 'markup_bps': markup, 'valid': valid}))
         row = db.session.get(AIRequest, key)
         row.status, row.response = 'completed' if valid else 'invalid', response
         db.session.commit()

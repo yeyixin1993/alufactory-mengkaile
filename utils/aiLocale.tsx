@@ -78,10 +78,6 @@ const messages:Record<string,[string,string]>={
     "Chat history",
     "相談履歴"
   ],
-  "本地测试 · 不限额度": [
-    "Local test · Unlimited",
-    "ローカルテスト・制限なし"
-  ],
   "额度暂不可用": [
     "Balance unavailable",
     "残高を取得できません"
@@ -162,13 +158,9 @@ const messages:Record<string,[string,string]>={
     "Start chat",
     "相談を始める"
   ],
-  "本地测试不限额度 · AI 识别结果请核对": [
-    "Unlimited local testing · Please check AI recognition results",
-    "ローカルテストは制限なし・AI の認識結果をご確認ください"
-  ],
-  "游客及普通用户免费发送 3 条消息，回复追问也计入次数。VIP/VIP+ 使用账户额度。": [
-    "Guests and standard users get 3 free messages, including follow-ups. VIP/VIP+ use account credit.",
-    "ゲスト・一般会員は追加回答を含め3通まで無料。VIP/VIP+ はアカウント残高を使用します。"
+  "游客每台设备免费发送 3 条消息，回复追问也计入次数。登录后使用账户额度，VIP/VIP+ 含赠送额度。": [
+    "Each device gets 3 free guest messages, including follow-ups. After signing in you use your account credit; VIP/VIP+ include a grant.",
+    "ゲストは1台につき3通まで無料（追加の質問も1通に数えます）。ログイン後はアカウント残高、VIP/VIP+ は付与分をご利用いただけます。"
   ],
   "AI 额度充值 · 充多少到账多少": [
     "AI credit · Receive the full top-up amount",

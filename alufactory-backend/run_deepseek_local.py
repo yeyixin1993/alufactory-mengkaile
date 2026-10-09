@@ -31,7 +31,7 @@ def build_app():
     from app.ai_models import AISettings
     from flask import request, jsonify
     app = create_app('development', instance_path=str(INSTANCE_DIR))
-    app.config.update(DEBUG=False, AI_LOCAL_UNLIMITED=True)
+    app.config.update(DEBUG=False)
     @app.before_request
     def no_local_payments():
         if request.path.startswith('/api/payments') or request.path.startswith('/api/ai/recharge'):

@@ -26,10 +26,9 @@ const CONNECTION_FAILURE = /failed to fetch|networkerror|load failed|connection 
 
 // Why the advisor stopped serving this visitor. Signing in is the fix for every locked
 // state except a stale visitor token, which a reload clears.
-type AdvisorLock = '' | 'trial_exhausted' | 'trial_claimed' | 'guest_rate_limited' | 'visitor_token_stale';
+type AdvisorLock = '' | 'trial_exhausted' | 'guest_rate_limited' | 'visitor_token_stale';
 const LOCK_BY_REASON: Record<string, AdvisorLock> = {
   trial_exhausted: 'trial_exhausted',
-  trial_claimed: 'trial_claimed',
   guest_rate_limited: 'guest_rate_limited',
   visitor_token_invalid: 'visitor_token_stale',
   visitor_token_expired: 'visitor_token_stale',
@@ -215,39 +214,31 @@ export default function AIChatBar({ user, onAddToCart, cart=[], language, onLang
     } catch (err: any) { setError(err.message); }
     finally { setPaying(false); }
   };
-  // Visitors always see how much of the free allowance is left (3/3 → 0/3); at 0/3 the
-  // composer stops accepting messages and offers signing in instead of a dead button.
+  // A visitor always sees how much of the device allowance is left (3/3 → 0/3). The count is
+  // per device and does not expire, so 0/3 simply means "this browser has spent its three";
+  // the composer then stops accepting messages and offers signing in instead of a dead button.
   const trialRemaining = status?.trial_mode ? Math.max(0, Number(status.trial_remaining) || 0) : null;
   const trialLimit = Number(status?.trial_limit) > 0 ? Number(status.trial_limit) : 3;
   const trialExhausted = trialRemaining !== null && trialRemaining <= 0;
   const lockKind: AdvisorLock = lock || (trialExhausted ? 'trial_exhausted' : '');
   const needsLogin = !user && LOCKED(lockKind);
   const quotaText = status
-    ? status.local_unlimited
-      ? tr('本地测试 · 不限额度')
-      : trialRemaining !== null
-        ? label(
-            trialExhausted ? `游客试用已用完（${trialRemaining}/${trialLimit}）` : `剩余 ${trialRemaining}/${trialLimit} 条免费消息`,
-            trialExhausted ? `Guest trial used up (${trialRemaining}/${trialLimit})` : `${trialRemaining}/${trialLimit} free messages left`,
-            trialExhausted ? `ゲスト試用は使い切りました（${trialRemaining}/${trialLimit}）` : `無料メッセージ残り ${trialRemaining}/${trialLimit} 通`)
-        : `${label('AI 余额','AI balance','AI 残高')} ¥${money(status.balance_cny)}`
-    : LOCKED(lock)
+    ? trialRemaining !== null
       ? label(
-          lock === 'guest_rate_limited' ? '本机今日试用名额已满' : '游客试用已转入账号',
-          lock === 'guest_rate_limited' ? 'No guest trial left on this network' : 'Guest trial moved to your account',
-          lock === 'guest_rate_limited' ? 'この回線の試用枠は使い切りました' : 'ゲスト試用はアカウントに引き継がれました')
+          trialExhausted ? `${user ? '试用额度' : '游客试用'}已用完（${trialRemaining}/${trialLimit}）` : `剩余 ${trialRemaining}/${trialLimit} 条免费消息`,
+          trialExhausted ? `${user ? 'Trial' : 'Guest trial'} used up (${trialRemaining}/${trialLimit})` : `${trialRemaining}/${trialLimit} free messages left`,
+          trialExhausted ? `${user ? '試用' : 'ゲスト試用'}を使い切りました（${trialRemaining}/${trialLimit}）` : `無料メッセージ残り ${trialRemaining}/${trialLimit} 通`)
+      : `${label('AI 余额','AI balance','AI 残高')} ¥${money(status.balance_cny)}`
+    : lock === 'guest_rate_limited'
+      ? label('本机今日试用名额已满','No guest trial left on this network','この回線の試用枠は使い切りました')
       : error ? tr('额度暂不可用') : tr('正在读取额度…');
-  const lockNotice = LOCKED(lockKind)
+  // Only a visitor can be asked to sign in. A signed-in account with a spent trial has its
+  // own recharge entry in the header, so it must not be told to sign in again.
+  const lockNotice = needsLogin
     ? label(
-        lockKind === 'guest_rate_limited' ? '本机今日的游客试用名额已满，登录后可继续。'
-          : lockKind === 'trial_claimed' ? '游客试用已转入你的账号，登录后可继续。'
-          : '游客试用已用完，登录后可继续。',
-        lockKind === 'guest_rate_limited' ? 'No guest trial left on this network. Sign in to continue.'
-          : lockKind === 'trial_claimed' ? 'Your guest trial moved to your account. Sign in to continue.'
-          : 'Your guest trial is used up. Sign in to continue.',
-        lockKind === 'guest_rate_limited' ? 'この回線のゲスト試用枠は使い切りました。ログインで続行できます。'
-          : lockKind === 'trial_claimed' ? 'ゲスト試用はアカウントに引き継がれました。ログインで続行できます。'
-          : 'ゲスト試用を使い切りました。ログインで続行できます。')
+        lockKind === 'guest_rate_limited' ? '本机今日的游客试用名额已满，登录后可继续。' : '游客试用已用完，登录后可继续。',
+        lockKind === 'guest_rate_limited' ? 'No guest trial left on this network. Sign in to continue.' : 'Your guest trial is used up. Sign in to continue.',
+        lockKind === 'guest_rate_limited' ? 'この回線のゲスト試用枠は使い切りました。ログインで続行できます。' : 'ゲスト試用を使い切りました。ログインで続行できます。')
     : '';
   return <AILanguageContext.Provider value={language}>
     {aiHidden && !home && <div className={`ai-restore-bar ${workspace?'ai-restore-workspace':''}`}><button type="button" className="ai-visibility-button" onClick={()=>aiVisibility.setHidden(false)}><Sparkles size={17}/>{label('显示 AI 顾问','Show AI advisor','AIアドバイザーを表示')}</button>{workspace&&<Link to="/">{label('返回首页','Back to home','ホームへ')}</Link>}</div>}
@@ -313,7 +304,7 @@ export default function AIChatBar({ user, onAddToCart, cart=[], language, onLang
         {['报价需要提供什么信息', '截面本色/彩色是什么意思', '能做和图片一样的吗'].map(example => <button key={example} onClick={() => { setInput(example); inputRef.current?.focus(); }}><Plus size={13} />{example}</button>)}
       </div>}
       <div className="ai-entry-notices">
-      <p className="text-xs text-slate-500 mb-3">{status?.local_unlimited ? tr("本地测试不限额度 · AI 识别结果请核对") : tr("游客及普通用户免费发送 3 条消息，回复追问也计入次数。VIP/VIP+ 使用账户额度。")}</p>
+      <p className="text-xs text-slate-500 mb-3">{tr("游客每台设备免费发送 3 条消息，回复追问也计入次数。登录后使用账户额度，VIP/VIP+ 含赠送额度。")}</p>
       {lockNotice && <p className="ai-entry-lock mb-3">{lockNotice} <Link to="/login" className="underline">{tr("登录")}</Link></p>}
       {status && (!status.enabled || (!status.configured && !status.local_answers_available)) && <p className="text-sm text-amber-800 mb-3">AI 咨询暂未开通，您可以先使用<Link to="/quick-quote" className="underline">{tr("快速报价")}</Link>。</p>}
       {status?.enabled && !status.configured && status.local_answers_available && <p className="text-sm text-slate-600 mb-3">目前可回答已收录的常见问题；智能规格识别暂未开通，估价请使用<Link to="/quick-quote" className="underline">{tr("快速报价")}</Link>。</p>}
