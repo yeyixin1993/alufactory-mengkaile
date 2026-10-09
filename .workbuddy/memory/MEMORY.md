@@ -2,13 +2,26 @@
 
 ## 运行与验证
 
-- Node 用托管版：`/Users/eliye/.workbuddy/binaries/node/versions/22.22.2-2/bin`（跑 npm 时把这个目录加到 PATH 前面）。
+- Node 用托管版：`/Users/eliye/.workbuddy/binaries/node/versions/22.22.2-6/bin`（跑 npm 时把这个目录加到 PATH 前面）。
+  **托管 Node 会被平台升级并删掉旧版本目录**（2026-10-09 从 `22.22.2-2` 换成 `-6`）：升级会把装在旧版本
+  全局 bin 里的命令行工具一起删掉（`agent-browser` 就这样没了）。跑之前先 `ls .../node/versions/` 确认。
+- **`agent-browser` 现在不在托管 Node 里**（那次升级把它删了）。可用副本在
+  `/Users/eliye/node_modules/.bin/agent-browser`（家目录那份 scratch `package.json` 里带 `agent-browser@^0.27.0`）。
+  它自带的 Chromium 也没了，要**复用系统 Chrome**：
+  ```bash
+  export PATH="/Users/eliye/node_modules/.bin:/Users/eliye/.workbuddy/binaries/node/versions/22.22.2-6/bin:$PATH"
+  export AGENT_BROWSER_EXECUTABLE_PATH="/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
+  ```
+  不设 `AGENT_BROWSER_EXECUTABLE_PATH` 会 `CDP response channel closed`。另外 `open <url>` 第一次可能
+  停在 `about:blank`（CDP 竞态），**再 `open` 一次或 `get url` 复核**再往下走。
 - 前端回归脚本统一走 `vite build --ssr scripts/verify-*.ts` + `node`（`test:designer-group-move`、
   `test:drill-mode-manipulators`、`test:accessory-list-reform` …）。新增校验脚本时按同样模式加 package.json script。
 - **批量删除坑（safe-delete shim 按「回合」累计计数，阈值 50）**：`prebuild`（`catalog:html`）会对
   `.catalog-export` 做 `--emptyOutDir`，同一回合连续跑多个 `vite --emptyOutDir` 就会报
-  `SAFE_DELETE_BULK_CONFIRM_REQUIRED`。批量跑回归/构建前，先用 Python（`shutil.rmtree` + `os.remove`）
-  清空 `.verify*-dist`、`.catalog-export`、`dist` 的内容，就能一次全过。
+  `SAFE_DELETE_BULK_CONFIRM_REQUIRED`。**用 Python 预先清目录这次也照样计数**（本回合累计 158）。
+  真正管用的开关是环境变量 `CODEBUDDY_SAFE_DELETE_BULK_THRESHOLD`（默认 50）：删的都是本项目
+  `dist` / `.catalog-export` 这类构建产物时，命令前加 `CODEBUDDY_SAFE_DELETE_BULK_THRESHOLD=5000` 即可。
+  相关变量：`CODEBUDDY_SAFE_DELETE_BULK_STATE_DIR`（计数状态目录）、`REPORT_PATH`、`BIN_DIR`。
 - `tsc --noEmit` 有 5 个**既有**报错（不是自己引入的）：`alufactory-backend/FRONTEND_SERVICE.ts` 的
   `@/config`、`App.tsx` 的 `setTimeout`、`components/PrintableCatalog.tsx` 的 3 个 `key`。
 - **`git push` 会跑 `.githooks/pre-push`**（`core.hooksPath=.githooks`）：先 `npm run package:dist`
@@ -34,6 +47,19 @@
   新账号 `trial_limit=3`；同一 IP 每天最多新建 10 个游客账号（超了报「当前网络试用申请过于频繁」）。
 - `run_deepseek_local.py` 开 `AI_LOCAL_UNLIMITED=True`（且要 `remote_addr` 是回环）⇒ 本地游客/会员都不限额度，
   页面显示「本地测试 · 不限额度」。但**真发消息会真实扣 DeepSeek 余额**，验证按钮状态时不要真提交。
+  FAQ 命中的消息不调模型、不花钱（`docs/AI_FAQ_STARTER.md` 里的标准问题，如「两端攻丝是什么意思」），
+  要端到端验证就用它。
+- **游客被「当前网络试用申请过于频繁，请登录后使用。」挡住（2026-10-09 真踩到）**：`identity()` 里
+  `rate_limit('guest:{remote_addr}:{UTC day}', 10)` —— **同一 IP 每天只能新建 10 个游客账号**。
+  只要 localStorage 里没有有效 `mengkaile-ai-visitor`（新 profile / 无痕 / 清过 storage / 换了 launcher
+  导致 SECRET_KEY 变化），每次打开都算新建一个，10 次就打满、当天再打开就被拒。本机测试库查法：
+  `ai_rate_windows` 的 key 是 `sha256(bucket)`，bucket = `guest:127.0.0.1:<UTC日期>`；要放行就
+  `update ai_rate_windows set count=0 where id=<该 hash>`（**只动本地 `instance/deepseek-local/ai-test.db`**）。
+  顺手把 3 条试用规则改回「游客可试用」是业主 2026-10-09 明确否掉的，不要再提议去改。
+- **前端曾把后端的真实原因吞掉（2026-10-09 已修）**：`AIChatBar` 的 `/status` 失败分支原先把所有异常
+  都写成「咨询服务暂时连接不上，请稍后重试，或先使用快速报价。」，于是「游客名额已满」「访客凭据已失效」
+  这类**服务端明确给了原因**的失败看起来跟「后端没开」一模一样 —— 业主就是这样误判成「游客不能进 AI chat」。
+  现在用 `statusFailure()` 区分：只有 fetch `TypeError` / 5xx 才说连接不上，其余一律原样透出后端文案。
 
 ## 分支 / worktree 现状（2026-10-09 核对）
 
