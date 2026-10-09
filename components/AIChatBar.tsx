@@ -17,6 +17,21 @@ const visitor = () => { try { return localStorage.getItem(VISITOR_KEY) || ''; } 
 const saveVisitor = (token: string) => { if (token) try { localStorage.setItem(VISITOR_KEY, token); } catch { /* server still limits new visitors */ } };
 const money = (value: number) => value.toFixed(4);
 
+// A refused connection arrives as a fetch TypeError, or as a 5xx when the dev proxy
+// cannot reach the API. Those are the only cases where "cannot connect" is the truth;
+// every other failure carries the backend's own reason — an expired visitor token, the
+// daily cap on new visitor accounts, an exhausted trial — and saying "cannot connect"
+// instead sends the reader hunting for a network problem that does not exist.
+const CONNECTION_FAILURE = /failed to fetch|networkerror|load failed|connection (refused|closed)|api request failed \((500|502|503|504)\)/i;
+
+const statusFailure = (error: any) => {
+  const message = String(error?.message || '').trim();
+  // An expired session already redirects to /#/login inside the API client.
+  if (/\(401\)$/.test(message)) return '';
+  if (!message || CONNECTION_FAILURE.test(message)) return '咨询服务暂时连接不上，请稍后重试，或先使用快速报价。';
+  return message;
+};
+
 export default function AIChatBar({ user, onAddToCart, cart=[], language, onLanguageChange }: { language:Language;onLanguageChange:(language:Language)=>void; user: User | null; key?: string; cart?:CartItem[]; onAddToCart?: (items: CartItem[], mode?: 'append'|'replace') => void }) {
   const tr=(text:string)=>aiText(language,text);
   const location = useLocation();
@@ -96,11 +111,11 @@ export default function AIChatBar({ user, onAddToCart, cart=[], language, onLang
     setMessages([]); setAttachment([]); setInput(''); setStatus(null); setError(''); setPending(null); setEntries(null); setOpen(workspace);
     ApiService.aiRequest('/status', { visitor_token: visitor() }).then(data => {
       if (active) { saveVisitor(data.visitor_token); setStatus(data); setMessages(data.history || []); }
-    }).catch(() => { if (active) setError('咨询服务暂时连接不上，请稍后重试，或先使用快速报价。'); });
+    }).catch((err: any) => { const message = statusFailure(err); if (active && message) setError(message); });
     return () => { active = false; };
   }, [user?.id]);
   useEffect(() => {
-    const focus = () => { refresh().catch(() => {}); };
+    const focus = () => { refresh().catch((err: any) => { const message = statusFailure(err); if (message) setError(message); }); };
     window.addEventListener('focus', focus);
     return () => window.removeEventListener('focus', focus);
   }, [user?.id]);
