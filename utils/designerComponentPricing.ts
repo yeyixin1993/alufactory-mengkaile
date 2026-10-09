@@ -12,8 +12,16 @@
  * through to `item.accessoryPrice || 0`, which silently priced a whole source
  * model at zero. They are now classified from their own recorded evidence —
  * never from a component name alone — and priced with the rules below.
+ *
+ * One family is priced by the customer catalog instead: a source part the
+ * owner has identified as a numbered accessory is charged the catalog's own
+ * price for the series its envelope names, so the design quote and the
+ * accessory list cannot disagree (see `data/designerSourceAccessoryLinks.ts`).
  */
 import { DISPLAY_RACK_COMPONENT_CATALOG } from '../data/displayRackComponentCatalog';
+import { resolveDesignerSourceAccessoryRow } from '../data/designerSourceAccessoryLinks';
+import type { AccessoryRow } from '../data/accessoryCatalog';
+import { resolveAccessoryUnitPrice } from './accessoryQuote';
 
 export type WheelGrade = 'standard' | 'upgraded';
 export type CasterThreadSize = 'M6' | 'M8' | 'M10' | 'M12';
@@ -82,6 +90,8 @@ export type ImportedComponentCategory =
   | 'caster'
   | 'handle'
   | 'decorative_profile'
+  /** A source part the catalog itself carries, priced from its catalog line. */
+  | 'catalog_accessory'
   | 'unknown';
 
 export type ImportedComponentPriceBasis = 'length' | 'piece';
@@ -95,6 +105,12 @@ export interface ImportedComponentPrice {
   readonly status: ImportedComponentPriceStatus;
   /** Shaft length used by the length-priced basis, in mm. */
   readonly lengthMm: number | null;
+  /**
+   * The catalog line this part *is*, when the owner has linked the source part
+   * to a numbered accessory. Everything the customer sees (name, code, picture)
+   * comes from this row, so the design and the accessory list agree.
+   */
+  readonly linkedAccessory: AccessoryRow | null;
 }
 
 export interface ImportedComponentPricingInput {
@@ -113,6 +129,11 @@ export interface ImportedComponentPricingInput {
   wheelGrade?: unknown;
   accessoryThreadSize?: string | null;
   hasBrake?: boolean | null;
+  /**
+   * Pieces in the design. Only the catalog-price path uses it, so a linked part
+   * reaches the same bulk threshold the accessory list would give it.
+   */
+  quantity?: number | null;
 }
 
 const normalizeToken = (value: unknown) => String(value ?? '').trim().toLowerCase();
@@ -187,6 +208,7 @@ const pending = (category: ImportedComponentCategory, basis: ImportedComponentPr
   basis,
   status: 'pending',
   lengthMm: null,
+  linkedAccessory: null,
 });
 
 const perPiece = (category: ImportedComponentCategory, unitPrice: number): ImportedComponentPrice => ({
@@ -195,13 +217,17 @@ const perPiece = (category: ImportedComponentCategory, unitPrice: number): Impor
   basis: 'piece',
   status: 'confirmed',
   lengthMm: null,
+  linkedAccessory: null,
 });
 
 /**
  * Unit price for one imported source component.
  *
+ * - 已关联目录的源模型零件 → the customer catalog's own price for the series
+ *   its envelope names, read through the same colour/bulk rule the accessory
+ *   list uses.
  * - 光轴 → length-priced at the confirmed per-metre shaft price.
- * - 支撑座（SHF/SK 系列、源模型固定支座）→ the confirmed per-piece support price.
+ * - 其余支撑座（SHF/SK 系列）→ the confirmed per-piece support price.
  * - 轮子 → the selected wheel tier: standard keeps the original caster price,
  *   the 诺贝 upgrade is a flat price per wheel.
  * - 拉手 → the owner-confirmed per-piece price.
@@ -211,6 +237,22 @@ const perPiece = (category: ImportedComponentCategory, unitPrice: number): Impor
 export const resolveImportedComponentPrice = (
   input: ImportedComponentPricingInput,
 ): ImportedComponentPrice => {
+  // The owner's own identification of a source part beats every heuristic: a
+  // linked part is the catalog line itself, so it is charged the catalog price
+  // for the series its envelope names. An envelope the catalog cannot place
+  // falls through to the generic rules instead of borrowing the bracket price.
+  const linkedAccessory = resolveDesignerSourceAccessoryRow(input.semanticType, input.boundsMm);
+  if (linkedAccessory) {
+    const quantity = Math.max(1, Math.floor(Number(input.quantity) || 1));
+    return {
+      unitPrice: resolveAccessoryUnitPrice(linkedAccessory, 'natural', quantity),
+      category: 'catalog_accessory',
+      basis: 'piece',
+      status: 'confirmed',
+      lengthMm: null,
+      linkedAccessory,
+    };
+  }
   const category = classifyImportedComponent(input);
   if (category === 'linear_shaft') {
     const lengthMm = resolveShaftLengthMm(input);
@@ -220,10 +262,11 @@ export const resolveImportedComponentPrice = (
       basis: 'length',
       status: 'confirmed',
       lengthMm: lengthMm > 0 ? lengthMm : null,
+      linkedAccessory: null,
     };
   }
   if (category === 'shaft_support') {
-    return { unitPrice: SHAFT_SUPPORT_UNIT_PRICE, category, basis: 'piece', status: 'confirmed', lengthMm: null };
+    return { unitPrice: SHAFT_SUPPORT_UNIT_PRICE, category, basis: 'piece', status: 'confirmed', lengthMm: null, linkedAccessory: null };
   }
   if (category === 'caster') {
     return {
@@ -237,6 +280,7 @@ export const resolveImportedComponentPrice = (
       basis: 'piece',
       status: 'confirmed',
       lengthMm: null,
+      linkedAccessory: null,
     };
   }
   if (category === 'handle') return perPiece(category, HANDLE_UNIT_PRICE);

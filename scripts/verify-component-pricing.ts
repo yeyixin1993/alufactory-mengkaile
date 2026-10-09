@@ -37,11 +37,13 @@ assert.equal(CASTER_BRAKE_SURCHARGE, 4, '带刹车加价应为 ¥4');
 assert.equal(UPGRADED_WHEEL_UNIT_PRICE, 50, '升级诺贝轮子应为 ¥50/个');
 assert.equal(HANDLE_UNIT_PRICE, 23.12, '拉手应为 ¥23.12/个（装饰料取整到 ¥8 后，余数落到拉手）');
 assert.equal(DECORATIVE_PROFILE_UNIT_PRICE, 8, '8080 装饰料应为整 ¥8/个');
-// The pair is what the ¥880 landing actually calibrates: 1 × 拉手 + 8 × 装饰料.
+// The pair is what the landed price calibrates: 1 × 拉手 + 8 × 装饰料. Linking the
+// 固定支座 to catalog No.3 moved the landing to ¥920 but must not disturb this
+// pair — the remainder had already been absorbed here.
 assert.equal(
   Number((1 * HANDLE_UNIT_PRICE + 8 * DECORATIVE_PROFILE_UNIT_PRICE).toFixed(2)),
   87.12,
-  '拉手 + 8080 装饰料合计必须仍为 ¥87.12（落地 ¥880 的校准口径）',
+  '拉手 + 8080 装饰料合计必须仍为 ¥87.12（落地价的校准口径，不受固定支座改价影响）',
 );
 assert.equal(DEFAULT_WHEEL_GRADE, 'standard', '默认应为普通轮子');
 assert.equal(normalizeWheelGrade(undefined), 'standard', '未选择时按普通轮子处理');
@@ -90,6 +92,7 @@ for (const item of importedItems) {
     wheelGrade: item.wheelGrade,
     accessoryThreadSize: item.accessoryThreadSize,
     hasBrake: item.hasBrake,
+    quantity: item.quantity,
   });
   importedTotal += price.unitPrice * Math.max(1, item.quantity || 1);
   const entry = pricedByName.get(item.name) || { count: 0, unitPrice: price.unitPrice, status: price.status, category: price.category };
@@ -110,13 +113,15 @@ const expectPriced = (name: string, count: number, unitPrice: number, status: st
 };
 expectPriced('Shaft D12', 4, 2.87, 'confirmed', 'linear_shaft');
 expectPriced('SHF12A support', 8, 2, 'confirmed', 'shaft_support');
-expectPriced('Source fixed support', 16, 2, 'confirmed', 'shaft_support');
+// The source model's fixed support is the owner-identified 3号角码, so it is
+// charged the catalog's 3030 tier (¥4.5) rather than the generic support price.
+expectPriced('Source fixed support', 16, 4.5, 'confirmed', 'catalog_accessory');
 expectPriced('带刹车脚轮（原模型）', 4, 22, 'confirmed', 'caster');
 expectPriced('不锈钢拉手', 1, HANDLE_UNIT_PRICE, 'confirmed', 'handle');
 expectPriced('8080装饰短料', 8, DECORATIVE_PROFILE_UNIT_PRICE, 'confirmed', 'decorative_profile');
 
-assert.equal(Number(importedTotal.toFixed(2)), 234.6,
-  '普通轮子方案下导入件合计应为 ¥234.6（11.48 光轴 + 48 支座 + 88 轮子 + 23.12 拉手 + 64.00 装饰料）');
+assert.equal(Number(importedTotal.toFixed(2)), 274.6,
+  '普通轮子方案下导入件合计应为 ¥274.6（11.48 光轴 + 88 支座 + 88 轮子 + 23.12 拉手 + 64.00 装饰料）');
 
 const upgraded = items.map((item) => (item.kind === 'imported_component' && classifyImportedComponent({
   semanticType: item.sourceMesh?.source.semanticType,
@@ -127,24 +132,27 @@ const upgraded = items.map((item) => (item.kind === 'imported_component' && clas
 const upgradedTotal = upgraded
   .filter((item) => item.kind === 'imported_component')
   .reduce((sum, item) => sum + calculatePrice(item), 0);
-assert.equal(Number(upgradedTotal.toFixed(2)), 346.6, '升级诺贝轮子方案下导入件合计应为 ¥346.6（+¥112）');
+assert.equal(Number(upgradedTotal.toFixed(2)), 386.6, '升级诺贝轮子方案下导入件合计应为 ¥386.6（+¥112）');
 
 // 5. Whole-design totals through the designer's own price surface.
 // The non-imported part of this design was already verified at ¥479.4, so the
 // total must now be that plus the imported parts, the calibrated 拉手/装饰料 and
 // the 28 颗 3030 螺丝 (¥0.75 each) instead of the old ¥479.4.
-// The upgraded-wheel total is the owner's ¥880 landed baseline minus the
-// 安能 freight to 浙江 — see `npm run test:stool-landed-total`.
+// The sixteen 固定支座 moved from the ¥2 support basis to the 3号角码 catalog
+// tier (¥4.5), which is the ¥40 difference from the earlier ¥735 / ¥847 totals.
+// These totals are the *scene item* subtotal: the 32 tier fastener sets are not
+// scene items, so the cart adds them as their own priced lines (+¥32) and the
+// landing figure is ¥952 — see `npm run test:stool-landed-total`.
 const totalFor = (designItems: typeof items) => Number(designItems.reduce((sum, item) => sum + calculatePrice(item), 0).toFixed(1));
 const standardTotal = totalFor(items);
 const upgradedDesignTotal = totalFor(upgraded as typeof items);
 assert.equal(upgradedDesignTotal - standardTotal, 112, '升级四只诺贝轮子应比普通方案贵 ¥112');
-assert.equal(standardTotal, 735, '凳子模板（普通轮子）整单应为 ¥735，而不是导入件归零时的 ¥479.4');
-assert.equal(upgradedDesignTotal, 847, '凳子模板（升级诺贝轮子）整单应为 ¥847（＋安能运费 ¥33 = 落地 ¥880）');
+assert.equal(standardTotal, 775, '凳子模板（普通轮子）整单应为 ¥775，而不是导入件归零时的 ¥479.4');
+assert.equal(upgradedDesignTotal, 887, '凳子模板（升级诺贝轮子）零件小计应为 ¥887；层间紧固件 ¥32 由购物车单独成行 ⇒ 落地 ¥952（安能 ¥33）');
 
 console.log('Designer component pricing regression checks passed.');
 console.log(`  imported components (standard wheels): ¥${importedTotal.toFixed(2)}`);
 console.log(`  imported components (upgraded wheels): ¥${upgradedTotal.toFixed(2)}`);
 console.log(`  whole 凳子 design (standard wheels): ¥${standardTotal.toFixed(1)}`);
-console.log(`  whole 凳子 design (upgraded wheels): ¥${upgradedDesignTotal.toFixed(1)}`);
+console.log(`  whole 凳子 design (upgraded wheels): ¥${upgradedDesignTotal.toFixed(1)}（+ 紧固件 ¥32 ⇒ 落地 ¥952）`);
 console.log(`  pricing scheme: ${JSON.stringify(IMPORTED_COMPONENT_PRICING_SCHEME)}`);

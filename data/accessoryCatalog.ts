@@ -69,7 +69,12 @@ export const buildAccessoryRowKey = (defId: string, series: AccessoryRowSeries) 
 export const ACCESSORY_CODE_IMAGE_MAP: Record<string, string> = {
   '1': '/images/accessory/1.jpg',
   '2': '/images/accessory/2.jpg',
-  '3': ACCESSORY_IMAGE,
+  // No.3 used to fall back to the whole 1–10 identification chart, so the
+  // customer's 3号角码 row showed every accessory at once. `3.jpg` is the same
+  // kind of crop of that same photograph as 1/2/5/7L/7T/9, taken around the
+  // two views of the third bracket. The designer-only vector artwork for the
+  // same part is `public/images/accessory/3.svg`.
+  '3': '/images/accessory/3.jpg',
   '5': '/images/accessory/5.jpg',
   '7': '/images/accessory/7L.jpg',
   '7L': '/images/accessory/7L.jpg',

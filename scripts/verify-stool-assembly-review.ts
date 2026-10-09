@@ -1,9 +1,12 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import { buildStoolTemplateFromAsset, type StoolSourceAsset } from '../utils/parametricStool';
-import { normalizeDesignItems, completeStoolConnectionSystem } from '../components/DIYDesigner';
+import { normalizeDesignItems, completeStoolConnectionSystem, buildProductionData } from '../components/DIYDesigner';
+import { buildMaterialList } from '../utils/materialList';
 import { rekeyImportedDesignItems } from '../utils/designerImportRemap';
-import { reviewStoolAssembly } from '../utils/stoolAssemblyReview';
+import { materializeStoolSupportFasteners, reviewStoolAssembly, STOOL_SUPPORT_FASTENER_SPEC } from '../utils/stoolAssemblyReview';
+import { ACCESSORY_ROWS } from '../data/accessoryCatalog';
+import { resolveAccessoryUnitPrice } from '../utils/accessoryQuote';
 
 const asset = JSON.parse(fs.readFileSync('public/models/stool/source-v1.json', 'utf8')) as StoolSourceAsset;
 const originalAsset = JSON.stringify(asset);
@@ -29,6 +32,20 @@ for (const parameters of [
   assert.equal(review.totals.matchedMounts, 32);
   assert.equal(review.totals.candidateScrews, 32);
   assert.equal(review.totals.candidateNuts, 32);
+  // A correct model has no *computed* failure. The physical statements it cannot
+  // settle are advisories, not blockers, so they can be accepted instead of
+  // permanently locking the design out of the cart.
+  assert.deepEqual(review.blockingIssues, [], 'A placed 16-support model has no computed assembly failure');
+  assert.equal(review.advisoryNotes.length, 1);
+  assert.ok(review.advisoryNotes[0].includes('32 套紧固件的实物安装验证'));
+  assert.deepEqual(review.issues, review.advisoryNotes, 'The single list stays blocking-then-advisory');
+  for (const support of assembly.supports) {
+    assert.equal(support.fastenerSpecStatus, 'owner_confirmed');
+    assert.equal(support.candidateFastener.status, 'owner_confirmed');
+    assert.equal(support.candidateNut.status, 'owner_confirmed');
+    assert.equal(support.candidateFastener.catalogItemId, STOOL_SUPPORT_FASTENER_SPEC.screwCatalogItemId);
+    assert.equal(support.candidateNut.catalogItemId, STOOL_SUPPORT_FASTENER_SPEC.nutCatalogItemId);
+  }
   assert.equal(assembly.supports.filter((support) => support.tier === 'lower_fixed_to_middle').length, 8);
   assert.equal(assembly.supports.filter((support) => support.tier === 'upper_middle_to_seat').length, 8);
   for (const support of assembly.supports) {
@@ -125,5 +142,75 @@ assert.ok(reviewStoolAssembly(changedSupport).assemblies[0].supports.find((item)
 const allRemoved = baseline.filter((item) => item.sourceMesh?.source.semanticType !== 'fixed_support');
 assert.equal(reviewStoolAssembly(allRemoved).totals.missingSupports, 16);
 assert.equal(reviewStoolAssembly([]).applicable, false);
+
+// --- The owner-confirmed tier fasteners as real, priced purchasing lines ------
+const fasteners = materializeStoolSupportFasteners(baseline);
+assert.equal(fasteners.applicable, true);
+assert.equal(fasteners.supports, 16, 'Only supports whose two mounts all match may buy hardware');
+assert.equal(fasteners.sets, 32, 'One screw-and-nut set per mounting face');
+assert.deepEqual(fasteners.lines.map((line) => line.catalogItemId),
+  [STOOL_SUPPORT_FASTENER_SPEC.screwCatalogItemId, STOOL_SUPPORT_FASTENER_SPEC.nutCatalogItemId]);
+for (const line of fasteners.lines) {
+  const row = ACCESSORY_ROWS.find((candidate) => candidate.defId === line.catalogItemId)!;
+  assert.ok(row, 'The confirmed specification must still exist in the accessory catalog');
+  // The line has to be the catalogue row read through the catalogue's own rule,
+  // not a price copied next to the review.
+  assert.equal(line.quantity, 32);
+  assert.equal(line.unitPrice, resolveAccessoryUnitPrice(row, 'natural', 32));
+  assert.equal(line.unitPrice, row.price.naturalBulk, '32 pieces reach the catalogue bulk tier');
+  assert.equal(line.bulkApplied, true);
+  assert.equal(line.subtotal, Number((row.price.naturalBulk * 32).toFixed(2)));
+}
+assert.equal(fasteners.total, 32, '32 × (¥0.5 screw + ¥0.5 nut)');
+assert.deepEqual(fasteners.spec, STOOL_SUPPORT_FASTENER_SPEC);
+
+// A support that cannot be placed buys nothing, so an unverified mount can never
+// silently add hardware to the cart.
+const unplaced = materializeStoolSupportFasteners(moved);
+assert.equal(reviewStoolAssembly(moved).totals.unmatchedMounts, 2);
+assert.ok(unplaced.supports < 16, 'A support with a destroyed mating face leaves the purchase');
+assert.equal(unplaced.sets, unplaced.supports * 2);
+const setPrice = unplaced.lines.reduce((sum, line) => sum + line.unitPrice, 0);
+assert.equal(unplaced.total, Number((unplaced.sets * setPrice).toFixed(2)),
+  '每个安装面一套 = 1 颗螺丝 + 1 个螺母');
+assert.equal(materializeStoolSupportFasteners([]).applicable, false);
+assert.equal(materializeStoolSupportFasteners([]).total, 0);
+
+// --- the factory projection names them, and stays price-free ------------------
+const production = buildProductionData(baseline, 'cn');
+const fastenerParts = production.parts.filter((part) => part.id.startsWith('stool-support-fastener-'));
+assert.deepEqual(fastenerParts.map((part) => part.id), [
+  `stool-support-fastener-${STOOL_SUPPORT_FASTENER_SPEC.screwCatalogItemId}`,
+  `stool-support-fastener-${STOOL_SUPPORT_FASTENER_SPEC.nutCatalogItemId}`,
+]);
+assert.ok(fastenerParts.every((part) => part.type === 'screw' && part.quantity === 32));
+// The scene itself must still contain no inferred screw bodies — the fasteners
+// are a derived purchasing line, not geometry.
+assert.equal(baseline.some((item) => item.id.startsWith('stool-support-fastener-')), false);
+
+const materialList = buildMaterialList(production);
+const fastenerRows = materialList.sections.flatMap((section) => section.rows)
+  .filter((row) => row.partIds.some((id) => id.startsWith('stool-support-fastener-')));
+assert.equal(fastenerRows.length, 2, 'The factory list carries both fastener lines');
+assert.ok(fastenerRows.every((row) => row.quantity === 32 && row.state === 'recorded'));
+assert.ok(fastenerRows.every((row) => row.catalogItemId === STOOL_SUPPORT_FASTENER_SPEC.screwCatalogItemId
+  || row.catalogItemId === STOOL_SUPPORT_FASTENER_SPEC.nutCatalogItemId));
+// The specification has to survive into the factory sheet, not just the part.
+assert.ok(fastenerRows.every((row) => row.specification.includes('M6 × 12 mm')), 
+  fastenerRows.map((row) => row.specification).join(' | '));
+assert.ok(fastenerRows.every((row) => row.machiningNotes.length === 0 && row.reviewNotes.length === 0));
+// The factory document is price-free by contract: the money is on the cart line
+// and the designer estimate, never in the production projection.
+const moneyKeys = /^(?:accessoryPrice|price|unitPrice|totalPrice|amount|cost|subtotal|totalAmount|currency|unitRate)$/i;
+const assertPriceFree = (value: unknown, location: string): void => {
+  if (!value || typeof value !== 'object') return;
+  for (const [key, child] of Object.entries(value)) {
+    assert.equal(moneyKeys.test(key), false, `${location}.${key} must not contain commerce fields`);
+    if (child && typeof child === 'object') assertPriceFree(child, `${location}.${key}`);
+  }
+};
+assertPriceFree(production, 'productionProjection');
+assertPriceFree(materialList, 'materialList');
+
 assert.equal(JSON.stringify(asset), originalAsset, 'Source asset remains unchanged');
-console.log('Stool assembly review passed: default/asymmetric geometry, 32 measured mounts, 3 frame components versus one planned bridge graph, re-keyed/overlapping scopes and repeated whole-document appends, moved/deleted parents, missing/changed support and no false fastening completion.');
+console.log('Stool assembly review passed: default/asymmetric geometry, 32 measured mounts, 3 frame components versus one planned bridge graph, re-keyed/overlapping scopes and repeated whole-document appends, moved/deleted parents, missing/changed support, no computed blocker on a placed model, and 32 owner-confirmed fastener sets priced from the accessory catalog.');

@@ -1,4 +1,3 @@
-import { frameTypeName } from '../utils/framePricing';
 
 import React from 'react';
 import { CartItem, User, ProductType, ProfileConfig, Language, ProfileSide, Address } from '../types';
@@ -15,6 +14,11 @@ import {
 } from '../utils/cartAccessories';
 import { getAccessoryShippingWeightKg } from '../utils/membership';
 import { expandFinishedFurnitureCartItems } from '../utils/finishedFurnitureCart';
+// The factory sheet prints the same numbered accessory picture the customer saw,
+// so it reads the catalog's own map rather than keeping a second copy. The copy
+// it used to hold had already drifted: it asked for `/images/accessory/3.jpg`
+// while the catalog still fell back to the whole 1–10 chart.
+import { ACCESSORY_CODE_IMAGE_MAP } from '../data/accessoryCatalog';
 
 interface FactorySheetProps {
   cart: CartItem[];
@@ -34,30 +38,6 @@ interface FactorySheetProps {
 }
 
 const getCurrency = (lang: Language) => lang === 'cn' ? '￥' : '$';
-
-const ACCESSORY_CODE_IMAGE_MAP: Record<string, string> = {
-  '1': '/images/accessory/1.jpg',
-  '2': '/images/accessory/2.jpg',
-  '3': '/images/accessory/3.jpg',
-  '5': '/images/accessory/5.jpg',
-  '7': '/images/accessory/7L.jpg',
-  '7L': '/images/accessory/7L.jpg',
-  '7T': '/images/accessory/7T.jpg',
-  '8': '/images/accessory/8.jpg',
-  '9': '/images/accessory/9.jpg',
-  '10': '/images/accessory/10.jpg',
-  '10_1515_m4x6_cap': '/images/accessory/10_1515_m4x6_cap.jpg',
-  '10_1515_m4x12_cap': '/images/accessory/10_1515_m4x12_cap.jpg',
-  '10_1515_m4_tnut': '/images/accessory/10_1515_m4_tnut.jpg',
-  '10_2020_m5x14_cap': '/images/accessory/10_2020_m5x14_cap.jpg',
-  '10_2020_m5x8_cap': '/images/accessory/10_2020_m5x8_cap.jpg',
-  '10_2020_m6x20_cs': '/images/accessory/10_2020_m6x20_cs.jpg',
-  '10_2020_m5_tnut': '/images/accessory/10_2020_m5_tnut.jpg',
-  '10_3030_m6x18_cap': '/images/accessory/10_3030_m6x18_cap.jpg',
-  '10_3030_m6x12_cap': '/images/accessory/10_3030_m6x12_cap.jpg',
-  '10_3030_m8x20_cs': '/images/accessory/10_3030_m8x20_cs.jpg',
-  '10_3030_m6_tnut': '/images/accessory/10_3030_m6_tnut.jpg',
-};
 
 const pickFirstNonEmpty = (...values: any[]): string => {
   for (const value of values) {
@@ -906,7 +886,7 @@ const FactorySheet: React.FC<FactorySheetProps> = ({ cart, user, language, order
                   <div className="bg-slate-50 p-4 rounded-xl border border-slate-100">
                     <h4 className="text-xs font-black text-slate-400 uppercase tracking-widest border-b border-slate-200 pb-2 mb-3">{t.specs}</h4>
                     <div className="grid grid-cols-2 md:grid-cols-3 gap-3 text-xs">
-                      {item.product.type === ProductType.FRAME ? <div>{frameTypeName(cfg.frameType, language)}</div> : <div><span className="text-slate-400">{language === 'cn' ? '厚度' : language === 'jp' ? '厚さ' : 'Thickness'}:</span> <span className="font-black">{cfg.thickness ?? '-'}mm</span></div>}
+                      <div><span className="text-slate-400">{language === 'cn' ? '厚度' : language === 'jp' ? '厚さ' : 'Thickness'}:</span> <span className="font-black">{cfg.thickness ?? '-'}mm</span></div>
                       <div><span className="text-slate-400">{language === 'cn' ? '宽' : language === 'jp' ? '幅' : 'Width'}:</span> <span className="font-black">{cfg.width ?? '-'}mm</span></div>
                       <div><span className="text-slate-400">{language === 'cn' ? '高' : language === 'jp' ? '高さ' : 'Height'}:</span> <span className="font-black">{cfg.height ?? '-'}mm</span></div>
                       <div><span className="text-slate-400">{language === 'cn' ? '颜色' : language === 'jp' ? '色' : 'Color'}:</span> <span className="font-black">{resolveBoardColorLabel(cfg, language, item.product.type)}</span></div>
@@ -924,7 +904,7 @@ const FactorySheet: React.FC<FactorySheetProps> = ({ cart, user, language, order
                         <div><span className="text-slate-400">{language === 'cn' ? '海洋板规格' : language === 'jp' ? '海洋板仕様' : 'Marine Spec'}:</span> <span className="font-black">{cfg.marineSpecName || (cfg.marineSpecId === 'marine_bbb_plain' ? (language === 'cn' ? 'BBB素板' : language === 'jp' ? 'BBB素板' : 'BBB plain board') : (language === 'cn' ? 'BBB两面UV清漆+覆膜' : language === 'jp' ? 'BBB両面UVクリア+フィルム' : 'BBB double-side UV varnish + film'))}</span></div>
                       )}
                       {showComponentPrice && <div><span className="text-slate-400">{language === 'cn' ? '单价' : language === 'jp' ? '単価' : 'Unit Price'}:</span> <span className="font-black">{currency}{Number(cfg.unitPrice || (item.totalPrice / Math.max(1, item.quantity))).toFixed(1)}</span></div>}
-                      {item.product.type !== ProductType.FRAME && <div><span className="text-slate-400">{language === 'cn' ? '面积' : language === 'jp' ? '面積' : 'Area'}:</span> <span className="font-black">{Number(cfg.areaSqm || 0).toFixed(3)}㎡</span></div>}
+                      <div><span className="text-slate-400">{language === 'cn' ? '面积' : language === 'jp' ? '面積' : 'Area'}:</span> <span className="font-black">{Number(cfg.areaSqm || 0).toFixed(3)}㎡</span></div>
                     </div>
                     {cfg.openingSide && (
                       <div className="mt-3 text-xs font-bold text-slate-700">
