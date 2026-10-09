@@ -123,3 +123,7 @@
   ④ **导入后会弹「导入型材攻丝设置」，必须先关掉**（选「保留原有攻丝设置」），否则后续点击全被挡；
   ⑤ 首屏之下的按钮 `click` 会点空：先 `el.scrollIntoView({block:'center'})` 再 `el.click()`；
   ⑥ 断言 `location.hash`、`window.__rej/__err` 为 null、购物车文本含预期行；⑦ 收尾 `agent-browser close`。
+- **验证画布浮层几何（谁盖住谁）**：量 `getBoundingClientRect()` 做相交判断，别靠肉眼。
+  notice 只活 **2600ms**，所以要在**同一次 eval 里**触发并测量：点「暂不能下单」设计的 `加入购物车`
+  （会走 `showNotice(release.blocking.join(' '))`）→ 轮询 `[data-testid=diy-canvas-notice]` → 立刻量
+  notice / `diy-scene-control-hint` / `加工符号` 图例三个矩形。截图留证同理要抢在 2.6s 内。
