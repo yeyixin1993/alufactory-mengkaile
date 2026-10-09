@@ -1132,7 +1132,7 @@ const TEXT: Record<Language, Record<string, string>> = {
     importAppend: '既存内容に追加',
     importReplace: '既存内容を置換',
     importCancelled: '読み込みをキャンセルしました',
-    dragHint: '左ドラッグで視点回転、右ドラッグで上下左右へ平行移動、ホイールで前後ズームします。パーツ選択後は軸矢印を左ドラッグして移動します。黒い長さ変更矢印は形材を選択した場合だけ表示され、短い右クリックで操作メニューを開きます。',
+    dragHint: '左ドラッグで視点回転、右ドラッグで上下左右へ平行移動、ホイールで前後ズームします。パーツ選択後は軸矢印を左ドラッグして移動します。黒い長さ変更矢印は形材を選択した場合だけ表示され、短い右クリックで操作メニューを開きます。Shift+色軸ドラッグで複製しながら移動、Shift+空白部ドラッグで範囲選択できます。',
     delete: '削除',
     duplicate: '複製',
     backToProject: 'プロジェクトへ戻る',
@@ -10188,21 +10188,18 @@ const ThreeAssembly: React.FC<{
       )}
       {collidingProfileIds.size === 0 && (
         <div
-          className="pointer-events-none absolute bottom-3 right-3 z-20 w-[min(370px,calc(100%-24px))] rounded-2xl border border-slate-700 bg-slate-950/95 p-2.5 text-white shadow-2xl shadow-slate-950/25"
+          className="pointer-events-none absolute bottom-3 right-3 z-20 max-w-[calc(100%-24px)] rounded-2xl border border-slate-700 bg-slate-950/95 px-3 py-3 text-white shadow-2xl shadow-slate-950/25"
           data-testid="diy-scene-control-hint"
         >
-          <div className="flex items-center gap-2">
-            <MousePointer2 className="h-4 w-4 shrink-0 text-sky-300" />
-            <div className="flex flex-wrap gap-1.5 text-[10px] font-black leading-none">
+          <div className="flex flex-wrap items-center gap-2">
+            <MousePointer2 className="h-3.5 w-3.5 shrink-0 text-sky-300" />
+            <div className="flex flex-wrap items-center gap-1.5 text-[9px] font-black leading-none">
               {[interactionLabels.orbit, interactionLabels.pan, interactionLabels.zoom].map((label) => (
-                <span key={label} className="rounded-lg border border-white/15 bg-white/10 px-2 py-1.5">
+                <span key={label} className="whitespace-nowrap rounded-lg border border-white/15 bg-white/10 px-2 py-1.5">
                   {label}
                 </span>
               ))}
             </div>
-          </div>
-          <div className="mt-2 border-t border-white/15 pt-2 text-[10px] font-bold leading-snug text-slate-200">
-            {interactionLabels.part}
           </div>
         </div>
       )}
@@ -10490,7 +10487,7 @@ const ThreeAssembly: React.FC<{
         </div>
       )}
       {snapHint && (
-        <div className={`pointer-events-none absolute left-1/2 z-20 -translate-x-1/2 rounded-full bg-sky-500 px-4 py-2 text-[11px] font-black text-white shadow-xl shadow-sky-500/30 ${collidingProfileIds.size > 0 ? 'bottom-16' : 'bottom-4'}`}>
+        <div className={`pointer-events-none absolute left-1/2 z-20 -translate-x-1/2 rounded-full bg-sky-500 px-4 py-2 text-[11px] font-black text-white shadow-xl shadow-sky-500/30 ${collidingProfileIds.size > 0 ? 'bottom-28' : 'bottom-4'}`}>
           {snapHint}
         </div>
       )}
@@ -13254,7 +13251,7 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({
               {maycadReview.warnings.length > 3 && <div className="mt-1 text-amber-600">+{maycadReview.warnings.length - 3}</div>}
             </div>
           )}
-          {notice && <div className="absolute bottom-5 left-1/2 -translate-x-1/2 rounded-2xl bg-slate-950 px-5 py-3 text-sm font-black text-white shadow-2xl">{notice}</div>}
+          {notice && <div className="pointer-events-none absolute bottom-20 left-1/2 z-40 max-w-[calc(100%-24px)] -translate-x-1/2 rounded-2xl bg-slate-950 px-5 py-3 text-center text-sm font-black text-white shadow-2xl" data-testid="diy-canvas-notice">{notice}</div>}
         </main>
 
         <aside
