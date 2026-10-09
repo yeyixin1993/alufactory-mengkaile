@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { gunzipSync } from 'node:zlib';
 import { calculatePrice } from '../components/DIYDesigner';
+import { materializeStoolSupportFasteners } from '../utils/stoolAssemblyReview';
 import { SHIPPING_RATES, SHIPPING_RATES_AN, SHIPPING_RATES_SF, PROFILE_WEIGHTS } from '../constants';
 import {
   DECORATIVE_PROFILE_UNIT_PRICE,
@@ -18,6 +19,18 @@ import {
  * designer's subtotal to that number through the same weight and shipping
  * rules the cart uses. If a price, a weight table or a shipping tier moves,
  * this fails instead of quietly changing what a customer is quoted.
+ *
+ * The landed figure was ¥880 while the sixteen 固定支座 were charged the ¥2
+ * support basis. The owner then identified that part as the catalog's 3号角码,
+ * which put it on the 3030 catalog tier (¥4.5) — ¥40 more — and the figure
+ * became ¥920. The 拉手 / 装饰料 split is deliberately *not* re-tuned to hide
+ * that: the owner pinned 装饰料 at a round ¥8/件, and at ¥8 × 8 the calibrated
+ * pair already exceeds what a ¥880 landing would leave, so ¥920 is the floor
+ * rather than a new calibration.
+ *
+ * The figure is ¥952 now that the sixteen supports' tier fasteners are real
+ * purchasable lines: 32 sets of M6×12 + 3030 T-nut at the catalog's 20-piece
+ * bulk tier, ¥16 + ¥16 = ¥32. None of the item prices moved.
  */
 
 /** Mirrors `MARINE_BOARD_WEIGHT_PER_SQM` in `App.tsx` / `QuickQuote.tsx`. */
@@ -29,7 +42,7 @@ const ACCESSORY_SHIPPING_WEIGHT_KG = 1;
 const OVERLENGTH_THRESHOLD_MM = 1500;
 const OVERLENGTH_FEE = 20;
 
-const TARGET_LANDED_TOTAL = 880;
+const TARGET_LANDED_TOTAL = 952;
 const DESTINATION_PROVINCE = '浙江';
 
 const fixturePath = path.resolve('scripts/fixtures/stool-import-20260930.json.gz');
@@ -84,9 +97,33 @@ const calibratedPartsTotal = handleCount * HANDLE_UNIT_PRICE + decorativeCount *
 assert.equal(DECORATIVE_PROFILE_UNIT_PRICE, 8, '8080 装饰料应为整 ¥8/件');
 assert.equal(HANDLE_UNIT_PRICE, 23.12, '拉手应承担余数 = ¥23.12/件');
 assert.equal(Number(calibratedPartsTotal.toFixed(2)), 87.12,
-  '拉手 + 8080 装饰料合计必须为 ¥87.12，否则落地价不再是 ¥880');
+  '拉手 + 8080 装饰料合计必须仍为业主定下的 ¥87.12（装饰料整 ¥8，余数落拉手）');
+
+// The bracket re-price is the whole reason the landing moved, so name it here.
+const linkedBracketItems = ordered.filter((item) => (
+  item.kind === 'imported_component'
+  && item.sourceMesh?.source.semanticType === 'fixed_support'
+));
+assert.equal(linkedBracketItems.length, 16, '凳子夹具的固定支座数量已变化，请重新核对 3号角码 计价');
+assert.equal(
+  linkedBracketItems.reduce((sum, item) => sum + calculatePrice(item), 0),
+  72,
+  '十六件 3号角码（3030）必须按目录价 ¥4.5/件 计为 ¥72，而不是 ¥2 支座的 ¥32',
+);
 const rawSubtotal = baseOutsideCalibration + calibratedPartsTotal;
-const designSubtotal = Number(rawSubtotal.toFixed(1));
+
+/**
+ * The tier fasteners are owner-confirmed purchased parts, not scene items, so
+ * `calculatePrice` cannot see them — the cart adds them through
+ * `materializeStoolSupportFasteners`. A landing figure that ignored them would
+ * quote the customer a stool they cannot assemble, so this test has to add the
+ * same lines the cart does.
+ */
+const fasteners = materializeStoolSupportFasteners(ordered);
+assert.equal(fasteners.supports, 16, '凳子夹具的固定支座数量已变化，请重新核对层间紧固件');
+assert.equal(fasteners.sets, 32, '每个固定支座两个安装面 ⇒ 32 套 M6×12 螺丝 + 3030 T型螺母');
+assert.equal(fasteners.total, 32, '32 套紧固件应按目录批量价 ¥0.5/件 计为 ¥16 + ¥16 = ¥32');
+const designSubtotal = Number((rawSubtotal + fasteners.total).toFixed(1));
 
 // --- Shipping, using the cart's own weight and rate logic. ---
 const profileWeightKg = ordered.reduce((sum, item) => {
@@ -131,7 +168,8 @@ const landed = Number((designSubtotal + shipping[cheapest]).toFixed(1));
 console.log('凳子参考设计（升级诺贝轮子）发浙江');
 console.log(`  其他零件小计: ¥${baseOutsideCalibration.toFixed(4)}`);
 console.log(`  校准件小计: ¥${calibratedPartsTotal.toFixed(4)}`);
-console.log(`  设计估价小计: ¥${rawSubtotal.toFixed(4)}（界面显示 ¥${designSubtotal}）`);
+console.log(`  层间紧固件: ${fasteners.sets} 套（M6×12 + 3030 T型螺母）¥${fasteners.total}`);
+console.log(`  设计估价小计: ¥${designSubtotal}（零件 ¥${rawSubtotal.toFixed(4)} + 紧固件 ¥${fasteners.total}）`);
 console.log(`  重量: 型材 ${profileWeightKg.toFixed(2)}kg + 海洋板 ${marineBoardWeightKg.toFixed(2)}kg`
   + ` + 配件 ${accessoryWeightKg}kg = ${totalWeightKg.toFixed(2)}kg（计费 ${roundedWeight}kg）`);
 console.log(`  运费: 普通 ¥${shipping.standard} / 顺丰 ¥${shipping.sf} / 安能 ¥${shipping.anneng} → 选用 ${cheapest} ¥${shipping[cheapest]}`);
@@ -141,4 +179,6 @@ console.log(`  拉手 ¥${HANDLE_UNIT_PRICE}×${handleCount} + 8080装饰料 ¥$
 
 assert.equal(landed, TARGET_LANDED_TOTAL, `凳子参考设计发浙江的落地总价应为 ¥${TARGET_LANDED_TOTAL}`);
 
-console.log('Reference design landed total to 浙江 matches the owner-confirmed ¥880.');
+console.log(`Reference design landed total to 浙江: ¥${landed}`
+  + '（固定支座按 3号角码目录价后由 ¥880 变为 ¥920：¥40 = 16 件 × (¥4.5 − ¥2)；'
+  + `32 套层间紧固件做实再 +¥${fasteners.total} ⇒ ¥${landed}）`);

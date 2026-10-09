@@ -29,7 +29,7 @@
     "test:stool-assembly": "vite build --target esnext --ssr scripts/verify-stool-assembly-refinements.ts --outDir .verify-stool-assembly-dist --emptyOutDir && node .verify-stool-assembly-dist/verify-stool-assembly-refinements.js",
     "test:connection-decision-engine": "vite build --target esnext --ssr scripts/verify-connection-decision-engine.ts --outDir .verify-connection-decision-engine-dist --emptyOutDir && node .verify-connection-decision-engine-dist/verify-connection-decision-engine.js",
     "test:no5-validation": "vite build --target esnext --ssr scripts/verify-no5-hidden-connector-validation.ts --outDir .verify-no5-validation-dist --emptyOutDir && node .verify-no5-validation-dist/verify-no5-hidden-connector-validation.js",
-    "test:stool-all": "npm run test:parametric-stool && npm run test:parametric-stool-contract && npm run test:stool-accessories && npm run test:stool-accessory-contract && npm run test:stool-connections && npm run test:stool-assembly && npm run test:stool-render && npm run test:stool-assembly-review",
+    "test:stool-all": "npm run test:parametric-stool && npm run test:parametric-stool-contract && npm run test:stool-accessories && npm run test:stool-accessory-contract && npm run test:stool-connections && npm run test:stool-assembly && npm run test:stool-render && npm run test:stool-assembly-review && npm run test:designer-release-gate && npm run test:source-part-cart-merge",
     "generate:stool": "npm run test:stool-connections -- --write-artifacts --output-dir=outputs/stool-import-fix-20260930",
     "test:stool-render": "vite build --target esnext --ssr scripts/verify-stool-render-contract.ts --outDir .verify-stool-render-dist --emptyOutDir && node .verify-stool-render-dist/verify-stool-render-contract.js",
     "test:stool-assembly-review": "vite build --target esnext --ssr scripts/verify-stool-assembly-review.ts --outDir .verify-stool-assembly-review-dist --emptyOutDir && node .verify-stool-assembly-review-dist/verify-stool-assembly-review.js",
@@ -40,7 +40,12 @@
     "test:component-pricing": "vite build --ssr scripts/verify-component-pricing.ts --outDir .verify-component-pricing-dist --emptyOutDir && node .verify-component-pricing-dist/verify-component-pricing.js",
     "test:screw-pricing": "vite build --ssr scripts/verify-screw-pricing.ts --outDir .verify-screw-pricing-dist --emptyOutDir && node .verify-screw-pricing-dist/verify-screw-pricing.js",
     "test:stool-landed-total": "vite build --ssr scripts/verify-stool-landed-total.ts --outDir .verify-stool-landed-total-dist --emptyOutDir && node .verify-stool-landed-total-dist/verify-stool-landed-total.js",
-    "dev:deepseek": "node scripts/dev-deepseek.mjs"
+    "dev:deepseek": "node scripts/dev-deepseek.mjs",
+    "test:designer-accessory-link": "vite build --ssr scripts/verify-designer-accessory-link.ts --outDir .verify-designer-accessory-link-dist --emptyOutDir && node .verify-designer-accessory-link-dist/verify-designer-accessory-link.js",
+    "test:source-geometry-sharing": "vite build --ssr scripts/verify-source-geometry-sharing.ts --outDir .verify-source-geometry-sharing-dist --emptyOutDir && node .verify-source-geometry-sharing-dist/verify-source-geometry-sharing.js",
+    "export:stool-952": "vite build --ssr scripts/export-stool-design.ts --outDir .verify-export-stool-dist --emptyOutDir && node .verify-export-stool-dist/export-stool-design.js",
+    "test:designer-release-gate": "vite build --target esnext --ssr scripts/verify-designer-release-gate.ts --outDir .verify-release-gate-dist --emptyOutDir && node .verify-release-gate-dist/verify-designer-release-gate.js",
+    "test:source-part-cart-merge": "vite build --target esnext --ssr scripts/verify-source-part-cart-merge.ts --outDir .verify-source-part-cart-merge-dist --emptyOutDir && node .verify-source-part-cart-merge-dist/verify-source-part-cart-merge.js"
   },
   "dependencies": {
     "@fontsource-variable/noto-sans-jp": "5.3.0",
