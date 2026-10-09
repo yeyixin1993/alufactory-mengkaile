@@ -158,9 +158,13 @@ const messages:Record<string,[string,string]>={
     "Start chat",
     "相談を始める"
   ],
-  "游客每台设备免费发送 3 条消息，回复追问也计入次数。登录后使用账户额度，VIP/VIP+ 含赠送额度。": [
-    "Each device gets 3 free guest messages, including follow-ups. After signing in you use your account credit; VIP/VIP+ include a grant.",
-    "ゲストは1台につき3通まで無料（追加の質問も1通に数えます）。ログイン後はアカウント残高、VIP/VIP+ は付与分をご利用いただけます。"
+  "游客/普通用户每台设备免费发送 3 条消息，回复追问也计入次数。": [
+    "Guests and standard users get 3 free messages per device, including follow-ups.",
+    "ゲスト・一般会員は1台につき3通まで無料（追加の質問も1通に数えます）。"
+  ],
+  "登录后使用账户额度，VIP/VIP+ 含赠送额度。": [
+    "After signing in you use your account credit; VIP/VIP+ include a grant.",
+    "ログイン後はアカウント残高、VIP/VIP+ は付与分をご利用いただけます。"
   ],
   "AI 额度充值 · 充多少到账多少": [
     "AI credit · Receive the full top-up amount",

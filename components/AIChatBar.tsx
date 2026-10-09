@@ -11,6 +11,7 @@ import AIQuoteCard from './AIQuoteCard';
 import AIOrderConfirmation from './AIOrderConfirmation';
 import AIResponseReveal from './AIResponseReveal';
 import { saveChatDraft, takeChatDraft, ChatAttachment } from '../utils/aiChatHandoff';
+import { isVipMembership } from '../utils/membership';
 
 const VISITOR_KEY = 'mengkaile-ai-visitor';
 const visitor = () => { try { return localStorage.getItem(VISITOR_KEY) || ''; } catch { return ''; } };
@@ -240,6 +241,9 @@ export default function AIChatBar({ user, onAddToCart, cart=[], language, onLang
         lockKind === 'guest_rate_limited' ? 'No guest trial left on this network. Sign in to continue.' : 'Your guest trial is used up. Sign in to continue.',
         lockKind === 'guest_rate_limited' ? 'この回線のゲスト試用枠は使い切りました。ログインで続行できます。' : 'ゲスト試用を使い切りました。ログインで続行できます。')
     : '';
+  // VIP/VIP+ buy with account credit, so the three-free-messages rule does not apply to them;
+  // telling a paying member about a guest allowance reads as if they still got three free.
+  const paidMember = isVipMembership(user?.membershipLevel);
   return <AILanguageContext.Provider value={language}>
     {aiHidden && !home && <div className={`ai-restore-bar ${workspace?'ai-restore-workspace':''}`}><button type="button" className="ai-visibility-button" onClick={()=>aiVisibility.setHidden(false)}><Sparkles size={17}/>{label('显示 AI 顾问','Show AI advisor','AIアドバイザーを表示')}</button>{workspace&&<Link to="/">{label('返回首页','Back to home','ホームへ')}</Link>}</div>}
     <section hidden={aiHidden && !home} className={`ai-entry ${workspace ? 'ai-chat-workspace' : home ? 'ai-entry-home' : 'ai-entry-compact'}`} aria-label={tr("AI 设计与咨询")}>
@@ -304,7 +308,7 @@ export default function AIChatBar({ user, onAddToCart, cart=[], language, onLang
         {['报价需要提供什么信息', '截面本色/彩色是什么意思', '能做和图片一样的吗'].map(example => <button key={example} onClick={() => { setInput(example); inputRef.current?.focus(); }}><Plus size={13} />{example}</button>)}
       </div>}
       <div className="ai-entry-notices">
-      <p className="text-xs text-slate-500 mb-3">{tr("游客每台设备免费发送 3 条消息，回复追问也计入次数。登录后使用账户额度，VIP/VIP+ 含赠送额度。")}</p>
+      <p className="text-xs text-slate-500 mb-3">{!paidMember && tr("游客/普通用户每台设备免费发送 3 条消息，回复追问也计入次数。")}{tr("登录后使用账户额度，VIP/VIP+ 含赠送额度。")}</p>
       {lockNotice && <p className="ai-entry-lock mb-3">{lockNotice} <Link to="/login" className="underline">{tr("登录")}</Link></p>}
       {status && (!status.enabled || (!status.configured && !status.local_answers_available)) && <p className="text-sm text-amber-800 mb-3">AI 咨询暂未开通，您可以先使用<Link to="/quick-quote" className="underline">{tr("快速报价")}</Link>。</p>}
       {status?.enabled && !status.configured && status.local_answers_available && <p className="text-sm text-slate-600 mb-3">目前可回答已收录的常见问题；智能规格识别暂未开通，估价请使用<Link to="/quick-quote" className="underline">{tr("快速报价")}</Link>。</p>}
