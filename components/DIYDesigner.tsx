@@ -66,6 +66,7 @@ import {
   PROFILE_COLORS,
   PROFILE_VARIANTS,
   MARINE_BOARD_COLORS,
+  SHIPPING_METHOD_NAMES,
   getMarineBoardOrderColorName,
 } from '../constants';
 import ProfileVisualizer from './ProfileVisualizer';
@@ -103,6 +104,7 @@ import { DEFAULT_SCREW_UNIT_PRICE, resolveDesignerScrewPrice } from '../utils/de
 import { getRotationallyCanonicalMachiningKey } from '../utils/profileManufacturingEquivalence';
 import { parseMaycadSceneXml, type MaycadProfileReview } from '../utils/maycadImport';
 import { ACCESSORY_BULK_THRESHOLD, getConfirmedEndCapUnitPrice, hasConfirmedEndCapPrice } from '../utils/accessoryPricing';
+import { CONNECTION_ACCESSORY_IMAGE_KEY, getConnectionAccessoryImageSrc } from '../utils/designerAccessoryImages';
 import { ACCESSORY_CODE_IMAGE_MAP, getAccessoryRowSeriesLabel } from '../data/accessoryCatalog';
 import {
   DIY_TEMPLATE_STORAGE_PREFIX,
@@ -131,6 +133,10 @@ import {
   type ImportedComponentPrice,
   type WheelGrade,
 } from '../utils/designerComponentPricing';
+import {
+  DESIGNER_SHIPPING_PROVINCES,
+  estimateDesignerShipping,
+} from '../utils/designerLandedEstimate';
 
 type DIYItemKind =
   | 'imported_component'
@@ -404,7 +410,9 @@ const TEXT: Record<Language, Record<string, string>> = {
     otherParts: '其他配件',
     accessorySpec: '配件规格',
     accessoryProfileSize: '适配型材规格',
-    availableForSeries: '每根配件下方直接标注适配型号，无需先选规格；彩色配件另按彩色价目计价。',
+    accessoryColorNatural: '本色',
+    accessoryColorColored: '彩色',
+    availableForSeries: '点击配件名称展开适配型号（2020 / 3030 …），再选择型号加入场景；彩色配件另按彩色价目计价。',
     bracketSize: '角码边长 (mm)',
     connectorLength: '连接件长度 (mm)',
     screwOrderSpec: '订货规格',
@@ -460,6 +468,12 @@ const TEXT: Record<Language, Record<string, string>> = {
     maycadTappingSkipped: '已保持未攻丝，可稍后逐根修改',
     addCart: '加入购物车',
     total: '设计估价',
+    estimateProvince: '收货省份（预估运费）',
+    estimateNoProvince: '暂不预估运费',
+    estimateWeight: '计费重量',
+    estimateFee: '预估运费',
+    estimateLanded: '预估到手价',
+    estimateHint: '按所选省份的最低运费档预估；下单填写地址后按同样规则计算，价格与此一致（不含螺丝、标签等可选费用）。',
     length: '长度 (mm)',
     width: '宽度 (mm)',
     height: '高度 (mm)',
@@ -715,7 +729,9 @@ const TEXT: Record<Language, Record<string, string>> = {
     otherParts: 'Other hardware',
     accessorySpec: 'Accessory specification',
     accessoryProfileSize: 'Compatible profile series',
-    availableForSeries: 'Only compatible parts are shown',
+    accessoryColorNatural: 'Natural',
+    accessoryColorColored: 'Colored',
+    availableForSeries: 'Click an accessory to expand its compatible profile series (2020 / 3030 …), then pick one to add. Colored parts follow the colored price tier.',
     bracketSize: 'Bracket side (mm)',
     connectorLength: 'Connector length (mm)',
     screwOrderSpec: 'Order specification',
@@ -771,6 +787,12 @@ const TEXT: Record<Language, Record<string, string>> = {
     maycadTappingSkipped: 'Profiles remain untapped and can be edited individually later',
     addCart: 'Add design to cart',
     total: 'Design estimate',
+    estimateProvince: 'Destination province (freight preview)',
+    estimateNoProvince: 'No freight preview',
+    estimateWeight: 'Billable weight',
+    estimateFee: 'Estimated freight',
+    estimateLanded: 'Estimated landed total',
+    estimateHint: 'Estimated with the cheapest courier for the chosen province. Checkout uses the same rules once your address is filled in, so the total matches (optional screw and label fees are not included).',
     length: 'Length (mm)',
     width: 'Width (mm)',
     height: 'Height (mm)',
@@ -1033,7 +1055,7 @@ const TEXT: Record<Language, Record<string, string>> = {
     otherParts: 'その他',
     accessorySpec: '部品仕様',
     accessoryProfileSize: '対応フレーム規格',
-    availableForSeries: '各部品の下に対応型番を表示しています。規格を先に選ぶ必要はありません。カラー部品はカラー価格で計算されます。',
+    availableForSeries: '部品名をクリックすると対応型番（2020 / 3030 など）が展開されます。型番を選んで追加してください。カラー部品はカラー価格で計算されます。',
     bracketSize: 'ブラケット辺長 (mm)',
     connectorLength: 'コネクタ長さ (mm)',
     screwOrderSpec: '発注仕様',
@@ -1089,6 +1111,12 @@ const TEXT: Record<Language, Record<string, string>> = {
     maycadTappingSkipped: 'タップ加工なしで保持しました。後から個別に変更できます',
     addCart: 'カートに追加',
     total: '見積金額',
+    estimateProvince: '配送先の省（送料の目安）',
+    estimateNoProvince: '送料を試算しない',
+    estimateWeight: '計量重量',
+    estimateFee: '送料の目安',
+    estimateLanded: '届くまでの合計（目安）',
+    estimateHint: '選んだ省の最安配送方法で試算しています。注文時に住所を入力すると同じ規則で計算されるため金額は一致します（ネジ・ラベルなどのオプション費用は含みません）。',
     length: '長さ (mm)',
     width: '幅 (mm)',
     height: '高さ (mm)',
@@ -11015,6 +11043,11 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({
   const [drillSetupOpen, setDrillSetupOpen] = useState(false);
   const [profileDrawTemplate, setProfileDrawTemplate] = useState<DIYSceneItem | null>(null);
   const [libraryProfileVariantId, setLibraryProfileVariantId] = useState('2020');
+  // Two-level accessory palette: level 1 lists each accessory once, level 2
+  // (expanded on click) offers the compatible profile series for that part.
+  const [expandedAccessoryKind, setExpandedAccessoryKind] = useState<DIYConnectionKind | null>(null);
+  // Province for the landed preview only — never part of the design file.
+  const [estimateProvince, setEstimateProvince] = useState('');
   const [accessoryPlacementTemplate, setAccessoryPlacementTemplate] = useState<DIYSceneItem | null>(null);
   const [newDoorLeafMode, setNewDoorLeafMode] = useState<DIYDoorLeafMode>('single');
   const [newDoorOverlay, setNewDoorOverlay] = useState<DIYDoorOverlay>('full');
@@ -11097,6 +11130,12 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({
     && Number.isFinite(finishedFurnitureQuote.totalPriceCny)
     ? Number(finishedFurnitureQuote.totalPriceCny)
     : componentTotal;
+  // Same weight tables and per-province tiers the cart charges, so the number
+  // previewed here is the number the order totals once an address exists.
+  const shippingEstimate = useMemo(
+    () => estimateDesignerShipping(items, total, estimateProvince, user),
+    [items, total, estimateProvince, user],
+  );
   const projectDisplayGroups = useMemo(() => groupProjectItemsForDisplay(items), [items]);
   const collidingProfileIds = useMemo(() => findCollidingProfileIds(items), [items]);
   const currency = language === 'cn' ? '￥' : '$';
@@ -11750,8 +11789,8 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({
       showNotice(t.endCapInstalled);
       return;
     }
-    // The library lists every accessory once per compatible profile series, so
-    // the series now travels with the picked entry instead of a panel selector.
+    // The library keeps one level-1 entry per accessory kind; the picked
+    // series travels with the level-2 entry instead of a panel selector.
     let accessorySeries = isConnectionAccessoryKind(kind)
       ? (ACCESSORY_PROFILE_SIZES.includes(variantId as DIYAccessoryProfileSize)
         ? variantId as DIYAccessoryProfileSize
@@ -12443,12 +12482,14 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({
           ? { id: 'diy-shaft-support-sk8', code: 0, label: 'SK8单轴支座', imageKey: '' }
           : { id: 'diy-shaft-support-shf8', code: 0, label: 'SHF8法兰式支座', imageKey: '' };
       const accessoryDefinition = {
-        connector: { id: '1', code: 1, label: t.connector, imageKey: '1' },
-        extruded_connector: { id: '2', code: 2, label: t.extrudedConnector, imageKey: '2' },
-        l_connector: { id: '7L', code: 7, label: t.lConnector, imageKey: '7L' },
-        t_connector: { id: '7T', code: 7, label: t.tConnector, imageKey: '7T' },
-        hidden_connector: { id: '5', code: 5, label: t.hiddenConnector, imageKey: '5' },
-        tee_connector: { id: '9', code: 9, label: t.teeConnector, imageKey: '9' },
+        // Image keys stay in `utils/designerAccessoryImages.ts` so the library
+        // thumbnails and the cart lines always show the same catalogue photo.
+        connector: { id: '1', code: 1, label: t.connector, imageKey: CONNECTION_ACCESSORY_IMAGE_KEY.connector },
+        extruded_connector: { id: '2', code: 2, label: t.extrudedConnector, imageKey: CONNECTION_ACCESSORY_IMAGE_KEY.extruded_connector },
+        l_connector: { id: '7L', code: 7, label: t.lConnector, imageKey: CONNECTION_ACCESSORY_IMAGE_KEY.l_connector },
+        t_connector: { id: '7T', code: 7, label: t.tConnector, imageKey: CONNECTION_ACCESSORY_IMAGE_KEY.t_connector },
+        hidden_connector: { id: '5', code: 5, label: t.hiddenConnector, imageKey: CONNECTION_ACCESSORY_IMAGE_KEY.hidden_connector },
+        tee_connector: { id: '9', code: 9, label: t.teeConnector, imageKey: CONNECTION_ACCESSORY_IMAGE_KEY.tee_connector },
         screw: item.screwHead === 'button_socket'
           ? { id: 'diy-button-socket-screw', code: 10, label: t.buttonSocketScrew, imageKey: '10' }
           : item.screwHead === 'flat_socket'
@@ -12718,17 +12759,16 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({
 
   const grooveLabel = (index: number) => grooveOrdinal(index, language);
 
-  // Flat library: one entry per (accessory kind × compatible profile series).
-  const accessoryLibraryEntries = ([
+  // Two-level library: level 1 lists each accessory kind once; the compatible
+  // profile series (2020 / 3030 …) is chosen in the expanded level-2 list.
+  const accessoryLibraryKinds = ([
     ['connector', t.connector, Wrench],
     ['extruded_connector', t.extrudedConnector, Wrench],
     ['hidden_connector', t.hiddenConnector, Box],
     ['l_connector', t.lConnector, PanelTop],
     ['t_connector', t.tConnector, PanelTop],
     ['tee_connector', t.teeConnector, PanelTop],
-  ] as const).flatMap(([kind, label, icon]) => (
-    getAvailableAccessorySizes(kind).map((series) => ({ kind, label, icon, series }))
-  ));
+  ] as const).map(([kind, label, icon]) => ({ kind, label, icon }));
 
   const paletteGroups = [
     {
@@ -12744,13 +12784,12 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({
     {
       id: 'fasteners',
       label: t.fasteningParts,
-      // Every accessory is expanded once per compatible profile series so the
-      // customer picks the part directly; the series is shown as a description
-      // line under the name instead of being chosen up front.
-      items: accessoryLibraryEntries.map((entry) => ({
+      // One level-1 entry per accessory kind; clicking expands the level-2
+      // list of compatible profile series so the customer picks 2020 / 3030
+      // inside the accessory instead of scanning a flat per-series list.
+      items: accessoryLibraryKinds.map((entry) => ({
         kind: entry.kind,
         label: entry.label,
-        series: entry.series,
         icon: entry.icon,
       })),
     },
@@ -12953,41 +12992,115 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({
                   {paletteGroup.items.map((entry) => {
                     const Icon = entry.icon;
                     const entryDisabled = entry.kind === 'cabinet_door' && !cabinetDoorOpenings.length;
-                    const entrySeries = 'series' in entry ? entry.series : undefined;
-                    const accessoryPrice = isConnectionAccessoryKind(entry.kind) && entrySeries
-                      ? ACCESSORY_PRICES[entry.kind][entrySeries]
-                      : undefined;
+                    const expandable = paletteGroup.id === 'fasteners' && isConnectionAccessoryKind(entry.kind);
+                    const expanded = expandable && expandedAccessoryKind === entry.kind;
+                    const seriesOptions = expandable ? getAvailableAccessorySizes(entry.kind) : [];
+                    if (!expandable) {
+                      return (
+                        <button
+                          key={entry.kind}
+                          data-testid={`diy-add-${entry.kind}`}
+                          draggable={!entryDisabled}
+                          disabled={entryDisabled}
+                          title={entry.kind === 'cabinet_door' ? (cabinetDoorOpenings.length ? t.doorFrameReady : t.doorNeedFrame) : undefined}
+                          onDragStart={(event) => event.dataTransfer.setData('application/x-mengkaile-part', JSON.stringify({
+                            kind: entry.kind,
+                            variantId: undefined,
+                          }))}
+                          onClick={() => addItem(entry.kind)}
+                          className="group flex items-center gap-3 rounded-2xl border border-slate-200 bg-slate-50 p-3 text-left transition hover:border-blue-400 hover:bg-blue-50 disabled:cursor-not-allowed disabled:opacity-45 disabled:hover:border-slate-200 disabled:hover:bg-slate-50"
+                        >
+                          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-white text-slate-500 shadow-sm group-hover:text-blue-600"><Icon className="h-5 w-5" /></span>
+                          <span className="min-w-0 flex-1">
+                            <span className="block text-xs font-black text-slate-700">{entry.label}</span>
+                            {entry.kind === 'cabinet_door' && (
+                              <span className={`mt-0.5 block text-[9px] font-bold ${cabinetDoorOpenings.length ? 'text-emerald-600' : 'text-slate-400'}`}>
+                                {cabinetDoorOpenings.length
+                                  ? `${t.doorFrameReady} · ${cabinetDoorOpenings.length * (newDoorLeafMode === 'double' ? 2 : 1)}${t.doorLeafUnit}`
+                                  : t.doorNeedFrame}
+                              </span>
+                            )}
+                          </span>
+                        </button>
+                      );
+                    }
+                    const prices = ACCESSORY_PRICES[entry.kind];
+                    // The library shows the same catalogue photograph the
+                    // accessory section uses, so "1号角码 / 2号角码 …" is
+                    // recognisable as a real part instead of a generic icon.
+                    const accessoryImage = getConnectionAccessoryImageSrc(entry.kind);
                     return (
-                      <button
-                        key={`${entry.kind}-${entrySeries || ''}`}
-                        data-testid={`diy-add-${entry.kind}${entrySeries ? `-${entrySeries}` : ''}`}
-                        draggable={!entryDisabled}
-                        disabled={entryDisabled}
-                        title={entry.kind === 'cabinet_door' ? (cabinetDoorOpenings.length ? t.doorFrameReady : t.doorNeedFrame) : undefined}
-                        onDragStart={(event) => event.dataTransfer.setData('application/x-mengkaile-part', JSON.stringify({
-                          kind: entry.kind,
-                          variantId: entrySeries,
-                        }))}
-                        onClick={() => addItem(entry.kind, entrySeries)}
-                        className="group flex items-center gap-3 rounded-2xl border border-slate-200 bg-slate-50 p-3 text-left transition hover:border-blue-400 hover:bg-blue-50 disabled:cursor-not-allowed disabled:opacity-45 disabled:hover:border-slate-200 disabled:hover:bg-slate-50"
-                      >
-                        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-white text-slate-500 shadow-sm group-hover:text-blue-600"><Icon className="h-5 w-5" /></span>
-                        <span className="min-w-0 flex-1">
-                          <span className="block text-xs font-black text-slate-700">{entry.label}</span>
-                          {entry.kind === 'cabinet_door' && (
-                            <span className={`mt-0.5 block text-[9px] font-bold ${cabinetDoorOpenings.length ? 'text-emerald-600' : 'text-slate-400'}`}>
-                              {cabinetDoorOpenings.length
-                                ? `${t.doorFrameReady} · ${cabinetDoorOpenings.length * (newDoorLeafMode === 'double' ? 2 : 1)}${t.doorLeafUnit}`
-                                : t.doorNeedFrame}
-                            </span>
+                      <div key={entry.kind} className="flex flex-col gap-1.5">
+                        <button
+                          type="button"
+                          data-testid={`diy-library-accessory-${entry.kind}`}
+                          aria-expanded={expanded}
+                          onClick={() => setExpandedAccessoryKind(expanded ? null : entry.kind)}
+                          className="group flex w-full items-center gap-3 rounded-2xl border border-slate-200 bg-slate-50 p-3 text-left transition hover:border-blue-400 hover:bg-blue-50"
+                        >
+                          {accessoryImage ? (
+                            <img
+                              src={accessoryImage}
+                              alt={entry.label}
+                              loading="lazy"
+                              data-testid={`diy-library-accessory-image-${entry.kind}`}
+                              className="h-11 w-11 shrink-0 rounded-xl border border-slate-200 bg-white object-contain p-0.5"
+                            />
+                          ) : (
+                            <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-white text-slate-500 shadow-sm group-hover:text-blue-600"><Icon className="h-5 w-5" /></span>
                           )}
-                          {entrySeries && (
-                            <span className="mt-0.5 block text-[9px] font-bold text-blue-500">
-                              {t.accessoryProfileSize} {entrySeries}{accessoryPrice ? ` · ${currency}${accessoryPrice.natural.toFixed(1)}` : ''}
+                          <span className="min-w-0 flex-1">
+                            <span className="block text-xs font-black text-slate-700">{entry.label}</span>
+                            <span className="mt-0.5 block text-[9px] font-bold text-slate-400">
+                              {seriesOptions.join(' / ')}
                             </span>
-                          )}
-                        </span>
-                      </button>
+                          </span>
+                          {expanded
+                            ? <ChevronDown className="h-4 w-4 shrink-0 text-blue-600" />
+                            : <ChevronRight className="h-4 w-4 shrink-0 text-slate-400" />}
+                        </button>
+                        {expanded && (
+                          <div className="ml-3 flex flex-col gap-1 border-l-2 border-blue-100 pl-2.5">
+                            {seriesOptions.map((series) => (
+                              <button
+                                key={`${entry.kind}-${series}`}
+                                type="button"
+                                data-testid={`diy-add-${entry.kind}-${series}`}
+                                draggable
+                                onDragStart={(event) => event.dataTransfer.setData('application/x-mengkaile-part', JSON.stringify({
+                                  kind: entry.kind,
+                                  variantId: series,
+                                }))}
+                                onClick={() => addItem(entry.kind, series)}
+                                className="group flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-2.5 py-2 text-left transition hover:border-blue-400 hover:bg-blue-50"
+                              >
+                                {accessoryImage ? (
+                                  <img
+                                    src={accessoryImage}
+                                    alt={`${entry.label} ${series}`}
+                                    loading="lazy"
+                                    className="h-8 w-8 shrink-0 rounded-lg border border-slate-200 bg-white object-contain p-0.5"
+                                  />
+                                ) : (
+                                  <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-lg bg-slate-50 text-slate-400 group-hover:text-blue-600">
+                                    <Icon className="h-3.5 w-3.5" />
+                                  </span>
+                                )}
+                                <span className="min-w-0 flex-1">
+                                  <span className="block text-[11px] font-black text-slate-700">{t.accessoryProfileSize} {series}</span>
+                                  {prices[series] && (
+                                    <span className="block text-[9px] font-bold text-blue-500">
+                                      {t.accessoryColorNatural} {currency}{prices[series]!.natural.toFixed(1)}
+                                      {' · '}
+                                      {t.accessoryColorColored} {currency}{prices[series]!.colored.toFixed(1)}
+                                    </span>
+                                  )}
+                                </span>
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                      </div>
                     );
                   })}
                 </div>
@@ -13333,6 +13446,42 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({
                   <div className="text-[10px] font-black uppercase tracking-widest text-slate-400">{t.total}</div>
                   <div className="mt-1 text-xl font-black">{currency}{total.toFixed(1)}</div>
                 </div>
+              </div>
+              <div className="mt-3 rounded-2xl border border-slate-200 bg-slate-50 p-3" data-testid="diy-shipping-estimate">
+                <label className="block">
+                  <span className="mb-1.5 block text-[9px] font-black uppercase tracking-widest text-slate-500">{t.estimateProvince}</span>
+                  <select
+                    data-testid="diy-estimate-province"
+                    value={estimateProvince}
+                    onChange={(event) => setEstimateProvince(event.target.value)}
+                    className="diy-select bg-white"
+                  >
+                    <option value="">{t.estimateNoProvince}</option>
+                    {DESIGNER_SHIPPING_PROVINCES.map((province) => (
+                      <option key={province} value={province}>{province}</option>
+                    ))}
+                  </select>
+                </label>
+                {shippingEstimate ? (
+                  <div className="mt-2.5 space-y-1.5">
+                    <div className="flex items-center justify-between text-[10px] font-bold text-slate-500">
+                      <span>{t.estimateWeight}</span>
+                      <span className="text-slate-700">
+                        {shippingEstimate.billedWeightKg} kg
+                        {shippingEstimate.hasOverlength ? ` · ${language === 'cn' ? '超长' : language === 'jp' ? '長尺' : 'overlength'}` : ''}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between text-[10px] font-bold text-slate-500">
+                      <span>{t.estimateFee} · {SHIPPING_METHOD_NAMES[shippingEstimate.cheapest][language]}</span>
+                      <span className="text-slate-700">{currency}{shippingEstimate.fee.toFixed(1)}</span>
+                    </div>
+                    <div className="flex items-center justify-between rounded-xl bg-blue-600 px-2.5 py-2 text-white" data-testid="diy-estimate-landed">
+                      <span className="text-[10px] font-black uppercase tracking-widest">{t.estimateLanded}</span>
+                      <span className="text-base font-black">{currency}{shippingEstimate.landed.toFixed(1)}</span>
+                    </div>
+                  </div>
+                ) : null}
+                <p className="mt-2 text-[9px] font-bold leading-relaxed text-slate-400">{t.estimateHint}</p>
               </div>
               <div className="mt-3 rounded-2xl border border-emerald-100 bg-emerald-50/70 px-3 py-2.5">
                 <div className="text-[9px] font-black uppercase tracking-widest text-emerald-700">

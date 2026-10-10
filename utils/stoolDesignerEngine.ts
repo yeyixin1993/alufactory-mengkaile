@@ -4373,4 +4373,4 @@ const createAccessoryObject = (
 };
 
 export { synchronizeDesignerSceneItems, completeStoolConnectionSystem, inspectGuidedConnectionSystem, createAccessoryObject, getAccessoryDimensions };
-export type { DIYSceneItem };
+export type { DIYSceneItem, DIYConnectionKind };
