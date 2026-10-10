@@ -279,8 +279,8 @@ const QuickQuote: React.FC<{ language: Language; user?: User | null }> = ({ lang
   }, []);
 
   const profileRowsCalculated = useMemo(() => {
-    return profileRows.map(row => calculateQuickProfileRow(row, profileDiscountPerMeter));
-  }, [profileRows, profileDiscountPerMeter]);
+    return profileRows.map(row => calculateQuickProfileRow(row, profileDiscountPerMeter, membershipLevel));
+  }, [profileRows, profileDiscountPerMeter, membershipLevel]);
 
   const profileSummary = useMemo(() => {
     const itemTotal = round1(profileRowsCalculated.reduce((sum, x) => sum + x.subtotal, 0));
@@ -885,7 +885,7 @@ const QuickQuote: React.FC<{ language: Language; user?: User | null }> = ({ lang
             {profileRows.map((row, index) => {
               const calc = profileRowsCalculated[index];
               const color = PROFILE_COLORS.find((c) => c.id === row.colorId) || PROFILE_COLORS[0];
-              const shouldShowDangerFee = row.length > 0 && row.length <= PROFILE_DANGER_FEE_THRESHOLD_MM;
+              const shouldShowDangerFee = !isVipPlus && row.length > 0 && row.length <= PROFILE_DANGER_FEE_THRESHOLD_MM;
               const colorOnlyColoredSection = COLOR_ONLY_COLORED_SECTION_IDS.includes(row.colorId as any);
               return (
                 <div key={row.id} className="bg-slate-50 border border-slate-200 rounded-2xl p-4 md:p-5 space-y-4">

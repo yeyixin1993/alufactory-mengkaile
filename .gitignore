@@ -10,9 +10,11 @@ lerna-debug.log*
 node_modules
 dist
 dist-ssr
-.verify-dist
-.verify-source-dist
-.verify-furniture-cart-dist
+# Every `npm run test:*` verification bundle lands in its own throwaway output
+# directory (see the `vite build --ssr` scripts). One pattern covers them all —
+# previously only a few explicit names were listed, so a new check such as
+# `.verify-fee` showed up in GitHub Desktop as hundreds of files to upload.
+.verify-*/
 *.local
 
 # Editor directories and files
@@ -55,9 +57,6 @@ alufactory-backend/*_private_key.txt
 
 # Printable catalog intermediate bundle
 .catalog-export/
-
-# Stool verification bundles
-.verify-*-dist/
 
 # Reproducible stool verification reports and generated editable models
 outputs/stool-product-20260930/

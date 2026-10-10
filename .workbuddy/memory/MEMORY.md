@@ -4,7 +4,7 @@
 
 - Node 用托管版 `/Users/eliye/.workbuddy/binaries/node/versions/22.22.2-6/bin`（加 PATH 前）；升级会删旧目录，跑前 `ls` 确认。
 - `agent-browser` 副本在 `/Users/eliye/node_modules/.bin/`，必须 `AGENT_BROWSER_EXECUTABLE_PATH=<系统 Chrome>`（否则 CDP closed；closed → `close --all` 再 open）。native click 对 React 按钮偶发不生效，改 `eval "...el.click()"`（IIFE 包 const）。
-- 回归统一 `vite build --ssr scripts/verify-*.ts` + node；多个 `--emptyOutDir` 先 **export** `CODEBUDDY_SAFE_DELETE_BULK_THRESHOLD=5000`（链式命令里前缀赋值只对第一条生效）。凳子全套 `npm run test:stool-all`。verify 脚本不能用 `__dirname`（ESM），用 `path.resolve('.')`。
+- 回归统一 `vite build --ssr scripts/verify-*.ts` + node；多个 `--emptyOutDir` 先 **export** `CODEBUDDY_SAFE_DELETE_BULK_THRESHOLD=5000`（链式命令里前缀赋值只对第一条生效）。凳子全套 `npm run test:stool-all`。verify 脚本不能用 `__dirname`（ESM），用 `path.resolve('.')`。产物 `.verify-*/` 已一条 gitignore 覆盖；`vite.config.ts` 对 SSR 构建设了 `copyPublicDir: false`（否则每次回归都把 `public/` 210M 复制进产物目录，GitHub Desktop 会当成几百张新图片）——**别删这行**。
 - `tsc --noEmit` 既有报错 9 个（2026-10-10 核对）：FRONTEND_SERVICE `@/config`、App.tsx `setTimeout`、AIChatBar `phone`×3、AIProfile3D `createChatProfilePreview`、PrintableCatalog `key`×3。
 - `npm run dev` 曾因 watcher 在 `.venv-local` 符号链接 ELOOP 崩溃；冒烟可改 `vite preview --port 4173`。3000/5001 可能被业主占用，**别杀**。
 - 后端测试：`alufactory-backend/.venv-local/bin/python -m pytest tests -q`（基线 105）。`curl` 本地必加 `--noproxy '*'`。验 dist 新旧：工作区 clean + dist mtime 晚于最后 commit + grep 特征串。
@@ -12,8 +12,8 @@
 
 ## AI 聊天（只在 codex/ai-sales-assistant worktree：`/Users/eliye/.codex/worktrees/ai-sales-assistant/alufactory-mengkaile`）
 
-- 调试用 `npm run dev:deepseek`（Flask 5001 + Vite 3000；端口被占直接退出）。后端起不来 = 缺 `DEEPSEEK_API_KEY`。本地库 `instance/deepseek-local/ai-test.db`。
-- **游客/账号额度完全独立**：游客 3 条、同 IP 每日 10 个新游客；真发消息扣 DeepSeek 余额，验证用 FAQ 命中问题（免费）。引导词须 FAQ 精确命中；`seed_faq_rules()` 只补缺不更新。停服用 `reason` 码。SQLite 加列用 `db.session.execute(text(...))+commit()`。后台问答口 `/api/ai/admin/conversations`。
+- 调试用 `npm run dev:deepseek`（Flask 5001 + Vite 3000；端口被占直接退出）。后端起不来 = 缺 `DEEPSEEK_API_KEY`。
+- **游客/账号额度完全独立**：游客 3 条、同 IP 每日 10 个新游客；真发消息扣 DeepSeek 余额，验证用 FAQ 命中问题（免费）。引导词须 FAQ 精确命中；`seed_faq_rules()` 只补缺不更新。停服用 `reason` 码。SQLite 加列用 `db.session.execute(text(...))+commit()`。
 
 ## 设计文件合同 mengkaile-diy（docs §13.6）
 

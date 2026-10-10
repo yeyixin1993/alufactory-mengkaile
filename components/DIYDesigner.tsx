@@ -10777,7 +10777,7 @@ export const calculatePrice = (item: DIYSceneItem, user?: User | null) => {
     const holes = (item.holes || []).reduce((sum, hole) => sum + (hole.type === 'through' ? 1 : 1.8), 0);
     const tapPortCount = getProfileTapPortCount(item.variantId);
     const tapping = (item.tappingLeft ? tapPortCount * 1.5 : 0) + (item.tappingRight ? tapPortCount * 1.5 : 0);
-    const danger = (item.length || 0) > 20 && (item.length || 0) <= 100 ? 5 : 0;
+    const danger = membership !== 'vip_plus' && (item.length || 0) > 20 && (item.length || 0) <= 100 ? 5 : 0;
     return Number(((material + holes + tapping + danger) * quantity).toFixed(1));
   }
   if (item.kind === 'plate' || item.kind === 'pegboard' || item.kind === 'marine_board') {

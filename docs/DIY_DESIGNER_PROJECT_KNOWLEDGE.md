@@ -683,3 +683,5 @@ Save separate conversations in the server database, with request membership and 
 ### 2026-10-09 — 客户确认的导入配件术语
 后续 JSON 转换沿用 [导入配件术语映射](IMPORTED_ACCESSORY_TERMS.md)：Three-way connector S30 / 本次 threeway cube 对应3030三通（tee_connector）；Angle bracket S30 对应3030 1号角码（connector）。这是用户确认的配件身份，不解除装配与生产审核限制。当前记录为人工转换依据，尚未接入通用导入自动映射。
 
+
+- **2026-10-10 — 短料危险费：** VIP+型材长度≤100mm免危险费；VIP、普通用户和游客保留每根5元。P2、快速报价、设计器及AI服务端报价一致，VIP+不显示加收危险费提示。

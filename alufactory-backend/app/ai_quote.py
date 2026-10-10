@@ -140,7 +140,7 @@ def quote_single(spec, membership):
             return '请明确每根型材的打孔类别与数量（0–100）。', None
         processing += n * rate_per_hole
     tapping = (sum(sum(selections[end]) for end in ('left','right')) if selections else {'none': 0, 'left': 1, 'right': 1, 'both': 2}[spec['tapping']]) * 1.5
-    unit = rounded(rate * spec['length'] / 1000 + tapping + processing + (5 if spec['length'] <= 100 else 0))
+    unit = rounded(rate * spec['length'] / 1000 + tapping + processing + (5 if membership != 'vip_plus' and spec['length'] <= 100 else 0))
     subtotal = rounded(unit * spec['quantity'])
     weight = CATALOG['weights'].get(spec['model'], 0.6) * spec['length'] / 1000 * spec['quantity']
     options = {}

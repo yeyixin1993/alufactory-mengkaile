@@ -1342,7 +1342,7 @@ export const INITIAL_PRODUCTS: Product[] = [
 
     For 1515, the default tapping is M4; for 2020 and 2040, the default tapping is M6; for 3030, 3060, and 4040, the default tapping is M8.
     
-    Lengths ≤100mm incur a ¥5 danger fee per piece.`,
+    Lengths ≤100mm incur a ¥5 danger fee per piece (waived for VIP+).`,
       cn: `支持定制定长、打孔、攻丝。\t\n
 
     N1 为一面封边, N2 为两面封边, N3 为三面封边, N4 为四面封边。\t\n
@@ -1354,7 +1354,7 @@ export const INITIAL_PRODUCTS: Product[] = [
 
     1515默认攻丝M4, 2020及2040默认攻丝M6, 3030, 3060和4040默认攻丝M8。\t\n
     
-    长度≤100mm每根加收5元危险费。`,
+    长度≤100mm每根加收5元危险费，VIP+免收。`,
       jp: `定寸カット、穴あけ、タップ加工のカスタム対応が可能です。
 
     N1は一面封止、N2は両面封止、N3は三面封止、N4は四面封止を示します。

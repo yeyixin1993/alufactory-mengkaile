@@ -103,7 +103,7 @@ const ProfileEditor: React.FC<ProfileEditorProps> = ({ onSaveConfiguration, onCa
   const selectedColorPhotoSrc = getProfileColorPhotoSrc(colorId);
   const colorOnlyColoredSection = COLOR_ONLY_COLORED_SECTION_IDS.includes(colorId as any);
   const isTooShort = length <= MIN_PROFILE_LENGTH_MM;
-  const isDangerous = length > MIN_PROFILE_LENGTH_MM && length <= DANGER_FEE_THRESHOLD_MM;
+  const isDangerous = membershipLevel !== 'vip_plus' && length > MIN_PROFILE_LENGTH_MM && length <= DANGER_FEE_THRESHOLD_MM;
   const isTooLong = length > MAX_PROFILE_LENGTH_MM;
 
   useEffect(() => {
@@ -172,7 +172,7 @@ const ProfileEditor: React.FC<ProfileEditorProps> = ({ onSaveConfiguration, onCa
       if (currentMiterCut.right.enabled) miterFee += PRICE_MITER_CUT;
     }
     // Danger fee for short profiles (20mm < length <= 100mm)
-    const dangerFee = (len > MIN_PROFILE_LENGTH_MM && len <= DANGER_FEE_THRESHOLD_MM) ? DANGER_FEE_PER_PIECE : 0;
+    const dangerFee = (membershipLevel !== 'vip_plus' && len > MIN_PROFILE_LENGTH_MM && len <= DANGER_FEE_THRESHOLD_MM) ? DANGER_FEE_PER_PIECE : 0;
     return parseFloat((materialPrice + holeFee + tappingFee + miterFee + dangerFee).toFixed(1));
   };
 
