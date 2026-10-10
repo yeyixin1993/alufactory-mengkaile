@@ -28,7 +28,11 @@
 </main>
 <script>
 const el=id=>document.getElementById(id);
-let rules=[],editingId=crypto.randomUUID(),editingVersion=0,saving=false;
+// crypto.randomUUID only exists in a secure context; this console is commonly opened over
+// plain http://<ip>/admin/, where it is undefined and used to kill the whole script silently.
+const newId=()=>{if(crypto.randomUUID)return newId();const b=new Uint8Array(16);if(crypto.getRandomValues)crypto.getRandomValues(b);else for(let i=0;i<16;i++)b[i]=Math.random()*256|0;b[6]=b[6]&15|64;b[8]=b[8]&63|128;const h=[...b].map(x=>x.toString(16).padStart(2,'0')).join('');return h.slice(0,8)+'-'+h.slice(8,12)+'-'+h.slice(12,16)+'-'+h.slice(16,20)+'-'+h.slice(20);};
+window.addEventListener('error',e=>{const n=el('notice');if(n&&!n.textContent)n.textContent='页面脚本出错：'+e.message;});
+let rules=[],editingId=newId(),editingVersion=0,saving=false;
 const fields=['category','question','aliases','answer','notes','source'];
 async function api(path,data){const token=localStorage.getItem('authToken');if(!token){location.href='/admin/login.html';throw Error('请先登录管理员账号。');}const res=await fetch('/api/ai/admin/faq'+path,{method:data===undefined?'GET':'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+token},body:data===undefined?undefined:JSON.stringify(data)});const result=await res.json();if(!res.ok)throw Error(result.error||'请求失败');return result;}
 function notice(message,ok=false){el('notice').textContent=message;el('notice').className=ok?'ok':'';}
@@ -36,7 +40,7 @@ const run=fn=>async event=>{if(event)event.preventDefault();try{await fn();}catc
 function render(){const query=el('search').value.trim().toLowerCase(),filter=el('filter').value;el('cards').replaceChildren();const visible=rules.filter(r=>(filter==='all'||r.enabled===(filter==='enabled'))&&[r.question,r.answer,r.category,r.notes,...r.aliases].join(' ').toLowerCase().includes(query));el('counts').textContent=`共 ${rules.length} 条 · 已启用 ${rules.filter(r=>r.enabled).length} 条 · 未启用 ${rules.filter(r=>!r.enabled).length} 条`;
 for(const r of visible){const card=document.createElement('article');card.className='card'+(r.id===editingId?' editing':'');const title=document.createElement('h3');title.textContent=r.question;const tag=document.createElement('span');tag.className='badge'+(r.enabled?'':' draft');tag.textContent=r.category+' · '+(r.enabled?'已启用':'未启用');const text=document.createElement('p');text.textContent=r.answer;const btn=document.createElement('button');btn.textContent='编辑';btn.onclick=()=>edit(r);card.append(title,tag,text,btn);el('cards').append(card);}if(!visible.length){const p=document.createElement('p');p.textContent='没有匹配条目。';el('cards').append(p);}}
 function edit(rule){editingId=rule.id;editingVersion=rule.version;for(const field of fields)el(field).value=field==='aliases'?rule.aliases.join('\n'):rule[field];el('enabled').checked=rule.enabled;el('editorTitle').textContent='编辑：'+rule.question;el('versionInfo').textContent=`版本 ${rule.version} · 最后更新 ${new Date(rule.updated_at).toLocaleString()}`;render();el('question').focus();}
-function reset(){editingId=crypto.randomUUID();editingVersion=0;el('editor').reset();el('editorTitle').textContent='新增问答';el('versionInfo').textContent='新条目默认不启用，确认答案后再勾选。';render();}
+function reset(){editingId=newId();editingVersion=0;el('editor').reset();el('editorTitle').textContent='新增问答';el('versionInfo').textContent='新条目默认不启用，确认答案后再勾选。';render();}
 async function load(){const data=await api('');rules=data.rules;render();}
 el('search').oninput=render;el('filter').onchange=render;el('newRule').onclick=reset;el('cancelEdit').onclick=reset;el('reloadRules').onclick=run(load);
 el('editor').onsubmit=run(async()=>{if(saving)return;saving=true;el('saveRule').disabled=true;try{const payload={version:editingVersion,enabled:el('enabled').checked};for(const field of fields)payload[field]=field==='aliases'?el(field).value.split('\n').map(s=>s.trim()).filter(Boolean):el(field).value;const result=await api('/'+encodeURIComponent(editingId),payload);await load();edit(result.rule);notice(result.rule.enabled?'已保存并启用，下一条匹配消息立即生效。':'已保存为未启用条目，不会回答客户。',true);}finally{saving=false;el('saveRule').disabled=false;}});
