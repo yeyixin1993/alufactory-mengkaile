@@ -13,7 +13,7 @@
 ## AI 聊天（只在 codex/ai-sales-assistant worktree：`/Users/eliye/.codex/worktrees/ai-sales-assistant/alufactory-mengkaile`）
 
 - **后台 admin 页只能走 `http://47.98.229.152/admin/`（纯 HTTP，非安全上下文）**：nginx 主域 `/admin/` 被 SPA 吃掉、`/api/` 才代理 Flask；Flask 把 `alufactory-backend/admin/` 当静态目录（不参与 Vite 构建，改完直接同步文件）。所以 admin 页里**绝不能用 `crypto.randomUUID`**（http 下 undefined，顶层抛错会让整页脚本静默死掉）——已改成 `newId()` 兜底 `getRandomValues`。
-- **密钥位置**：生产 = 服务器 `alufactory-backend/.env.deepseek.production`（`wsgi.py` 先加载它，内容 `AI_PROVIDER=deepseek` + `DEEPSEEK_API_KEY`，`chmod 600`，重启 gunicorn）；本地 = `.env.deepseek.local`。**别写进 `alufactory-backend/.env`——那文件已被 git 跟踪**。光配 key 不够：总开关是 DB `AISettings(id=1).enabled`（默认 false），在 `/admin/ai.html`「全局设置」勾选保存。
+- **线上后端（2026-10-11 查实）**：systemd 服务名 `alufactory.service`，目录 `/home/alufactory/alufactory-mengkaile/alufactory-backend`（venv 叫 `venv`，不是 `.venv-local`），重启 `sudo systemctl restart alufactory`；无 supervisor。**实际入口是 `run_prod.py`（不是 `wsgi.py`）**：`venv/bin/python run_prod.py`，里面只有 bare `load_dotenv()` → **只读工作目录 `.env`**，所以密钥写 `.env.deepseek.production`（wsgi.py 的方案）在当前配置下**根本不生效**。两种真修法：① systemd drop-in `EnvironmentFile=` 指向 `.env.deepseek.production`（推荐，密钥不进 git）；② 直接追加到 `.env`（立即生效，但该文件被 git 跟踪）。本地 = `.env.deepseek.local`。光配 key 不够：总开关是 DB `AISettings(id=1).enabled`（默认 false），在 `/admin/ai.html`「全局设置」勾选保存。
 - 调试用 `npm run dev:deepseek`（Flask 5001 + Vite 3000；端口被占直接退出）。后端起不来 = 缺 `DEEPSEEK_API_KEY`。
 - **游客/账号额度完全独立**：游客 3 条、同 IP 每日 10 个新游客；真发消息扣 DeepSeek 余额，验证用 FAQ 命中问题（免费）。引导词须 FAQ 精确命中；`seed_faq_rules()` 只补缺不更新。停服用 `reason` 码。SQLite 加列用 `db.session.execute(text(...))+commit()`。
 
