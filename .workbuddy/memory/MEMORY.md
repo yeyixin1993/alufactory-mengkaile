@@ -26,6 +26,12 @@
   `@/config`、`App.tsx` 的 `setTimeout`、`components/PrintableCatalog.tsx` 的 3 个 `key`。
 - **`git push` 会跑 `.githooks/pre-push`**（`core.hooksPath=.githooks`）：先 `npm run package:dist`
   （完整 build + 打 ZIP）才推，所以很慢且在沙箱里易撞批量删除拦截 —— 用 `dangerouslyDisableSandbox` + 后台跑。
+- **上线 = 手工上传 ZIP 内 `dist/` 的内容**；`git push` **不会**部署前端（`dist` 被 gitignore，
+  `git ls-files dist` = 0），`mengkaile.top` 也不是 push 自动部署（见 `docs/CODEX_CHAT_HANDOFF_2026-08-10.md` §1）。
+  `~/Downloads/mengkaile-dist-latest.zip` 由 `scripts/package-dist.mjs` 产出，**zip 顶层就是 `dist/` 目录**，别整包直传。
+  **判断「这份 dist/zip 是不是最新」三步**：① `git status --porcelain` 为空；② `dist/index.html` 的 mtime
+  **晚于** `git log -1 --format=%cI`；③ `grep -o 'mengkaile-ai-visitor' dist/assets/index-*.js`（或任一刚改特征串）
+  能命中 ⇒ 产物确实含最新代码。前端 dist **不含** `alufactory-backend/admin/*.html` 与后端改动，需另部署后端。
 - 端到端冒烟用 `agent-browser`；配方见本文末「浏览器冒烟配方」。
 - **后端跑测试/脚本用 `alufactory-backend/.venv-local/bin/python`**（Flask 2.3.2 / SQLAlchemy 2.0，
   在 worktree 的 `alufactory-backend/.venv-local/`；托管 Python 和 brew Python 都**没有** flask）。
