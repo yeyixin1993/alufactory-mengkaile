@@ -111,6 +111,7 @@ import {
   DIY_TEMPLATE_STORAGE_PREFIX,
   getShelfSupportUnitPrice,
   WARDROBE_12MM_BOARD_SUPPORT_PRICE,
+  WARDROBE_18MM_BOARD_SUPPORT_PRICE,
   type FinishedFurnitureQuote,
   type ParametricShelfSupportType,
   type ParametricTemplatePayload,
@@ -179,6 +180,7 @@ interface DIYSceneItem extends StoolSceneItem {
   colorId: string;
   quantity: number;
   variantId?: string;
+  cabinetFrameLevel?: 'bottom' | 'top' | 'storage';
   length?: number;
   width?: number;
   height?: number;
@@ -400,7 +402,7 @@ const TEXT: Record<Language, Record<string, string>> = {
     draftReadFailed: '无法读取本地设计缓存，请导入已保存的 JSON 备份。',
     draftWriteFailed: '本地缓存保存失败，尚未离开设计器。请先下载设计 JSON 备份，并检查浏览器存储空间。',
     doorAdded: '柜门已按每列框架自动生成',
-    shelfSupport: '层板托', board12ShelfSupport: '12mm板专用层板托',
+    shelfSupport: '层板托', board12ShelfSupport: '12mm板专用层板托', board18ShelfSupport: '18mm板专用层板托',
     shelfSupportFinish: '层板托截面/颜色',
     shelfSupportOxidized: '氧化本色 · 8元/米',
     shelfSupportElectrophoretic: '彩色截面本色 · 10元/米',
@@ -719,7 +721,7 @@ const TEXT: Record<Language, Record<string, string>> = {
     draftReadFailed: 'Could not read the local draft. Please import your saved design JSON backup.',
     draftWriteFailed: 'Could not save the local draft. You are still in the designer. Download a design JSON backup and check browser storage.',
     doorAdded: 'Cabinet doors auto-sized to each frame bay',
-    shelfSupport: 'Shelf support', board12ShelfSupport: '12mm-board shelf support',
+    shelfSupport: 'Shelf support', board12ShelfSupport: '12mm-board shelf support', board18ShelfSupport: '18mm-board shelf support',
     shelfSupportFinish: 'Shelf-support finish',
     shelfSupportOxidized: 'Natural anodized · ¥8/m',
     shelfSupportElectrophoretic: 'Colored, natural section · ¥10/m',
@@ -1045,7 +1047,7 @@ const TEXT: Record<Language, Record<string, string>> = {
     draftReadFailed: 'ローカル設計を読み込めません。保存済みの設計JSONを読み込んでください。',
     draftWriteFailed: '設計を保存できないため移動を中止しました。設計JSONを保存し、ブラウザの空き容量を確認してください。',
     doorAdded: '各列の枠寸法に合わせて扉を自動生成しました',
-    shelfSupport: '棚受け', board12ShelfSupport: '12mm板専用棚受け',
+    shelfSupport: '棚受け', board12ShelfSupport: '12mm板専用棚受け', board18ShelfSupport: '18mm板専用棚受け',
     shelfSupportFinish: '棚受けの断面・色',
     shelfSupportOxidized: 'ナチュラルアルマイト · 8元/m',
     shelfSupportElectrophoretic: 'カラー・ナチュラル断面 · 10元/m',
@@ -1485,9 +1487,11 @@ const duplicateSceneItem = (item: DIYSceneItem): DIYSceneItem => {
  * profiles rather than the profiles that were already on the canvas.
  */
 
-const isBoard12ShelfSupport = (item: Pick<DIYSceneItem, 'kind' | 'shelfSupportType'>) => (
-  item.kind === 'shelf_support' && item.shelfSupportType === 'board_12mm'
+const isBoardShelfSupport = (item: Pick<DIYSceneItem, 'kind' | 'shelfSupportType'>) => (
+  item.kind === 'shelf_support' && ['board_12mm', 'board_18mm'].includes(item.shelfSupportType || '')
 );
+const boardShelfSupportPrice = (item: Pick<DIYSceneItem, 'shelfSupportType'>) => item.shelfSupportType === 'board_18mm' ? WARDROBE_18MM_BOARD_SUPPORT_PRICE : WARDROBE_12MM_BOARD_SUPPORT_PRICE;
+
 
 const isFixedRackHardware = (item: Pick<DIYSceneItem, 'kind' | 'shelfSupportType'>) => (
   item.kind === 'shelf_support'
@@ -1578,8 +1582,8 @@ export const normalizeDesignItems = (source: DIYSceneItem[]): DIYSceneItem[] => 
     ...(item.kind === 'shelf_support' ? {
       shelfSupportType: item.shelfSupportType || 'linear',
       finish: shelfSupportFinish,
-      accessoryPrice: isBoard12ShelfSupport(item)
-        ? WARDROBE_12MM_BOARD_SUPPORT_PRICE
+      accessoryPrice: isBoardShelfSupport(item)
+        ? boardShelfSupportPrice(item)
         : isFixedRackHardware(item)
           ? Number(item.accessoryPrice || 0)
           : getShelfSupportUnitPrice(item.thickness || 0, shelfSupportFinish),
@@ -2520,7 +2524,7 @@ const itemsFromProductionWorkbook = (production: ProductionWorkbookData): DIYSce
       ? part.finish
       : base.finish,
     shelfSupportType: (
-      ['linear', 'board_12mm', 'linear_shaft', 'shaft_support_sk8', 'shaft_support_shf8', 'drawer_slide_pair']
+      ['linear', 'board_12mm', 'board_18mm', 'linear_shaft', 'shaft_support_sk8', 'shaft_support_shf8', 'drawer_slide_pair']
         .includes(part.shelfSupportType || '')
         ? part.shelfSupportType
         : base.shelfSupportType
@@ -3148,24 +3152,18 @@ const detectCabinetDoorOpenings = (
     const horizontal = front.filter((entry) => entry.horizontal).sort((a, b) => a.box.center.y - b.box.center.y);
     const vertical = front.filter((entry) => entry.vertical).sort((a, b) => a.box.center.x - b.box.center.x);
     if (horizontal.length < 2 || vertical.length < 2) return [];
-    const bottom = horizontal[0];
-    const top = horizontal[horizontal.length - 1];
     const frameTolerance = 0.6;
-    const bottomLeft = bottom.box.center.x - bottom.xExtent;
-    const bottomRight = bottom.box.center.x + bottom.xExtent;
-    const topLeft = top.box.center.x - top.xExtent;
-    const topRight = top.box.center.x + top.xExtent;
-    const alignedVertical = vertical.filter((entry) => (
-      entry.box.center.x >= Math.max(bottomLeft, topLeft) - frameTolerance
-      && entry.box.center.x <= Math.min(bottomRight, topRight) + frameTolerance
-      && Math.abs((entry.box.center.y - entry.yExtent) - (bottom.box.center.y - bottom.yExtent)) <= frameTolerance
-      && Math.abs((entry.box.center.y + entry.yExtent) - (top.box.center.y + top.yExtent)) <= frameTolerance
-    ));
-    if (alignedVertical.length < 2) return [];
-
-    const columnCount = alignedVertical.length - 1;
-    return alignedVertical.slice(0, -1).flatMap((left, columnIndex) => {
-      const right = alignedVertical[columnIndex + 1];
+    const columnCount = vertical.length - 1;
+    return vertical.slice(0, -1).flatMap((left, columnIndex) => {
+      const right = vertical[columnIndex + 1];
+      const spanning = horizontal.filter(entry =>
+        entry.box.center.x - entry.xExtent <= left.box.center.x + left.xExtent + 0.01
+        && entry.box.center.x + entry.xExtent >= right.box.center.x - right.xExtent - 0.01);
+      const bottom = spanning.find(entry => [left, right].every(post =>
+        Math.abs(post.box.center.y - post.yExtent - (entry.box.center.y - entry.yExtent)) <= frameTolerance));
+      const top = [...spanning].reverse().find(entry => [left, right].every(post =>
+        Math.abs(post.box.center.y + post.yExtent - (entry.box.center.y + entry.yExtent)) <= frameTolerance));
+      if (!bottom || !top || bottom === top) return [];
       const outer = {
         left: (left.box.center.x - left.xExtent) * SCENE_SCALE,
         right: (right.box.center.x + right.xExtent) * SCENE_SCALE,
@@ -4640,7 +4638,7 @@ const validateDisplayRackConnectionSystem = (source: DIYSceneItem[]): DisplayRac
     const ids = [...(connector.attachedProfileIds || [])].sort();
     if (ids.length !== 2) issues.push(`角码${connector.id}没有绑定两根型材`);
     let key = ids.join(':JOINT:');
-    if (!requiredByJoint.has(key) && ids.every((id) => id.startsWith('wardrobe-3030-'))) {
+    if (!requiredByJoint.has(key) && ids.every((id) => id.startsWith('display-rack-3-'))) {
       const widthConnection = required.find((connection) => (
         ids.includes(connection.branchProfile.id)
         && Math.abs(profileBoxFromItem(connection.branchProfile).axes[0].x) > 0.99
@@ -4783,6 +4781,9 @@ const withDisplayRackConnectionSystem = (source: DIYSceneItem[]) => {
     });
     let directJointKey: string | null = null;
     for (const connection of ranked) {
+      // Outer cabinet frames are bracket-only. Drilling here used to create
+      // incorrect 15mm end holes/taps on the top and bottom horizontal rails.
+      if (connection.branchProfile.cabinetFrameLevel === 'bottom' || connection.branchProfile.cabinetFrameLevel === 'top') continue;
       const plan = drillTapJointPlan(connection.joint);
       if (!plan) continue;
       const drillKey = `${plan.drilledProfile.id}:${Math.round(plan.hole.positionMm * 10)}`;
@@ -4819,8 +4820,12 @@ const withDisplayRackConnectionSystem = (source: DIYSceneItem[]) => {
   bracketConnections.sort((first, second) => first.joint.key.localeCompare(second.joint.key)).forEach((connection) => {
     const { joint } = connection;
     if (usedPairs.has(joint.key)) return;
-    const alternatives = connection.branchProfile.id.startsWith('wardrobe-3030-')
-      && Math.abs(profileBoxFromItem(connection.branchProfile).axes[0].x) > 0.99
+    const rackOuterWidth = connection.branchProfile.id.startsWith('display-rack-3-')
+      && (connection.branchProfile.cabinetFrameLevel === 'bottom' || connection.branchProfile.cabinetFrameLevel === 'top')
+      && Math.abs(profileBoxFromItem(connection.branchProfile).axes[0].x) > 0.99;
+    // Rack: horizontal corner brackets around its bottom and top rectangles.
+    // Wardrobe: front/rear vertical-plane brackets leave inset panels clear.
+    const options = rackOuterWidth
       ? physicalConnections.filter((sibling) => (
         sibling.carrierProfile.id === connection.carrierProfile.id
         && Math.abs(sibling.carrierStationMm - connection.carrierStationMm) < 0.01
@@ -4828,8 +4833,8 @@ const withDisplayRackConnectionSystem = (source: DIYSceneItem[]) => {
       )).flatMap((sibling) => safeBracketPlacementsByJoint.get(
         [connection.branchProfile.id, sibling.branchProfile.id].sort().join(':JOINT:'),
       ) || [])
-      : [];
-    const placement = [...(safeBracketPlacementsByJoint.get(joint.key) || []), ...alternatives]
+      : (safeBracketPlacementsByJoint.get(joint.key) || []);
+    const placement = options
       .filter(({ candidate }) => !usedPlacementKeys.has(candidate.key))
       .filter(({ boxes }) => !boxes.some((box) => (
         selectedConnectorBoxes.some((selected) => orientedBoxesOverlap(box, selected, 0.001))
@@ -4844,7 +4849,7 @@ const withDisplayRackConnectionSystem = (source: DIYSceneItem[]) => {
       autoGenerated: true,
       attachedProfileIds: placement.candidate.targetProfileIds,
       attachmentKey: placement.candidate.key,
-      remark: '3030柜体自动连接：贴合两根3030型材的1号角码；与同节点直锁路径互斥',
+      remark: rackOuterWidth ? '3.0展示架顶底框平面1号角码，连接相邻横梁与深度梁；不打孔' : '3030柜体1号角码，安装在立面；顶底框不打孔，与内嵌板避让',
     });
     selectedConnectorBoxes.push(...placement.boxes);
     usedPairs.add(joint.key);
@@ -10628,8 +10633,8 @@ const getItemLabel = (item: DIYSceneItem, language: Language) => {
       : t.doorSingleLeaf;
     return `${materialLabel} · ${item.width}×${item.height} · ${leafLabel} · ${overlayLabel} · ${item.openingSide === 'right' ? t.doorRightOpen : t.doorLeftOpen}`;
   }
-  if (item.kind === 'shelf_support') return isBoard12ShelfSupport(item)
-    ? `${t.board12ShelfSupport} · ¥${WARDROBE_12MM_BOARD_SUPPORT_PRICE.toFixed(1)}`
+  if (item.kind === 'shelf_support') return isBoardShelfSupport(item)
+    ? `${item.shelfSupportType === 'board_18mm' ? t.board18ShelfSupport : t.board12ShelfSupport} · ¥${boardShelfSupportPrice(item).toFixed(1)}`
     : item.shelfSupportType === 'drawer_slide_pair'
       ? `三节滚珠抽屉滑轨 · 左右1套 · ${item.length || item.thickness || 0}mm`
       : item.shelfSupportType === 'linear_shaft'
@@ -10825,8 +10830,8 @@ export const calculatePrice = (item: DIYSceneItem, user?: User | null) => {
   }
   if (item.kind === 'cabinet_door') return getCabinetDoorPricing(item, user).unitPrice;
   if (item.kind === 'shelf_support') {
-    const unitPrice = isBoard12ShelfSupport(item)
-      ? WARDROBE_12MM_BOARD_SUPPORT_PRICE
+    const unitPrice = isBoardShelfSupport(item)
+      ? boardShelfSupportPrice(item)
       : isFixedRackHardware(item)
         ? Number(item.accessoryPrice || 0)
         : getShelfSupportUnitPrice(item.thickness || 0, item.finish || 'oxidized');
@@ -12496,7 +12501,7 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({
       if (item.kind === 'imported_component') {
         return buildImportedComponentCartItem(item, totalPrice, accessoryProduct, language);
       }
-      const board12ShelfSupport = isBoard12ShelfSupport(item);
+      const board12ShelfSupport = isBoardShelfSupport(item);
       const fixedRackHardware = isFixedRackHardware(item);
       const fixedRackAccessory = item.shelfSupportType === 'linear_shaft'
         ? { id: 'diy-linear-shaft-d8', code: 0, label: 'Ø8直线光轴', imageKey: '' }
@@ -12524,7 +12529,7 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({
         caster: { id: 'diy-threaded-caster', code: 0, label: t.caster, imageKey: '' },
         end_cap: { id: 'diy-profile-end-cap', code: 0, label: t.endCap, imageKey: '' },
         shelf_support: board12ShelfSupport
-          ? { id: 'diy-12mm-board-shelf-support', code: 0, label: t.board12ShelfSupport, imageKey: '' }
+          ? { id: item.shelfSupportType === 'board_18mm' ? 'diy-18mm-board-shelf-support' : 'diy-12mm-board-shelf-support', code: 0, label: item.shelfSupportType === 'board_18mm' ? t.board18ShelfSupport : t.board12ShelfSupport, imageKey: '' }
           : fixedRackHardware
             ? fixedRackAccessory
             : { id: 'diy-shelf-support', code: 0, label: t.shelfSupport, imageKey: '' },
@@ -13691,11 +13696,11 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({
 
               {selected.kind === 'shelf_support' && (
                 <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-                  {isBoard12ShelfSupport(selected) ? (
+                  {isBoardShelfSupport(selected) ? (
                     <div>
-                      <div className="text-[10px] font-black uppercase tracking-widest text-slate-400">{t.board12ShelfSupport}</div>
-                      <div className="mt-1 text-lg font-black text-slate-900">¥{WARDROBE_12MM_BOARD_SUPPORT_PRICE.toFixed(1)} / pcs</div>
-                      <div className="mt-1 text-[10px] font-bold leading-relaxed text-blue-700">12mm UV · 8 pcs / board</div>
+                      <div className="text-[10px] font-black uppercase tracking-widest text-slate-400">{selected.shelfSupportType === 'board_18mm' ? t.board18ShelfSupport : t.board12ShelfSupport}</div>
+                      <div className="mt-1 text-lg font-black text-slate-900">¥{boardShelfSupportPrice(selected).toFixed(1)} / pcs</div>
+                      <div className="mt-1 text-[10px] font-bold leading-relaxed text-blue-700">{selected.shelfSupportType === 'board_18mm' ? '18mm' : '12mm UV'} · 8 pcs / board</div>
                     </div>
                   ) : isFixedRackHardware(selected) ? (
                     <div>

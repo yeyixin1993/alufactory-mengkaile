@@ -107,6 +107,7 @@ export type PublicParametricShelfSupportType =
   | 'leveling_foot_d100_m16_l100'
   | 'linear'
   | 'board_12mm'
+  | 'board_18mm'
   | 'linear_shaft'
   | 'shaft_support_sk8'
   | 'shaft_support_shf8'

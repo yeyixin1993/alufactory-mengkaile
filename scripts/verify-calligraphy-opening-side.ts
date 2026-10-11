@@ -1,3 +1,4 @@
+import { completeParametricFurnitureTemplate, calculatePrice } from '../components/DIYDesigner';
 import {
   buildCalligraphyCabinetTemplate,
   CALLIGRAPHY_BASKET_DEPTH_MM,
@@ -120,3 +121,19 @@ assert(
 );
 
 console.log('Calligraphy-cabinet opening-side regression checks passed.');
+
+for (const opening of ['short', 'long'] as const) {
+  const payload = buildCalligraphyCabinetTemplate(2, 3, opening);
+  const ties = payload.items.filter(item => item.kind === 'profile' && item.remark?.includes('背面横梁'));
+  assert(ties.length === 6, 'One rear tie per bay per intermediate level');
+  assert(ties.every(item => item.length === (opening === 'short' ? 300 : 420)
+    && item.position[2] === -Number(payload.summary.depthMm) / 2 + 10
+    && [150, 280, 410].includes(item.position[1])
+    && !item.holes?.length && !item.tappingLeft && !item.tappingRight), 'Rear tie geometry/machining');
+  const completed = completeParametricFurnitureTemplate(payload);
+  const brackets = completed.items.filter(item => item.kind === 'connector');
+  assert(brackets.length === 12, 'Two No.1 brackets per rear tie');
+  assert(brackets.every(item => item.lockedPosition && item.attachedProfileIds?.length === 2), 'Rear brackets must resolve real joints');
+  assert(brackets.every(item => calculatePrice(item) > 0), 'Rear brackets included in pricing');
+}
+console.log('Calligraphy rear ties and resolved No.1 brackets passed.');

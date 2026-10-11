@@ -1,0 +1,423 @@
+{
+  "parameters": {
+    "lengthMm": 1580,
+    "widthMm": 450,
+    "heightMm": 880,
+    "columns": 1,
+    "storageLayers": 1
+  },
+  "items": [
+    {
+      "kind": "profile",
+      "variantId": "2020-N1",
+      "position": [
+        0,
+        932,
+        215
+      ],
+      "rotation": [
+        90,
+        0,
+        0
+      ],
+      "length": 1580,
+      "holes": [
+        {
+          "side": "D",
+          "type": "countersunk",
+          "positionMm": 10
+        },
+        {
+          "side": "D",
+          "type": "countersunk",
+          "positionMm": 1570
+        }
+      ]
+    },
+    {
+      "kind": "profile",
+      "variantId": "2020-N1",
+      "position": [
+        0,
+        932,
+        -215
+      ],
+      "rotation": [
+        -90,
+        0,
+        0
+      ],
+      "length": 1580,
+      "holes": [
+        {
+          "side": "B",
+          "type": "countersunk",
+          "positionMm": 10
+        },
+        {
+          "side": "B",
+          "type": "countersunk",
+          "positionMm": 1570
+        }
+      ]
+    },
+    {
+      "kind": "profile",
+      "variantId": "2020",
+      "position": [
+        -780,
+        932,
+        0
+      ],
+      "rotation": [
+        0,
+        90,
+        0
+      ],
+      "length": 410,
+      "holes": [
+        {
+          "side": "A",
+          "type": "countersunk",
+          "positionMm": 17
+        },
+        {
+          "side": "A",
+          "type": "countersunk",
+          "positionMm": 393
+        }
+      ]
+    },
+    {
+      "kind": "profile",
+      "variantId": "2020",
+      "position": [
+        780,
+        932,
+        0
+      ],
+      "rotation": [
+        0,
+        90,
+        0
+      ],
+      "length": 410,
+      "holes": [
+        {
+          "side": "A",
+          "type": "countersunk",
+          "positionMm": 17
+        },
+        {
+          "side": "A",
+          "type": "countersunk",
+          "positionMm": 393
+        }
+      ]
+    },
+    {
+      "kind": "profile",
+      "variantId": "2047",
+      "position": [
+        -780,
+        492,
+        201.5
+      ],
+      "rotation": [
+        0,
+        90,
+        90
+      ],
+      "length": 860,
+      "holes": []
+    },
+    {
+      "kind": "profile",
+      "variantId": "2047",
+      "position": [
+        -780,
+        492,
+        -201.5
+      ],
+      "rotation": [
+        0,
+        -90,
+        90
+      ],
+      "length": 860,
+      "holes": []
+    },
+    {
+      "kind": "profile",
+      "variantId": "2047",
+      "position": [
+        780,
+        492,
+        201.5
+      ],
+      "rotation": [
+        0,
+        90,
+        90
+      ],
+      "length": 860,
+      "holes": []
+    },
+    {
+      "kind": "profile",
+      "variantId": "2047",
+      "position": [
+        780,
+        492,
+        -201.5
+      ],
+      "rotation": [
+        0,
+        -90,
+        90
+      ],
+      "length": 860,
+      "holes": []
+    },
+    {
+      "kind": "marine_board",
+      "position": [
+        0,
+        936,
+        0
+      ],
+      "rotation": [
+        90,
+        0,
+        0
+      ],
+      "width": 1538,
+      "height": 408,
+      "thickness": 12
+    },
+    {
+      "kind": "profile",
+      "variantId": "2020",
+      "position": [
+        -780,
+        72,
+        0
+      ],
+      "rotation": [
+        0,
+        90,
+        0
+      ],
+      "length": 356,
+      "holes": []
+    },
+    {
+      "kind": "profile",
+      "variantId": "2020",
+      "position": [
+        780,
+        72,
+        0
+      ],
+      "rotation": [
+        0,
+        90,
+        0
+      ],
+      "length": 356,
+      "holes": []
+    },
+    {
+      "kind": "marine_board",
+      "position": [
+        0,
+        76,
+        0
+      ],
+      "rotation": [
+        90,
+        0,
+        0
+      ],
+      "width": 1538,
+      "height": 408,
+      "thickness": 12
+    },
+    {
+      "kind": "profile",
+      "variantId": "2020",
+      "position": [
+        -780,
+        502,
+        0
+      ],
+      "rotation": [
+        0,
+        90,
+        0
+      ],
+      "length": 356,
+      "holes": []
+    },
+    {
+      "kind": "profile",
+      "variantId": "2020",
+      "position": [
+        780,
+        502,
+        0
+      ],
+      "rotation": [
+        0,
+        90,
+        0
+      ],
+      "length": 356,
+      "holes": []
+    },
+    {
+      "kind": "marine_board",
+      "position": [
+        0,
+        506,
+        0
+      ],
+      "rotation": [
+        90,
+        0,
+        0
+      ],
+      "width": 1538,
+      "height": 408,
+      "thickness": 12
+    },
+    {
+      "kind": "caster",
+      "position": [
+        -780,
+        0,
+        201.5
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "width": 50,
+      "height": 75,
+      "thickness": 45
+    },
+    {
+      "kind": "caster",
+      "position": [
+        -780,
+        0,
+        -201.5
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "width": 50,
+      "height": 75,
+      "thickness": 45
+    },
+    {
+      "kind": "caster",
+      "position": [
+        780,
+        0,
+        201.5
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "width": 50,
+      "height": 75,
+      "thickness": 45
+    },
+    {
+      "kind": "caster",
+      "position": [
+        780,
+        0,
+        -201.5
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "width": 50,
+      "height": 75,
+      "thickness": 45
+    },
+    {
+      "kind": "profile",
+      "variantId": "2020-N1",
+      "position": [
+        0,
+        72,
+        215
+      ],
+      "rotation": [
+        90,
+        0,
+        0
+      ],
+      "length": 1540,
+      "holes": []
+    },
+    {
+      "kind": "profile",
+      "variantId": "2020-N1",
+      "position": [
+        0,
+        72,
+        -215
+      ],
+      "rotation": [
+        -90,
+        0,
+        0
+      ],
+      "length": 1540,
+      "holes": []
+    },
+    {
+      "kind": "profile",
+      "variantId": "2020-N1",
+      "position": [
+        0,
+        502,
+        -215
+      ],
+      "rotation": [
+        -90,
+        0,
+        0
+      ],
+      "length": 1540,
+      "holes": []
+    },
+    {
+      "kind": "profile",
+      "variantId": "2020-N1",
+      "position": [
+        0,
+        502,
+        215
+      ],
+      "rotation": [
+        90,
+        0,
+        0
+      ],
+      "length": 1540,
+      "holes": []
+    }
+  ]
+}

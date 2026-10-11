@@ -19,6 +19,7 @@ import {
   MAX_FURNITURE_PROFILE_MM,
   ParametricTemplatePayload,
   WardrobeFrameOption,
+  WardrobeBaseOption,
 } from '../utils/parametricFurniture';
 import DisplayRackConfigurator from './DisplayRackConfigurator';
 
@@ -42,7 +43,7 @@ const COPY = {
     wardrobeLayers: '收纳层数', wardrobeColumnWidth: '平均列宽', wardrobeGenerated: '实际型材数量',
     profileSummary: '型材配置', machiningSummary: '加工配置',
     calligraphyProfiles: '全部2020；最底和最顶各有一层与横梁同高的框架深度梁且不装层板托；中间每层每道分隔线共用一根420mm承托梁并安装层板托；顶部为12mm海洋板，超过2440mm时在型材分隔线上自动分成两片。',
-    calligraphyMachining: '5层柜共有底框+5层篮筐承托+顶框共7层深度梁；孔位从底端130mm起按130mm递增，最后一孔距立柱顶端65mm；全部型材两端攻丝并默认配螺丝。',
+    calligraphyMachining: '5层柜共有底框+5层篮筐承托+顶框共7层深度梁；孔位从底端130mm起按130mm递增，最后一孔距立柱顶端65mm；原框架型材两端攻丝并默认配螺丝；每层每列背面另加同高2020横梁，两端使用1号角码，不打孔攻丝。',
     wardrobeProfiles: 'N列沿正面总长等分并生成N+1道前后2040立柱边界。上下框使用贯通前后横梁和每道边界的深度梁；每个中间收纳层的前后横杆按列分段，避免穿过中间立柱，相邻列共享边界深度横杆，因此每列都形成完整四边框。每个四边框内嵌一块12mm UV层板，板长和板宽分别比框内净空小2mm。',
     wardrobeMachining: '收纳层在上下框之间均匀分布；前后2020横杆均接在2040宽面靠柜体内部的槽位。每根分段横杆和共享深度横杆都在各自立柱接点使用1号角码，角码两条90°贴边分别紧贴横杆和立柱。层框不做打孔攻丝连接，2040立柱也不增加对应层孔。每块12mm UV层板四周各留1mm，并自动配8个“12mm板专用层板托”，单价0.7元。设计器会识别各列正面框架，可继续添加外框四周和相邻门间均留3mm的柜门。',
     generate: '生成并进入3D设计器', editable: '3D设计器将在新标签页打开；生成后可继续移动、改尺寸、改孔位并人工审核。',
@@ -62,7 +63,7 @@ const COPY = {
     wardrobeLayers: 'Storage levels', wardrobeColumnWidth: 'Average column width', wardrobeGenerated: 'Total profiles',
     profileSummary: 'Profile configuration', machiningSummary: 'Machining',
     calligraphyProfiles: 'All 2020. Frame-only depth rails sit level with the bottom and top cross rails and receive no shelf supports. Every intermediate basket level has one shared 420 mm support rail per divider. The 12 mm marine-board top is split on a supported profile divider when the cabinet exceeds 2440 mm.',
-    calligraphyMachining: 'A five-layer cabinet has seven depth levels. Upright holes start 130 mm from the bottom, repeat every 130 mm, and the final hole is 65 mm from the upright top. All profiles are tapped at both ends with screws prefilled.',
+    calligraphyMachining: 'A five-layer cabinet has seven depth levels. Upright holes start 130 mm from the bottom, repeat every 130 mm, and the final hole is 65 mm from the upright top. Original frame profiles are tapped at both ends with screws prefilled. Each intermediate level has one rear 2020 rail per bay, joined to posts by No.1 brackets at both ends without drilling or tapping.',
     wardrobeProfiles: 'N columns are divided evenly along the front length and use N+1 front/rear 2040 post boundaries. Top and bottom frames keep continuous front/rear rails plus one depth rail at every boundary. At each internal level, front/rear rails are split by column so they cannot pass through divider posts, while neighboring columns share their boundary depth rail; every column is therefore a closed four-sided frame. Each frame receives one inset 12mm UV board, 2mm smaller than the clear opening in both dimensions.',
     wardrobeMachining: 'Storage levels are evenly spaced between the top and bottom frames. Front and rear 2020 rails use the inward-facing groove of each 2040 wide face. Every segmented rail and shared depth rail uses a No.1 bracket at each post contact, with both perpendicular seating edges flush to the rail and post. Shelf-frame drill-and-tap machining and matching post holes are omitted. Every 12mm UV board has a 1mm gap on all four sides and eight dedicated 12mm-board shelf supports at ¥0.7 each. The designer can detect each front bay and add doors with 3mm around the outer frame and 3mm between neighboring leaves.',
     generate: 'Generate in 3D designer', editable: 'The 3D designer opens in a new tab; the generated assembly remains editable and must be reviewed before ordering.',
@@ -82,7 +83,7 @@ const COPY = {
     wardrobeLayers: '収納段数', wardrobeColumnWidth: '平均列幅', wardrobeGenerated: '形材の合計本数',
     profileSummary: 'プロファイル構成', machiningSummary: '加工構成',
     calligraphyProfiles: '全て2020。最下部と最上部は横材と同じ高さの枠用奥行材で棚受けなし。中間の各かご段は仕切り線ごとに420mm棚受け材を1本共有。12mmマリンボード天板は2440mmを超える場合、形材仕切り上で2枚に分割します。',
-    calligraphyMachining: '5段棚は下枠＋かご5段＋上枠の計7段。縦柱の穴は下端130mmから130mm間隔で、最後の穴から上端までは65mm。全形材を両端タップし、ねじを初期配置します。',
+    calligraphyMachining: '5段棚は下枠＋かご5段＋上枠の計7段。縦柱の穴は下端130mmから130mm間隔で、最後の穴から上端までは65mm。既存枠材は両端タップし、ねじを初期配置。各中間段・各列の背面に同じ高さの2020横材を追加し、両端を1号ブラケットで柱に接続します。追加横材は穴あけ・タップ不要です。',
     wardrobeProfiles: '正面全長をN列に均等分割し、前後にN+1本ずつの2040境界柱を配置します。上下枠は連続した前後横材と各境界の奥行材で構成。中間段の前後横材は列ごとに分割して中間柱との干渉を防ぎ、隣接列は境界奥行材を共有するため、各列が完全な四辺枠になります。各四辺枠には、内寸より長さ・幅を各2mm小さくした12mm UV棚板を1枚内蔵します。',
     wardrobeMachining: '収納段は上下枠の間に等間隔で配置し、前後の2020横材は2040幅広面の庫内側溝へ接続します。分割横材と共有奥行材の各柱接点に1号ブラケットを置き、直角2辺を横材と柱へ密着させます。棚枠の穴あけ・タップ接続と2040柱の対応穴は追加しません。12mm UV棚板は四周各1mmの隙間を取り、1枚ごとに「12mm板専用棚受け」を8個、単価0.7元で自動配置します。各列の正面枠には外枠四周と隣接扉間を3mm空けた扉を追加できます。',
     generate: '3Dデザイナーで生成', editable: '3Dデザイナーは新しいタブで開きます。生成後も移動・寸法・穴位置を編集し、注文前に確認できます。',
@@ -138,6 +139,8 @@ const StandardFurnitureConfigurator: React.FC<{
   const [wardrobeLayers, setWardrobeLayers] = useState(5);
   const [wardrobeColumns, setWardrobeColumns] = useState(1);
   const [wardrobeFrame, setWardrobeFrame] = useState<WardrobeFrameOption>('2040_2020');
+  const [wardrobeBases, setWardrobeBases] = useState<Record<string, WardrobeBaseOption>>({ '2047_2020': 'caster', '3030': 'none' });
+  const wardrobeBase = wardrobeFrame === '2040_2020' ? 'none' : wardrobeBases[wardrobeFrame];
   const [openingSide, setOpeningSide] = useState<CalligraphyOpeningSide>('short');
   const wardrobeLayerLimit = getWardrobeStorageLayerLimit(wardrobeHeight);
   const effectiveWardrobeLayers = Math.min(wardrobeLayers, wardrobeLayerLimit);
@@ -172,12 +175,12 @@ const StandardFurnitureConfigurator: React.FC<{
     ? { profiles: copy.wardrobeProfiles, machining: copy.wardrobeMachining }
     : wardrobeFrame === '2047_2020'
       ? {
-        profiles: { cn: '2047立柱＋2020横梁，正面横梁使用2020-N1，封闭面朝前。保留等分列数和12mm UV内嵌层板，每块板配8个专用层板托。每根立柱默认配一只标准黑色M8丝杆轮（不带刹车），柜体尺寸不含轮子高度。按实际材料和加工计价。', en: '2047 posts with 2020 rails and closed-face 2020-N1 front rails. Equal bays retain inset 12mm UV boards with eight supports each. Every post includes a standard black M8 caster without a brake. Dimensions exclude caster height. Priced by actual materials and machining.', jp: '2047柱＋2020横材。前面横材は2020-N1で溝なし面を前向きに配置。均等列と12mm UV棚板、1枚あたり8個の棚受けを維持します。各柱に標準黒色M8キャスター（ブレーキなし）を付属。寸法はキャスター高さを含まず、実際の材料・加工で計算します。' }[language],
+        profiles: { cn: '2047立柱＋2020横梁，前后横梁使用2020-N1，封闭面朝外。保留等分列数和12mm UV内嵌层板，每块板配8个专用层板托。底部可选四角M8轮子、每根立柱M8调整脚或不选；柜体尺寸不含底部配件高度。按实际材料和加工计价。', en: '2047 posts with 2020 rails and outward-facing sealed 2020-N1 front and rear rails. Equal bays retain inset 12mm UV boards with eight supports each. Choose four corner M8 casters, M8 feet at every post, or none. Dimensions exclude base accessories. Priced by actual materials and machining.', jp: '2047柱＋2020横材。前後横材は2020-N1で溝なし面を外向きに配置。均等列と12mm UV棚板、1枚あたり8個の棚受けを維持します。四隅のM8キャスター、各柱のM8調整脚、またはなしを選択。寸法は底部パーツを含まず、実際の材料・加工で計算します。' }[language],
         machining: { cn: '顶部横梁压立柱，按2047两侧端孔27mm中心距连接；顶部深度梁孔距端面17mm。底框和中间层框以角码侧接立柱，底端中央孔攻M8安装轮子。', en: 'Top rails cap the posts, matching the 27mm outer-bore spacing; top depth-rail holes are 17mm from each end. Bottom and storage frames use side-mounted brackets, leaving the central M8 bottom port open for the caster.', jp: '上枠は柱端に重ね、端孔の27mmピッチに合わせます。上部奥行材の穴位置は端面から17mm。下枠・中間枠はブラケットで側面接続し、柱底の中央M8孔にキャスターを取り付けます。' }[language],
       }
       : {
-        profiles: { cn: '全3030框架，复用3.0展示架的柜体结构，保留衣柜等分列数与收纳层数。18mm海洋板由前后横梁承托，不配置抽屉。按实际材料和加工计价。', en: 'All-3030 cabinet frame shared with the 3.0 rack, with wardrobe bays and storage levels. Front and rear rails support 18mm marine boards. No drawers. Priced by actual materials and machining.', jp: '3.0展示棚と共通の3030キャビネット構造を使用し、衣柜の均等列・収納段数を維持。18mmマリンボードを前後横材で支持します。引き出しは含まず、実際の材料・加工で計算します。' }[language],
-        machining: { cn: '外框端部连接孔距端面15mm，中间层按层高打孔攻丝。沿用展示架的连接规则：同一节点优先打孔攻丝，螺丝路径冲突处使用角码，避免两颗螺丝相撞。', en: 'Outer-frame connections are drilled 15mm from the ends; intermediate holes follow shelf heights. Drill-and-tap joints use corner brackets where screw paths would collide, following the rack connection rules.', jp: '外枠端部は端面から15mm、中間段は棚高さに合わせて穴あけ・タップ加工。同一節点でねじが干渉する接続には展示棚と同じブラケットを使用します。' }[language],
+        profiles: { cn: '全3030框架，复用3.0展示架的柜体结构，保留衣柜等分列数与收纳层数。18mm海洋板全部内嵌，每板8只18mm专用层板托（暂定¥1.7/只），不配置抽屉。按实际材料和加工计价。', en: 'All-3030 cabinet frame shared with the 3.0 rack, with wardrobe bays and storage levels. All 18mm marine boards are inset, with eight dedicated supports each (provisional ¥1.7 each). No drawers. Priced by actual materials and machining.', jp: '3.0展示棚と共通の3030キャビネット構造を使用し、衣柜の均等列・収納段数を維持。18mmマリンボードはすべて内嵌し、専用棚受けを8個ずつ配置（暫定¥1.7/個）。引き出しは含まず、実際の材料・加工で計算します。' }[language],
+        machining: { cn: '顶底框不打孔，用立面1号角码连接，避开内嵌板；中间层按层高打孔攻丝。沿用展示架的连接规则：同一节点优先打孔攻丝，螺丝路径冲突处使用角码，避免两颗螺丝相撞。', en: 'Top and bottom frames use vertical-plane No.1 brackets without drilling, leaving inset boards clear; intermediate holes follow shelf heights. Drill-and-tap joints use corner brackets where screw paths would collide, following the rack connection rules.', jp: '上下枠は穴加工せず、縦面の1号ブラケットで接続。中間段は棚高さに合わせて穴あけ・タップ加工。同一節点でねじが干渉する接続には展示棚と同じブラケットを使用します。' }[language],
       };
 
   const generate = () => {
@@ -194,6 +197,7 @@ const StandardFurnitureConfigurator: React.FC<{
         effectiveWardrobeLayers,
         effectiveWardrobeColumns,
         wardrobeFrame,
+        wardrobeBase,
       );
     openTemplateInDesigner(payload);
   };
@@ -259,8 +263,16 @@ const StandardFurnitureConfigurator: React.FC<{
             <span className="mb-2 block text-xs font-black text-slate-500">{language === 'cn' ? '框架方案' : language === 'jp' ? 'フレーム構成' : 'Frame option'}</span>
             <select data-testid="wardrobe-frame-option" value={wardrobeFrame} onChange={(event) => setWardrobeFrame(event.target.value as WardrobeFrameOption)} className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 font-black text-slate-800">
               <option value="2040_2020">2040 + 2020</option>
-              <option value="2047_2020">2047 + 2020 · {language === 'cn' ? '正面封边 / M8轮子' : language === 'jp' ? '前面溝なし / M8キャスター' : 'Closed front / M8 casters'}</option>
+              <option value="2047_2020">2047 + 2020 · {language === 'cn' ? '前后封边' : language === 'jp' ? '前後溝なし' : 'Sealed front & rear'}</option>
               <option value="3030">3030 · {language === 'cn' ? '18mm层板' : language === 'jp' ? '18mm棚板' : '18mm shelves'}</option>
+            </select>
+          </label>
+          <label className="block">
+            <span className="mb-2 block text-xs font-black text-slate-500">{language === 'cn' ? '底部配件' : language === 'jp' ? '底部パーツ' : 'Base accessories'}</span>
+            <select data-testid="wardrobe-base-option" value={wardrobeBase} disabled={wardrobeFrame === '2040_2020'} onChange={event => setWardrobeBases(previous => ({ ...previous, [wardrobeFrame]: event.target.value as WardrobeBaseOption }))} className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 font-black text-slate-800 disabled:cursor-not-allowed disabled:text-slate-400 disabled:opacity-60">
+              <option value="caster">{language === 'cn' ? '轮子 · 四角各1只 M8' : language === 'jp' ? 'M8キャスター · 四隅' : 'M8 casters · four corners'}</option>
+              <option value="foot">{language === 'cn' ? '调整脚 · 每根立柱底部 M8' : language === 'jp' ? 'M8調整脚 · 各柱底部' : 'M8 feet · every post'}</option>
+              <option value="none">{language === 'cn' ? '不选' : language === 'jp' ? 'なし' : 'None'}</option>
             </select>
           </label>
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-5">

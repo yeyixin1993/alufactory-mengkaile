@@ -903,8 +903,9 @@ const getFinishedFurnitureParameterRows = (item: CartItem, language: Language) =
   }
   if (source === 'wardrobe' && summary.frameOption) {
     rows.push({ label: language === 'cn' ? '框架方案' : language === 'jp' ? 'フレーム構成' : 'Frame', value: String(summary.frameOption).replace('_', ' + ') });
+    if (Number(summary.footCount) > 0) rows.push({ label: language === 'cn' ? '调整脚' : language === 'jp' ? '調整脚' : 'Feet', value: `M8 × ${summary.footCount}` });
     if (Number(summary.casterCount) > 0) rows.push({ label: language === 'cn' ? '轮子' : language === 'jp' ? 'キャスター' : 'Casters', value: `M8 × ${summary.casterCount}` });
-    if (summary.heightBasis === 'cabinet_without_casters' && Number(summary.casterCount) > 0) rows.push({ label: text.size, value: language === 'cn' ? '柜体尺寸不含轮子高度' : language === 'jp' ? 'キャスター高さを除く' : 'Dimensions exclude caster height' });
+    if ((summary.heightBasis === 'cabinet_without_casters' || summary.heightBasis === 'cabinet_without_base_accessories') && (Number(summary.casterCount) > 0 || Number(summary.footCount) > 0)) rows.push({ label: text.size, value: language === 'cn' ? '柜体尺寸不含底部配件高度' : language === 'jp' ? '底部パーツの高さを除く' : 'Dimensions exclude base accessories' });
   }
   if (Number.isFinite(Number(summary.columns))) rows.push({ label: text.columns, value: String(Number(summary.columns)) });
   if (Number.isFinite(Number(summary.layers))) rows.push({ label: text.layers, value: String(Number(summary.layers)) });

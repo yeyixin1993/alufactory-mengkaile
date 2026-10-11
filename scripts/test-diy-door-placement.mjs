@@ -130,3 +130,11 @@ const [decimalDoor] = api.normalizeDesignItems([{ ...api.createItem('cabinet_doo
 assert.equal(decimalDoor.width, 296);
 assert.equal(decimalDoor.height, 2194);
 console.log(`PASS: ${doorCases} paired-door geometry cases, all mixed overlays, integer dimensions, JSON/XLSX metadata, No.1/No.2 marker removal and three-plane clusters.`);
+
+for (const frame of ['2047_2020', '3030']) {
+  for (const columns of [1, 2, 3]) {
+    const items = api.normalizeDesignItems(api.buildWardrobeTemplate(1200, 600, 2200, 2, columns, frame).items);
+    assert.equal(api.detectCabinetDoorOpenings(items).length, columns, `${frame}: detect each segmented bay`);
+  }
+}
+console.log('PASS: 2047/3030 segmented wardrobe door openings.');
