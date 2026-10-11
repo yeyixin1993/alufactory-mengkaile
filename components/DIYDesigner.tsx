@@ -14606,3 +14606,10 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({
 };
 
 export default DIYDesigner;
+
+// Read-only chat preview uses the exact designer profile/machining renderer.
+export const createChatProfilePreview = (config: import('../types').ProfileConfig, transparentProfile = false) => createProfileObject({
+  id: 'ai-profile-preview', kind: 'profile', name: config.variantId || '2020', position: [0, 0, 0], rotation: [0, 0, 0],
+  colorId: config.colorId || 'natural', quantity: 1, variantId: config.variantId, length: config.length,
+  holes: config.holes, tappingLeft: config.tapping.left.some(Boolean), tappingRight: config.tapping.right.some(Boolean), finish: config.finish,
+}, false, transparentProfile, true, 1, false, new Set());

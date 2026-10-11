@@ -53,7 +53,7 @@ export default function AIProfile3D({config}:{config:ProfileConfig}) {
    resize();const observer=new ResizeObserver(resize);observer.observe(element);
    let frame=0;const draw=()=>{controls.update();renderer.render(scene,camera);frame=requestAnimationFrame(draw);};draw();
    cleanup=()=>{cancelAnimationFrame(frame);observer.disconnect();controls.dispose();orbit.current=null;applyTransparency.current=null;profile.traverse((o:any)=>{o.geometry?.dispose();if(o.material){(Array.isArray(o.material)?o.material:[o.material]).forEach((m:any)=>m.dispose());}});renderer.dispose();renderer.domElement.remove();};
-  }).catch(()=>setError(tr("3D 预览暂不可用，请先核对下方 ABCD 图和孔位明细。")));
+  }).catch((reason)=>{console.error('[AIProfile3D] 3D preview failed to initialise',reason);setError(tr("3D 预览暂不可用，请先核对下方 ABCD 图和孔位明细。"));});
   return()=>{disposed=true;cleanup();};
  },[config]);
  return <div className="ai-3d-preview">
