@@ -8,7 +8,7 @@
 - `tsc --noEmit` 既有报错 9 个：`@/config`、App `setTimeout`、AIChatBar `phone`×3、AIProfile3D `createChatProfilePreview`、PrintableCatalog `key`×3。
 - `npm run dev` 曾因 watcher 在 `.venv-local` 符号链接 ELOOP 崩溃；冒烟改 `vite preview --port 4173`（或 `python3 -m http.server 4180 --directory dist`）。3000/5001 可能被业主占用，**别杀**。hash 路由 `#/diy-designer`，首屏外按钮先 `scrollIntoView`。
 - 后端测试：`alufactory-backend/.venv-local/bin/python -m pytest tests -q`（基线 105）。`curl` 本地必加 `--noproxy '*'`。
-- 部署：**无 git 钩子**，`npm run package:dist`（build + 打 ZIP）后**手工上传 ZIP 内 dist/**，push 不部署。验 dist 新旧：工作区 clean + dist mtime 晚于最后 commit + grep 特征串（源码改了没 build，线上仍是旧串）。
+- 部署：**手工上传 ZIP 内 dist/**。`core.hooksPath=.githooks` 有一个 **`pre-push`** 会跑 `npm run package:dist`（build + 打 ZIP），所以 **push 会构建但不会部署**；`dist` 本身 gitignore。验 dist 新旧：工作区 clean + dist mtime 晚于最后 commit + grep 特征串（源码改了没 build，线上仍是旧串）。
 
 ## AI 聊天（只在 codex/ai-sales-assistant worktree：`/Users/eliye/.codex/worktrees/ai-sales-assistant/alufactory-mengkaile`）
 
