@@ -47,7 +47,8 @@
     "test:designer-release-gate": "vite build --target esnext --ssr scripts/verify-designer-release-gate.ts --outDir .verify-release-gate-dist --emptyOutDir && node .verify-release-gate-dist/verify-designer-release-gate.js",
     "test:designer-shipping-estimate": "vite build --ssr scripts/verify-designer-shipping-estimate.ts --outDir .verify-designer-shipping-estimate-dist --emptyOutDir && node .verify-designer-shipping-estimate-dist/verify-designer-shipping-estimate.js",
     "test:designer-library-images": "vite build --ssr scripts/verify-designer-library-images.ts --outDir .verify-designer-library-images-dist --emptyOutDir && node .verify-designer-library-images-dist/verify-designer-library-images.js",
-    "test:source-part-cart-merge": "vite build --target esnext --ssr scripts/verify-source-part-cart-merge.ts --outDir .verify-source-part-cart-merge-dist --emptyOutDir && node .verify-source-part-cart-merge-dist/verify-source-part-cart-merge.js"
+    "test:source-part-cart-merge": "vite build --target esnext --ssr scripts/verify-source-part-cart-merge.ts --outDir .verify-source-part-cart-merge-dist --emptyOutDir && node .verify-source-part-cart-merge-dist/verify-source-part-cart-merge.js",
+    "test:wardrobe-options": "vite build --ssr scripts/verify-wardrobe-options.ts --outDir .verify-wardrobe-dist --emptyOutDir && node .verify-wardrobe-dist/verify-wardrobe-options.js"
   },
   "dependencies": {
     "@fontsource-variable/noto-sans-jp": "5.3.0",

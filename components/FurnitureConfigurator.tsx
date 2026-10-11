@@ -18,6 +18,7 @@ import {
   getWardrobeStorageLayerLimit,
   MAX_FURNITURE_PROFILE_MM,
   ParametricTemplatePayload,
+  WardrobeFrameOption,
 } from '../utils/parametricFurniture';
 import DisplayRackConfigurator from './DisplayRackConfigurator';
 
@@ -136,14 +137,16 @@ const StandardFurnitureConfigurator: React.FC<{
   const [wardrobeHeight, setWardrobeHeight] = useState(2200);
   const [wardrobeLayers, setWardrobeLayers] = useState(5);
   const [wardrobeColumns, setWardrobeColumns] = useState(1);
+  const [wardrobeFrame, setWardrobeFrame] = useState<WardrobeFrameOption>('2040_2020');
   const [openingSide, setOpeningSide] = useState<CalligraphyOpeningSide>('short');
   const wardrobeLayerLimit = getWardrobeStorageLayerLimit(wardrobeHeight);
   const effectiveWardrobeLayers = Math.min(wardrobeLayers, wardrobeLayerLimit);
-  const wardrobeColumnLimit = getWardrobeColumnLimit(wardrobeLength);
+  const wardrobeColumnLimit = getWardrobeColumnLimit(wardrobeLength, wardrobeFrame);
   const effectiveWardrobeColumns = Math.min(wardrobeColumns, wardrobeColumnLimit);
   const wardrobeProfileCount = getWardrobeProfileCount(
     effectiveWardrobeColumns,
     effectiveWardrobeLayers,
+    wardrobeFrame,
   );
   const wardrobeColumnWidthMm = Number((wardrobeLength / effectiveWardrobeColumns).toFixed(1));
 
@@ -165,6 +168,18 @@ const StandardFurnitureConfigurator: React.FC<{
     `${calligraphyDepthMm}$1mm`,
   );
 
+  const wardrobeDetails = wardrobeFrame === '2040_2020'
+    ? { profiles: copy.wardrobeProfiles, machining: copy.wardrobeMachining }
+    : wardrobeFrame === '2047_2020'
+      ? {
+        profiles: { cn: '2047立柱＋2020横梁，正面横梁使用2020-N1，封闭面朝前。保留等分列数和12mm UV内嵌层板，每块板配8个专用层板托。每根立柱默认配一只标准黑色M8丝杆轮（不带刹车），柜体尺寸不含轮子高度。按实际材料和加工计价。', en: '2047 posts with 2020 rails and closed-face 2020-N1 front rails. Equal bays retain inset 12mm UV boards with eight supports each. Every post includes a standard black M8 caster without a brake. Dimensions exclude caster height. Priced by actual materials and machining.', jp: '2047柱＋2020横材。前面横材は2020-N1で溝なし面を前向きに配置。均等列と12mm UV棚板、1枚あたり8個の棚受けを維持します。各柱に標準黒色M8キャスター（ブレーキなし）を付属。寸法はキャスター高さを含まず、実際の材料・加工で計算します。' }[language],
+        machining: { cn: '顶部横梁压立柱，按2047两侧端孔27mm中心距连接；顶部深度梁孔距端面17mm。底框和中间层框以角码侧接立柱，底端中央孔攻M8安装轮子。', en: 'Top rails cap the posts, matching the 27mm outer-bore spacing; top depth-rail holes are 17mm from each end. Bottom and storage frames use side-mounted brackets, leaving the central M8 bottom port open for the caster.', jp: '上枠は柱端に重ね、端孔の27mmピッチに合わせます。上部奥行材の穴位置は端面から17mm。下枠・中間枠はブラケットで側面接続し、柱底の中央M8孔にキャスターを取り付けます。' }[language],
+      }
+      : {
+        profiles: { cn: '全3030框架，复用3.0展示架的柜体结构，保留衣柜等分列数与收纳层数。18mm海洋板由前后横梁承托，不配置抽屉。按实际材料和加工计价。', en: 'All-3030 cabinet frame shared with the 3.0 rack, with wardrobe bays and storage levels. Front and rear rails support 18mm marine boards. No drawers. Priced by actual materials and machining.', jp: '3.0展示棚と共通の3030キャビネット構造を使用し、衣柜の均等列・収納段数を維持。18mmマリンボードを前後横材で支持します。引き出しは含まず、実際の材料・加工で計算します。' }[language],
+        machining: { cn: '外框端部连接孔距端面15mm，中间层按层高打孔攻丝。沿用展示架的连接规则：同一节点优先打孔攻丝，螺丝路径冲突处使用角码，避免两颗螺丝相撞。', en: 'Outer-frame connections are drilled 15mm from the ends; intermediate holes follow shelf heights. Drill-and-tap joints use corner brackets where screw paths would collide, following the rack connection rules.', jp: '外枠端部は端面から15mm、中間段は棚高さに合わせて穴あけ・タップ加工。同一節点でねじが干渉する接続には展示棚と同じブラケットを使用します。' }[language],
+      };
+
   const generate = () => {
     const payload = isCalligraphy
       ? buildCalligraphyCabinetTemplate(
@@ -178,6 +193,7 @@ const StandardFurnitureConfigurator: React.FC<{
         wardrobeHeight,
         effectiveWardrobeLayers,
         effectiveWardrobeColumns,
+        wardrobeFrame,
       );
     openTemplateInDesigner(payload);
   };
@@ -190,7 +206,7 @@ const StandardFurnitureConfigurator: React.FC<{
         </span>
         <div>
           <h3 className="text-2xl font-black text-slate-900">{isCalligraphy ? copy.calligraphyTitle : copy.wardrobeTitle}</h3>
-          <p className="mt-2 text-sm font-medium leading-relaxed text-slate-500">{isCalligraphy ? copy.calligraphyHint : copy.wardrobeHint}</p>
+          <p className="mt-2 text-sm font-medium leading-relaxed text-slate-500">{isCalligraphy ? copy.calligraphyHint : (wardrobeFrame === '3030' ? ({ cn: '选择柜体尺寸、等分列数和中间收纳层数，生成可编辑的3030衣柜。层板为18mm海洋板。', en: 'Choose cabinet dimensions, equal bays and intermediate storage levels to generate an editable 3030 wardrobe with 18mm marine boards.', jp: '寸法・均等列・中間収納段数を選んで、18mmマリンボード付きの編集可能な3030衣柜を生成します。' }[language]) : copy.wardrobeHint)}</p>
         </div>
       </div>
 
@@ -239,6 +255,14 @@ const StandardFurnitureConfigurator: React.FC<{
         </>
       ) : (
         <div className="space-y-3">
+          <label className="block">
+            <span className="mb-2 block text-xs font-black text-slate-500">{language === 'cn' ? '框架方案' : language === 'jp' ? 'フレーム構成' : 'Frame option'}</span>
+            <select data-testid="wardrobe-frame-option" value={wardrobeFrame} onChange={(event) => setWardrobeFrame(event.target.value as WardrobeFrameOption)} className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 font-black text-slate-800">
+              <option value="2040_2020">2040 + 2020</option>
+              <option value="2047_2020">2047 + 2020 · {language === 'cn' ? '正面封边 / M8轮子' : language === 'jp' ? '前面溝なし / M8キャスター' : 'Closed front / M8 casters'}</option>
+              <option value="3030">3030 · {language === 'cn' ? '18mm层板' : language === 'jp' ? '18mm棚板' : '18mm shelves'}</option>
+            </select>
+          </label>
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-5">
           <NumericInput label={copy.length} value={wardrobeLength} min={400} max={MAX_FURNITURE_PROFILE_MM} onChange={setWardrobeLength} />
           <NumericInput label={copy.width} value={wardrobeWidth} min={300} max={MAX_FURNITURE_PROFILE_MM} onChange={setWardrobeWidth} />
@@ -256,8 +280,8 @@ const StandardFurnitureConfigurator: React.FC<{
       )}
 
       <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-        <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4"><div className="flex items-center gap-2 text-xs font-black text-slate-800"><Ruler className="h-4 w-4 text-blue-600" />{copy.profileSummary}</div><p className="mt-2 text-xs font-medium leading-relaxed text-slate-500">{isCalligraphy ? calligraphyProfilesCopy : copy.wardrobeProfiles}</p></div>
-        <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4"><div className="flex items-center gap-2 text-xs font-black text-slate-800"><Sparkles className="h-4 w-4 text-amber-500" />{copy.machiningSummary}</div><p className="mt-2 text-xs font-medium leading-relaxed text-slate-500">{isCalligraphy ? copy.calligraphyMachining : copy.wardrobeMachining}</p></div>
+        <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4"><div className="flex items-center gap-2 text-xs font-black text-slate-800"><Ruler className="h-4 w-4 text-blue-600" />{copy.profileSummary}</div><p className="mt-2 text-xs font-medium leading-relaxed text-slate-500">{isCalligraphy ? calligraphyProfilesCopy : wardrobeDetails.profiles}</p></div>
+        <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4"><div className="flex items-center gap-2 text-xs font-black text-slate-800"><Sparkles className="h-4 w-4 text-amber-500" />{copy.machiningSummary}</div><p className="mt-2 text-xs font-medium leading-relaxed text-slate-500">{isCalligraphy ? copy.calligraphyMachining : wardrobeDetails.machining}</p></div>
       </div>
 
       {isCalligraphy && <p className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs font-bold leading-relaxed text-amber-800">{copy.supportPricing}</p>}

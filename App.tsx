@@ -901,6 +901,11 @@ const getFinishedFurnitureParameterRows = (item: CartItem, language: Language) =
       value: `${isLongOpening ? text.openingLong : text.openingShort} · ${openingWidth}mm`,
     });
   }
+  if (source === 'wardrobe' && summary.frameOption) {
+    rows.push({ label: language === 'cn' ? '框架方案' : language === 'jp' ? 'フレーム構成' : 'Frame', value: String(summary.frameOption).replace('_', ' + ') });
+    if (Number(summary.casterCount) > 0) rows.push({ label: language === 'cn' ? '轮子' : language === 'jp' ? 'キャスター' : 'Casters', value: `M8 × ${summary.casterCount}` });
+    if (summary.heightBasis === 'cabinet_without_casters' && Number(summary.casterCount) > 0) rows.push({ label: text.size, value: language === 'cn' ? '柜体尺寸不含轮子高度' : language === 'jp' ? 'キャスター高さを除く' : 'Dimensions exclude caster height' });
+  }
   if (Number.isFinite(Number(summary.columns))) rows.push({ label: text.columns, value: String(Number(summary.columns)) });
   if (Number.isFinite(Number(summary.layers))) rows.push({ label: text.layers, value: String(Number(summary.layers)) });
   if (Number.isFinite(Number(summary.storageLayers))) rows.push({ label: text.layers, value: String(Number(summary.storageLayers)) });

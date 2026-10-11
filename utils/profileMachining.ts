@@ -125,3 +125,16 @@ export const describeHolePassage = (hole: DrillHole, variantId: string, language
   if (language === 'jp') return `${hole.side}面${entryGroove} → ${exitSide}面${exitGroove}`;
   return `${hole.side}${entryGroove} → ${exitSide}${exitGroove}`;
 };
+
+
+/** 2047 catalog section: two Ø5.2 outer bores at ±13.5mm and
+ * one Ø6.8 centre bore for M8. Wide-face slots align with the outer bores.
+ * Other sections retain uniformly spaced module centres.
+ */
+export const profileSectionCenters = (span: number, count: number, variantId?: string, scale = 1): number[] => {
+  if (variantId === '2047' && Math.abs(span * scale - 47) < 0.001) {
+    if (count === 2) return [13.5 / scale, -13.5 / scale];
+    if (count === 3) return [13.5 / scale, 0, -13.5 / scale];
+  }
+  return Array.from({ length: Math.max(1, count) }, (_, index) => span / 2 - (index + 0.5) * span / Math.max(1, count));
+};

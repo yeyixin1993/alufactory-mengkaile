@@ -1,3 +1,4 @@
+import { build3030CabinetFrame } from './parametricCabinetFrame';
 import type { DrillHole, ProfileSide } from '../types';
 import type { ParametricSceneItem, ParametricTemplatePayload } from './parametricFurniture';
 import { DISPLAY_RACK_COMPONENT_CATALOG } from '../data/displayRackComponentCatalog';
@@ -399,65 +400,28 @@ export const buildDisplayRack3Template = (
   const marineBoardColorId = parameters.marineBoardColorId || 'wood_natural';
   const shaftHeights = layout.upperTierHeightsMm.map((tier) => round(tier + FIXED.shaftLevelOffsetMm));
 
-  [15, width - 15].forEach((widthStation, index) => {
-    items.push(createRackProfile(
-      id,
-      width,
-      depth,
-      [15, widthStation, 0],
-      [15, widthStation, upperLevels === 0 ? divider - 18 : height],
-      `3.0展架后立柱${index + 1}；每个上层仅保留一个Ø8光轴贯通孔`,
-      // The rack shaft runs along the scene X/overall-width axis. A vertical
-      // profile is rotated +90 degrees around Z, so its local A/C faces are
-      // the two faces pierced by that shaft. B/D are the front/rear faces and
-      // were the reason the old template painted the holes in the wrong place.
-      // One `through` record represents the entry and exit of one physical
-      // bore; do not create a second record for the opposite face.
-      createShaftPassageHoles(id, shaftHeights, 'A'),
-    ));
-  });
-  [15, width - 15].forEach((widthStation, index) => {
-    items.push(createRackProfile(
-      id,
-      width,
-      depth,
-      [depth - 15, widthStation, 0],
-      [depth - 15, widthStation, divider - 18],
-      `3.0展架前立柱${index + 1}`,
-    ));
-  });
-
-  const lowerDepthStations = [15, ...layout.drawerRailHeightsMm, topRail];
-  lowerDepthStations.forEach((heightStation, stationIndex) => {
-    [15, width - 15].forEach((widthStation, sideIndex) => {
-      items.push(createRackProfile(
-        id,
-        width,
-        depth,
-        [30, widthStation, heightStation],
-        [depth - 30, widthStation, heightStation],
-        `3.0展架下部第${stationIndex + 1}道深向梁-${sideIndex + 1}`,
-      ));
-    });
-  });
-
-  const lowerWidthRails: Array<[number, number, string]> = [
-    [15, 15, '下部后底横梁'],
-    [depth - 15, 15, '下部前底横梁'],
-    [15, topRail, '下部后顶横梁'],
-    [depth - 15, topRail, '下部前顶横梁'],
-    [15, divider * (345 / 824), '下部后侧加强横梁'],
-  ];
-  lowerWidthRails.forEach(([depthStation, heightStation, name]) => {
-    items.push(createRackProfile(
-      id,
-      width,
-      depth,
-      [depthStation, 30, heightStation],
-      [depthStation, width - 30, heightStation],
-      `3.0展架${name}`,
-    ));
-  });
+  items.push(...build3030CabinetFrame({
+    boundaryXs: [-width / 2 + 15, width / 2 - 15],
+    frontZ: depth / 2 - 15,
+    backZ: -depth / 2 + 15,
+    frontPostHeight: divider - 18,
+    backPostHeight: upperLevels === 0 ? divider - 18 : height,
+    depthLevels: [15, ...layout.drawerRailHeightsMm, topRail],
+    widthLevels: [
+      { z: -depth / 2 + 15, y: 15, label: '下部后底横梁' },
+      { z: depth / 2 - 15, y: 15, label: '下部前底横梁' },
+      { z: -depth / 2 + 15, y: topRail, label: '下部后顶横梁' },
+      { z: depth / 2 - 15, y: topRail, label: '下部前顶横梁' },
+      { z: -depth / 2 + 15, y: divider * (345 / 824), label: '下部后侧加强横梁' },
+    ],
+    createProfile: (start, end, label) => createRackProfile(
+      id, width, depth,
+      [start[2] + depth / 2, start[0] + width / 2, start[1]],
+      [end[2] + depth / 2, end[0] + width / 2, end[1]],
+      `3.0展架${label}`,
+      label.startsWith('后立柱') ? createShaftPassageHoles(id, shaftHeights, 'A') : [],
+    ),
+  }));
 
   layout.upperTierHeightsMm.forEach((heightStation, index) => {
     const level = index + 1;
