@@ -138,3 +138,10 @@ for (const frame of ['2047_2020', '3030']) {
   }
 }
 console.log('PASS: 2047/3030 segmented wardrobe door openings.');
+
+const openings3030 = api.detectCabinetDoorOpenings(api.normalizeDesignItems(api.buildWardrobeTemplate(1200, 600, 1200, 1, 1, '3030').items));
+for (const material of ['aluminum', 'pegboard', 'marine']) {
+  const door = api.fitCabinetDoorToOpening({ ...api.createItem('cabinet_door', 0), doorMaterial: material, doorOverlay: 'full' }, openings3030[0]);
+  assert.equal(door.doorOverlay, material === 'marine' ? 'full' : 'half');
+}
+console.log('PASS: 3030 metal full-overlay restriction; marine full overlay preserved.');

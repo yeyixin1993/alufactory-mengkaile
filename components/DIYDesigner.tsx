@@ -3108,6 +3108,7 @@ const profileBoxFromItem = (item: DIYSceneItem): ProfileBox => {
 };
 
 type CabinetDoorOpening = {
+  has3030Frame?: boolean;
   profileIds: string[];
   outer: { left: number; right: number; bottom: number; top: number };
   inner: { left: number; right: number; bottom: number; top: number };
@@ -3180,6 +3181,7 @@ const detectCabinetDoorOpenings = (
       const profileIds = [left.profile.id, right.profile.id, bottom.profile.id, top.profile.id];
       return [{
         profileIds,
+        has3030Frame: [left, right, bottom, top].some(entry => entry.profile.variantId?.startsWith('3030')),
         outer,
         inner,
         boundaryCenters: {
@@ -3265,7 +3267,8 @@ const cabinetDoorOpeningAttachmentKey = (
   : opening.key;
 
 const fitCabinetDoorToOpening = (item: DIYSceneItem, opening: CabinetDoorOpening): DIYSceneItem => {
-  const overlay = item.doorOverlay || 'full';
+  const requestedOverlay = item.doorOverlay || 'full';
+  const overlay = opening.has3030Frame && item.doorMaterial !== 'marine' && requestedOverlay === 'full' ? 'half' : requestedOverlay;
   const leafMode: DIYDoorLeafMode = item.doorLeafMode || (item.attachmentKey?.includes(':DOUBLE:') ? 'double' : 'single');
   const pairSide: DIYDoorPairSide | undefined = leafMode === 'double'
     ? item.doorPairSide || (item.attachmentKey?.endsWith(':DOUBLE:right') ? 'right' : 'left')
@@ -3284,6 +3287,7 @@ const fitCabinetDoorToOpening = (item: DIYSceneItem, opening: CabinetDoorOpening
     : renderedThickness / 2 + 2;
   return {
     ...item,
+    doorOverlay: overlay,
     width,
     height,
     position: [
@@ -11123,6 +11127,9 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({
     items,
     selectedFrameProfileIds.length >= 4 ? new Set(selectedFrameProfileIds) : undefined,
   ), [items, selectedFrameProfileIds.join('|')]);
+  const newDoorFullDisabled = cabinetDoorOpenings.some(opening => opening.has3030Frame);
+  const selectedDoorFullDisabled = selected?.kind === 'cabinet_door' && selected.doorMaterial !== 'marine'
+    && items.some(item => selected.attachedProfileIds?.includes(item.id) && item.kind === 'profile' && item.variantId?.startsWith('3030'));
   const selectedTapPortCount = selected?.kind === 'profile' ? getProfileTapPortCount(selected.variantId) : 0;
   const selectedTappingMode = selected?.kind === 'profile'
     ? selected.tappingLeft && selected.tappingRight
@@ -13004,11 +13011,11 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({
                         <span className="mb-1 block text-[8px] font-black uppercase tracking-widest text-blue-700">{t.doorOverlay}</span>
                         <select
                           data-testid="diy-new-door-overlay"
-                          value={newDoorOverlay}
+                          value={newDoorFullDisabled && newDoorOverlay === 'full' ? 'half' : newDoorOverlay}
                           onChange={(event) => setNewDoorOverlay(event.target.value as DIYDoorOverlay)}
                           className="diy-select !py-2 !text-[10px]"
                         >
-                          <option value="full">{t.doorFullOverlay}</option>
+                          <option value="full" disabled={newDoorFullDisabled}>{t.doorFullOverlay}</option>
                           <option value="half">{t.doorHalfOverlay}</option>
                           <option value="inset">{t.doorInsetOverlay}</option>
                         </select>
@@ -13659,7 +13666,7 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({
                   <label className="mt-3 block">
                     <span className="diy-field-label">{t.doorOverlay}</span>
                     <select data-testid="diy-door-overlay" value={selected.doorOverlay || 'full'} onChange={(event) => updateSelectedDoor({ doorOverlay: event.target.value as DIYDoorOverlay })} className="diy-select">
-                      <option value="full">{t.doorFullOverlay}</option>
+                      <option value="full" disabled={selectedDoorFullDisabled}>{t.doorFullOverlay}</option>
                       <option value="half">{t.doorHalfOverlay}</option>
                       <option value="inset">{t.doorInsetOverlay}</option>
                     </select>

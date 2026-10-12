@@ -705,3 +705,6 @@ Save separate conversations in the server database, with request membership and 
 ### 2026-10-12 — Wardrobe base accessory options
 
 2047 and 3030 offer caster / adjustable foot / none. Casters attach only to the four outer corner posts, regardless of column count. Adjustable M8 feet attach to every post (2×(columns+1)). 2040+2020 is forced to none with a disabled grey selector. Preserve per-frame selections; initial 2047 selection remains caster and 3030 remains none. All accessories are actual components included in pricing, JSON/XLSX and cart metadata. Cabinet dimensions exclude base accessories; caster mounting lift is 62mm, adjustable feet use the existing 45mm model with a 25mm cabinet lift and 20mm stem engagement. Selected post bottom ports are tapped M8. This replaces the earlier all-post caster default.
+
+### 2026-10-12 — 3030柜门覆盖限制
+3030框架上的自动铝柜门和铝洞洞板门不支持全盖：创建及编辑入口将全盖置灰，默认改用半盖。由海洋板全盖切换为铝材时重新按半盖计算尺寸；海洋板门仍可全盖。限制根据门关联的实际3030框架识别，不影响其他框架。框架选择文案标明2040/2047为12mm层板、3030为18mm层板，不再混入M8轮子字样。

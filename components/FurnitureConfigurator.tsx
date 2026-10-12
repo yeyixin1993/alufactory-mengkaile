@@ -262,8 +262,8 @@ const StandardFurnitureConfigurator: React.FC<{
           <label className="block">
             <span className="mb-2 block text-xs font-black text-slate-500">{language === 'cn' ? '框架方案' : language === 'jp' ? 'フレーム構成' : 'Frame option'}</span>
             <select data-testid="wardrobe-frame-option" value={wardrobeFrame} onChange={(event) => setWardrobeFrame(event.target.value as WardrobeFrameOption)} className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 font-black text-slate-800">
-              <option value="2040_2020">2040 + 2020</option>
-              <option value="2047_2020">2047 + 2020 · {language === 'cn' ? '前后封边' : language === 'jp' ? '前後溝なし' : 'Sealed front & rear'}</option>
+              <option value="2040_2020">2040 + 2020 · {language === 'cn' ? '12mm层板' : language === 'jp' ? '12mm棚板' : '12mm shelves'}</option>
+              <option value="2047_2020">2047 + 2020 · {language === 'cn' ? '前后封边 / 12mm层板' : language === 'jp' ? '前後溝なし / 12mm棚板' : 'Sealed front & rear / 12mm shelves'}</option>
               <option value="3030">3030 · {language === 'cn' ? '18mm层板' : language === 'jp' ? '18mm棚板' : '18mm shelves'}</option>
             </select>
           </label>
