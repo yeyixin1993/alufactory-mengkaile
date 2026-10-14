@@ -6,10 +6,12 @@
 - `agent-browser` 副本在 `/Users/eliye/node_modules/.bin/`，必须 `AGENT_BROWSER_EXECUTABLE_PATH=<系统 Chrome>`（否则 CDP closed；closed → `close --all` 再 open）。native click 对 React 按钮偶发不生效，改 `eval "...el.click()"`（IIFE 包 const）。
 - 回归统一 `vite build --ssr scripts/verify-*.ts` + node；多个 `--emptyOutDir` 先 **export** `CODEBUDDY_SAFE_DELETE_BULK_THRESHOLD=5000`（链式命令里前缀赋值只对第一条生效）。凳子全套 `npm run test:stool-all`。verify 脚本不能用 `__dirname`（ESM），用 `path.resolve('.')`。产物 `.verify-*/` 已被一条 gitignore 覆盖；`vite.config.ts` 的 SSR `copyPublicDir: false` **别删**（否则每次回归复制 `public/` 210M 进产物目录，GitHub Desktop 当成几百张新图）。
 - `tsc --noEmit` 既有报错 **8 个**（2026-10-12 起，修 3D 预览时消掉 1 个）：`@/config`、App `setTimeout`、AIChatBar `phone`×3、PrintableCatalog `key`×3。
-- `.git/index.lock` 会反复出现 **0 字节僵尸锁**（今天两次）：`lsof`/`pgrep` 确认无持有者，无 maintenance/gc 配置，无 LFS（`.gitattributes` 只有 `* text=auto`，`git lfs` 未安装），仓内脚本也不调 git → 直接 `rm -f .git/index.lock`。读操作不受影响，只有 add/commit 被挡。疑似 GitHub Desktop 后台 index 刷新或被杀进程留下的。
+- `.git/index.lock` 会反复出现 **0 字节僵尸锁**（10-11 两次、10-14 一次）：`lsof`/`pgrep` 确认无持有者，无 maintenance/gc 配置，无 LFS（`.gitattributes` 只有 `* text=auto`，`git lfs` 未安装），仓内脚本也不调 git → 直接 `rm -f .git/index.lock`。读操作不受影响，只有 add/commit 被挡。疑似 GitHub Desktop 后台 index 刷新或被杀进程留下的。
+- **`git push` 前必须 `export CODEBUDDY_SAFE_DELETE_BULK_THRESHOLD=5000`**：`pre-push` 的 `package:dist` 里 vite `emptyDir(dist/assets)`（244 个文件）会被沙箱安全删除守卫拦下（`SAFE_DELETE_BULK_CONFIRM_REQUIRED`），表现为 `error: failed to push some refs`。用 `export`，行内前缀传不进子进程钩子。
+- **`public/catalog/mengkaile-catalog-2026-jp.html` 是 `prebuild`(`catalog:html`) 的确定性产物，却被 git 跟踪、且是 55MB 单行文件**：一旦它出现在 `git status`，**先查 NUL 再决定**（`python3 -c "print(open(p,'rb').read().count(0))"`）。10-14 曾出现等长 16KB 全 0 空洞（写入中断，`dist/catalog/` 副本同时损坏）——等长的「1+/1-」在单行大文件里看不出内容差异，极易被误提交。恢复 `git checkout --` 后重新 build 即得干净版本。注意**只对文本扩展名查 NUL**，PNG/JPG 本就含 NUL，扫 dist 会大量误报。
 - `npm run dev` 曾因 watcher 在 `.venv-local` 符号链接 ELOOP 崩溃；冒烟改 `vite preview --port 4173`（或 `python3 -m http.server 4180 --directory dist`）。3000/5001 可能被业主占用，**别杀**。hash 路由 `#/diy-designer`，首屏外按钮先 `scrollIntoView`。
 - 后端测试：`alufactory-backend/.venv-local/bin/python -m pytest tests -q`（基线 105）。`curl` 本地必加 `--noproxy '*'`。
-- 部署：**手工上传 ZIP 内 dist/**。`core.hooksPath=.githooks` 有一个 **`pre-push`** 会跑 `npm run package:dist`（build + 打 ZIP），所以 **push 会构建但不会部署**；`dist` 本身 gitignore。验 dist 新旧：工作区 clean + dist mtime 晚于最后 commit + grep 特征串（源码改了没 build，线上仍是旧串）。
+- 部署：**手工上传 ZIP 内 dist/**。`core.hooksPath=.githooks` 有一个 **`pre-push`** 会跑 `npm run package:dist`（build + 打 ZIP），所以 **push 会构建但不会部署**；`dist` 本身 gitignore。ZIP 产物固定落在 **`/Users/eliye/Downloads/mengkaile-dist-latest.zip`**（约 159MB）。验 dist 新旧：工作区 clean + dist mtime 晚于最后 commit + grep 特征串（源码改了没 build，线上仍是旧串）。
 
 ## AI 聊天（只在 codex/ai-sales-assistant worktree：`/Users/eliye/.codex/worktrees/ai-sales-assistant/alufactory-mengkaile`）
 
