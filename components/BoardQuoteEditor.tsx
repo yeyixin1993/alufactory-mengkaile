@@ -1,3 +1,4 @@
+import { DraftNumberInput, NumericActionButton } from './DraftNumberInput';
 import React, { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Language, Product, CartItem, User } from '../types';
@@ -357,7 +358,7 @@ const BoardQuoteEditor: React.FC<BoardQuoteEditorProps> = ({ language, product, 
   };
 
   return (
-    <div className="bg-white p-8 rounded-[3rem] border border-slate-100 shadow-xl space-y-6">
+    <div data-numeric-scope className="bg-white p-8 rounded-[3rem] border border-slate-100 shadow-xl space-y-6">
       <h3 className="text-2xl font-black text-slate-800">{t.configure}</h3>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -379,7 +380,7 @@ const BoardQuoteEditor: React.FC<BoardQuoteEditorProps> = ({ language, product, 
 
         <div>
           <label className="block text-xs font-black text-slate-400 uppercase mb-2">{t.qq_width || '宽 (mm)'}</label>
-          <input
+          <DraftNumberInput
             type="number"
             min={minWidth}
             max={maxWidth}
@@ -395,7 +396,7 @@ const BoardQuoteEditor: React.FC<BoardQuoteEditorProps> = ({ language, product, 
 
         <div>
           <label className="block text-xs font-black text-slate-400 uppercase mb-2">{t.qq_height || '高 (mm)'}</label>
-          <input
+          <DraftNumberInput
             type="number"
             min={minHeight}
             max={maxHeight}
@@ -455,7 +456,7 @@ const BoardQuoteEditor: React.FC<BoardQuoteEditorProps> = ({ language, product, 
 
         <div>
           <label className="block text-xs font-black text-slate-400 uppercase mb-2">{t.qq_quantity || '数量'}</label>
-          <input
+          <DraftNumberInput
             type="number"
             min={1}
             value={quantity}
@@ -667,13 +668,13 @@ const BoardQuoteEditor: React.FC<BoardQuoteEditorProps> = ({ language, product, 
         <div className="text-xs font-bold text-red-600">{language === 'cn' ? '高度不支持超过3000mm' : language === 'jp' ? '高さは3000mmを超えられません' : 'Height over 3000mm is not supported'}</div>
       )}
 
-      <button
+      <NumericActionButton
         onClick={handleSubmit}
         disabled={hasRangeError || saving || !allowedThicknessSet.has(effectiveThickness)}
         className="w-full bg-blue-600 text-white py-4 rounded-2xl font-black hover:bg-blue-500 transition-all"
       >
         {saving ? (language==='cn'?'保存中…':language==='en'?'Saving…':'保存中…') : onSaveConfiguration ? (language==='cn'?'保存并确认此项配置':language==='en'?'Save and confirm this item':'保存してこの項目を確認') : initialItem ? (language === 'cn' ? '更新并返回购物车' : language === 'jp' ? '更新してカートへ戻る' : 'Update & Back to Cart') : (language === 'cn' ? '加入购物车并去支付' : language === 'jp' ? 'カートに追加して支払いへ' : 'Add to Cart and Pay')}
-      </button>
+      </NumericActionButton>
     </div>
   );
 };

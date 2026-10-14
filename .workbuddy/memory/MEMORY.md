@@ -33,3 +33,13 @@
 ## 分支 / 用户
 
 - 用户用 **GitHub Desktop**：切分支自动 `git stash`，工作区 clean ≠ 改动丢了。
+
+## 前端发布链路（定稿，长期有效）
+
+- **服务器侧** `/home/alufactory/deploy-frontend.sh`：一条命令 = git pull → npm run build → 发布 dist 到 `/www/mengkaile-frontend`（冲突旧文件改名 `.bakMMDD`）→ md5 校验。**与后端的 `/home/alufactory/update.sh` 完全独立，互不调用；不要动 update.sh。**
+- **Mac 侧**（工作区 `/Users/eliye/WorkBuddy/2026-10-11-00-37-18/`）：`sync-frontend.sh` 一条命令 = 本地构建 → rsync 增量上传到 `/home/alufactory/frontend-staging` → 触发远端发布 → 校验。日常只传 1~3MB（catalog 159M 是确定性产物，不重传）。另有桌面启动器 `~/Desktop/更新前端网站.command` 可双击。
+- **铁律：不删除任何文件。** deploy-frontend.sh 里 4 处 `# run rm -f "$f"` 全部处于注释状态（搜「删除已停用」）；sync-frontend.sh 默认不带 `--delete`（`SYNC_DELETE=0`）。用户明确要求「just add」。
+- 环境事实：ECS `47.98.229.152`（cn-hangzhou，i-bp1dehcuxg5e60tknwew，Ubuntu 22.04，2vCPU/1.6G内存/无swap，**未装 Node**，磁盘余 29G）；登录 root，专用部署密钥 `~/.ssh/mengkaile_deploy`（已授权到 ECS 的 /root/.ssh/authorized_keys）。
+- nginx：站点根 `/www/mengkaile-frontend`（已用探针实测确认生效），80→443 跳转，`/api/` → `127.0.0.1:5000`。`/etc/nginx/conf.d/mengkaile.conf` 里被重复粘贴过（含 4 个同名 server block），靠「同端口先定义者胜」侥幸选对，**待清理**（备份→截断→`mv mengkaile.top.conf mengkaile.top.conf.disabled`→`nginx -t && systemctl reload nginx`）。
+- ECS 上**没有 `www` 用户**，现网文件属主是 `root:root`，故脚本 `OWNER` 默认留空（不改属主）。
+- 已知待办：www 里 assets 有 **143 个孤儿 bundle / 58MB**、images 有 17 张孤儿图（旧配色），均**保留不删**；`--clean-orphans` / `--prune` 开关已具备，只列不删。

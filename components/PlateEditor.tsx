@@ -1,3 +1,4 @@
+import { DraftNumberInput, NumericActionButton } from './DraftNumberInput';
 
 import React, { useState, useEffect, useMemo } from 'react';
 import { PlateConfig, Rect, Language } from '../types';
@@ -92,7 +93,7 @@ const PlateEditor: React.FC<PlateEditorProps> = ({ language, onSave }) => {
   const viewBox = `0 0 ${PLATE_WIDTH} ${PLATE_HEIGHT}`;
 
   return (
-    <div className="bg-white p-6 rounded-lg shadow-sm border border-slate-200">
+    <div data-numeric-scope className="bg-white p-6 rounded-lg shadow-sm border border-slate-200">
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6">
         <div>
            <h3 className="text-xl font-bold text-slate-800">{t.configure} - {t.plateSize} 2500x1250mm</h3>
@@ -116,7 +117,7 @@ const PlateEditor: React.FC<PlateEditorProps> = ({ language, onSave }) => {
       <div className="bg-slate-50 p-4 rounded-lg mb-6 flex flex-wrap gap-4 items-end border border-slate-200">
         <div>
           <label className="block text-xs font-semibold text-slate-500 uppercase mb-1">{t.width} (mm)</label>
-          <input 
+          <DraftNumberInput
             type="number" 
             value={width} 
             onChange={e => setWidth(Number(e.target.value))}
@@ -126,7 +127,7 @@ const PlateEditor: React.FC<PlateEditorProps> = ({ language, onSave }) => {
         </div>
         <div>
           <label className="block text-xs font-semibold text-slate-500 uppercase mb-1">{t.height} (mm)</label>
-          <input 
+          <DraftNumberInput
             type="number" 
             value={height} 
             onChange={e => setHeight(Number(e.target.value))}
@@ -134,12 +135,12 @@ const PlateEditor: React.FC<PlateEditorProps> = ({ language, onSave }) => {
             min={100} max={1200}
           />
         </div>
-        <button 
+        <NumericActionButton
           onClick={addItem}
           className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded font-medium flex items-center gap-2 transition-colors"
         >
           <Plus className="w-4 h-4" /> {t.addPiece}
-        </button>
+        </NumericActionButton>
       </div>
 
       {/* The Visual Plate */}

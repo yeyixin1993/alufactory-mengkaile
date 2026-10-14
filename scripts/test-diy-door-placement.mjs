@@ -8,7 +8,7 @@ import { build } from 'esbuild';
 // adding test-only exports to the production designer module.
 const root = fileURLToPath(new URL('../', import.meta.url));
 const names = ['normalizeDesignItems', 'detectCabinetDoorOpenings', 'cabinetDoorBounds',
-  'cabinetDoorLeafBounds', 'fitCabinetDoorToOpening', 'syncAttachedAccessories',
+  'buildSheetSizedCabinetDoors', 'cabinetDoorFitsSheet', 'cabinetDoorLeafBounds', 'fitCabinetDoorToOpening', 'syncAttachedAccessories',
   'availableAccessoryPlacementCandidates', 'groupAccessoryPlacementOverlays', 'accessoryPlacementFaceLabel', 'createItem'];
 const privateNames = names.filter(name => name !== 'normalizeDesignItems');
 const result = await build({
@@ -145,3 +145,24 @@ for (const material of ['aluminum', 'pegboard', 'marine']) {
   assert.equal(door.doorOverlay, material === 'marine' ? 'full' : 'half');
 }
 console.log('PASS: 3030 metal full-overlay restriction; marine full overlay preserved.');
+
+for (const [width, height, expected] of [[1200,2400,1],[2400,1200,1],[1600,2200,2],[3000,2200,4],[1000,3000,2],[3000,3000,6]]) {
+  const opening = { profileIds: ['a','b','c','d'], outer: {left:0,right:width+6,bottom:0,top:height+6}, inner: {left:20,right:width-14,bottom:20,top:height-14}, boundaryCenters:{left:10,right:width-4}, columnIndex:0,columnCount:1,frontZ:300,key:'sheet-test' };
+  const doors = api.buildSheetSizedCabinetDoors(opening, {...api.createItem('cabinet_door',0),doorLeafMode:'single',doorOverlay:'full'});
+  assert.equal(doors.length, expected, `${width}x${height} split count`);
+  assert(doors.every(api.cabinetDoorFitsSheet));
+  assert.equal(new Set(doors.map(d=>d.id)).size, doors.length);
+  assert.equal(new Set(doors.map(d=>d.attachmentKey)).size, doors.length);
+  for (const door of doors) {
+    const restored = api.fitCabinetDoorToOpening(JSON.parse(JSON.stringify(door)), opening);
+    assert.deepEqual(restored.position,door.position);
+    assert.equal(restored.width,door.width); assert.equal(restored.height,door.height);
+  }
+  for (let i=0;i<doors.length;i++) for(let j=i+1;j<doors.length;j++) {
+    const a=doors[i],b=doors[j];
+    const gapX=Math.abs(a.position[0]-b.position[0])-(a.width+b.width)/2;
+    const gapY=Math.abs(a.position[1]-b.position[1])-(a.height+b.height)/2;
+    assert(gapX>=3-1e-6 || gapY>=3-1e-6, 'At least 3mm seam between leaves');
+  }
+}
+console.log('PASS: 1200x2400 rotated sheet limit, automatic paired/stacked leaves, persisted geometry and seams.');

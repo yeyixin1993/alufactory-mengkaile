@@ -1,3 +1,4 @@
+import { DraftNumberInput, NumericActionButton } from './DraftNumberInput';
 import {
   ACCESSORY_CODE_IMAGE_MAP,
   ACCESSORY_IMAGE,
@@ -303,7 +304,7 @@ const AccessoryQuoteEditor: React.FC<{
 
   return (
     <>
-    <div className="space-y-6">
+    <div data-numeric-scope className="space-y-6">
       <div className="bg-white p-6 rounded-3xl shadow-xl border border-slate-100">
         <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
           <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4 flex flex-col items-center justify-center">
@@ -468,7 +469,7 @@ const AccessoryQuoteEditor: React.FC<{
                       {row.lengthPriced && (
                         <label className="mt-2 flex items-center gap-2 text-xs">
                           {language === 'cn' ? '长度' : language === 'jp' ? '長さ' : 'Length'}
-                          <input aria-label="8mm shaft length (mm)" type="number" min={1} max={3000} step={1} value={shaftLengthMm} onChange={e => setShaftLengthMm(Math.max(1, Math.min(3000, Math.round(Number(e.target.value) || 1))))} className="w-20 rounded border border-slate-200 px-2 py-1" /> mm
+                          <DraftNumberInput aria-label="8mm shaft length (mm)" type="number" min={1} max={3000} step={1} value={shaftLengthMm} onChange={e => setShaftLengthMm(Math.max(1, Math.min(3000, Math.round(Number(e.target.value) || 1))))} className="w-20 rounded border border-slate-200 px-2 py-1" /> mm
                         </label>
                       )}
                       {row.naturalOnly && <div className="text-[11px] text-slate-500">{language === 'cn' ? '原色 · 不按型材系列区分' : language === 'jp' ? '原色・シリーズ共通' : 'Natural · all series'}</div>}
@@ -515,7 +516,7 @@ const AccessoryQuoteEditor: React.FC<{
                       ) : colorMode === 'natural' ? <span className="text-slate-400">-</span> : null}
                     </td>}
                     <td className="p-2 border border-slate-100">
-                      <input
+                      <DraftNumberInput
                         type="number"
                         min={0}
                         value={qty}
@@ -544,12 +545,12 @@ const AccessoryQuoteEditor: React.FC<{
         </div>
 
         <div className="flex gap-3">
-          <button
+          <NumericActionButton
             onClick={submit}
             className="bg-slate-900 text-white px-6 py-3 rounded-2xl font-black hover:bg-blue-600 transition-all"
           >
             {initialItem ? ui.update : ui.add}
-          </button>
+          </NumericActionButton>
           {initialItem && (
             <button
               onClick={() => navigate(returnCartPath)}

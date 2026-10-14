@@ -121,3 +121,11 @@ Wardrobe frame options (2026-10-11): the configurator offers 2040+2020, 2047+202
 Calligraphy cabinet rear ties (2026-10-11): each intermediate basket level includes one segmented rear 2020 rail per bay, joined to rear posts with two No.1 brackets. New ties are not drilled/tapped and use actual-component pricing. Covered by `npm run test:calligraphy-opening`.
 
 Wardrobe base accessories (2026-10-12): builder seventh argument is caster/foot/none. 2047 and 3030 allow four-corner casters or all-post feet; 2040 forces none. Summary records baseOption, casterCount and footCount. Verified by test:wardrobe-options.
+
+Wardrobe sealed faces (2026-10-13): builder eighth argument sealed/open; 2047 forces sealed. Front/rear N1 faces point outward; depth rails stay standard. Sealed 2040 omits M6×8 rail cross-holes; 3030 connection planning skips paths through closed faces and uses brackets. Regression: test:wardrobe-options.
+
+3030 inset-door clearance (2026-10-13): intermediate front rails default to a 30mm setback, with shorter inset boards and relocated supports. No.5 hidden brackets attach these rails to depth rails; joint selection excludes offset post fastening. Top/bottom frames stay unchanged. test:wardrobe-options checks geometry and completed connections.
+
+Automatic door sheets (2026-10-14): enforce short edge ≤1200mm and long edge ≤2400mm. Automatic generation searches single/paired leaves and stacked rows, preserving 3mm seams and existing post hinge locations. Row subdivision persists in attachment keys across sync and JSON/XLSX. Covered by scripts/test-diy-door-placement.mjs.
+
+数字编辑统一使用 `components/DraftNumberInput.tsx`：输入时保留可清空的草稿，仅把可用数字传给业务状态；生成/确认/保存按钮使用 `NumericActionButton`，并在所属配置容器标记 `data-numeric-scope`。避免在输入事件里用默认值覆盖空白。需要延后几何更新的字段可设 `deferCommit`，在失焦/Enter 时提交。独立配置区各自校验，取消、删除、切换和重置操作不受阻。

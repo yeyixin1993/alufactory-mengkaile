@@ -1,3 +1,4 @@
+import { DraftNumberInput, NumericActionButton } from './DraftNumberInput';
 import { ENABLED_METAL_BOARD_THICKNESSES, PEGBOARD_PRICE_PER_SQM, ALUMINUM_PLATE_PRICE_PER_SQM, VIP_PLUS_PEGBOARD_PRICE_PER_SQM, VIP_PLUS_ALUMINUM_PLATE_PRICE_PER_SQM, MARINE_BOARD_SPEC_PRICE_PER_SQM, MARINE_BOARD_COLORED_SURCHARGE_PER_SQM, MARINE_BOARD_WEIGHT_PER_SQM, MIN_BOARD_CHARGE_AREA_SQM, MAX_PROFILE_LENGTH_MM, MAX_BOARD_WIDTH_MM, MAX_BOARD_HEIGHT_MM, MARINE_BOARD_MAX_WIDTH_MM, MARINE_BOARD_MAX_HEIGHT_MM } from '../utils/quickQuoteCatalog';
 import { calculateFrameUnitPrice } from '../utils/framePricing';
 import React, { useMemo, useState } from 'react';
@@ -707,7 +708,7 @@ const QuickQuote: React.FC<{ language: Language; user?: User | null }> = ({ lang
                 )}
                 <div>
                   <label className="block text-xs font-black text-slate-500 mb-1">{t.qq_width}</label>
-                  <input
+                  <DraftNumberInput
                     type="number"
                     min={1}
                     max={maxWidthMm}
@@ -718,7 +719,7 @@ const QuickQuote: React.FC<{ language: Language; user?: User | null }> = ({ lang
                 </div>
                 <div>
                   <label className="block text-xs font-black text-slate-500 mb-1">{t.qq_height}</label>
-                  <input
+                  <DraftNumberInput
                     type="number"
                     min={1}
                     max={maxHeightMm}
@@ -748,7 +749,7 @@ const QuickQuote: React.FC<{ language: Language; user?: User | null }> = ({ lang
                 )}
                 <div>
                   <label className="block text-xs font-black text-slate-500 mb-1">{t.qq_quantity}</label>
-                  <input
+                  <DraftNumberInput
                     type="number"
                     min={0}
                     value={row.quantity}
@@ -817,7 +818,7 @@ const QuickQuote: React.FC<{ language: Language; user?: User | null }> = ({ lang
         : 'Marine board max size: width 2440mm, height 1220mm (12/18mm supported)';
 
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 py-8 sm:py-12">
+    <div data-numeric-scope className="max-w-7xl mx-auto px-4 sm:px-6 py-8 sm:py-12">
       <div className="bg-white border border-slate-100 rounded-3xl shadow-xl p-4 sm:p-6 md:p-8 space-y-6">
         <h2 className="text-2xl sm:text-3xl md:text-4xl font-black text-slate-900">{t.quickQuote}</h2>
 
@@ -906,7 +907,7 @@ const QuickQuote: React.FC<{ language: Language; user?: User | null }> = ({ lang
                     </div>
                     <div>
                       <label className="block text-xs font-black text-slate-500 mb-1">{t.qq_length}</label>
-                      <input
+                      <DraftNumberInput
                         type="number"
                         min={1}
                         max={MAX_PROFILE_LENGTH_MM}
@@ -967,7 +968,7 @@ const QuickQuote: React.FC<{ language: Language; user?: User | null }> = ({ lang
                     <div className="grid grid-cols-5 gap-1.5 min-w-[560px]">
                     <div>
                       <label className="block text-[9px] font-black text-slate-500 mb-1 leading-tight">{buildPerPieceLabel(t.qq_tappingCount)}</label>
-                      <input
+                      <DraftNumberInput
                         type="number"
                         min={0}
                         value={row.tappingCount === 0 ? '' : row.tappingCount}
@@ -977,7 +978,7 @@ const QuickQuote: React.FC<{ language: Language; user?: User | null }> = ({ lang
                     </div>
                     <div>
                       <label className="block text-[9px] font-black text-slate-500 mb-1 leading-tight">{buildPerPieceLabel(t.qq_throughHoleCount)}</label>
-                      <input
+                      <DraftNumberInput
                         type="number"
                         min={0}
                         value={row.throughHoleCount === 0 ? '' : row.throughHoleCount}
@@ -987,7 +988,7 @@ const QuickQuote: React.FC<{ language: Language; user?: User | null }> = ({ lang
                     </div>
                     <div>
                       <label className="block text-[9px] font-black text-slate-500 mb-1 leading-tight">{buildPerPieceLabel(t.qq_countersunkCount)}</label>
-                      <input
+                      <DraftNumberInput
                         type="number"
                         min={0}
                         value={row.countersunkHoleCount === 0 ? '' : row.countersunkHoleCount}
@@ -997,7 +998,7 @@ const QuickQuote: React.FC<{ language: Language; user?: User | null }> = ({ lang
                     </div>
                     <div>
                       <label className="block text-[9px] font-black text-slate-500 mb-1 leading-tight">{buildPerPieceLabel(t.qq_threadedHoleCount)}</label>
-                      <input
+                      <DraftNumberInput
                         type="number"
                         min={0}
                         value={row.threadedHoleCount === 0 ? '' : row.threadedHoleCount}
@@ -1007,7 +1008,7 @@ const QuickQuote: React.FC<{ language: Language; user?: User | null }> = ({ lang
                     </div>
                     <div>
                       <label className="block text-[9px] font-black text-slate-500 mb-1 leading-tight">{buildPerPieceLabel(t.qq_miter45CutCount)}</label>
-                      <input
+                      <DraftNumberInput
                         type="number"
                         min={0}
                         value={row.miter45CutCount === 0 ? '' : row.miter45CutCount}
@@ -1021,7 +1022,7 @@ const QuickQuote: React.FC<{ language: Language; user?: User | null }> = ({ lang
                   <div className="grid grid-cols-2 gap-3">
                     <div>
                       <label className="block text-xs font-black text-slate-500 mb-1">{t.qq_quantity}</label>
-                      <input
+                      <DraftNumberInput
                         type="number"
                         min={0}
                         value={row.quantity === 0 ? '' : row.quantity}
@@ -1156,7 +1157,7 @@ const QuickQuote: React.FC<{ language: Language; user?: User | null }> = ({ lang
                     </div>
                     <div>
                       <label className="block text-xs font-black text-slate-500 mb-1">{t.qq_innerWidth}</label>
-                      <input
+                      <DraftNumberInput
                         type="number"
                         min={1}
                         value={row.innerWidth}
@@ -1166,7 +1167,7 @@ const QuickQuote: React.FC<{ language: Language; user?: User | null }> = ({ lang
                     </div>
                     <div>
                       <label className="block text-xs font-black text-slate-500 mb-1">{t.qq_innerHeight}</label>
-                      <input
+                      <DraftNumberInput
                         type="number"
                         min={1}
                         value={row.innerHeight}
@@ -1179,7 +1180,7 @@ const QuickQuote: React.FC<{ language: Language; user?: User | null }> = ({ lang
                   <div className="grid grid-cols-2 gap-3">
                     <div>
                       <label className="block text-xs font-black text-slate-500 mb-1">{t.qq_quantity}</label>
-                      <input
+                      <DraftNumberInput
                         type="number"
                         min={0}
                         value={row.quantity === 0 ? '' : row.quantity}
@@ -1343,7 +1344,7 @@ const QuickQuote: React.FC<{ language: Language; user?: User | null }> = ({ lang
                         <td className="p-2 border border-slate-100 whitespace-nowrap">{currency}{catalogUnit.toFixed(2)}</td>
                         <td className="p-2 border border-slate-100 whitespace-nowrap">{currency}{catalogBulk.toFixed(2)}</td>
                         <td className="p-2 border border-slate-100">
-                          <input
+                          <DraftNumberInput
                             type="number"
                             min={0}
                             value={qty}
@@ -1382,12 +1383,12 @@ const QuickQuote: React.FC<{ language: Language; user?: User | null }> = ({ lang
           </div>
         )}
 
-        <button
+        <NumericActionButton
           onClick={() => setShowSummary(true)}
           className="w-full md:w-auto px-6 py-3 rounded-xl bg-blue-600 text-white font-black text-sm"
         >
           {t.qq_calculateQuote}
-        </button>
+        </NumericActionButton>
       </div>
 
       {showSummary && !selectedProvince && (

@@ -1,4 +1,5 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import { DraftNumberInput, NumericActionButton } from './DraftNumberInput';
+import React, { useMemo, useState } from 'react';
 import {
   AlertTriangle,
   CheckCircle2,
@@ -177,18 +178,7 @@ const RangeNumberControl: React.FC<{
   unit?: string;
   onChange: (value: number) => void;
 }> = ({ label, value, min, max, step = 1, unit = 'mm', onChange }) => {
-  const [draft, setDraft] = useState(String(value));
-  useEffect(() => setDraft(String(value)), [value]);
   const commit = (next: number) => onChange(clampToStep(next, min, max, step));
-  const updateDraft = (raw: string) => {
-    setDraft(raw);
-    const parsed = Number(raw);
-    if (raw.trim() && Number.isFinite(parsed) && parsed >= min && parsed <= max) commit(parsed);
-  };
-  const commitDraft = () => {
-    const parsed = Number(draft);
-    commit(Number.isFinite(parsed) ? parsed : value);
-  };
   return (
     <div className="rounded-2xl border border-slate-200 bg-white p-3 shadow-sm">
       <div className="mb-2 flex items-center justify-between gap-3">
@@ -198,15 +188,14 @@ const RangeNumberControl: React.FC<{
       <div className="flex items-center gap-2">
         <button type="button" aria-label={`${label} -`} onClick={() => commit(value - step)} className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-slate-200 text-slate-500 transition hover:border-blue-300 hover:text-blue-600"><Minus className="h-4 w-4" /></button>
         <div className="min-w-0 flex-1">
-          <input
-            type="text"
+          <DraftNumberInput
+            type="number"
             inputMode="decimal"
-            value={draft}
+            value={value}
             min={min}
             max={max}
             step={step}
-            onChange={(event) => updateDraft(event.target.value)}
-            onBlur={commitDraft}
+            onChange={(event) => commit(Number(event.target.value))}
             onKeyDown={(event) => { if (event.key === 'Enter') event.currentTarget.blur(); }}
             className="h-9 w-full rounded-xl border border-slate-200 bg-slate-50 px-2 text-center text-sm font-black text-slate-900 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
           />
@@ -389,7 +378,7 @@ const DisplayRackConfigurator: React.FC<DisplayRackConfiguratorProps> = ({ langu
   };
 
   return (
-    <div data-testid="furniture-configurator-display-rack-3-0" className="overflow-hidden rounded-[2.5rem] border border-slate-100 bg-white shadow-xl">
+    <div data-numeric-scope data-testid="furniture-configurator-display-rack-3-0" className="overflow-hidden rounded-[2.5rem] border border-slate-100 bg-white shadow-xl">
       <div className="border-b border-slate-100 bg-gradient-to-r from-slate-950 via-slate-900 to-emerald-950 px-5 py-6 text-white sm:px-8">
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div className="flex items-start gap-4">
@@ -487,7 +476,7 @@ const DisplayRackConfigurator: React.FC<DisplayRackConfiguratorProps> = ({ langu
             </div>
           </div>
 
-          <button
+          <NumericActionButton
             data-testid="display-rack-generate"
             type="button"
             disabled={!validation.valid}
@@ -495,7 +484,7 @@ const DisplayRackConfigurator: React.FC<DisplayRackConfiguratorProps> = ({ langu
             className="flex w-full items-center justify-center gap-2 rounded-2xl bg-blue-600 px-5 py-4 text-sm font-black text-white shadow-lg shadow-blue-600/20 transition hover:bg-blue-500 disabled:cursor-not-allowed disabled:bg-slate-300 disabled:shadow-none"
           >
             <Sparkles className="h-5 w-5" />{copy.generate}
-          </button>
+          </NumericActionButton>
           <p className="text-center text-[10px] font-bold leading-relaxed text-slate-400">{copy.generateHint}</p>
         </div>
 

@@ -1,3 +1,4 @@
+import { DraftNumberInput, NumericActionButton } from './components/DraftNumberInput';
 import { frameTypeName } from './utils/framePricing';
 import FrameQuoteEditor from './components/FrameQuoteEditor';
 
@@ -903,6 +904,7 @@ const getFinishedFurnitureParameterRows = (item: CartItem, language: Language) =
   }
   if (source === 'wardrobe' && summary.frameOption) {
     rows.push({ label: language === 'cn' ? '框架方案' : language === 'jp' ? 'フレーム構成' : 'Frame', value: String(summary.frameOption).replace('_', ' + ') });
+    if (summary.edgeOption) rows.push({ label: language === 'cn' ? '前后封边' : language === 'jp' ? '前後の溝なし面' : 'Front/rear faces', value: summary.edgeOption === 'sealed' ? (language === 'cn' ? '封边' : language === 'jp' ? '溝なし' : 'Sealed') : (language === 'cn' ? '不封边' : language === 'jp' ? '溝あり' : 'Open grooves') });
     if (Number(summary.footCount) > 0) rows.push({ label: language === 'cn' ? '调整脚' : language === 'jp' ? '調整脚' : 'Feet', value: `M8 × ${summary.footCount}` });
     if (Number(summary.casterCount) > 0) rows.push({ label: language === 'cn' ? '轮子' : language === 'jp' ? 'キャスター' : 'Casters', value: `M8 × ${summary.casterCount}` });
     if ((summary.heightBasis === 'cabinet_without_casters' || summary.heightBasis === 'cabinet_without_base_accessories') && (Number(summary.casterCount) > 0 || Number(summary.footCount) > 0)) rows.push({ label: text.size, value: language === 'cn' ? '柜体尺寸不含底部配件高度' : language === 'jp' ? '底部パーツの高さを除く' : 'Dimensions exclude base accessories' });
@@ -1324,7 +1326,7 @@ const Cart: React.FC<{
   );
 
   return (
-    <div className="max-w-6xl mx-auto p-6 relative">
+    <div data-numeric-scope className="max-w-6xl mx-auto p-6 relative">
       <ExportOverlay visible={isExporting} message={t.exportOverlayMessage} warning={t.exportOverlayWarning} />
       <h2 className="text-5xl font-black mb-10 text-slate-900 tracking-tight">{t.cart}</h2>
       
@@ -1384,9 +1386,9 @@ const Cart: React.FC<{
           <div className="flex justify-between items-center bg-white p-5 rounded-[2rem] shadow-xl border border-slate-100">
             <Link to="/" className="flex items-center gap-2 text-blue-600 font-black px-5 py-3 rounded-2xl hover:bg-blue-50 transition-all text-sm"><ArrowLeft className="w-4 h-4"/> {language === 'cn' ? '返回添加其他材料' : language === 'jp' ? '戻って他の材料を追加' : 'Back to add other materials'}</Link>
             <div className="flex gap-2">
-              <button onClick={() => openFactorySheetPreview({ cart, user, language, showPrice: true, address: selectedAddress || undefined, shippingMethod: SHIPPING_METHOD_NAMES[activeCourier][language], shippingFee, include304Screws, includeLabelService, labelFee, overlengthFee })} className="flex items-center gap-2 text-slate-700 font-bold px-5 py-3 rounded-2xl border border-slate-200 hover:bg-slate-50 transition-all text-sm"><Eye className="w-4 h-4"/> {t.preview}</button>
+              <NumericActionButton onClick={() => openFactorySheetPreview({ cart, user, language, showPrice: true, address: selectedAddress || undefined, shippingMethod: SHIPPING_METHOD_NAMES[activeCourier][language], shippingFee, include304Screws, includeLabelService, labelFee, overlengthFee })} className="flex items-center gap-2 text-slate-700 font-bold px-5 py-3 rounded-2xl border border-slate-200 hover:bg-slate-50 transition-all text-sm"><Eye className="w-4 h-4"/> {t.preview}</NumericActionButton>
               {user?.role === 'admin' && (
-                <button onClick={() => handleGeneratePDF(false)} className="flex items-center gap-2 text-orange-600 font-bold px-5 py-3 rounded-2xl border border-orange-100 bg-orange-50 hover:bg-orange-100 transition-all text-sm"><FileDown className="w-4 h-4"/> {t.downloadNoPrice}</button>
+                <NumericActionButton onClick={() => handleGeneratePDF(false)} className="flex items-center gap-2 text-orange-600 font-bold px-5 py-3 rounded-2xl border border-orange-100 bg-orange-50 hover:bg-orange-100 transition-all text-sm"><FileDown className="w-4 h-4"/> {t.downloadNoPrice}</NumericActionButton>
               )}
             </div>
           </div>
@@ -1435,7 +1437,7 @@ const Cart: React.FC<{
                       )}
                       <div className="mt-1 flex items-center gap-2">
                         <span className="text-xs font-bold text-slate-500 uppercase">{t.quantity}:</span>
-                        <input 
+                        <DraftNumberInput
                           type="number" 
                           min="1" 
                           value={item.quantity} 
@@ -1859,7 +1861,7 @@ const Cart: React.FC<{
               <span>{currency}{finalTotal.toFixed(1)}</span>
             </div>
             <div className="space-y-3">
-              <button
+              <NumericActionButton
                 onClick={handleSaveCart}
                 disabled={isExporting || isSavingCart}
                 className="w-full bg-slate-700 py-4 rounded-3xl font-black hover:bg-slate-600 transition-all shadow-xl disabled:bg-slate-800 disabled:text-slate-500 uppercase tracking-widest text-sm flex items-center justify-center gap-2"
@@ -1872,7 +1874,7 @@ const Cart: React.FC<{
                     {t.saveCart}
                   </>
                 )}
-              </button>
+              </NumericActionButton>
 
               {saveCartStatus === 'saved' && (
                 <p className="text-xs text-emerald-300 font-bold">{t.cartSaved}</p>
@@ -1881,9 +1883,9 @@ const Cart: React.FC<{
                 <p className="text-xs text-rose-300 font-bold">{t.cartSaveFailed}</p>
               )}
 
-              <button onClick={handleCheckout} disabled={isExporting || isSavingCart} className="w-full bg-blue-600 py-6 rounded-3xl font-black hover:bg-blue-500 transition-all shadow-2xl shadow-blue-600/30 disabled:bg-slate-800 disabled:text-slate-600 uppercase tracking-widest text-lg flex items-center justify-center gap-3">
+              <NumericActionButton onClick={handleCheckout} disabled={isExporting || isSavingCart} className="w-full bg-blue-600 py-6 rounded-3xl font-black hover:bg-blue-500 transition-all shadow-2xl shadow-blue-600/30 disabled:bg-slate-800 disabled:text-slate-600 uppercase tracking-widest text-lg flex items-center justify-center gap-3">
                 {isExporting ? <div className="w-6 h-6 border-4 border-white/30 border-t-white rounded-full animate-spin" /> : <><Download className="w-6 h-6" /> {t.checkout}</>}
-              </button>
+              </NumericActionButton>
             </div>
             <p className="mt-5 text-xs text-slate-400 leading-relaxed">
               {language === 'cn'

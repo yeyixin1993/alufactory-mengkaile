@@ -1,3 +1,4 @@
+import { DraftNumberInput, NumericActionButton } from './DraftNumberInput';
 import {aiText} from '../utils/aiLocale';
 
 // Add missing React import to fix namespace errors
@@ -339,7 +340,7 @@ const ProfileEditor: React.FC<ProfileEditorProps> = ({ onSaveConfiguration, onCa
   const grooveCount = getProfileGrooveCount(selectedVariant.id, selectedSide);
 
   return (
-    <div className="space-y-8">
+    <div data-numeric-scope className="space-y-8">
       <div className={`bg-white p-4 sm:p-6 rounded-3xl shadow-xl border ${initialItem || editingId ? 'border-blue-400 ring-4 ring-blue-50' : 'border-slate-100'}`}>
         <div className="flex justify-between items-center mb-6">
           <h3 className="text-2xl font-black text-slate-800 flex items-center gap-3">
@@ -406,7 +407,7 @@ const ProfileEditor: React.FC<ProfileEditorProps> = ({ onSaveConfiguration, onCa
         <div className="mb-8">
             <label className="block text-xs font-black text-slate-400 uppercase mb-2">{t.length} </label>
             <div className="relative">
-              <input type="number" min={MIN_PROFILE_LENGTH_MM + 1} max={MAX_PROFILE_LENGTH_MM} value={length} onChange={(e) => setLength(Math.min(MAX_PROFILE_LENGTH_MM, Math.max(0, parseFloat(e.target.value))))} className={`w-full border rounded-xl px-4 py-3 outline-none font-black text-xl ${isTooLong || isTooShort ? 'border-red-300 text-red-600 bg-red-50' : isDangerous ? 'border-amber-300 text-amber-700 bg-amber-50' : 'border-slate-200 bg-slate-50'}`} />
+              <DraftNumberInput type="number" min={MIN_PROFILE_LENGTH_MM + 1} max={MAX_PROFILE_LENGTH_MM} value={length} onChange={(e) => setLength(Math.min(MAX_PROFILE_LENGTH_MM, Math.max(0, parseFloat(e.target.value))))} className={`w-full border rounded-xl px-4 py-3 outline-none font-black text-xl ${isTooLong || isTooShort ? 'border-red-300 text-red-600 bg-red-50' : isDangerous ? 'border-amber-300 text-amber-700 bg-amber-50' : 'border-slate-200 bg-slate-50'}`} />
               <div className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 text-sm font-black">MM</div>
             </div>
             {isTooShort && <div className="text-red-600 text-xs mt-2 font-black">{t.minLengthDangerous} (&gt;{MIN_PROFILE_LENGTH_MM}mm)</div>}
@@ -517,7 +518,7 @@ const ProfileEditor: React.FC<ProfileEditorProps> = ({ onSaveConfiguration, onCa
                 </div>
               )}
               
-              <button onClick={addHole} className="bg-slate-900 text-white px-4 py-2 rounded-xl text-xs font-black hover:bg-slate-700 transition-all h-[42px] uppercase">{t.addHole}</button>
+              <NumericActionButton onClick={addHole} className="bg-slate-900 text-white px-4 py-2 rounded-xl text-xs font-black hover:bg-slate-700 transition-all h-[42px] uppercase">{t.addHole}</NumericActionButton>
            </div>
 
            <div className="mt-4 border-t border-slate-200 pt-4">
@@ -538,7 +539,7 @@ const ProfileEditor: React.FC<ProfileEditorProps> = ({ onSaveConfiguration, onCa
                   />
                 ))}
               </div>
-              <button onClick={addBatchHoles} className="bg-blue-600 text-white px-4 py-2 rounded-xl text-xs font-black hover:bg-blue-700 transition-all uppercase">{language==='cn'?'批量添加打孔':language==='en'?'Add batch holes':'穴を一括追加'}</button>
+              <NumericActionButton onClick={addBatchHoles} className="bg-blue-600 text-white px-4 py-2 rounded-xl text-xs font-black hover:bg-blue-700 transition-all uppercase">{language==='cn'?'批量添加打孔':language==='en'?'Add batch holes':'穴を一括追加'}</NumericActionButton>
            </div>
         </div>
         {grooveCount >= 2 && (
@@ -676,16 +677,16 @@ const ProfileEditor: React.FC<ProfileEditorProps> = ({ onSaveConfiguration, onCa
           {holes.map((hole,i)=><div key={hole.id} className="flex flex-wrap items-center gap-2 rounded-xl bg-slate-50 p-3">
             <span className="text-sm">{i+1}.</span>
             <select aria-label={language==='cn'?`孔${i+1}加工面`:language==='en'?`Hole ${i+1} face`:`穴${i+1} 加工面`} value={hole.side} onChange={e=>setHoles(prev=>prev.map(h=>h.id===hole.id?{...h,side:e.target.value as ProfileSide,physicalGrooveIndex:0}:h))} className="rounded-lg border p-2">{(['A','B','C','D'] as const).map(s=><option key={s} value={s}>{s} {language==='en'?'face':'面'}</option>)}</select>
-            <input aria-label={language==='cn'?`孔${i+1}位置毫米`:language==='en'?`Hole ${i+1} position in millimeters`:`穴${i+1} 位置（mm）`} type="number" step="1" min="5" max={length-5} value={hole.positionMm} onChange={e=>setHoles(prev=>prev.map(h=>h.id===hole.id?{...h,positionMm:Math.round(Number(e.target.value))}:h))} className="w-24 rounded-lg border p-2"/><span className="text-xs">mm</span>
+            <DraftNumberInput aria-label={language==='cn'?`孔${i+1}位置毫米`:language==='en'?`Hole ${i+1} position in millimeters`:`穴${i+1} 位置（mm）`} type="number" step="1" min="5" max={length-5} value={hole.positionMm} onChange={e=>setHoles(prev=>prev.map(h=>h.id===hole.id?{...h,positionMm:Math.round(Number(e.target.value))}:h))} className="w-24 rounded-lg border p-2"/><span className="text-xs">mm</span>
             <select aria-label={language==='cn'?`孔${i+1}类型`:language==='en'?`Hole ${i+1} type`:`穴${i+1} 種類`} value={hole.type} onChange={e=>setHoles(prev=>prev.map(h=>h.id===hole.id?{...h,type:e.target.value as HoleType,threadSize:e.target.value==='threaded'?(h.threadSize||'M3'):undefined}:h))} className="rounded-lg border p-2"><option value="through">{tr("通孔")}</option><option value="countersunk">{tr("沉头孔")}</option><option value="threaded">{tr("螺纹孔")}</option></select>
             {hole.type==='threaded'&&<select aria-label={language==='cn'?`孔${i+1}螺纹规格`:language==='en'?`Hole ${i+1} thread size`:`穴${i+1} ねじサイズ`} value={hole.threadSize||'M3'} onChange={e=>setHoles(prev=>prev.map(h=>h.id===hole.id?{...h,threadSize:e.target.value as ThreadSize}:h))} className="rounded-lg border p-2">{['M3','M4','M5','M6',...(variantId.startsWith('30')||variantId.startsWith('40')?['M8']:[])].map(v=><option key={v}>{v}</option>)}</select>}
             {getProfileGrooveCount(variantId,hole.side)>1&&<select aria-label={language==='cn'?`孔${i+1}槽位`:language==='en'?`Hole ${i+1} groove`:`穴${i+1} 溝`} value={hole.physicalGrooveIndex||0} onChange={e=>setHoles(prev=>prev.map(h=>h.id===hole.id?{...h,physicalGrooveIndex:Number(e.target.value)}:h))} className="rounded-lg border p-2">{Array.from({length:getProfileGrooveCount(variantId,hole.side)},(_,n)=><option key={n} value={n}>{language==='cn'?`第${n+1}槽`:language==='en'?`Groove ${n+1}`:`溝${n+1}`}</option>)}</select>}
             <button type="button" aria-label={language==='cn'?`删除孔${i+1}`:language==='en'?`Delete hole ${i+1}`:`穴${i+1}を削除`} onClick={()=>setHoles(prev=>prev.filter(h=>h.id!==hole.id))} className="rounded-lg p-2 text-red-500"><Trash2 size={16}/></button>
           </div>)}
         </div>}
-        <button onClick={addToBatch} disabled={saving || isTooLong || isTooShort} className={`w-full py-5 font-black rounded-2xl shadow-xl transition-all flex items-center justify-center gap-3 uppercase tracking-widest ${isTooLong || isTooShort ? 'bg-slate-200 text-slate-400 cursor-not-allowed shadow-none' : (initialItem || editingId ? 'bg-blue-600 hover:bg-blue-700 text-white shadow-blue-600/20' : 'bg-slate-900 hover:bg-slate-800 text-white shadow-slate-900/10')}`}>
+        <NumericActionButton onClick={addToBatch} disabled={saving || isTooLong || isTooShort} className={`w-full py-5 font-black rounded-2xl shadow-xl transition-all flex items-center justify-center gap-3 uppercase tracking-widest ${isTooLong || isTooShort ? 'bg-slate-200 text-slate-400 cursor-not-allowed shadow-none' : (initialItem || editingId ? 'bg-blue-600 hover:bg-blue-700 text-white shadow-blue-600/20' : 'bg-slate-900 hover:bg-slate-800 text-white shadow-slate-900/10')}`}>
           {saving ? tr("正在保存…") : onSaveConfiguration ? tr("保存加工配置") : initialItem ? 'Save Updates' : (editingId ? t.updateBatchItem : t.addToBatch)}
-        </button>
+        </NumericActionButton>
       </div>
 
       {!initialItem && (
@@ -730,7 +731,7 @@ const ProfileEditor: React.FC<ProfileEditorProps> = ({ onSaveConfiguration, onCa
                           </div>
                         </td>
                         <td className="px-4 text-center">
-                          <input type="number" min="1" value={item.quantity} onChange={(e) => { const q = parseInt(e.target.value) || 1; setDraftProfiles(draftProfiles.map(x => x.id === item.id ? {...x, quantity: q, totalPrice: parseFloat((x.config.unitPrice * q).toFixed(1))} : x)); }} className="w-16 px-2 py-1 bg-white border border-slate-200 rounded-lg text-center font-black" />
+                          <DraftNumberInput type="number" min="1" value={item.quantity} onChange={(e) => { const q = parseInt(e.target.value) || 1; setDraftProfiles(draftProfiles.map(x => x.id === item.id ? {...x, quantity: q, totalPrice: parseFloat((x.config.unitPrice * q).toFixed(1))} : x)); }} className="w-16 px-2 py-1 bg-white border border-slate-200 rounded-lg text-center font-black" />
                         </td>
                         <td className="px-4 font-black text-blue-600">{currency}{item.totalPrice.toFixed(1)}</td>
                         <td className="px-4 text-right">
@@ -746,9 +747,9 @@ const ProfileEditor: React.FC<ProfileEditorProps> = ({ onSaveConfiguration, onCa
               </tbody>
             </table>
           </div>
-          <button onClick={handleBatchConfirm} disabled={draftProfiles.length === 0 || !!editingId} className={`w-full py-5 rounded-2xl font-black flex items-center justify-center gap-3 transition-all uppercase tracking-widest ${draftProfiles.length > 0 && !editingId ? 'bg-blue-600 text-white shadow-xl shadow-blue-600/20' : 'bg-slate-100 text-slate-300 cursor-not-allowed'}`}>
+          <NumericActionButton onClick={handleBatchConfirm} disabled={draftProfiles.length === 0 || !!editingId} className={`w-full py-5 rounded-2xl font-black flex items-center justify-center gap-3 transition-all uppercase tracking-widest ${draftProfiles.length > 0 && !editingId ? 'bg-blue-600 text-white shadow-xl shadow-blue-600/20' : 'bg-slate-100 text-slate-300 cursor-not-allowed'}`}>
             <ShoppingCart className="w-6 h-6" /> {t.addBatchToCart}
-          </button>
+          </NumericActionButton>
         </div>
       )}
     </div>

@@ -1237,7 +1237,7 @@
         async function saveInventoryRow(id) {
             const input = document.getElementById(`inventory-count-${id}`);
             const barCount = Number(input?.value);
-            if (!Number.isInteger(barCount) || barCount < 0) return alert('库存支数必须是非负整数');
+            if (!input?.value.trim() || !Number.isInteger(barCount) || barCount < 0) return alert('库存支数必须是非负整数');
             const response = await fetch(`${API_BASE}/admin/profile-inventory/${id}`, {
                 method: 'PUT',
                 headers: { 'Authorization': `Bearer ${authToken}`, 'Content-Type': 'application/json' },
@@ -1368,7 +1368,7 @@
         async function saveAccessoryInventoryRow(id) {
             const input = document.getElementById(`accessory-inventory-count-${id}`);
             const quantity = Number(input?.value);
-            if (!Number.isInteger(quantity) || quantity < 0) return alert('库存数量必须是非负整数');
+            if (!input?.value.trim() || !Number.isInteger(quantity) || quantity < 0) return alert('库存数量必须是非负整数');
             const response = await fetch(`${API_BASE}/admin/accessory-inventory/${id}`, {
                 method: 'PUT',
                 headers: { 'Authorization': `Bearer ${authToken}`, 'Content-Type': 'application/json' },

@@ -1,3 +1,4 @@
+import { DraftNumberInput, NumericActionButton } from './DraftNumberInput';
 import { synchronizeDesignerSceneItems as synchronizeStoolScene, completeStoolConnectionSystem, inspectGuidedConnectionSystem, createAccessoryObject as createStoolAccessoryObject, getAccessoryDimensions as getStoolAccessoryDimensions, type DIYSceneItem as StoolSceneItem } from '../utils/stoolDesignerEngine';
 import { inspectDesignerImportItems } from '../utils/designerImportPreflight';
 import { rekeyImportedDesignItems } from '../utils/designerImportRemap';
@@ -181,6 +182,7 @@ interface DIYSceneItem extends StoolSceneItem {
   quantity: number;
   variantId?: string;
   cabinetFrameLevel?: 'bottom' | 'top' | 'storage';
+  wardrobeFrontSetbackMm?: number;
   length?: number;
   width?: number;
   height?: number;
@@ -376,7 +378,7 @@ const TEXT: Record<Language, Record<string, string>> = {
     doorNeedFrame: '检测到完整的正面型材框架后即可添加柜门',
     doorFrameReady: '已检测到可安装柜门的正面框架',
     doorAlreadyAdded: '这个框架已经安装了柜门',
-    doorSizeUnsupported: '单扇柜门最大1500×3000mm；当前开口需要拆分为多扇门',
+    doorSizeUnsupported: '单块门板须适配1200×2400mm板材（允许旋转）；当前开口无法自动拆分',
     doorMaterial: '柜门材料',
     doorAluminum: '铝柜门',
     doorMarine: '海洋板门',
@@ -396,7 +398,7 @@ const TEXT: Record<Language, Record<string, string>> = {
     doorRightOpen: '右开',
     doorAutoSize: '自动门尺寸',
     doorLeafUnit: '扇',
-    doorMarginHint: '仅修改当前门扇，可分别设置全盖、半盖或大弯。全盖与半盖等高；尺寸向下取整到毫米，周边至少留3mm，对开中缝3mm。',
+    doorMarginHint: '单块门板不超过1200×2400mm（可旋转），自动加门会按需拆分。仅修改当前门扇，可分别设置全盖、半盖或大弯。全盖与半盖等高；尺寸向下取整到毫米，周边至少留3mm，对开中缝3mm。',
     backHome: '回到主页',
     draftRestored: '已恢复此浏览器中保存的设计',
     draftReadFailed: '无法读取本地设计缓存，请导入已保存的 JSON 备份。',
@@ -695,7 +697,7 @@ const TEXT: Record<Language, Record<string, string>> = {
     doorNeedFrame: 'Add a complete front profile frame to enable a cabinet door',
     doorFrameReady: 'A compatible front frame is ready for a cabinet door',
     doorAlreadyAdded: 'This frame already has a cabinet door',
-    doorSizeUnsupported: 'A single door is limited to 1500×3000mm; split this opening into multiple leaves',
+    doorSizeUnsupported: 'Each door must fit a 1200×2400mm sheet (rotation allowed); this opening cannot be split automatically',
     doorMaterial: 'Door material',
     doorAluminum: 'Aluminum cabinet door',
     doorMarine: 'Marine-board door',
@@ -715,7 +717,7 @@ const TEXT: Record<Language, Record<string, string>> = {
     doorRightOpen: 'Right opening',
     doorAutoSize: 'Automatic door size',
     doorLeafUnit: ' leaves',
-    doorMarginHint: 'Edits affect only this leaf. Full and half overlay have equal height. Cut dimensions round down to whole mm, with at least 3mm perimeter clearance and a 3mm pair seam.',
+    doorMarginHint: 'Each leaf fits a 1200×2400mm sheet (rotation allowed); automatic doors split as needed. Edits affect only this leaf. Full and half overlay have equal height. Cut dimensions round down to whole mm, with at least 3mm perimeter clearance and a 3mm pair seam.',
     backHome: 'Back to home',
     draftRestored: 'Restored the design saved in this browser',
     draftReadFailed: 'Could not read the local draft. Please import your saved design JSON backup.',
@@ -1021,7 +1023,7 @@ const TEXT: Record<Language, Record<string, string>> = {
     doorNeedFrame: '正面の形材枠を完成すると扉を追加できます',
     doorFrameReady: '扉を取り付け可能な正面枠を検出しました',
     doorAlreadyAdded: 'この枠にはすでに扉があります',
-    doorSizeUnsupported: '扉1枚の上限は1500×3000mmです。複数枚に分割してください',
+    doorSizeUnsupported: '扉1枚は1200×2400mmの板材に収まる必要があります（回転可）。自動分割できません',
     doorMaterial: '扉材質',
     doorAluminum: 'アルミ扉',
     doorMarine: 'マリンボード扉',
@@ -1041,7 +1043,7 @@ const TEXT: Record<Language, Record<string, string>> = {
     doorRightOpen: '右開き',
     doorAutoSize: '自動扉寸法',
     doorLeafUnit: '枚',
-    doorMarginHint: '選択した扉のみ変更します。全かぶせと半かぶせは同じ高さです。寸法は整数mmに切り捨て、周囲は3mm以上、両開きの中央は3mm空けます。',
+    doorMarginHint: '扉1枚は1200×2400mm以内（回転可）。自動追加時に必要に応じて分割します。選択した扉のみ変更します。全かぶせと半かぶせは同じ高さです。寸法は整数mmに切り捨て、周囲は3mm以上、両開きの中央は3mm空けます。',
     backHome: 'ホームに戻る',
     draftRestored: 'このブラウザに保存された設計を復元しました',
     draftReadFailed: 'ローカル設計を読み込めません。保存済みの設計JSONを読み込んでください。',
@@ -1569,9 +1571,9 @@ export const normalizeDesignItems = (source: DIYSceneItem[]): DIYSceneItem[] => 
       doorOverlay: item.doorOverlay || 'full',
       doorLeafMode: item.doorLeafMode || (item.attachmentKey?.includes(':DOUBLE:') ? 'double' : 'single'),
       doorPairSide: item.doorPairSide
-        || (item.attachmentKey?.endsWith(':DOUBLE:right') ? 'right' : item.attachmentKey?.endsWith(':DOUBLE:left') ? 'left' : undefined),
+        || (item.attachmentKey?.includes(':DOUBLE:right') ? 'right' : item.attachmentKey?.includes(':DOUBLE:left') ? 'left' : undefined),
       openingSide: item.doorPairSide
-        || (item.attachmentKey?.endsWith(':DOUBLE:right') ? 'right' : item.attachmentKey?.endsWith(':DOUBLE:left') ? 'left' : undefined)
+        || (item.attachmentKey?.includes(':DOUBLE:right') ? 'right' : item.attachmentKey?.includes(':DOUBLE:left') ? 'left' : undefined)
         || item.openingSide
         || 'left',
       thickness: item.doorMaterial === 'marine'
@@ -2514,7 +2516,7 @@ const itemsFromProductionWorkbook = (production: ProductionWorkbookData): DIYSce
       : part.attachmentKey?.includes(':DOUBLE:') ? 'double' : base.doorLeafMode,
     doorPairSide: part.doorPairSide === 'left' || part.doorPairSide === 'right'
       ? part.doorPairSide
-      : part.attachmentKey?.endsWith(':DOUBLE:right') ? 'right' : part.attachmentKey?.endsWith(':DOUBLE:left') ? 'left' : undefined,
+      : part.attachmentKey?.includes(':DOUBLE:right') ? 'right' : part.attachmentKey?.includes(':DOUBLE:left') ? 'left' : undefined,
     openingSide: part.openingSide === 'right' || part.openingSide === 'left' ? part.openingSide : base.openingSide,
     length: part.lengthMm ?? base.length,
     width: part.widthMm ?? base.width,
@@ -3271,9 +3273,19 @@ const fitCabinetDoorToOpening = (item: DIYSceneItem, opening: CabinetDoorOpening
   const overlay = opening.has3030Frame && item.doorMaterial !== 'marine' && requestedOverlay === 'full' ? 'half' : requestedOverlay;
   const leafMode: DIYDoorLeafMode = item.doorLeafMode || (item.attachmentKey?.includes(':DOUBLE:') ? 'double' : 'single');
   const pairSide: DIYDoorPairSide | undefined = leafMode === 'double'
-    ? item.doorPairSide || (item.attachmentKey?.endsWith(':DOUBLE:right') ? 'right' : 'left')
+    ? item.doorPairSide || (item.attachmentKey?.includes(':DOUBLE:right') ? 'right' : 'left')
     : undefined;
   const bounds = cabinetDoorLeafBounds(opening, overlay, leafMode, pairSide);
+  // Row subdivision is part of the attachment key, so JSON/XLSX reloads and
+  // attached-door resizes preserve each leaf rather than refitting a full-height door.
+  const rowMatch = item.attachmentKey?.match(/:ROWS:(\d+):(\d+)$/);
+  const rowCount = rowMatch ? Math.max(1, Number(rowMatch[1])) : 1;
+  const rowIndex = rowMatch ? Math.min(rowCount - 1, Number(rowMatch[2])) : 0;
+  if (rowCount > 1) {
+    const pitch = (opening.outer.top - opening.outer.bottom) / rowCount;
+    if (rowIndex > 0) bounds.bottom = opening.outer.bottom + rowIndex * pitch + CABINET_DOOR_PERIMETER_GAP_MM / 2;
+    if (rowIndex < rowCount - 1) bounds.top = opening.outer.bottom + (rowIndex + 1) * pitch - CABINET_DOOR_PERIMETER_GAP_MM / 2;
+  }
   const width = Math.max(1, Math.floor(bounds.right - bounds.left));
   const height = Math.max(1, Math.floor(bounds.top - bounds.bottom));
   // Keep the 3mm meeting seam exact; the sub-mm cutting remainder belongs
@@ -3302,9 +3314,37 @@ const fitCabinetDoorToOpening = (item: DIYSceneItem, opening: CabinetDoorOpening
     lockedPosition: true,
     autoGenerated: true,
     attachedProfileIds: opening.profileIds,
-    attachmentKey: cabinetDoorOpeningAttachmentKey(opening, leafMode, pairSide),
+    attachmentKey: cabinetDoorOpeningAttachmentKey(opening, leafMode, pairSide) + (rowCount > 1 ? `:ROWS:${rowCount}:${rowIndex}` : ''),
     quantity: 1,
   };
+};
+
+const cabinetDoorFitsSheet = (door: Pick<DIYSceneItem, 'width' | 'height'>) => {
+  const width = door.width || 0;
+  const height = door.height || 0;
+  return width > 0 && height > 0 && Math.min(width, height) <= 1200 && Math.max(width, height) <= 2400;
+};
+
+const buildSheetSizedCabinetDoors = (opening: CabinetDoorOpening, template: DIYSceneItem): DIYSceneItem[] => {
+  // One or two vertical leaves keep hinges on the existing left/right posts.
+  // For tall openings, stack rows rather than inventing unsupported centre hinges.
+  const layouts = [1, 2].filter(columns => template.doorLeafMode !== 'double' || columns === 2)
+    .flatMap(columns => Array.from({ length: 16 }, (_, index) => ({ columns, rows: index + 1 })))
+    .sort((a, b) => a.columns * a.rows - b.columns * b.rows || a.rows - b.rows);
+  for (const { columns, rows } of layouts) {
+    const doors = Array.from({ length: rows }, (_, row) => Array.from({ length: columns }, (_, column) => {
+      const mode = columns === 2 ? 'double' : 'single';
+      const side = columns === 2 ? (column === 0 ? 'left' : 'right') : undefined;
+      return fitCabinetDoorToOpening({
+        ...template,
+        id: `${template.id}:LEAF:${rows}:${row}:${column}`,
+        doorLeafMode: mode, doorPairSide: side, openingSide: side || template.openingSide || 'left',
+        attachmentKey: cabinetDoorOpeningAttachmentKey(opening, mode, side) + (rows > 1 ? `:ROWS:${rows}:${row}` : ''),
+      }, opening);
+    })).flat();
+    if (doors.every(cabinetDoorFitsSheet)) return doors;
+  }
+  return [];
 };
 
 const endCapPlacementForProfile = (profile: DIYSceneItem, end: 'left' | 'right') => {
@@ -4047,7 +4087,7 @@ const syncAttachedAccessories = (source: DIYSceneItem[]) => source.map((item) =>
   if (item.kind === 'cabinet_door' && item.lockedPosition) {
     const openings = detectCabinetDoorOpenings(source);
     const opening = openings.find((candidate) => (
-      candidate.key === item.attachmentKey || item.attachmentKey?.startsWith(`${candidate.key}:DOUBLE:`)
+      candidate.key === item.attachmentKey || item.attachmentKey?.startsWith(`${candidate.key}:DOUBLE:`) || item.attachmentKey?.startsWith(`${candidate.key}:ROWS:`)
     ))
       || openings.find((candidate) => candidate.profileIds.every((profileId) => item.attachedProfileIds?.includes(profileId)));
     if (!opening) {
@@ -4512,7 +4552,17 @@ const displayRackPhysicalConnections = (source: DIYSceneItem[]): RackPhysicalCon
     let branchEnd: -1 | 1;
     let carrierProfile: DIYSceneItem;
     let carrierThrough = false;
-    if (firstEnd !== null && secondEnd === null) {
+    const recessed = joint.first.wardrobeFrontSetbackMm ? joint.first : joint.second.wardrobeFrontSetbackMm ? joint.second : null;
+    if (recessed) {
+      const other = recessed === joint.first ? joint.second : joint.first;
+      // A 30mm setback no longer aligns with the post's central slot.
+      // Seat the rail on the adjacent depth rail instead of inventing an offset post fastener.
+      if (Math.abs(profileBoxFromItem(other).axes[0].z) < 0.99) return [];
+      branchProfile = recessed;
+      branchEnd = (recessed === joint.first ? firstEnd : secondEnd) || 1;
+      carrierProfile = other;
+      carrierThrough = true;
+    } else if (firstEnd !== null && secondEnd === null) {
       branchProfile = joint.first;
       branchEnd = firstEnd;
       carrierProfile = joint.second;
@@ -4603,6 +4653,16 @@ const connectorSeatBoxes = (placement: AccessoryPlacement): ProfileBox[] => {
   const secondArm = new THREE.Vector3(0, 1, 0).applyQuaternion(quaternion).normalize();
   const localZ = new THREE.Vector3(0, 0, 1).applyQuaternion(quaternion).normalize();
   const origin = placement.position;
+  if (placement.key.includes(':SLOT-5:')) {
+    const axes = [firstArm, secondArm, localZ] as [THREE.Vector3, THREE.Vector3, THREE.Vector3];
+    const length = 42 / SCENE_SCALE;
+    const arm = 12.6 / SCENE_SCALE;
+    const depth = 4.2 / SCENE_SCALE;
+    return [
+      { center: origin.clone().addScaledVector(firstArm, length / 2).addScaledVector(secondArm, arm / 2), axes, halfSizes: [length / 2, arm / 2, depth / 2] },
+      { center: origin.clone().addScaledVector(firstArm, arm / 2).addScaledVector(secondArm, length / 2), axes, halfSizes: [arm / 2, length / 2, depth / 2] },
+    ];
+  }
   const moduleSize = 30 / SCENE_SCALE;
   const wallThickness = THREE.MathUtils.clamp(moduleSize * 0.18, 0.026, 0.06);
   const axes = [firstArm, secondArm, localZ] as [THREE.Vector3, THREE.Vector3, THREE.Vector3];
@@ -4627,7 +4687,7 @@ const validateDisplayRackConnectionSystem = (source: DIYSceneItem[]): DisplayRac
     ? (item.holes || []).filter((hole) => hole.jointKey?.endsWith(':DRILL-TAP')).map((hole) => ({ item, hole }))
     : []);
   const connectors = source.filter((item) => (
-    item.kind === 'connector'
+    (item.kind === 'connector' || item.kind === 'hidden_connector')
     && item.autoGenerated
     && (item.attachedProfileIds || []).length === 2
     && (item.attachedProfileIds || []).every((id) => id.startsWith('display-rack-3-') || id.startsWith('wardrobe-3030-'))
@@ -4707,7 +4767,7 @@ const validateDisplayRackConnectionSystem = (source: DIYSceneItem[]): DisplayRac
   });
 
   const probe = createItem('connector', source.length, '3030');
-  const placementsByKey = new Map(accessoryPlacementCandidates(probe, source).map((placement) => [placement.key, placement]));
+  const placementsByKey = new Map([...accessoryPlacementCandidates(probe, source), ...accessoryPlacementCandidates(createItem('hidden_connector', source.length, '3030'), source)].map((placement) => [placement.key, placement]));
   const obstacleBoxes = displayRackConnectionObstacles(source);
   const checkedConnectorBoxes: { id: string; boxes: ProfileBox[] }[] = [];
   connectors.forEach((connector) => {
@@ -4745,13 +4805,15 @@ const withDisplayRackConnectionSystem = (source: DIYSceneItem[]) => {
   if (!physicalConnections.length) return source;
   const alreadyPrepared = source.some((item) => (
     item.kind === 'profile' && (item.holes || []).some((hole) => hole.jointKey?.endsWith(':DRILL-TAP'))
-  )) || source.some((item) => item.kind === 'connector' && item.autoGenerated);
+  )) || source.some((item) => (item.kind === 'connector' || item.kind === 'hidden_connector') && item.autoGenerated);
   if (alreadyPrepared) return source;
 
   const probe = createItem('connector', source.length, '3030');
   const obstacleBoxes = displayRackConnectionObstacles(source);
   const safeBracketPlacementsByJoint = new Map<string, { candidate: AccessoryPlacement; boxes: ProfileBox[] }[]>();
-  accessoryPlacementCandidates(probe, source).forEach((candidate) => {
+  [...accessoryPlacementCandidates(probe, source), ...accessoryPlacementCandidates(createItem('hidden_connector', source.length, '3030'), source)].forEach((candidate) => {
+    const recessed = source.some(item => item.wardrobeFrontSetbackMm && candidate.targetProfileIds.includes(item.id));
+    if (candidate.key.includes(':SLOT-5:') !== recessed) return;
     if (!candidate.joint || candidate.targetProfileIds.length !== 2) return;
     const boxes = connectorSeatBoxes(candidate);
     if (boxes.some((box) => obstacleBoxes.some((obstacle) => orientedBoxesOverlap(box, obstacle, 0.001)))) return;
@@ -4787,9 +4849,14 @@ const withDisplayRackConnectionSystem = (source: DIYSceneItem[]) => {
     for (const connection of ranked) {
       // Outer cabinet frames are bracket-only. Drilling here used to create
       // incorrect 15mm end holes/taps on the top and bottom horizontal rails.
+      if (connection.branchProfile.wardrobeFrontSetbackMm) continue;
       if (connection.branchProfile.cabinetFrameLevel === 'bottom' || connection.branchProfile.cabinetFrameLevel === 'top') continue;
       const plan = drillTapJointPlan(connection.joint);
       if (!plan) continue;
+      // Wardrobe N1 faces must stay sealed on both the entry and exit faces.
+      if (plan.drilledProfile.id.startsWith('wardrobe-3030-')
+        && (!getProfileGrooveCount(plan.drilledProfile.variantId, plan.hole.side)
+          || !getProfileGrooveCount(plan.drilledProfile.variantId, OPPOSITE_PROFILE_SIDE[plan.hole.side]))) continue;
       const drillKey = `${plan.drilledProfile.id}:${Math.round(plan.hole.positionMm * 10)}`;
       const tapKey = `${plan.tappedProfile.id}:${plan.tappedEnd}`;
       if (occupiedDrillStations.has(drillKey) || occupiedTappedEnds.has(tapKey)) continue;
@@ -4846,14 +4913,14 @@ const withDisplayRackConnectionSystem = (source: DIYSceneItem[]) => {
       .sort((first, second) => first.candidate.key.localeCompare(second.candidate.key))[0];
     if (!placement) return;
     connectors.push({
-      ...createItem('connector', prepared.length + connectors.length, '3030'),
+      ...createItem(connection.branchProfile.wardrobeFrontSetbackMm ? 'hidden_connector' : 'connector', prepared.length + connectors.length, '3030'),
       position: placement.candidate.position.toArray().map((value) => Number((value * SCENE_SCALE).toFixed(3))) as Vec3,
       rotation: placement.candidate.rotation,
       lockedPosition: true,
       autoGenerated: true,
       attachedProfileIds: placement.candidate.targetProfileIds,
       attachmentKey: placement.candidate.key,
-      remark: rackOuterWidth ? '3.0展示架顶底框平面1号角码，连接相邻横梁与深度梁；不打孔' : '3030柜体1号角码，安装在立面；顶底框不打孔，与内嵌板避让',
+      remark: connection.branchProfile.wardrobeFrontSetbackMm ? '3030前横梁内退30mm；5号隐藏角码连接深度梁，避让内嵌门及层板' : rackOuterWidth ? '3.0展示架顶底框平面1号角码，连接相邻横梁与深度梁；不打孔' : '3030柜体1号角码，安装在立面；顶底框不打孔，与内嵌板避让',
     });
     selectedConnectorBoxes.push(...placement.boxes);
     usedPairs.add(joint.key);
@@ -10289,7 +10356,7 @@ const ThreeAssembly: React.FC<{
             </span>
           </div>
           <div className="flex items-center gap-1.5">
-            <input
+            <DraftNumberInput
               type="number"
               min={5}
               max={Math.max(5, holeDraft.lengthMm - 5)}
@@ -10321,13 +10388,13 @@ const ThreeAssembly: React.FC<{
             >
               {drillEditorLabels.cancel}
             </button>
-            <button
+            <NumericActionButton
               type="button"
               onClick={applyHoleDraft}
               className="rounded-xl bg-blue-600 px-3 py-2 text-[10px] font-black text-white hover:bg-blue-500"
             >
               {drillEditorLabels.confirm}
-            </button>
+            </NumericActionButton>
           </div>
         </div>
       )}
@@ -10351,7 +10418,7 @@ const ThreeAssembly: React.FC<{
               <span className="shrink-0 text-[8px] font-black text-slate-500">
                 {operationLabels.move}{operationEditor.moveTargetIds && operationEditor.moveTargetIds.length > 1 ? ` · ${operationEditor.moveTargetIds.length}` : ''}
               </span>
-              <input
+              <DraftNumberInput
                 type="number"
                 aria-label={operationLabels.move}
                 data-testid="diy-operation-value"
@@ -10367,14 +10434,14 @@ const ThreeAssembly: React.FC<{
                 className="w-14 min-w-0 rounded-md border border-blue-200 bg-white px-1.5 py-1 text-right text-[11px] font-black text-slate-900 outline-none focus:border-blue-500"
               />
               <span className="shrink-0 text-[9px] font-black text-slate-400">mm</span>
-              <button
+              <NumericActionButton
                 type="button"
                 data-testid="diy-operation-apply"
                 onClick={() => applyOperationEditor()}
                 className="shrink-0 rounded-md bg-blue-600 px-2 py-1 text-[9px] font-black text-white hover:bg-blue-500"
               >
                 {operationLabels.apply}
-              </button>
+              </NumericActionButton>
             </div>
           ) : (
             <>
@@ -10401,14 +10468,14 @@ const ThreeAssembly: React.FC<{
                   className="min-w-0 flex-1 rounded-lg border border-blue-200 bg-blue-50 px-2 py-1.5 text-right text-xs font-black text-slate-900 outline-none focus:border-blue-500"
                 />
                 <span className="text-[10px] font-black text-slate-400">mm</span>
-                <button
+                <NumericActionButton
                   type="button"
                   data-testid="diy-operation-apply"
                   onClick={() => applyOperationEditor()}
                   className="rounded-lg bg-blue-600 px-2 py-1.5 text-[10px] font-black text-white hover:bg-blue-500"
                 >
                   {operationLabels.apply}
-                </button>
+                </NumericActionButton>
               </div>
               {operationEditor.error && (
                 <div
@@ -10882,77 +10949,16 @@ const NumberField: React.FC<NumberFieldProps> = ({
   onInvalid,
   onChange,
 }) => {
-  const normalizedValue = Number.isFinite(value) ? value : 0;
-  const [draft, setDraft] = useState(String(normalizedValue));
-  const [editing, setEditing] = useState(false);
-  const [error, setError] = useState('');
-
-  useEffect(() => {
-    if (!deferCommit || (!editing && !error)) setDraft(String(normalizedValue));
-  }, [deferCommit, editing, error, normalizedValue]);
-
-  const commitDraft = () => {
-    if (!deferCommit) return;
-    const trimmed = draft.trim();
-    const parsed = Number(trimmed);
-    const invalid = trimmed === ''
-      || !Number.isFinite(parsed)
-      || (min !== undefined && parsed < min)
-      || (max !== undefined && parsed > max);
-    if (invalid) {
-      setError(invalidMessage || `${min ?? '-'} – ${max ?? '+'}`);
-      onInvalid?.();
-      return;
-    }
-    setError('');
-    setDraft(String(parsed));
-    onChange(parsed);
-  };
-
   return (
     <label className="block">
       <span className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1.5">{label}</span>
-      <input
-        type="number"
-        value={deferCommit ? draft : normalizedValue}
-        min={min}
-        max={max}
-        step={step}
-        onFocus={() => setEditing(true)}
-        onBlur={() => {
-          setEditing(false);
-          commitDraft();
-        }}
-        onChange={(event) => {
-          if (deferCommit) {
-            setDraft(event.target.value);
-            setError('');
-          } else {
-            onChange(Number(event.target.value) || 0);
-          }
-        }}
-        onKeyDown={(event) => {
-          if (!deferCommit) return;
-          if (event.key === 'Enter') {
-            event.preventDefault();
-            // Blur is the single commit boundary, avoiding a duplicate submit
-            // while also letting a rejected scene update restore its real value.
-            event.currentTarget.blur();
-          }
-          if (event.key === 'Escape') {
-            setDraft(String(normalizedValue));
-            setError('');
-            event.currentTarget.blur();
-          }
-        }}
-        aria-invalid={Boolean(error)}
-        className={`w-full rounded-xl border bg-slate-50 px-3 py-2.5 text-sm font-bold text-slate-800 outline-none focus:ring-2 ${
-          error
-            ? 'border-red-400 focus:border-red-500 focus:ring-red-100'
-            : 'border-slate-200 focus:border-blue-500 focus:ring-blue-100'
-        }`}
-      />
-      {error && <span role="alert" className="mt-1.5 block text-[10px] font-black leading-relaxed text-red-600">{error}</span>}
+      <DraftNumberInput type="number" value={value} min={min} max={max} step={step}
+        deferCommit={deferCommit}
+        onChange={event => onChange(Number(event.target.value))}
+        onInvalid={onInvalid}
+        title={invalidMessage}
+        onKeyDown={event => { if (event.key === 'Enter') { event.preventDefault(); event.currentTarget.blur(); } }}
+        className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm font-bold text-slate-800 outline-none focus:ring-2 focus:border-blue-500 focus:ring-blue-100" />
     </label>
   );
 };
@@ -11127,6 +11133,9 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({
     items,
     selectedFrameProfileIds.length >= 4 ? new Set(selectedFrameProfileIds) : undefined,
   ), [items, selectedFrameProfileIds.join('|')]);
+  const plannedDoorCount = useMemo(() => cabinetDoorOpenings.reduce((sum, opening) => sum + buildSheetSizedCabinetDoors(opening, {
+    ...createItem('cabinet_door', 0), doorOverlay: newDoorOverlay, doorLeafMode: newDoorLeafMode,
+  }).length, 0), [cabinetDoorOpenings, newDoorOverlay, newDoorLeafMode]);
   const newDoorFullDisabled = cabinetDoorOpenings.some(opening => opening.has3030Frame);
   const selectedDoorFullDisabled = selected?.kind === 'cabinet_door' && selected.doorMaterial !== 'marine'
     && items.some(item => selected.attachedProfileIds?.includes(item.id) && item.kind === 'profile' && item.variantId?.startsWith('3030'));
@@ -11757,25 +11766,18 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({
         .filter((item) => item.kind === 'cabinet_door' && item.attachmentKey)
         .map((item) => item.attachmentKey as string));
       const availableOpenings = cabinetDoorOpenings.filter((opening) => ![...occupiedOpeningKeys].some((key) => (
-        key === opening.key || key.startsWith(`${opening.key}:DOUBLE:`)
+        key === opening.key || key.startsWith(`${opening.key}:DOUBLE:`) || key.startsWith(`${opening.key}:ROWS:`)
       )));
       if (!availableOpenings.length) {
         showNotice(t.doorAlreadyAdded);
         return;
       }
-      const doors = availableOpenings.flatMap((opening, openingIndex) => {
-        const pairSides: Array<DIYDoorPairSide | undefined> = newDoorLeafMode === 'double'
-          ? ['left', 'right']
-          : [undefined];
-        return pairSides.map((doorPairSide, leafIndex) => fitCabinetDoorToOpening({
-          ...createItem('cabinet_door', items.length + openingIndex * pairSides.length + leafIndex),
-          doorOverlay: newDoorOverlay,
-          doorLeafMode: newDoorLeafMode,
-          doorPairSide,
-          openingSide: doorPairSide || 'left',
-        }, opening));
-      });
-      if (doors.some((door) => (door.width || 0) > 1500 || (door.height || 0) > 3000)) {
+      const doorGroups = availableOpenings.map((opening, openingIndex) => buildSheetSizedCabinetDoors(opening, {
+        ...createItem('cabinet_door', items.length + openingIndex),
+        doorOverlay: newDoorOverlay, doorLeafMode: newDoorLeafMode,
+      }));
+      const doors = doorGroups.flat();
+      if (doorGroups.some(group => !group.length) || !doors.every(cabinetDoorFitsSheet)) {
         showNotice(t.doorSizeUnsupported);
         return;
       }
@@ -12842,7 +12844,7 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({
   ];
 
   return (
-    <div className="min-h-[calc(100vh-88px)] bg-slate-100 xl:flex xl:h-screen xl:min-h-0 xl:flex-col xl:overflow-hidden">
+    <div data-numeric-scope className="min-h-[calc(100vh-88px)] bg-slate-100 xl:flex xl:h-screen xl:min-h-0 xl:flex-col xl:overflow-hidden">
       <div className="shrink-0 border-b border-slate-200 bg-white px-4 py-4 sm:px-6">
         <div className="mx-auto flex max-w-[1800px] flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
           <div>
@@ -12881,9 +12883,9 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({
               </button>
               {fileMenu === 'json' && (
                 <div className="absolute right-0 top-full z-50 mt-2 w-52 rounded-2xl border border-slate-200 bg-white p-2 shadow-2xl">
-                  <button type="button" onClick={() => { save(); setFileMenu(null); }} className="flex w-full items-center gap-2 rounded-xl px-3 py-2.5 text-left text-xs font-black text-slate-700 hover:bg-blue-50 hover:text-blue-700"><Save className="h-4 w-4" />{t.save}</button>
+                  <NumericActionButton type="button" onClick={() => { save(); setFileMenu(null); }} className="flex w-full items-center gap-2 rounded-xl px-3 py-2.5 text-left text-xs font-black text-slate-700 hover:bg-blue-50 hover:text-blue-700"><Save className="h-4 w-4" />{t.save}</NumericActionButton>
                   <button type="button" onClick={() => { load(); setFileMenu(null); }} className="flex w-full items-center gap-2 rounded-xl px-3 py-2.5 text-left text-xs font-black text-slate-700 hover:bg-blue-50 hover:text-blue-700"><Upload className="h-4 w-4" />{t.load}</button>
-                  <button type="button" onClick={() => { exportJson(); setFileMenu(null); }} className="flex w-full items-center gap-2 rounded-xl px-3 py-2.5 text-left text-xs font-black text-slate-700 hover:bg-blue-50 hover:text-blue-700"><Download className="h-4 w-4" />{t.export}</button>
+                  <NumericActionButton type="button" onClick={() => { exportJson(); setFileMenu(null); }} className="flex w-full items-center gap-2 rounded-xl px-3 py-2.5 text-left text-xs font-black text-slate-700 hover:bg-blue-50 hover:text-blue-700"><Download className="h-4 w-4" />{t.export}</NumericActionButton>
                 </div>
               )}
             </div>
@@ -12898,7 +12900,7 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({
               </button>
               {fileMenu === 'excel' && (
                 <div className="absolute right-0 top-full z-50 mt-2 w-52 rounded-2xl border border-slate-200 bg-white p-2 shadow-2xl">
-                  <button type="button" onClick={() => { exportExcel(); setFileMenu(null); }} className="flex w-full items-center gap-2 rounded-xl px-3 py-2.5 text-left text-xs font-black text-slate-700 hover:bg-blue-50 hover:text-blue-700"><Download className="h-4 w-4" />{t.exportExcel}</button>
+                  <NumericActionButton type="button" onClick={() => { exportExcel(); setFileMenu(null); }} className="flex w-full items-center gap-2 rounded-xl px-3 py-2.5 text-left text-xs font-black text-slate-700 hover:bg-blue-50 hover:text-blue-700"><Download className="h-4 w-4" />{t.exportExcel}</NumericActionButton>
                   <button type="button" data-testid="diy-load-excel" onClick={() => { excelImportRef.current?.click(); setFileMenu(null); }} className="flex w-full items-center gap-2 rounded-xl px-3 py-2.5 text-left text-xs font-black text-slate-700 hover:bg-blue-50 hover:text-blue-700"><Upload className="h-4 w-4" />{t.loadExcel}</button>
                 </div>
               )}
@@ -12971,7 +12973,7 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({
                         ))}
                       </select>
                     </label>
-                    <button
+                    <NumericActionButton
                       type="button"
                       data-testid="diy-library-start-profile-draw"
                       onClick={() => startProfileDrawFromVariant(libraryProfileVariantId)}
@@ -12983,7 +12985,7 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({
                     >
                       <Move3D className="h-4 w-4" />
                       {t.freeDrawProfile}
-                    </button>
+                    </NumericActionButton>
                     <p className="mt-2 text-[9px] font-bold leading-relaxed text-blue-600/80">{t.freeDrawHint}</p>
                   </div>
                 )}
@@ -13033,7 +13035,7 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({
                     const seriesOptions = expandable ? getAvailableAccessorySizes(entry.kind) : [];
                     if (!expandable) {
                       return (
-                        <button
+                        <NumericActionButton
                           key={entry.kind}
                           data-testid={`diy-add-${entry.kind}`}
                           draggable={!entryDisabled}
@@ -13052,12 +13054,12 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({
                             {entry.kind === 'cabinet_door' && (
                               <span className={`mt-0.5 block text-[9px] font-bold ${cabinetDoorOpenings.length ? 'text-emerald-600' : 'text-slate-400'}`}>
                                 {cabinetDoorOpenings.length
-                                  ? `${t.doorFrameReady} · ${cabinetDoorOpenings.length * (newDoorLeafMode === 'double' ? 2 : 1)}${t.doorLeafUnit}`
+                                  ? `${t.doorFrameReady} · ${plannedDoorCount}${t.doorLeafUnit}`
                                   : t.doorNeedFrame}
                               </span>
                             )}
                           </span>
-                        </button>
+                        </NumericActionButton>
                       );
                     }
                     const prices = ACCESSORY_PRICES[entry.kind];
@@ -13098,7 +13100,7 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({
                         {expanded && (
                           <div className="ml-3 flex flex-col gap-1 border-l-2 border-blue-100 pl-2.5">
                             {seriesOptions.map((series) => (
-                              <button
+                              <NumericActionButton
                                 key={`${entry.kind}-${series}`}
                                 type="button"
                                 data-testid={`diy-add-${entry.kind}-${series}`}
@@ -13132,7 +13134,7 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({
                                     </span>
                                   )}
                                 </span>
-                              </button>
+                              </NumericActionButton>
                             ))}
                           </div>
                         )}
@@ -13580,7 +13582,7 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({
                   {t.interferenceWarning}
                 </div>
               )}
-              <div className="mt-4 space-y-5">
+              <div key={selected.id} className="mt-4 space-y-5">
               <div className="flex items-center gap-2">
                 {selected.kind !== 'end_cap' && selected.kind !== 'cabinet_door' && <button onClick={() => {
                   const duplicated = {
@@ -14234,7 +14236,7 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({
                     )}
                     <label className="col-span-2 block"><span className="diy-field-label">{t.holeType}</span><select value={holeType} onChange={(event) => setHoleType(event.target.value as HoleType)} className="diy-select"><option value="through">{t.through}</option><option value="countersunk">{t.countersunk}</option><option value="threaded">{t.threaded}</option></select></label>
                     {holeType === 'threaded' && <label className="col-span-2 block"><span className="diy-field-label">{t.threadLabel}</span><select value={threadSize} onChange={(event) => setThreadSize(event.target.value as ThreadSize)} className="diy-select">{(['M3', 'M4', 'M5', 'M6', 'M8'] as ThreadSize[]).map((size) => <option key={size}>{size}</option>)}</select></label>}
-                    <button onClick={addHole} className="col-span-2 rounded-xl bg-blue-600 px-3 py-2.5 text-xs font-black text-white hover:bg-blue-500">{t.addHole}</button>
+                    <NumericActionButton onClick={addHole} className="col-span-2 rounded-xl bg-blue-600 px-3 py-2.5 text-xs font-black text-white hover:bg-blue-500">{t.addHole}</NumericActionButton>
                   </div>
                   <div className="mt-3 space-y-1">
                     {(selected.holes || []).map((hole) => (
@@ -14297,11 +14299,11 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({
               </div>
             </>
           )}
-          <button onClick={addDesignToCart} disabled={!items.length} className="mt-5 flex w-full items-center justify-center gap-2 rounded-2xl bg-blue-600 px-4 py-4 text-sm font-black text-white shadow-xl shadow-blue-600/20 transition hover:bg-blue-500 disabled:cursor-not-allowed disabled:bg-slate-300 disabled:shadow-none">
+          <NumericActionButton onClick={addDesignToCart} disabled={!items.length} className="mt-5 flex w-full items-center justify-center gap-2 rounded-2xl bg-blue-600 px-4 py-4 text-sm font-black text-white shadow-xl shadow-blue-600/20 transition hover:bg-blue-500 disabled:cursor-not-allowed disabled:bg-slate-300 disabled:shadow-none">
             <ShoppingCart className="h-5 w-5" />{t.addCart} · {currency}{total.toFixed(1)}
-          </button>
+          </NumericActionButton>
           {manufacturingRelease.applies && (
-            <button
+            <NumericActionButton
               type="button"
               data-testid="diy-manufacturing-release-banner"
               data-status={manufacturingRelease.blocking.length
@@ -14322,7 +14324,7 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({
                 {' · '}
                 {manufacturingRelease.issues.length}
               </span>
-            </button>
+            </NumericActionButton>
           )}
           {stoolSupportFasteners.lines.length > 0 && (
             <div
