@@ -537,6 +537,7 @@ const buildWardrobeFrameTemplate = (
   storageLayersInput = 5,
   columnsInput = 1,
   frame: WardrobeFrameOption = '2040_2020',
+  frontSetbackMm = 0,
 ): ParametricTemplatePayload => {
   const lengthMm = clampInteger(lengthInput, 400, MAX_FURNITURE_PROFILE_MM);
   const widthMm = clampInteger(widthInput, 300, MAX_FURNITURE_PROFILE_MM);
@@ -656,6 +657,7 @@ const buildWardrobeFrameTemplate = (
     attachmentPrefix,
     columnIndex,
     clearDepth,
+    boardCenterZ = 0,
     frontSupportZ,
     backSupportZ,
     frontRail,
@@ -668,6 +670,7 @@ const buildWardrobeFrameTemplate = (
     attachmentPrefix: string;
     columnIndex: number;
     clearDepth: number;
+    boardCenterZ?: number;
     frontSupportZ: number;
     backSupportZ: number;
     frontRail: ParametricSceneItem;
@@ -689,7 +692,7 @@ const buildWardrobeFrameTemplate = (
       id: id('marine-board'),
       kind: 'marine_board' as const,
       name: '12mm UV wardrobe shelf board',
-      position: [boardCenterX, frameY + 4, 0] as [number, number, number],
+      position: [boardCenterX, frameY + 4, boardCenterZ] as [number, number, number],
       rotation: [90, 0, 0] as [number, number, number],
       colorId: 'wood_natural',
       quantity: 1,
@@ -755,13 +758,13 @@ const buildWardrobeFrameTemplate = (
         backRail,
       );
       addBoardSupport(
-        [startX + 11, supportY, sign * supportZOffset],
+        [startX + 11, supportY, boardCenterZ + sign * supportZOffset],
         [0, 90, 0],
         `左侧${supportIndex + 1}/2`,
         leftDepthRail,
       );
       addBoardSupport(
-        [endX - 11, supportY, sign * supportZOffset],
+        [endX - 11, supportY, boardCenterZ + sign * supportZOffset],
         [0, 90, 0],
         `右侧${supportIndex + 1}/2`,
         rightDepthRail,
@@ -796,6 +799,7 @@ const buildWardrobeFrameTemplate = (
     const layerIndex = is2047 ? frameIndex - 1 : frameIndex;
     const frameLabel = layerIndex < 0 ? '底部' : `第${layerIndex + 1}个收纳层`;
     const layerY = Math.round(y);
+    const setback = layerIndex < 0 ? 0 : frontSetbackMm;
     const depthRails = boundaryXs.map((x, boundaryIndex) => createProfile(id, {
       variantId: '2020',
       length: storageDepthRailLength,
@@ -807,12 +811,12 @@ const buildWardrobeFrameTemplate = (
       const endX = boundaryXs[columnIndex + 1];
       const railLength = Number((endX - startX - 20).toFixed(3));
       const railCenterX = Number(((startX + endX) / 2).toFixed(3));
-      return [frontShelfRailZ, backShelfRailZ].map((z, faceIndex) => createProfile(id, {
+      return [frontShelfRailZ - setback, backShelfRailZ].map((z, faceIndex) => createProfile(id, {
         variantId: is2047 ? '2020-N1' : '2020',
         length: railLength,
         position: [railCenterX, layerY, z],
         rotation: is2047 ? [faceIndex === 0 ? 90 : -90, 0, 0] : [0, 0, 0],
-        remark: `衣柜${frameLabel}第${columnIndex + 1}/${columns}列${faceIndex === 0 ? '前' : '后'}侧${railLength}mm分段横杆2020；落在2040外侧槽位，前后横梁与柜体外缘齐平，端面贴齐相邻列边界立柱并以1号角码连接，不攻丝`,
+        remark: `衣柜${frameLabel}第${columnIndex + 1}/${columns}列${faceIndex === 0 ? '前' : '后'}侧${railLength}mm分段横杆2020；${faceIndex === 0 && setback ? `前横梁内退${setback}mm，接立柱内侧槽位` : '落在2040外侧槽位，与柜体外缘齐平'}，端面贴齐相邻列边界立柱并以1号角码连接，不攻丝`,
       }));
     });
     const widthRails = widthRailsByColumn.flat();
@@ -824,8 +828,9 @@ const buildWardrobeFrameTemplate = (
         frameLabel: `${frameLabel}`,
         attachmentPrefix: `WARDROBE:SHELF:${layerIndex + 1}`,
         columnIndex,
-        clearDepth: depthRailLength,
-        frontSupportZ: frontShelfRailZ - 1,
+        clearDepth: depthRailLength - setback,
+        boardCenterZ: -setback / 2,
+        frontSupportZ: frontShelfRailZ - 1 - setback,
         backSupportZ: backShelfRailZ + 1,
         frontRail: columnRails[0],
         backRail: columnRails[1],
@@ -912,6 +917,7 @@ const buildWardrobeFrameTemplate = (
     },
     summary: {
       frameOption: frame,
+      frontRailSetbackMm: frontSetbackMm,
       lengthMm,
       widthMm,
       heightMm,
@@ -1026,8 +1032,9 @@ export const buildWardrobeTemplate = (
   base: WardrobeBaseOption = frame === '2047_2020' ? 'caster' : 'none',
   edge: WardrobeEdgeOption = frame === '2047_2020' ? 'sealed' : 'open',
 ): ParametricTemplatePayload => {
-  const payload = buildWardrobeFrameTemplate(length, depth, height, layers, columns, frame);
   const sealed = frame === '2047_2020' || edge === 'sealed';
+  const frontSetbackMm = frame === '2047_2020' ? 27 : frame === '2040_2020' && sealed ? 20 : 0;
+  const payload = buildWardrobeFrameTemplate(length, depth, height, layers, columns, frame, frontSetbackMm);
   if (sealed && frame !== '2047_2020') {
     payload.items.forEach(item => {
       if (item.kind !== 'profile' || item.rotation[1] === 90) return; // depth rails retain open grooves

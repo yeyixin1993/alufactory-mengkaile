@@ -70,7 +70,13 @@ const project = (item: any) => Object.fromEntries(['kind', 'variantId', 'positio
   const value = key === 'holes' && item.kind === 'profile' ? (item.holes || []).map(({ side, type, positionMm }: any) => ({ side, type, positionMm })) : item[key];
   return value === undefined ? [] : [[key, value]];
 }));
-assert.deepEqual(generated.items.filter(item => ['profile', 'marine_board', 'caster'].includes(item.kind)).map(item => JSON.stringify(project(item))).sort(), approved.items.map((item: any) => JSON.stringify(project(item))).sort());
+assert.deepEqual(generated.items.filter(item => ['profile', 'marine_board', 'caster'].includes(item.kind)).map(item => JSON.stringify(project(item))).sort(), approved.items.map((item: any) => {
+  // Preserve the owner's original fixture; only the new middle-front clearance changes.
+  const next = { ...item, position: [...item.position] };
+  if (item.kind === 'profile' && item.variantId === '2020-N1' && item.position[1] === 502 && item.position[2] > 0) next.position[2] -= 27;
+  if (item.kind === 'marine_board' && item.position[1] === 506) { next.position[2] -= 13.5; next.height -= 27; }
+  return JSON.stringify(project(next));
+}).sort());
 const supported = completeParametricFurnitureTemplate(buildWardrobeTemplate(1200, 600, 2200, 2, 2, '3030')).items;
 const supports = supported.filter(item => item.shelfSupportType === 'board_18mm');
 assert(supports.every(item => calculatePrice(item) === 1.7));
@@ -115,6 +121,28 @@ for (const frame of ['2040_2020', '2047_2020', '3030'] as const) {
       }
       const completed = completeParametricFurnitureTemplate(payload);
       assert(completed.check.valid, `${frame}/${edge}/${columns}: ${completed.check.issues.join('; ')}`);
+      if (frame !== '3030') {
+        const setback = frame === '2047_2020' ? 27 : sealed ? 20 : 0;
+        assert.equal(payload.summary.frontRailSetbackMm, setback);
+        const middleBoards = completed.items.filter(item => item.kind === 'marine_board' && /^WARDROBE:SHELF:[1-9]/.test(item.attachmentKey || ''));
+        assert.equal(middleBoards.length, columns * 2);
+        for (const board of middleBoards) {
+          assert.equal(board.position[2], -setback / 2);
+          assert.equal(board.height, 600 - 42 - setback);
+          const rails = completed.items.filter(item => item.kind === 'profile' && board.attachedProfileIds?.includes(item.id) && item.rotation[1] === 0);
+          const front = rails.find(item => item.position[2] > 0)!;
+          assert.equal(front.position[2], 290 - setback);
+          assert.equal(rails.find(item => item.position[2] < 0)!.position[2], -290);
+          assert.equal(completed.items.filter(item => item.kind === 'connector' && item.attachedProfileIds?.includes(front.id)).length, 2);
+          const supports = completed.items.filter(item => item.kind === 'shelf_support' && item.attachedProfileIds?.includes(board.id));
+          assert.equal(supports.length, 8);
+          assert(supports.filter(item => item.attachedProfileIds?.includes(front.id)).every(item => item.position[2] === 289 - setback));
+          if (setback) assert(300 - 20 >= front.position[2] + 10, '18mm inset door must not penetrate front shelf rail');
+          assert.equal(board.position[2] - board.height! / 2, -279, 'Rear board edge must remain fixed');
+        }
+        const outerBoards = completed.items.filter(item => item.kind === 'marine_board' && !middleBoards.includes(item));
+        assert(outerBoards.every(item => item.position[2] === 0 && item.height === 558), 'Top/bottom boards stay unchanged');
+      }
       if (frame === '3030') {
         const fronts = completed.items.filter(item => item.kind === 'profile' && item.wardrobeFrontSetbackMm === 30);
         assert.equal(fronts.length, columns * 2);
