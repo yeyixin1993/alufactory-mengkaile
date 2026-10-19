@@ -49,6 +49,7 @@
     "test:designer-library-images": "vite build --ssr scripts/verify-designer-library-images.ts --outDir .verify-designer-library-images-dist --emptyOutDir && node .verify-designer-library-images-dist/verify-designer-library-images.js",
     "test:source-part-cart-merge": "vite build --target esnext --ssr scripts/verify-source-part-cart-merge.ts --outDir .verify-source-part-cart-merge-dist --emptyOutDir && node .verify-source-part-cart-merge-dist/verify-source-part-cart-merge.js",
     "test:wardrobe-options": "vite build --ssr scripts/verify-wardrobe-options.ts --outDir .verify-wardrobe-dist --emptyOutDir && node .verify-wardrobe-dist/verify-wardrobe-options.js",
+    "test:profile-visible-faces": "vite build --target esnext --ssr scripts/verify-profile-visible-faces.ts --outDir .verify-profile-faces-dist --emptyOutDir && node .verify-profile-faces-dist/verify-profile-visible-faces.js",
     "test:ai-chat-3d-preview": "vite build --target esnext --ssr scripts/verify-ai-chat-3d-preview.ts --outDir .verify-ai-chat-3d-dist --emptyOutDir && node .verify-ai-chat-3d-dist/verify-ai-chat-3d-preview.js"
   },
   "dependencies": {

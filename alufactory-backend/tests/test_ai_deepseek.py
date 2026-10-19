@@ -74,7 +74,7 @@ class DeepSeekTest(unittest.TestCase):
             with patch('app.routes.ai_chat.time.time',return_value=result['created']):
                 response=self.chat(index=index)
             self.assertEqual(response.json['charged_cny'],0)
-            self.assertEqual(self.status().json['balance_cny'],10)
+            self.assertEqual(self.status().json['balance_cny'],5)
             self.assertIsNone(db.session.get(AIAccount,'u:vip').busy)
 
     @patch.dict('os.environ', {'AI_PROVIDER':'deepseek','DEEPSEEK_API_KEY':'fake'})
@@ -90,7 +90,7 @@ class DeepSeekTest(unittest.TestCase):
     def test_timeout_does_not_charge(self, upstream):
         result = self.chat()
         self.assertEqual(result.json['charged_cny'], 0)
-        self.assertEqual(self.status().json['balance_cny'], 10)
+        self.assertEqual(self.status().json['balance_cny'], 5)
         self.assertIsNone(db.session.get(AIAccount,'u:vip').busy)
 
     def test_explicit_selection_and_no_key(self):

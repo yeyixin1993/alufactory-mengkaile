@@ -37,12 +37,28 @@ class AIChatTest(unittest.TestCase):
         return self.client.post('/api/ai/chat', headers=self.headers(user) if user else {}, json={'visitor_token': token, 'message': '2020粉色两根', 'request_id': f'00000000-0000-4000-8000-{index:012d}'})
 
     def test_grant_and_upgrade_once(self):
-        self.assertEqual(self.status().json['balance_cny'], 10)
-        self.assertEqual(self.status().json['balance_cny'], 10)
+        self.assertEqual(self.status().json['balance_cny'], 5)
+        self.assertEqual(self.status().json['balance_cny'], 5)
         db.session.get(User, 'vip').membership_level='vip_plus'; db.session.commit()
-        self.assertEqual(self.status().json['balance_cny'], 100)
+        self.assertEqual(self.status().json['balance_cny'], 50)
         db.session.get(User, 'vip').membership_level='vip'; db.session.commit()
-        self.assertEqual(self.status().json['balance_cny'], 100)
+        self.assertEqual(self.status().json['balance_cny'], 50)
+
+    def test_legacy_grants_are_retained_and_upgrade_only_tops_up(self):
+        self.status()
+        account = db.session.get(AIAccount, 'u:vip')
+        account.granted = 10 * SCALE
+        account.balance = 8 * SCALE
+        db.session.commit()
+        self.assertEqual(self.status().json['balance_cny'], 8)
+        db.session.get(User, 'vip').membership_level = 'vip_plus'
+        db.session.commit()
+        self.assertEqual(self.status().json['balance_cny'], 48)
+        self.assertEqual(self.status().json['balance_cny'], 48)
+        account.granted = 100 * SCALE
+        account.balance = 73 * SCALE
+        db.session.commit()
+        self.assertEqual(self.status().json['balance_cny'], 73)
 
     @patch('app.routes.ai_chat.provider_extract', return_value=(json.dumps(SPEC), 100000, {'prompt_tokens':3000,'completion_tokens':500}))
     def test_cost_markup_and_retry(self, provider):
@@ -50,7 +66,7 @@ class AIChatTest(unittest.TestCase):
         self.assertEqual(first.json['charged_cny'], .0011)
         self.assertEqual(self.chat().json, first.json)
         self.assertEqual(provider.call_count, 1)
-        self.assertAlmostEqual(self.status().json['balance_cny'], 9.9989)
+        self.assertAlmostEqual(self.status().json['balance_cny'], 4.9989)
         self.assertEqual(AILedger.query.filter_by(kind='usage').count(), 1)
 
     @patch('app.routes.ai_chat.provider_extract', return_value=(json.dumps(SPEC), 100000, {}))
@@ -90,7 +106,7 @@ class AIChatTest(unittest.TestCase):
     @patch('app.routes.ai_chat.provider_extract', side_effect=TimeoutError())
     def test_timeout_not_charged(self, _):
         self.chat()
-        self.assertEqual(self.status().json['balance_cny'], 10)
+        self.assertEqual(self.status().json['balance_cny'], 5)
         self.assertIsNone(db.session.get(AIAccount, 'u:vip').busy)
 
     def test_no_key_or_disabled_does_not_use_trial(self):
@@ -104,7 +120,7 @@ class AIChatTest(unittest.TestCase):
         self.assertEqual(self.client.post('/api/ai/admin/users/vip', json=payload, headers=self.headers()).status_code,403)
         self.assertEqual(self.client.post('/api/ai/admin/users/vip', json=payload, headers=self.headers('admin')).status_code,200)
         self.assertEqual(self.client.post('/api/ai/admin/users/vip', json=payload, headers=self.headers('admin')).status_code,409)
-        self.assertEqual(self.status().json['balance_cny'],110)
+        self.assertEqual(self.status().json['balance_cny'],105)
         payload.update(operation_id='00000000-0000-4000-8000-000000000002',delta_cny='-111')
         self.assertEqual(self.client.post('/api/ai/admin/users/vip', json=payload, headers=self.headers('admin')).status_code,409)
 
@@ -148,7 +164,7 @@ class AIChatTest(unittest.TestCase):
     def test_invalid_output_not_billed(self, _):
         response = self.chat()
         self.assertEqual(response.json['charged_cny'], 0)
-        self.assertEqual(self.status().json['balance_cny'], 10)
+        self.assertEqual(self.status().json['balance_cny'], 5)
 
     @patch('app.routes.ai_chat.urllib.request.urlopen')
     def test_provider_usage_with_implicit_cache(self, upstream):
@@ -182,7 +198,7 @@ class AIChatTest(unittest.TestCase):
         self.assertEqual(self.client.post(endpoint,data=data).text,'failure')
         client.verify.return_value=True
         for _ in range(2):self.assertEqual(self.client.post(endpoint,data=data).text,'success')
-        self.assertEqual(self.status().json['balance_cny'],110)
+        self.assertEqual(self.status().json['balance_cny'],105)
         self.assertEqual(AILedger.query.filter_by(kind='recharge').count(),1)
         self.assertEqual(self.client.post(endpoint,data={**data,'trade_no':'different'}).text,'failure')
 

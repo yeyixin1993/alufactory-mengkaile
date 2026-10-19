@@ -30,6 +30,22 @@ class FAQTest(unittest.TestCase):
         self.env = patch.dict('os.environ', {'AI_PROVIDER': 'qwen', 'DASHSCOPE_API_KEY':'', 'AI_QWEN_BASE_URL':''})
         self.env.start()
 
+    def test_quota_policy_refresh_preserves_custom_answers(self):
+        from app.ai_faq import LEGACY_QUOTA_ANSWER
+        rule = db.session.get(AIFaqRule, 'quota-vip')
+        rule.answer = LEGACY_QUOTA_ANSWER
+        db.session.commit()
+        seed_faq_rules()
+        self.assertIn('¥5 AI', rule.answer)
+        self.assertIn('¥50', rule.answer)
+        version = rule.version
+        seed_faq_rules()
+        self.assertEqual(rule.version, version)
+        rule.answer = '管理员自定义答复'
+        db.session.commit()
+        seed_faq_rules()
+        self.assertEqual(rule.answer, '管理员自定义答复')
+
     def tearDown(self):
         self.env.stop()
         db.session.remove()
@@ -81,7 +97,7 @@ class FAQTest(unittest.TestCase):
         provider.assert_not_called()
         self.assertEqual(AILedger.query.filter_by(kind='faq').count(),1)
         self.assertEqual(AILedger.query.filter_by(kind='faq').first().api_cost,0)
-        self.assertEqual(db.session.get(AIAccount,'u:vip').balance,10*100_000_000)
+        self.assertEqual(db.session.get(AIAccount,'u:vip').balance,5*100_000_000)
 
     def test_three_messages_still_apply_to_local_answers(self):
         for i in range(1,4):

@@ -40,11 +40,21 @@ def match_faq(message):
     return matches[0] if len(matches) == 1 else None
 
 
+LEGACY_QUOTA_ANSWER = '当前 VIP 一次性赠送 ¥10 AI 额度，VIP+ 一次性赠送 ¥100，没有每月自动重置。此前已领取 VIP ¥10 的账号升级到 VIP+ 时，累计赠送补足至 ¥100。剩余额度可在聊天栏查看。'
+
+
 def seed_faq_rules():
     """Insert missing rules; upgrade only untouched legacy policy placeholders."""
     for entry in SEED_RULES:
         existing = db.session.get(AIFaqRule, entry['id'])
         if existing is not None:
+            # Refresh the exact former quota answer without overwriting custom admin text.
+            if entry['id'] == 'quota-vip' and existing.answer == LEGACY_QUOTA_ANSWER:
+                AIFaqRule.query.filter_by(id=existing.id, version=existing.version, answer=LEGACY_QUOTA_ANSWER).update(
+                    {'answer': entry['answer'], 'version': existing.version + 1, 'updated_by': 'seed-quota-2026-10-19'}, synchronize_session=False)
+                db.session.commit()
+                db.session.expire_all()
+                continue
             legacy = next((r for r in LEGACY_DRAFTS if r['id'] == entry['id']
                            and all(getattr(existing, key) == value for key, value in r.items())), None)
             if (legacy and entry != legacy and (existing.version, existing.updated_by) in ((1, 'seed'), (2, 'seed-policy-2026-10-03'))

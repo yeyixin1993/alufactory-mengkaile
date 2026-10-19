@@ -8,7 +8,7 @@ This document is the durable product and engineering memory for the Mengkaile 3D
 
 ### AI consultation entry (2026-10-03; local first phase, disabled pending setup)
 
-The owner approved text-first AI consultation through a top-of-page chat bar, followed by image-assisted designer generation and then PDF/payment/product-order integration. VIP receives a one-time RMB 10 allowance; VIP+ receives a one-time RMB 100 allowance, with no recurring reset. Upgrade grants bring the cumulative gift to RMB 100 rather than gifting it repeatedly. Guests and ordinary registered users receive three user messages; replies to clarification questions count. Frontend shows remaining messages or balance. New password registrations MUST remain VIP until the owner changes that policy; no registration membership change was made.
+The owner approved text-first AI consultation through a top-of-page chat bar, followed by image-assisted designer generation and then PDF/payment/product-order integration. VIP receives a one-time RMB 5 allowance; VIP+ receives a one-time RMB 50 allowance, with no recurring reset. Upgrade grants bring the cumulative gift to RMB 50 rather than gifting it repeatedly. Guests and ordinary registered users receive three user messages; replies to clarification questions count. Frontend shows remaining messages or balance. New password registrations MUST remain VIP until the owner changes that policy; no registration membership change was made.
 
 Recharge RMB 100 credits RMB 100. Usage deducts provider metered cost × 1.10, with precision below one fen. Per owner instruction the customer interface does not separately show the 10% service markup. Backend controls can enable/disable AI globally or for a customer, adjust balances/trial limits and change the markup, with operator/reason audit records. Alipay credits only after verified asynchronous payment notification (matching merchant, order, amount and transaction; duplicate-safe). WeChat displays the existing collection QR and requires the administrator to verify receipt and manually add credit. A customer declaration of payment never grants credit.
 
@@ -139,6 +139,7 @@ These correspond to the common module-aligned connection states seen in MayCAD/J
 - 2020R and 3030R have rounded/curved exterior faces and are not ordinary square profiles.
 - `2020-N4-RD` is rounded but not a mathematically perfect full circle; model it from its cross-section drawing.
 - 2047 is a special section. Its rendered section and machining map must show three end-tapping positions per end.
+- Visible slots use the shared `getProfileVisualGrooveCount` rule, separately from machining stations. `2040-N1-20` seals the 20mm A face; `2040-N1-40` and `3060-N1-60` seal the 40/60mm D face while retaining two D-face drilling stations. N2 adjacent variants seal A/B, N3 retains only D, and rounded R variants retain C/D. After the extrusion's +90° Y rotation, section left is B and section right is D. Do not infer all N1 closures from the suffix alone. `npm run test:profile-visible-faces` checks all catalog variants and probes their actual mesh faces (2026-10-19 rendering correction).
 - Current profile catalog IDs and prices live in `constants.ts`; geometry and machining behavior must remain keyed by stable variant ID, not display name.
 
 ## 9. Color and material rules

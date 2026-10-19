@@ -128,7 +128,7 @@ def identity(data):
     # 「试用次数已转入注册账号，请登录使用。」 forever — a visitor being counted against the
     # signed-in allowance and then asked to sign in, which is what customers found confusing.
     membership = normalize_membership_level(user.membership_level) if user else 'standard'
-    grant = {'vip': 10, 'vip_plus': 100}.get(membership, 0) * SCALE
+    grant = {'vip': 5, 'vip_plus': 50}.get(membership, 0) * SCALE
     # Compare-and-swap makes lazy one-time grants and upgrade top-ups idempotent.
     db.session.refresh(account)
     old_grant = account.granted

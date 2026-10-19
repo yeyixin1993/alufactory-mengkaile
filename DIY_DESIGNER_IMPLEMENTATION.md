@@ -131,3 +131,5 @@ Automatic door sheets (2026-10-14): enforce short edge ≤1200mm and long edge �
 数字编辑统一使用 `components/DraftNumberInput.tsx`：输入时保留可清空的草稿，仅把可用数字传给业务状态；生成/确认/保存按钮使用 `NumericActionButton`，并在所属配置容器标记 `data-numeric-scope`。避免在输入事件里用默认值覆盖空白。需要延后几何更新的字段可设 `deferCommit`，在失焦/Enter 时提交。独立配置区各自校验，取消、删除、切换和重置操作不受阻。
 
 Wardrobe clearance (2026-10-14): sealed 2040+2020 intermediate fronts recess 20mm; 2047+2020 recess 27mm. Both align with the inner post groove and retain No.1 brackets. Boards shorten and supports follow; top/bottom and rear frames stay fixed. Unsealed 2040 stays flush. `test:wardrobe-options` covers single/multiple columns, bracket resolution, board/support positions and static inset-door clearance. Regenerate existing templates to apply; deploy a rebuilt frontend `dist/`, not only backend files.
+
+Profile face rendering (2026-10-19): 2D and 3D share visible-slot rules in `utils/profileMachining.ts`, distinct from drilling stations. Corrected wide-face N1 closures and N2/N3/R orientation against canonical A/B/C/D faces. Run `npm run test:profile-visible-faces` for all 25 catalog models, including actual mesh ray checks.

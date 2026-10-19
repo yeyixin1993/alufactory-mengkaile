@@ -35,6 +35,12 @@ export const getProfileGrooveCount = (variantId = '2020', side: ProfileSide): nu
   return 1;
 };
 
+/** Visible slots differ from machining stations on sealed wide faces. */
+export const getProfileVisualGrooveCount = (variantId = '2020', side: ProfileSide): number => {
+  if ((variantId === '2040-N1-40' || variantId === '3060-N1-60') && side === 'D') return 0;
+  return getProfileGrooveCount(variantId, side);
+};
+
 export const getProfileTapPortCount = (variantId = '2020'): number => {
   if (variantId === '2047') return 3;
   const sizeMatch = variantId.match(/^(\d{2})(\d{2,3})/);

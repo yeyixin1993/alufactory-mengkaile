@@ -4,6 +4,7 @@ import { PROFILE_VARIANTS } from '../constants';
 import {
   getHoleDisplayGrooveIndex,
   getProfileGrooveCount,
+  getProfileVisualGrooveCount,
   getProfileTapPortCountForSide,
   physicalGrooveToDisplay,
   OPPOSITE_PROFILE_SIDE,
@@ -139,15 +140,7 @@ const ProfileVisualizer: React.FC<ProfileVisualizerProps> = ({
   const grooveCount = getGrooveCount(selectedSide);
   const tappingPortCount = getProfileTapPortCountForSide(selectedVariant.id, selectedSide);
 
-  // Visual groove count: how many groove lines to actually draw.
-  // For sealed faces that still allow drill positioning (e.g. 2040-N1-40 D), visual = 0.
-  const getVisualGrooveCount = (side: ProfileSide): number => {
-    const id = selectedVariant.id;
-    // 2040-N1-40 / 3060-N1-60 D side is sealed (no visible groove) but uses 2 drill positions
-    if ((id === '2040-N1-40' || id === '3060-N1-60') && side === 'D') return 0;
-    return getGrooveCount(side);
-  };
-  const visualGrooveCount = getVisualGrooveCount(selectedSide);
+  const visualGrooveCount = getProfileVisualGrooveCount(selectedVariant.id, selectedSide);
   const getVisibleHoles = (side: ProfileSide) => {
     const opposite = OPPOSITE_PROFILE_SIDE[side];
     if (isRadiusProfile) return holes.filter(h => h.side === side);

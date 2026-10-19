@@ -73,7 +73,7 @@ No refund automation is implemented yet. Reconcile any refund and corresponding 
 
 1. Configure the provider and send `2020 pink 1000mm 两端攻丝`. Expect missing quantity/province and automatic selection of the catalog's sole supported cut-section finish (ask only when multiple finishes are available). Follow-up answers retain existing fields.
 2. Compare complete quotes against QuickQuote for membership, color, short lengths, quantity and destination. Unsupported machining/assemblies must not receive a fabricated simple-profile quote.
-3. Confirm guest/standard messages decrement once, VIP initial allowance is RMB 10, VIP+ cumulative grant RMB 100, and user switches do not expose another account's history.
+3. Confirm guest/standard messages decrement once, VIP initial allowance is RMB 5, VIP+ cumulative grant RMB 50, and user switches do not expose another account's history.
 4. Compare returned provider token usage/cache details with the admin ledger. Verify 10% markup and precision without per-message one-fen rounding. Exercise provider failure, invalid structured output and retry.
 5. Use Alipay sandbox first: wrong signature/app/amount fails; repeated success credits once; browser return alone credits nothing. Then verify deployment callback reachability with an owner-controlled low-value live test.
 6. Confirm WeChat image is the intended merchant receipt code; verify manual credit and customer refresh.

@@ -5,7 +5,7 @@ Status: phase-one text consultation, metering, admin controls and recharge paths
 
 ## Requested outcome
 
-A chat bar at the top of the website accepts natural-language requirements and images, asks for missing information, quotes current products, hands editable models to the designer, generates PDFs, and leads to payment with backend records. Confirmed: VIP has a one-time RMB 10 AI allowance and VIP+ a one-time RMB 100 allowance, with no periodic reset. Anonymous visitors and standard registered users each have a three-message trial; this means user messages, including replies to clarification questions, not three complete conversations. The frontend must explicitly explain this and display remaining messages or money. Text-first delivery is approved.
+A chat bar at the top of the website accepts natural-language requirements and images, asks for missing information, quotes current products, hands editable models to the designer, generates PDFs, and leads to payment with backend records. Confirmed: VIP has a one-time RMB 5 AI allowance and VIP+ a one-time RMB 50 allowance, with no periodic reset. Anonymous visitors and standard registered users each have a three-message trial; this means user messages, including replies to clarification questions, not three complete conversations. The frontend must explicitly explain this and display remaining messages or money. Text-first delivery is approved.
 
 The backend administration must support enabling/disabling AI access and adjusting customer allowances at any time, with an audit trail of operator, reason, delta and balance. Provide a customer recharge entry point. Confirmed: Alipay verified asynchronous notifications automatically credit the full paid amount; WeChat uses the existing receipt QR and administrator-verified manual credit. Customer-visible recharge RMB 100 means RMB 100 allowance. Usage debits provider metered cost × 1.10; the customer UI does not separately display the markup, per owner instruction. Administrators can adjust the markup. Provider account setup is pending; the owner currently has neither account configured.
 
@@ -42,7 +42,7 @@ Sources: [Qwen pricing](https://help.aliyun.com/zh/model-studio/model-pricing), 
 
 ## Implemented defaults and next acceptance
 
-- VIP receives RMB 10 once. Upgrading to VIP+ brings cumulative grants to RMB 100 (adds RMB 90 if RMB 10 was granted); downgrading/re-upgrading never repeats a grant.
+- VIP receives RMB 5 once. Upgrading to VIP+ brings cumulative grants to RMB 50 (adds RMB 45 if RMB 5 was granted); downgrading/re-upgrading never repeats a grant.
 - Not signed in means guest, signed in means account: two separate allowances with nothing copied between them, so neither signing in nor signing out changes what the browser still has (see the 2026-10-09 section below); new VIP registrations receive the VIP allowance. Resetting a conversation does not reset allowance.
 - Money uses integer hundred-millionths of RMB; provider usage and markup are stored separately in the admin ledger. Malformed/failed responses do not debit customers. A locked per-account request prevents parallel overspend; uncertain/crashed requests have an admin reconciliation path, with uncertain provider costs absorbed by the merchant.
 - The first provider is pinned Qwen3.7 Flash Beijing with <=32K input and 800 output token limits. Cache usage receives its applicable input discount. The credential is server-only. Provider discounts/free credits are not inferable from API token usage; the metered tariff must be reconciled with the merchant account before launch.
@@ -119,3 +119,5 @@ Implemented explicit backend `AI_PROVIDER=deepseek` with `DEEPSEEK_API_KEY`, off
 - **「一条都不能漏」**：归档功能上线前写的 `ai_requests` 没有会话链接，只有该账号下次被访问时才补（`_initialize_conversation`）。后台列表读取时会先跑 `adopt_orphan_requests()`（幂等、限 500 条）收编这些孤儿，否则「问了就再也不回来的客户」的问答会永远看不见。
 - 页面：`alufactory-backend/admin/ai-conversations.html`，左侧会话列表 + 右侧问答明细；左侧导航新增「💬 AI聊天记录」，与额度管理、问答规则库互相加链接。客户文本一律走 `textContent` 渲染，不拼 HTML。
 - 回归：`npm run`/后台测试新增 `tests/test_ai_conversations_admin.py`（6 项：权限、游客来源与明细、搜索与过滤、附件按需、分页与空会话隐藏、孤儿收编幂等）。
+
+2026-10-19: One-time AI grants are VIP RMB 5 / VIP+ cumulative RMB 50. Previously granted credits are retained, never clawed back; an old RMB 10 VIP grant receives only RMB 40 on upgrade. Recharge and usage pricing are unchanged.

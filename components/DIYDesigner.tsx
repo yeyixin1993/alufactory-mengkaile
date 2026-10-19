@@ -92,6 +92,7 @@ import {
   getHoleDisplayGrooveIndex,
   getHolePhysicalGrooveIndex,
   getProfileGrooveCount,
+  getProfileVisualGrooveCount,
   getProfileTapPortCount,
   profileSectionCenters,
   grooveOrdinal,
@@ -5324,27 +5325,12 @@ const findAxisFlushSnap = (
 type ProfileFace = 'top' | 'right' | 'bottom' | 'left';
 
 const getActiveProfileFaces = (variantId = '2020'): Set<ProfileFace> => {
-  const active = new Set<ProfileFace>(['top', 'right', 'bottom', 'left']);
-  if (variantId === '2020R' || variantId === '3030R') {
-    return new Set<ProfileFace>(['bottom', 'left']);
-  }
-  // 2047 is a 20×47 special section: its A face is the sealed 20mm edge,
-  // while the opposite 20mm edge and both 47mm faces retain their grooves.
-  // profileMachining.ts already exposes the same A-face rule for drilling.
-  if (variantId === '2047') {
-    active.delete('top');
-    return active;
-  }
-  if (variantId.includes('N4')) return new Set<ProfileFace>();
-  if (variantId.includes('N3')) return new Set<ProfileFace>(['bottom']);
-  if (variantId.includes('N2-OPP')) return new Set<ProfileFace>(['right', 'left']);
-  if (variantId.includes('N2')) {
-    active.delete('top');
-    active.delete('right');
-  } else if (variantId.includes('N1')) {
-    active.delete('top');
-  }
-  return active;
+  // Extrusion rotates +90° about Y: section left becomes +Z (B),
+  // section right becomes -Z (D). Keep visible slots aligned with machining.
+  const faces: Array<[ProfileFace, ProfileSide]> = [
+    ['top', 'A'], ['left', 'B'], ['bottom', 'C'], ['right', 'D'],
+  ];
+  return new Set(faces.filter(([, side]) => getProfileVisualGrooveCount(variantId, side) > 0).map(([face]) => face));
 };
 
 const createProfileSectionShape = (
@@ -5556,7 +5542,7 @@ const createProfileObject = (
         width,
         height,
         cellSize,
-        activeFaces,
+        roundedSector ? new Set<ProfileFace>(['bottom', 'left']) : activeFaces,
         grooveXCenters,
         grooveYCenters,
         roundedSector,
@@ -5576,6 +5562,11 @@ const createProfileObject = (
     bevelThickness: Math.min(0.008, cellSize * 0.025),
     curveSegments: 16,
   });
+  // Turn the rounded section so its flat slots face C/D; keep triangle winding.
+  if (roundedSector) {
+    geometry.rotateY(Math.PI);
+    geometry.translate(0, 0, length);
+  }
   geometry.rotateY(Math.PI / 2);
   geometry.translate(-length / 2, 0, 0);
   geometry.computeVertexNormals();
