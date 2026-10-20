@@ -21,6 +21,7 @@ interface ProfileVisualizerProps {
   interactive?: boolean;
   tapLabel: string; // New prop for localized label
   showSideSelector?: boolean;
+  previewHoleId?: string;
 }
 
 /**
@@ -118,6 +119,7 @@ const ProfileVisualizer: React.FC<ProfileVisualizerProps> = ({
   onTapToggle,
   onBarClick,
   onHoleClick,
+  previewHoleId,
   interactive = false,
   tapLabel,
   showSideSelector = true
@@ -156,14 +158,18 @@ const ProfileVisualizer: React.FC<ProfileVisualizerProps> = ({
     const isTapped = tapping[side][index] && !disabledForSide;
 
     return (
-      <div 
+      <button
+           type="button"
+           aria-label={`${side === 'left' ? '←' : '→'} ${tapLabel} ${index + 1}`}
+           aria-pressed={Boolean(isTapped)}
+           disabled={!interactive || !onTapToggle || disabledForSide}
            key={`${side}-${index}`}
            data-testid={`profile-tap-${side}-${index}`}
            data-physical-port={index}
            data-tapped={Boolean(isTapped)}
            className={`absolute ${side === 'left' ? 'left-2' : 'right-2'} -translate-y-1/2 flex flex-col items-center transition-transform ${
-             interactive && !disabledForSide ? 'cursor-pointer hover:scale-110' : 'cursor-default'
-           } ${isTapped ? 'opacity-100' : disabledForSide ? 'opacity-40' : 'opacity-20'}`}
+             interactive && onTapToggle && !disabledForSide ? 'cursor-pointer hover:scale-110' : 'cursor-default'
+           } ${isTapped ? 'opacity-100' : disabledForSide ? 'opacity-40' : interactive && onTapToggle ? 'opacity-70' : 'opacity-20'}`}
            style={{ top: topPct }}
            onClick={(e) => {
              e.stopPropagation();
@@ -176,7 +182,7 @@ const ProfileVisualizer: React.FC<ProfileVisualizerProps> = ({
            }`}>
               <span className={`${disabledForSide ? 'text-slate-400' : 'text-red-500'} text-[10px] font-bold leading-none`}>{side === 'left' ? '→' : '←'}</span>
            </div>
-        </div>
+        </button>
     );
   };
 
@@ -310,12 +316,13 @@ const ProfileVisualizer: React.FC<ProfileVisualizerProps> = ({
                   interactive && onHoleClick?.(hole.id);
                 }}
               >
+                 {interactive && onHoleClick && <span className="absolute left-1/2 top-1/2 h-6 w-6 -translate-x-1/2 -translate-y-1/2 rounded-full" />}
                  {isCountersunkEntry && (
                    <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-5 h-5 rounded-full pointer-events-none" style={{ border: '1px solid #475569', WebkitPrintColorAdjust: 'exact', printColorAdjust: 'exact' } as React.CSSProperties} />
                  )}
                  <div 
                    className={`rounded-full border border-white/50 transition-transform ${interactive ? 'group-hover:scale-125 group-hover:bg-red-500' : ''}`}
-                   style={{ width: '8px', height: '8px', backgroundColor: '#000', WebkitPrintColorAdjust: 'exact', printColorAdjust: 'exact' } as React.CSSProperties}
+                   style={{ width: '8px', height: '8px', backgroundColor: hole.id === previewHoleId ? '#2563eb' : '#000', outline: hole.id === previewHoleId ? '3px solid #93c5fd' : undefined, WebkitPrintColorAdjust: 'exact', printColorAdjust: 'exact' } as React.CSSProperties}
                  />
                  {isThreaded && (
                    <>

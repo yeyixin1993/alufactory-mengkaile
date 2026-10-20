@@ -23,7 +23,7 @@ import { getAccessoryShippingWeightKg, normalizeMembershipLevel } from './utils/
 import { calculateScrewPlan, inferInclude304ScrewsByTotal } from './utils/screwCalculator';
 import { preloadImages } from './utils/imagePreload';
 import { exportElementToPdf } from './utils/pdfExport';
-import { summarizeDiyScrewCartItems } from './utils/cartAccessories';
+import { estimateDiyScrewCartItems } from './utils/cartAccessories';
 import { isValidShippingPhone, normalizeShippingPhone } from './utils/shippingPhone';
 import { getDesignSourceLabel, normalizeDesignSourceInfo } from './utils/designSource';
 import {
@@ -1097,7 +1097,7 @@ const Cart: React.FC<{
 
   const activeCourier: ShippingMethod = selectedCourier === 'auto' ? shippingOptions.cheapest : selectedCourier;
   const activeShipping = shippingOptions[activeCourier];
-  const diyScrewCartRows = React.useMemo(() => summarizeDiyScrewCartItems(productionCart), [productionCart]);
+  const diyScrewCartRows = React.useMemo(() => estimateDiyScrewCartItems(productionCart), [productionCart]);
   const hasDiyScrewCartRows = diyScrewCartRows.length > 0;
   useEffect(() => {
     if (hasDiyScrewCartRows && include304Screws) setInclude304Screws(false);
@@ -1807,13 +1807,13 @@ const Cart: React.FC<{
                   />
                   <span>
                     {hasDiyScrewCartRows
-                      ? `3D设计器已配螺丝（按客户确认数量，共${diyScrewCartRows.reduce((sum, row) => sum + row.quantity, 0)}颗）`
+                      ? `3D设计器已配螺丝（按实际孔数加备用，共${diyScrewCartRows.reduce((sum, row) => sum + row.quantity, 0)}颗）`
                       : '需要配304螺丝（沉头孔=圆柱头；通孔=半圆头螺丝+弹性配件）'}
                   </span>
                 </label>
                 {hasDiyScrewCartRows ? (
                   <div className="text-[11px] text-slate-400 leading-relaxed">
-                    已包含在3D设计器配件价格中，不再重复收取按孔位配螺丝费用。PDF将按头型、长度、型材规格和颜色合并显示。
+                    已包含在3D设计器配件价格中，不再重复收取按孔位配螺丝费用。配发预估按实际配孔数加每规格2颗备用计算；原订单金额不变。PDF按螺丝规格合并显示。
                   </div>
                 ) : include304Screws && (
                   <>

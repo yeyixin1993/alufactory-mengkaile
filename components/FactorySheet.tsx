@@ -10,7 +10,7 @@ import {
   getProfileManufacturingGroupKey,
   groupFactoryDisplayCartItems,
   isDiyScrewAccessory,
-  summarizeDiyScrewCartItems,
+  estimateDiyScrewCartItems,
 } from '../utils/cartAccessories';
 import { getAccessoryShippingWeightKg } from '../utils/membership';
 import { expandFinishedFurnitureCartItems } from '../utils/finishedFurnitureCart';
@@ -214,7 +214,7 @@ const FactorySheet: React.FC<FactorySheetProps> = ({ cart, user, language, order
 
   const baseTotal = cart.reduce((acc, i) => acc + i.totalPrice, 0);
   const displayCart = React.useMemo(() => groupFactoryDisplayCartItems(productionCart), [productionCart]);
-  const diyScrewRows = React.useMemo(() => summarizeDiyScrewCartItems(productionCart), [productionCart]);
+  const diyScrewRows = React.useMemo(() => estimateDiyScrewCartItems(productionCart), [productionCart]);
   const showAnyDiyScrewPrice = showPrice && diyScrewRows.some((row) => !row.hideComponentPrice);
   const hasDiyScrewRows = diyScrewRows.length > 0;
   const nonScrewDisplayCart = React.useMemo(
@@ -453,7 +453,7 @@ const FactorySheet: React.FC<FactorySheetProps> = ({ cart, user, language, order
                     if (diyScrews && (diyScrews.socketCylinder > 0 || diyScrews.buttonSocket > 0 || diyScrews.flatSocket > 0)) {
                       return (
                         <span className="ml-2 text-[10px] text-cyan-700">
-                          ｜圆柱头内六角 {diyScrews.socketCylinder} / 半圆头内六角 {diyScrews.buttonSocket} / 扁头内六角 {diyScrews.flatSocket}（按3D设计器确认数量）
+                          ｜圆柱头内六角 {diyScrews.socketCylinder} / 半圆头内六角 {diyScrews.buttonSocket} / 扁头内六角 {diyScrews.flatSocket}（按实际孔数，含备用）
                         </span>
                       );
                     }
@@ -537,7 +537,7 @@ const FactorySheet: React.FC<FactorySheetProps> = ({ cart, user, language, order
         <div data-pdf-block className="break-inside-avoid overflow-hidden rounded-xl border-2 border-cyan-700 bg-white">
           <div className="flex items-center justify-between bg-cyan-700 px-5 py-3 text-white">
             <div className="font-black tracking-wide">
-              {language === 'cn' ? '3D设计器螺丝汇总' : language === 'jp' ? '3Dデザイナーねじ集計' : '3D designer screw summary'}
+              {language === 'cn' ? '螺丝配发预估' : language === 'jp' ? 'ねじ配布見積' : 'Screw packing estimate'}
             </div>
             <div className="flex items-center gap-5 text-xs font-bold">
               <span>{t.quantity}: {diyScrewRows.reduce((sum, row) => sum + row.quantity, 0)}</span>
@@ -547,10 +547,10 @@ const FactorySheet: React.FC<FactorySheetProps> = ({ cart, user, language, order
           <div className="p-4">
             <div className="mb-3 text-[10px] font-bold text-cyan-700">
               {language === 'cn'
-                ? '以下数量以客户在3D设计器中最终确认的数量为准。'
+                ? '预估配发数量按实际配孔数计算，每种螺丝规格另含2颗备用；原订单金额不变。'
                 : language === 'jp'
-                  ? '数量は3Dデザイナーでお客様が最終確認した値です。'
-                  : 'Quantities below are the customer-confirmed values from the 3D designer.'}
+                  ? '穴数＋同規格の予備2本を表示。注文金額は変更しません。'
+                  : 'Packing estimate: actual hole count plus 2 spares per screw specification. Original order amounts are unchanged.'}
             </div>
             <table className="w-full border-collapse text-left text-[10px]">
               <thead>
@@ -560,7 +560,7 @@ const FactorySheet: React.FC<FactorySheetProps> = ({ cart, user, language, order
                   <th className="border border-cyan-100 p-2">{language === 'cn' ? '长度' : language === 'jp' ? '長さ' : 'Length'}</th>
                   <th className="border border-cyan-100 p-2">{t.color}</th>
                   <th className="border border-cyan-100 p-2 text-right">{t.quantity}</th>
-                  {showAnyDiyScrewPrice && <th className="border border-cyan-100 p-2 text-right">{language === 'cn' ? '小计' : language === 'jp' ? '小計' : 'Subtotal'}</th>}
+                  {showAnyDiyScrewPrice && <th className="border border-cyan-100 p-2 text-right">{language === 'cn' ? '原明细金额' : language === 'jp' ? '元の明細金額' : 'Original line amount'}</th>}
                 </tr>
               </thead>
               <tbody>

@@ -1,3 +1,4 @@
+import { profileScrewRequirements, reconcileScrewEstimates } from './screwEstimate';
 import { CartItem, ProductType, ProfileConfig } from '../types';
 import { getDiyScrewOrderSpec } from './screwCalculator';
 import { getRotationallyCanonicalMachiningKey } from './profileManufacturingEquivalence';
@@ -534,3 +535,21 @@ export const summarizeDiyScrewCartItems = (cart: CartItem[]): DiyScrewCartSummar
 );
 
 export const hasDiyScrewCartItems = (cart: CartItem[]) => summarizeDiyScrewCartItems(cart).length > 0;
+
+/** Packing estimate only: keep historical purchased amounts and source rows unchanged. */
+export const estimateDiyScrewCartItems = (cart: CartItem[]): DiyScrewCartSummaryRow[] => {
+  const confirmed = summarizeDiyScrewCartItems(cart);
+  if (!confirmed.length) return [];
+  const required = profileScrewRequirements(cart.filter(item => item.product.type === ProductType.PROFILE).map(item => ({
+    variantId: (item.config as ProfileConfig).variantId, holes: (item.config as ProfileConfig).holes, quantity: item.quantity,
+  })));
+  const { rows, missing } = reconcileScrewEstimates(confirmed, required);
+  // Estimated packing quantities are not billed line quantities; monetary totals
+  // remain on the original cart/order rather than being shown against this estimate.
+  return [...rows.map(row => ({ ...row, hideComponentPrice: true })), ...missing.map(row => {
+    const spec = getDiyScrewOrderSpec(row.profileSize, row.screwHead as any, row.screwLengthMm || 1);
+    return { ...row, profileModel: row.profileSize, screwThreadSize: spec.threadSize,
+      includesElasticFastener: Boolean(spec.includesElasticFastener), colorId: 'natural', colorName: '银白',
+      totalPrice: 0, hideComponentPrice: true };
+  })];
+};

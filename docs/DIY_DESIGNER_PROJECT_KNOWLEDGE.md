@@ -164,6 +164,11 @@ These correspond to the common module-aligned connection states seen in MayCAD/J
 
 ### 10.1 Hole placement workflow
 
+1. The selected profile's machining card appears immediately after model/length, before color and transforms. Its primary workflow reuses P2's `ProfileVisualizer`: select a face, click the diagram to stage a blue hole, enter a whole-mm distance from either end, and confirm. One face state controls the diagram and saved hole. Drafts never enter manufacturing data until confirmed; Cancel discards the preview. Existing holes can be edited from the diagram or list (including position/type/thread/face/slot), or deleted, through the ordinary undoable designer commit. Opening a hole from its exit view restores its actual entry face, preserving countersink direction and physical groove identity. Start/end distances are linked; both retain at least 5mm clearance. Selecting another profile/model/length resets the editing draft. (2026-10-19)
+2. “3D 点选” retains the existing spatial drilling workflow described below; the diagram’s end-tapping buttons toggle the corresponding whole end and stay synchronized with the explicit per-end controls below (including existing end-cap tapping protection). Multi-port previews retain the current designer whole-end tapping semantics. New-hole confirmation is labelled “开孔”; each saved-hole row has an explicit Edit action as well as secondary Delete.
+
+Existing 3D workflow:
+
 1. Customer activates “点选打孔”.
 2. Customer first chooses hole type: through, countersunk, or threaded.
 3. Customer clicks the intended profile face/slot.
@@ -197,6 +202,9 @@ These correspond to the common module-aligned connection states seen in MayCAD/J
 - Port count and location come from the real cross-section, never from a generic single-center assumption.
 
 ## 11. Screws and connection hardware
+
+- **2026-10-20 packing estimate (owner revision):** use actual quantity-weighted eligible hole counts plus two spares per purchasing specification directly, not the maximum with saved designer screw quantities. Designer, cart and PDF share this rule. Removing holes reduces the estimate; zero eligible holes means zero estimated screws and zero spares. Compatible series/head/thread/length are grouped across variants and colors; suppressed process holes and ordinary threaded holes are excluded, while explicit head overrides remain authoritative. Existing screw rows supply display metadata only. Source purchasing quantities and historical order prices remain unchanged; this is a packing estimate. Auto-generated linked screws account for profile piece quantity, and editing holes in a design already using automatic screws fills newly missing links. PDF alone cannot prove the edit history behind an old short count. This supersedes earlier maximum/confirmed-quantity estimate rules.
+
 
 - Auto-fill mapping is a Mengkaile product rule:
   - countersunk hole → cylinder-head socket screw;
@@ -731,3 +739,5 @@ Save separate conversations in the server database, with request membership and 
 ### 2026-10-14 — 2040封边 / 2047大弯门预留
 
 2040+2020封边方案中间层前横梁默认内退20mm，2047+2020默认内退27mm；与3030一样在生成框架时预留大弯门空间。2040不封边方案不变。20/27mm分别对应两条立柱侧槽的间距，因此前横梁端部仍用1号角码接立柱内侧槽，不套用3030连接深度梁的5号方案。中间层12mm内嵌板深度同步减少20/27mm，中心后移10/13.5mm；前层板托同步后移、侧托按新板中心和深度分布。顶底框、顶底板、后横梁、立柱、门洞及底部配件不变，计价和导出使用新板材实际尺寸。此规则替代此前这两个方案中间前横梁外侧齐平的规则；历史JSON保留人工编辑，需重新生成框架或人工同步调整。前端生成逻辑修改必须重新build并部署dist，单独更新后台不能生效。
+
+2026-10-19 型材颜色话术：客户说银色、本色、原色、银白色直接按银白色（natural）报价，不再确认银色色种；仅明确说亮银色才使用 silver，按该目录价格计费。表末颜色备注仍可确认适用范围；截面本色不改变彩色表面，海洋板原色语义不变。

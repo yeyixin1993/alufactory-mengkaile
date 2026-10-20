@@ -4,6 +4,27 @@ from app.ai_review import build_review
 from app.routes.ai_chat import visual_reply
 
 class ClarificationTest(unittest.TestCase):
+    def test_silver_aliases(self):
+        base = dict(model='2020', length=1000, quantity=1, province='天津', tapping='none', section='natural')
+        _, natural = quote_profile({**base, 'color': 'natural'}, 'standard')
+        for color in ('银色', '本色', '原色', '银白', '银白色'):
+            spec = normalize_extracted_spec({**base, 'color': color})
+            self.assertEqual(spec['color'], 'natural')
+            reply, quote = quote_profile(spec, 'standard')
+            self.assertEqual(quote['subtotal'], natural['subtotal'])
+            self.assertNotIn('需要什么颜色', reply)
+            batch = normalize_extracted_spec({'items': [{**base, 'color': color}]})
+            self.assertEqual(batch['items'][0]['color'], 'natural')
+        for color in ('亮银色', 'silver'):
+            spec = normalize_extracted_spec({**base, 'color': color})
+            self.assertEqual(spec['color'], 'silver')
+            _, bright = quote_profile(spec, 'standard')
+            self.assertGreater(bright['subtotal'], natural['subtotal'])
+        marine = normalize_extracted_spec({'product': 'marine_board', 'color': '原色'})
+        self.assertEqual(marine['color'], '原色')
+        colored = normalize_extracted_spec({**base, 'color': 'purple', 'source_notes': '紫色，截面本色'})
+        self.assertEqual(colored['color'], 'purple')
+
     def test_annotation_and_split_rows(self):
         spec=normalize_extracted_spec({'items':[
             {'source_row':3,'model':'2020','length':1000,'quantity':1,'source_notes':'邻边封槽，一根A面'},
@@ -13,6 +34,7 @@ class ClarificationTest(unittest.TestCase):
         self.assertEqual([r['model'] for r in spec['items']],['2020-N2']*2)
         reply=visual_reply(spec)
         self.assertIn('全部型材',reply)
+        self.assertNotIn('还是亮银', reply)
         self.assertNotIn('?mm',reply)
         self.assertNotIn('确认以上识别信息',reply)
 

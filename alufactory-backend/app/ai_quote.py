@@ -8,6 +8,12 @@ from pathlib import Path
 
 CATALOG = json.loads(Path(__file__).with_name('ai_catalog.json').read_text())
 
+def normalize_profile_color(color):
+    # `silver` is the existing catalog ID for explicit bright silver, not a synonym.
+    return {'银色': 'natural', '本色': 'natural', '原色': 'natural',
+            '银白': 'natural', '银白色': 'natural', '亮银色': 'silver',
+            '紫色': 'purple', '米白': 'beige'}.get(color, color)
+
 def clarification_questions(spec, stage=None):
     values = spec.get('clarifications', [])
     if not isinstance(values, list):
@@ -41,6 +47,8 @@ def recognized_lines(spec):
 
 def normalize_extracted_spec(spec):
     """Keep annotation rows out of the BOM and preserve explicit variant semantics."""
+    if product_kind(spec) == 'profile':
+        spec['color'] = normalize_profile_color(spec.get('color'))
     items = spec.get('items')
     if not isinstance(items, list): return spec
     if not items: spec['items'] = [dict((k,v) for k,v in spec.items() if k != 'items')]; items = spec['items']
@@ -48,6 +56,8 @@ def normalize_extracted_spec(spec):
     for row in items:
         if not isinstance(row, dict): raise ValueError('清单行格式错误。')
         if spec.get('product') and not row.get('product'): row['product'] = spec['product']
+        if product_kind(row) == 'profile':
+            row['color'] = normalize_profile_color(row.get('color'))
         if product_kind(row) == 'profile' and not row.get('model') and row.get('length') is None and row.get('quantity') is None and (row.get('color') or row.get('source_notes')):
             annotations.append(row)
         else:
@@ -58,7 +68,7 @@ def normalize_extracted_spec(spec):
     if annotations:
         annotation_ids = [str(r.get('source_row')) for r in annotations if r.get('source_row') is not None]
         questions = [q for q in questions if isinstance(q, dict) and not any(f'第{n}行' in q.get('question','') for n in annotation_ids)]
-        questions.append({'stage':'quote', 'question':'表格末尾的颜色备注是否适用于全部型材？“银色”是原色银白还是亮银色？'})
+        questions.append({'stage':'quote', 'question':'表格末尾的颜色备注是否适用于全部型材？'})
     explicit_neighbor = False
     for row in rows:
         if product_kind(row) != 'profile': continue
@@ -87,6 +97,7 @@ def quote_single(spec, membership):
         raise ValueError('需求格式不正确，请重新描述。')
     if product_kind(spec) != 'profile':
         return quote_material(spec, membership, CATALOG, rounded)
+    spec = {**spec, 'color': normalize_profile_color(spec.get('color'))}
     if spec.get('unsupported'):
         return '已记录需求。目前自动估价支持单种型材；多种材料、家具结构或复杂加工请在设计器补充尺寸和连接方式，并联系人工复核。', None
     variants = {v['id']: v for v in CATALOG['variants']}
@@ -175,7 +186,10 @@ def quote_profile(spec, membership):
         if not isinstance(item, dict): raise ValueError('清单行格式错误。')
         line = {**{k: spec.get(k) for k in ('product','model','color','province','section','tapping')}, **item}
         line['province'] = spec.get('province') or line.get('province')
-        line['color'] = {'原色':'natural','本色':'natural','银白':'natural','紫色':'purple','米白':'beige'}.get(line.get('color'),line.get('color'))
+        if product_kind(line) == 'profile':
+            line['color'] = normalize_profile_color(line.get('color'))
+        else:
+            line['color'] = {'原色':'natural','本色':'natural','银白':'natural','紫色':'purple','米白':'beige'}.get(line.get('color'),line.get('color'))
         if product_kind(line) == 'profile' and line.get('tapping') is None:
             line['tapping'] = 'none'; assumptions = True
         if line.get('unsupported'):
