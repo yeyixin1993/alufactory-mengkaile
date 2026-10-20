@@ -104,6 +104,9 @@ assert.equal(linesNamed(pdf, 'SHF12A support')[0].line.quantity, 8, 'and keeps t
 const bracketLines = linesNamed(grouped, '3号角码 · 3030');
 assert.equal(bracketLines.length, 1, `sixteen No.3 brackets are one catalogue line, got ${bracketLines.length}`);
 assert.equal(bracketLines[0].line.quantity, 16);
+const includedHardware = (bracketLines[0].item.config as any).lines.filter((line: any) => line.kitRole);
+assert.deepEqual(includedHardware.map((line: any) => line.quantity), [32, 32]);
+assert.ok(includedHardware.every((line: any) => line.subtotal === 0), 'No.3 hardware is included, not charged twice');
 assert.equal(bracketLines[0].item.config.importedSourcePart, false, 'a linked part is a catalogue part');
 assert.equal(bracketLines[0].item.config.catalogItemId, '3', 'and it quotes back its catalogue definition');
 assert.equal(supportLines[0].item.config.importedSourcePart, true, 'an unlinked source part stays a source part');

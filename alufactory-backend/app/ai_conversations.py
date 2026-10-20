@@ -53,7 +53,7 @@ def transcript(account):
         response=row.response or {}
         link=db.session.get(AIConversationMessage,row.id)
         history.extend([{'role':'user','content':row.message.split('\n[图片:')[0], 'image':link.image if isinstance(link.image,str) else None, 'attachments':link.image if isinstance(link.image,list) else []},
-            {'role':'assistant','content':response.get('reply',''), 'quote':response.get('quote'), 'request_id':row.id.rsplit(':',1)[-1], 'review':response.get('review'), 'order_confirmed':response.get('order_confirmed',[]), 'order_revision':response.get('order_revision',0)}])
+            {'role':'assistant','content':response.get('reply',''), 'quote':response.get('quote'), 'guidance':response.get('guidance',[]), 'request_id':row.id.rsplit(':',1)[-1], 'review':response.get('review'), 'order_confirmed':response.get('order_confirmed',[]), 'order_revision':response.get('order_revision',0)}])
     return history
 
 def conversation_list(account):

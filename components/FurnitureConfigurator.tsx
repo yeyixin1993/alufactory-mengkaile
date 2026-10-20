@@ -26,6 +26,7 @@ import {
 import DisplayRackConfigurator from './DisplayRackConfigurator';
 
 interface FurnitureConfiguratorProps {
+  initialAdvice?: {length?:number;width?:number;height?:number;wheels?:boolean};
   language: Language;
   type: ProductType.CALLIGRAPHY_CABINET | ProductType.WARDROBE | ProductType.DISPLAY_RACK_3_0;
 }
@@ -127,7 +128,8 @@ const openTemplateInDesigner = (payload: ParametricTemplatePayload) => {
 const StandardFurnitureConfigurator: React.FC<{
   language: Language;
   type: ProductType.CALLIGRAPHY_CABINET | ProductType.WARDROBE;
-}> = ({ language, type }) => {
+  initialAdvice?: FurnitureConfiguratorProps["initialAdvice"];
+}> = ({ language, type, initialAdvice }) => {
   const copy = COPY[language];
   const isCalligraphy = type === ProductType.CALLIGRAPHY_CABINET;
   const [mode, setMode] = useState<'grid' | 'size'>('grid');
@@ -135,12 +137,12 @@ const StandardFurnitureConfigurator: React.FC<{
   const [layers, setLayers] = useState(5);
   const [targetLength, setTargetLength] = useState(980);
   const [targetHeight, setTargetHeight] = useState(755);
-  const [wardrobeLength, setWardrobeLength] = useState(1200);
-  const [wardrobeWidth, setWardrobeWidth] = useState(600);
-  const [wardrobeHeight, setWardrobeHeight] = useState(2200);
+  const [wardrobeLength, setWardrobeLength] = useState(initialAdvice?.length || 1200);
+  const [wardrobeWidth, setWardrobeWidth] = useState(initialAdvice?.width || 600);
+  const [wardrobeHeight, setWardrobeHeight] = useState(initialAdvice?.height || 2200);
   const [wardrobeLayers, setWardrobeLayers] = useState(5);
   const [wardrobeColumns, setWardrobeColumns] = useState(1);
-  const [wardrobeFrame, setWardrobeFrame] = useState<WardrobeFrameOption>('2040_2020');
+  const [wardrobeFrame, setWardrobeFrame] = useState<WardrobeFrameOption>(initialAdvice?.wheels ? '2047_2020' : '2040_2020');
   const [wardrobeBases, setWardrobeBases] = useState<Record<string, WardrobeBaseOption>>({ '2047_2020': 'caster', '3030': 'none' });
   const [wardrobeEdges, setWardrobeEdges] = useState<Record<string, WardrobeEdgeOption>>({ '2040_2020': 'open', '3030': 'open' });
   const wardrobeEdge = wardrobeFrame === '2047_2020' ? 'sealed' : wardrobeEdges[wardrobeFrame];
@@ -176,14 +178,14 @@ const StandardFurnitureConfigurator: React.FC<{
   );
 
   const wardrobeDetails = wardrobeFrame === '2040_2020'
-    ? { profiles: copy.wardrobeProfiles, machining: wardrobeEdge === 'sealed' ? { cn: '封边方案中间层前横梁内退20mm，使用1号角码接立柱内侧槽；12mm内嵌层板同步缩短20mm，层板托随板调整，预留大弯柜门空间。顶底框和后横梁保持原位。', en: 'Sealed frames recess intermediate front rails 20mm, with No.1 brackets on the inner post grooves. Inset 12mm boards shorten by 20mm and their supports follow. Top/bottom frames and rear rails stay unchanged for inset-door clearance.', jp: '溝なし仕様の中間前横材は20mm後退し、柱の内側溝に1号ブラケットで接続。12mm棚板と棚受けも調整し、インセット扉の空間を確保します。上下枠と後横材は変更しません。' }[language] : copy.wardrobeMachining }
+    ? { profiles: copy.wardrobeProfiles, machining: wardrobeEdge === 'sealed' ? { cn: '中间层默认齐平，仅安装大弯柜门后前横梁内退20mm，使用1号角码接立柱内侧槽；12mm内嵌层板同步缩短20mm，层板托随板调整，预留大弯柜门空间。顶底框和后横梁保持原位。', en: 'Intermediate front rails are flush by default and recess 20mm only after inset doors are installed, with No.1 brackets on the inner post grooves. Inset 12mm boards shorten by 20mm and their supports follow. Top/bottom frames and rear rails stay unchanged for inset-door clearance.', jp: '中間前横材は標準で面一。インセット扉を取り付けた場合のみ20mm後退し、柱の内側溝に1号ブラケットで接続。12mm棚板と棚受けも調整し、インセット扉の空間を確保します。上下枠と後横材は変更しません。' }[language] : copy.wardrobeMachining }
     : wardrobeFrame === '2047_2020'
       ? {
         profiles: { cn: '2047立柱＋2020横梁，前后横梁使用2020-N1，封闭面朝外。保留等分列数和12mm UV内嵌层板，每块板配8个专用层板托。底部可选四角M8轮子、每根立柱M8调整脚或不选；柜体尺寸不含底部配件高度。按实际材料和加工计价。', en: '2047 posts with 2020 rails and outward-facing sealed 2020-N1 front and rear rails. Equal bays retain inset 12mm UV boards with eight supports each. Choose four corner M8 casters, M8 feet at every post, or none. Dimensions exclude base accessories. Priced by actual materials and machining.', jp: '2047柱＋2020横材。前後横材は2020-N1で溝なし面を外向きに配置。均等列と12mm UV棚板、1枚あたり8個の棚受けを維持します。四隅のM8キャスター、各柱のM8調整脚、またはなしを選択。寸法は底部パーツを含まず、実際の材料・加工で計算します。' }[language],
-        machining: { cn: '顶部横梁压立柱，按2047两侧端孔27mm中心距连接；顶部深度梁孔距端面17mm。中间层前横梁内退27mm，以1号角码接立柱内侧槽；层板缩短27mm，层板托同步调整，避让大弯柜门。顶底框和后横梁不动，底端中央孔攻M8安装底部配件。', en: 'Top rails cap the posts, matching the 27mm outer-bore spacing; top depth-rail holes are 17mm from each end. Intermediate front rails recess 27mm onto the inner post grooves using No.1 brackets; boards shorten 27mm and supports follow for inset doors. Top/bottom frames and rear rails stay unchanged.', jp: '上枠は柱端に重ね、端孔の27mmピッチに合わせます。上部奥行材の穴位置は端面から17mm。中間前横材は27mm後退し、柱の内側溝に1号ブラケットで接続。棚板と棚受けも調整し、インセット扉の空間を確保します。上下枠と後横材は変更しません。' }[language],
+        machining: { cn: '顶部横梁压立柱，按2047两侧端孔27mm中心距连接；顶部深度梁孔距端面17mm。中间层默认齐平，仅安装大弯柜门后前横梁内退27mm，以1号角码接立柱内侧槽；层板缩短27mm，层板托同步调整，避让大弯柜门。顶底框和后横梁不动，底端中央孔攻M8安装底部配件。', en: 'Top rails cap the posts, matching the 27mm outer-bore spacing; top depth-rail holes are 17mm from each end. Intermediate front rails are flush by default and recess 27mm only after inset doors are installed onto the inner post grooves using No.1 brackets; boards shorten 27mm and supports follow for inset doors. Top/bottom frames and rear rails stay unchanged.', jp: '上枠は柱端に重ね、端孔の27mmピッチに合わせます。上部奥行材の穴位置は端面から17mm。中間前横材は標準で面一。インセット扉を取り付けた場合のみ27mm後退し、柱の内側溝に1号ブラケットで接続。棚板と棚受けも調整し、インセット扉の空間を確保します。上下枠と後横材は変更しません。' }[language],
       }
       : {
-        profiles: { cn: '全3030框架，复用3.0展示架的柜体结构，保留衣柜等分列数与收纳层数。中间层前横梁默认内退30mm，以5号隐藏角码连接深度梁，为大弯门预留空间；中间层板前缘同步后退30mm。18mm海洋板全部内嵌，每板8只18mm专用层板托（暂定¥1.7/只），不配置抽屉。按实际材料和加工计价。', en: 'All-3030 cabinet frame shared with the 3.0 rack, with wardrobe bays and storage levels. Intermediate front rails and board fronts are recessed 30mm for inset doors, with No.5 hidden brackets joining the depth rails. All 18mm marine boards are inset, with eight dedicated supports each (provisional ¥1.7 each). No drawers. Priced by actual materials and machining.', jp: '3.0展示棚と共通の3030キャビネット構造を使用し、衣柜の均等列・収納段数を維持。中間段の前横材と棚板前端は30mm内側へ配置し、5号隠しブラケットで奥行材に接続。18mmマリンボードはすべて内嵌し、専用棚受けを8個ずつ配置（暫定¥1.7/個）。引き出しは含まず、実際の材料・加工で計算します。' }[language],
+        profiles: { cn: '全3030框架，复用3.0展示架的柜体结构，保留衣柜等分列数与收纳层数。中间层默认齐平，仅安装大弯柜门后前横梁内退30mm，以5号隐藏角码连接深度梁，为大弯门预留空间；中间层板前缘同步后退30mm。18mm海洋板全部内嵌，每板8只18mm专用层板托（暂定¥1.7/只），不配置抽屉。按实际材料和加工计价。', en: 'All-3030 cabinet frame shared with the 3.0 rack, with wardrobe bays and storage levels. Intermediate front rails and boards are flush by default and recess 30mm only after inset doors are installed, with No.5 hidden brackets joining the depth rails. All 18mm marine boards are inset, with eight dedicated supports each (provisional ¥1.7 each). No drawers. Priced by actual materials and machining.', jp: '3.0展示棚と共通の3030キャビネット構造を使用し、衣柜の均等列・収納段数を維持。中間段は標準で面一。インセット扉を取り付けた場合のみ前横材と棚板を30mm後退し、5号隠しブラケットで奥行材に接続。18mmマリンボードはすべて内嵌し、専用棚受けを8個ずつ配置（暫定¥1.7/個）。引き出しは含まず、実際の材料・加工で計算します。' }[language],
         machining: { cn: '顶底框不打孔，用立面1号角码连接，避开内嵌板；中间层按层高打孔攻丝。沿用展示架的连接规则：同一节点优先打孔攻丝，螺丝路径冲突处使用角码，避免两颗螺丝相撞。', en: 'Top and bottom frames use vertical-plane No.1 brackets without drilling, leaving inset boards clear; intermediate holes follow shelf heights. Drill-and-tap joints use corner brackets where screw paths would collide, following the rack connection rules.', jp: '上下枠は穴加工せず、縦面の1号ブラケットで接続。中間段は棚高さに合わせて穴あけ・タップ加工。同一節点でねじが干渉する接続には展示棚と同じブラケットを使用します。' }[language],
       };
 
@@ -322,10 +324,10 @@ const StandardFurnitureConfigurator: React.FC<{
   );
 };
 
-const FurnitureConfigurator: React.FC<FurnitureConfiguratorProps> = ({ language, type }) => (
+const FurnitureConfigurator: React.FC<FurnitureConfiguratorProps> = ({ language, type, initialAdvice }) => (
   type === ProductType.DISPLAY_RACK_3_0
     ? <DisplayRackConfigurator language={language} />
-    : <StandardFurnitureConfigurator language={language} type={type} />
+    : <StandardFurnitureConfigurator language={language} type={type} initialAdvice={initialAdvice} />
 );
 
 export default FurnitureConfigurator;

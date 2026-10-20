@@ -741,3 +741,29 @@ Save separate conversations in the server database, with request membership and 
 2040+2020封边方案中间层前横梁默认内退20mm，2047+2020默认内退27mm；与3030一样在生成框架时预留大弯门空间。2040不封边方案不变。20/27mm分别对应两条立柱侧槽的间距，因此前横梁端部仍用1号角码接立柱内侧槽，不套用3030连接深度梁的5号方案。中间层12mm内嵌板深度同步减少20/27mm，中心后移10/13.5mm；前层板托同步后移、侧托按新板中心和深度分布。顶底框、顶底板、后横梁、立柱、门洞及底部配件不变，计价和导出使用新板材实际尺寸。此规则替代此前这两个方案中间前横梁外侧齐平的规则；历史JSON保留人工编辑，需重新生成框架或人工同步调整。前端生成逻辑修改必须重新build并部署dist，单独更新后台不能生效。
 
 2026-10-19 型材颜色话术：客户说银色、本色、原色、银白色直接按银白色（natural）报价，不再确认银色色种；仅明确说亮银色才使用 silver，按该目录价格计费。表末颜色备注仍可确认适用范围；截面本色不改变彩色表面，海洋板原色语义不变。
+
+### 配件默认安装套装（2026-10-20，业主确认）
+
+首页配件选购与设计器共用 `utils/accessoryKit.ts`：默认勾选配齐，可取消，数量/删除与配件联动。1/2/3号每个2螺丝+2螺母，7L/7T每个4螺丝+4螺母，9号每个3螺丝且无螺母。**1号、3号目录现价已含全部安装件，不另收费**；2/7/9号套装新增螺丝按对应单买价格的50%，螺母原价。适用原色/彩色与现有数量批量档；单价保留半分钱等精度、行应付四舍五入到分。单买螺丝不打此套装折扣。取消已含安装件只改变配发，不改变原配件价。
+
+3号沿用同系列7号螺丝与T型螺母；1号规格待业主补充，明确保存“1号配套螺丝/螺母（规格待补）”占位与实际数量，不猜螺纹/长度。4040所有套装选项禁用置灰，不自动配螺丝螺母。其他2/7/9号使用目录明确的1515/2020/3030安装规格。
+
+安装件是配件组下的配发明细，不是加工孔对应的结构螺丝，不进入“实际孔数+每规格2颗备用”。购物车、工厂PDF必须列出包括零元已含安装件在内的数量；历史1/3号订单在工厂显示层补齐漏写的已含安装件，保留原订单价格。设计器JSON与Excel保留安装件选择和配发明细。源模型已确认的3号角码使用本规则，不再叠加旧凳子专用32组配件额外收费路径。该决定替代旧凳子紧固件单独计价规定。
+
+### 衣柜柜门驱动的中间层退让（2026-10-20，替代10-13/10-14默认内退规则）
+
+所有新建衣柜框架（2040开槽/封边、2047、3030开槽/封边）中间层默认与柜体正面齐平。选择全盖/半盖、仅在工具中选择门型但未安装柜门，都不触发内退。只有已安装且绑定框架的大弯/内嵌门，才对该门覆盖的列、层触发退让：2040为20mm、2047为27mm、3030为30mm。未被该门覆盖的列、顶底层、后侧框架保持不变。
+
+前横梁、层板深度/中心与相关板托同步调整；取消/删除最后覆盖该层的大弯门，或切换为全盖/半盖，自动恢复原尺寸。重复同步不累计位移。3030受控前横梁采用角码连接，齐平时1号，退让时改成5号连接深度梁；切换时重新生成这些横梁的连接件，避免遗留角码或孔位。选择、删除、门型切换沿用同一commit/撤销恢复链。
+
+`wardrobeDoorClearance` 保存逐件制造尺寸差值，JSON/Excel保留规则与当前状态。对无该元数据的历史手工/已保存模型不猜测或重建结构；在衣柜section重新生成可获得新默认与自动联动。回归 `npm run test:wardrobe-door-clearance`、`npm run test:wardrobe-options`。
+
+2026-10-20展示调整：衣柜配置页不展示“默认不内退…删除大弯门或更换门型后自动恢复”的说明块；自动退让规则保持，作为内部产品知识。
+
+### AI sales consultation routing (2026-10-20)
+- Informational questions are answered before quote-field collection. End tapping depth is 20mm; cross-section and wall-thickness questions show the same `/images/profile_<variant>.png` assets as P2.
+- Freight explanations use the current shipping catalog and quote calculator, including a 2020 natural 1000mm × 1 Shanghai example. Do not invent freight prices.
+- Cabinet/rack/design requests can open the existing wardrobe configurator inside chat; explicitly labelled mm/cm dimensions seed its inputs. Trolley proposals start with the supported caster frame. This is a preliminary editable design, not a load-bearing certification.
+- Accessory browsing uses the existing accessory quote editor and cart path. No automatic screw purchase. Explicit accessory quote requests remain in the normal quote flow.
+- Glass and polycarbonate are self-sourced; show aluminum-frame doors and marine board as alternatives, subject to customer choice. Complex/uncertain needs show contact WeChat 19821200413 and the contact QR (not the payment QR).
+- Unmatched conversational questions use the provider's answer mode, with no fabricated quote rows. Keep the latest structured BOM while answering intervening questions. Guidance cards persist with the chat transcript.

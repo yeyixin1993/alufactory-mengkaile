@@ -1,3 +1,5 @@
+import AccessoryKitOption from './AccessoryKitOption';
+import { buildAccessoryKitLines, kitLinesTotal, roundKitMoney } from '../utils/accessoryKit';
 import { DraftNumberInput, NumericActionButton } from './DraftNumberInput';
 import {
   ACCESSORY_CODE_IMAGE_MAP,
@@ -34,6 +36,7 @@ interface AccessoryConfig {
   colorId?: string;
   colorName?: string;
   quantities: Record<string, number>;
+  kitEnabled?: Record<string, boolean>;
   totalQuantity: number;
   shaftLengthMm?: number;
   lines: Array<{
@@ -81,8 +84,9 @@ const AccessoryQuoteEditor: React.FC<{
   );
   const [colorId, setColorId] = useState<string>(seeded.colorId || 'black');
   const [qtyMap, setQtyMap] = useState<Record<string, number>>(() => (
-    migrateLegacyAccessoryQuantities(seeded.quantities, seeded.profileSize)
+    migrateLegacyAccessoryQuantities(seeded.kitEnabled ? seeded.quantities : Object.fromEntries(Object.entries(seeded.quantities || {}).filter(([key]) => !seeded.lines?.some((line: any) => line.kitRole && line.id === key))), seeded.profileSize)
   ));
+  const [kitEnabled, setKitEnabled] = useState<Record<string, boolean>>(seeded.kitEnabled || Object.fromEntries(Object.keys(qtyMap).map(key => [key, (seeded as any).installationKit !== false])));
   const [shaftLengthMm, setShaftLengthMm] = useState(seeded.shaftLengthMm || 500);
   const [search, setSearch] = useState('');
   const [imgError, setImgError] = useState(false);
@@ -122,7 +126,7 @@ const AccessoryQuoteEditor: React.FC<{
     if (language === 'cn') {
       return {
         title: '配件选购',
-        hint: '所有配件平铺列出，每种规格独立一行；「适配型号」直接写在配件说明里，无需先选型材规格。',
+        hint: '找到配件和适配型号，填写数量即可默认配齐安装件；已有螺丝螺母可取消勾选。1号、3号整套原价已含；其他套装螺丝五折，螺母原价。4040暂不配套。',
         fitModel: '适配型号',
         colorMode: '颜色',
         natural: '本色',
@@ -137,10 +141,10 @@ const AccessoryQuoteEditor: React.FC<{
         code: '编号',
         item: '配件',
         image: '示意图',
-        unit: '单价',
+        unit: '配件单价',
         bulk: `批量单价(≥${ACCESSORY_BULK_THRESHOLD})`,
         qty: '数量',
-        subtotal: '小计',
+        subtotal: '含已选安装件小计',
         stock: '库存',
         pieces: '件',
         total: '总计',
@@ -240,10 +244,13 @@ const AccessoryQuoteEditor: React.FC<{
     });
   }, [language, search]);
 
-  const summary = useMemo(
+  const baseSummary = useMemo(
     () => summarizeAccessoryQuote(qtyMap, colorMode, language, shaftLengthMm),
     [colorMode, language, qtyMap, shaftLengthMm],
   );
+
+  const kitLines = baseSummary.lines.flatMap(({ row, quantity }) => kitEnabled[row.key] === false ? [] : buildAccessoryKitLines(row.defId, row.series, quantity, colorMode, language));
+  const summary = { ...baseSummary, total: roundKitMoney(baseSummary.total + kitLinesTotal(kitLines)), totalQuantity: baseSummary.totalQuantity + kitLines.reduce((n, line) => n + line.quantity, 0) };
 
   const submit = () => {
     if (summary.totalQuantity <= 0) {
@@ -262,12 +269,14 @@ const AccessoryQuoteEditor: React.FC<{
           ? (PROFILE_COLORS.find((c) => c.id === colorId)?.name?.[language] || colorId)
           : undefined,
       quantities: qtyMap,
+      kitEnabled,
       totalQuantity: summary.totalQuantity,
-      lines: summary.lines.map(({ row, quantity, unitPrice, subtotal, isBulk }) => ({
+      lines: [...summary.lines.map(({ row, quantity, unitPrice, subtotal, isBulk }) => ({
         id: row.key,
         code: row.code,
         name: [
           row.name[language],
+          row.series === '4040' || kitEnabled[row.key] === false ? (language === 'cn' ? '仅配件，不配安装件' : 'Accessory only') : '',
           `${ui.fitModel} ${getAccessoryRowSeriesLabel(row, language)}`,
           row.lengthPriced ? `${shaftLengthMm}mm` : '',
           row.naturalOnly ? (language === 'cn' ? '原色' : 'Natural') : '',
@@ -278,7 +287,7 @@ const AccessoryQuoteEditor: React.FC<{
         unitPrice,
         subtotal,
         isBulk,
-      })),
+      })), ...kitLines],
       unitTotal: summary.total,
     };
 
@@ -452,7 +461,8 @@ const AccessoryQuoteEditor: React.FC<{
                 const qty = Math.max(0, Number(qtyMap[row.key] ?? 0));
                 const unitPrice = resolveAccessoryUnitPrice(row, colorMode, qty, shaftLengthMm);
                 const isBulk = !row.naturalOnly && qty >= ACCESSORY_BULK_THRESHOLD;
-                const subtotal = round1(unitPrice * qty);
+                const kitTotal = kitEnabled[row.key] === false ? 0 : kitLinesTotal(buildAccessoryKitLines(row.defId, row.series, qty, colorMode, language));
+                const subtotal = roundKitMoney(round1(unitPrice * qty) + kitTotal);
                 const previousRow = filteredRows[rowIndex - 1];
                 const startsGroup = !previousRow || previousRow.defId !== row.defId;
                 const catalogUnit = row.naturalOnly || colorMode === 'natural' ? row.price.natural : row.price.colored;
@@ -473,6 +483,7 @@ const AccessoryQuoteEditor: React.FC<{
                         </label>
                       )}
                       {row.naturalOnly && <div className="text-[11px] text-slate-500">{language === 'cn' ? '原色 · 不按型材系列区分' : language === 'jp' ? '原色・シリーズ共通' : 'Natural · all series'}</div>}
+                      <AccessoryKitOption defId={row.defId} series={row.series} language={language} enabled={kitEnabled[row.key] !== false} onChange={enabled => setKitEnabled(previous => ({ ...previous, [row.key]: enabled }))} />
                       {row.note && <div className="text-[11px] text-slate-500">{row.note}</div>}
                     </td>
                     <td className="p-2 border border-slate-100">
@@ -526,7 +537,7 @@ const AccessoryQuoteEditor: React.FC<{
                       />
                     </td>
                     <td className="p-2 border border-slate-100 font-black text-slate-800 whitespace-nowrap">
-                      ¥{subtotal.toFixed(1)} {isBulk ? <span className="text-[10px] text-emerald-600">(Bulk)</span> : null}
+                      ¥{subtotal.toFixed(2)} {isBulk ? <span className="text-[10px] text-emerald-600">(Bulk)</span> : null}
                     </td>
                   </tr>
                 );
@@ -537,10 +548,10 @@ const AccessoryQuoteEditor: React.FC<{
 
         <div className="flex flex-wrap items-center justify-between gap-4 pt-2">
           <div className="text-sm font-bold text-slate-700">
-            {ui.totalQty}: <span className="text-slate-900">{summary.totalQuantity}</span>
+            {ui.totalQty}: <span className="text-slate-900">{baseSummary.totalQuantity}</span>{language === 'cn' ? ` 件配件 + ${kitLines.reduce((sum, line) => sum + line.quantity, 0)} 件安装件` : ` + ${kitLines.reduce((sum, line) => sum + line.quantity, 0)} kit parts`}
           </div>
           <div className="text-lg font-black text-slate-900">
-            {ui.total}: ¥{summary.total.toFixed(1)}
+            {ui.total}: ¥{summary.total.toFixed(2)}
           </div>
         </div>
 

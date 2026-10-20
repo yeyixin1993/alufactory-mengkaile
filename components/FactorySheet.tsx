@@ -1,3 +1,4 @@
+import { withIncludedAccessoryPacking } from '../utils/accessoryKit';
 
 import React from 'react';
 import { CartItem, User, ProductType, ProfileConfig, Language, ProfileSide, Address } from '../types';
@@ -97,7 +98,7 @@ const resolveBoardColorLabel = (cfg: any, language: Language, productType?: Prod
 const FactorySheet: React.FC<FactorySheetProps> = ({ cart, user, language, orderRef, dateStr, id, showPrice = true, address, shippingMethod, shippingFee: passedShippingFee, include304Screws = false, includeLabelService = false, labelFee: passedLabelFee, overlengthFee: passedOverlengthFee }) => {
   const t = TRANSLATIONS[language];
   const currency = getCurrency(language);
-  const productionCart = React.useMemo(() => expandFinishedFurnitureCartItems(cart), [cart]);
+  const productionCart = React.useMemo(() => expandFinishedFurnitureCartItems(cart).map(item => withIncludedAccessoryPacking(item, language)), [cart, language]);
  
 // Summarize profiles for a sheet: length, model, color, finish, tap, quantity, remarks
   const profileSummary = React.useMemo(() => {
@@ -809,7 +810,7 @@ const FactorySheet: React.FC<FactorySheetProps> = ({ cart, user, language, order
                             <div><span className="text-slate-400">{language === 'cn' ? '适配型号' : language === 'jp' ? '適合型番' : 'Fit Model'}:</span> <span className="font-black">{fitModel}</span></div>
                             <div><span className="text-slate-400">{language === 'cn' ? '颜色' : language === 'jp' ? '色' : 'Color'}:</span> <span className="font-black">{colorModeText}</span></div>
                             <div><span className="text-slate-400">{language === 'cn' ? '总数量' : language === 'jp' ? '総数量' : 'Total Qty'}:</span> <span className="font-black">{totalQty}</span></div>
-                            {showComponentPrice && <div><span className="text-slate-400">{language === 'cn' ? '小计' : language === 'jp' ? '小計' : 'Subtotal'}:</span> <span className="font-black">{currency}{Number(cfg?.unitTotal || item.totalPrice || 0).toFixed(1)}</span></div>}
+                            {showComponentPrice && <div><span className="text-slate-400">{language === 'cn' ? '小计' : language === 'jp' ? '小計' : 'Subtotal'}:</span> <span className="font-black">{currency}{Number(cfg?.unitTotal || item.totalPrice || 0).toFixed(2)}</span></div>}
                           </div>
                         </div>
 
@@ -869,7 +870,7 @@ const FactorySheet: React.FC<FactorySheetProps> = ({ cart, user, language, order
                                     <div className="min-w-0 flex-1 text-xs">
                                       <div className="font-black text-slate-800 whitespace-normal break-words leading-snug" title={lineName}>{lineName}</div>
                                       <div className="text-slate-500">{language === 'cn' ? '数量' : language === 'jp' ? '数量' : 'Qty'}: {qty}</div>
-                                      {showComponentPrice && <div className="text-slate-700 font-bold">{language === 'cn' ? '小计' : language === 'jp' ? '小計' : 'Subtotal'}: {currency}{subtotal.toFixed(1)}</div>}
+                                      {showComponentPrice && <div className="text-slate-700 font-bold">{language === 'cn' ? '小计' : language === 'jp' ? '小計' : 'Subtotal'}: {currency}{subtotal.toFixed(2)}</div>}
                                     </div>
                                   </div>
                                 );

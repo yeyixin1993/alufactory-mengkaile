@@ -1,3 +1,4 @@
+import type { WardrobeDoorClearance } from './wardrobeDoorClearance';
 import { strFromU8, unzipSync } from 'fflate';
 
 type WorkbookCell = string | number | null | undefined;
@@ -27,6 +28,10 @@ export interface ProductionWorkbookData {
     fixedReferenceId?: string;
     shaftDiameterMm?: number;
     accessoryPrice?: number;
+    wardrobeDoorClearance?: WardrobeDoorClearance;
+    wardrobeFrontSetbackMm?: number;
+    installationKit?: boolean;
+    installationKitLines?: Array<{ name: string; quantity: number }>;
     colorId?: string;
     color: string;
     pegHolePattern?: string;
@@ -274,6 +279,7 @@ export const buildProductionXlsx = (production: ProductionWorkbookData) => {
     part.doorLeafMode === 'double' ? '对开门' : part.doorLeafMode === 'single' ? '单开门' : '',
     part.doorPairSide === 'right' ? '右扇' : part.doorPairSide === 'left' ? '左扇' : '',
     part.openingSide === 'right' ? '右开' : part.openingSide === 'left' ? '左开' : '', part.remark,
+    part.installationKit === false ? '否' : '是', (part.installationKitLines || []).map(line => `${line.name} ×${line.quantity}`).join('；'), part.wardrobeDoorClearance ? JSON.stringify(part.wardrobeDoorClearance) : '', part.wardrobeFrontSetbackMm ?? '',
   ]);
   const holeRows = production.holes.map((hole) => [
     hole.partLine, hole.partId ?? '', hole.model, hole.holeLine, hole.holeId ?? '', hole.jointKey ?? '', hole.entryFace, hole.entryGroove, hole.exitFace, hole.exitGroove,
@@ -291,7 +297,7 @@ export const buildProductionXlsx = (production: ProductionWorkbookData) => {
     {
       name: '零件明细',
       title: '萌开了 3D DIY 零件明细',
-      headers: ['序号', '零件ID', '类型', '型号', '适配型材规格', '长度mm', '宽度mm', '高度mm', '厚度mm', '截面/表面档位', '层板托类型', '固定库ID', '轴径mm', '配件单价', '颜色', '颜色ID', '数量', '洞洞板孔型', '位置XYZ(mm)', '旋转XYZ(°)', '左端攻丝孔数', '右端攻丝孔数', '螺丝头型', '关联型材ID', '关联孔ID', '自动生成', '位置锁定', '连接型材ID', '连接关系ID', '配件螺纹规格', '带刹车', '端盖端面', '端盖自动攻丝', '柜门材料', '柜门覆盖方式', '柜门形式', '对开门扇位', '柜门开向', '备注'],
+      headers: ['序号', '零件ID', '类型', '型号', '适配型材规格', '长度mm', '宽度mm', '高度mm', '厚度mm', '截面/表面档位', '层板托类型', '固定库ID', '轴径mm', '配件单价', '颜色', '颜色ID', '数量', '洞洞板孔型', '位置XYZ(mm)', '旋转XYZ(°)', '左端攻丝孔数', '右端攻丝孔数', '螺丝头型', '关联型材ID', '关联孔ID', '自动生成', '位置锁定', '连接型材ID', '连接关系ID', '配件螺纹规格', '带刹车', '端盖端面', '端盖自动攻丝', '柜门材料', '柜门覆盖方式', '柜门形式', '对开门扇位', '柜门开向', '备注', '配套安装件', '安装件配发明细', '柜门自动退让', '前横梁内退mm'],
       rows: partRows,
       widths: [8, 25, 14, 14, 16, 12, 12, 12, 12, 18, 16, 26, 11, 12, 15, 14, 9, 14, 20, 20, 15, 15, 14, 25, 25, 12, 12, 38, 38, 16, 12, 12, 16, 14, 16, 12, 12, 12, 38],
     },
@@ -476,6 +482,9 @@ export const parseProductionXlsx = (content: ArrayBuffer): ProductionWorkbookDat
       fixedReferenceId: record['固定库ID'] || undefined,
       shaftDiameterMm: optionalNumber(record['轴径mm']),
       accessoryPrice: optionalNumber(record['配件单价']),
+      installationKit: record['配套安装件'] === '否' ? false : undefined,
+      wardrobeDoorClearance: record['柜门自动退让'] ? JSON.parse(record['柜门自动退让']) : undefined,
+      wardrobeFrontSetbackMm: optionalNumber(record['前横梁内退mm']),
       color: record['颜色'] || '',
       colorId: record['颜色ID'] || undefined,
       quantity: optionalNumber(record['数量']) || 1,

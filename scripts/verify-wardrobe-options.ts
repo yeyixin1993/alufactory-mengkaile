@@ -70,18 +70,12 @@ const project = (item: any) => Object.fromEntries(['kind', 'variantId', 'positio
   const value = key === 'holes' && item.kind === 'profile' ? (item.holes || []).map(({ side, type, positionMm }: any) => ({ side, type, positionMm })) : item[key];
   return value === undefined ? [] : [[key, value]];
 }));
-assert.deepEqual(generated.items.filter(item => ['profile', 'marine_board', 'caster'].includes(item.kind)).map(item => JSON.stringify(project(item))).sort(), approved.items.map((item: any) => {
-  // Preserve the owner's original fixture; only the new middle-front clearance changes.
-  const next = { ...item, position: [...item.position] };
-  if (item.kind === 'profile' && item.variantId === '2020-N1' && item.position[1] === 502 && item.position[2] > 0) next.position[2] -= 27;
-  if (item.kind === 'marine_board' && item.position[1] === 506) { next.position[2] -= 13.5; next.height -= 27; }
-  return JSON.stringify(project(next));
-}).sort());
+assert.deepEqual(generated.items.filter(item => ['profile', 'marine_board', 'caster'].includes(item.kind)).map(item => JSON.stringify(project(item))).sort(), approved.items.map((item: any) => JSON.stringify(project(item))).sort());
 const supported = completeParametricFurnitureTemplate(buildWardrobeTemplate(1200, 600, 2200, 2, 2, '3030')).items;
 const supports = supported.filter(item => item.shelfSupportType === 'board_18mm');
 assert(supports.every(item => calculatePrice(item) === 1.7));
 assert(buildProductionData(supported, 'cn').parts.filter(item => item.shelfSupportType === 'board_18mm').every(item => item.accessoryPrice === 1.7));
-assert(supported.filter(item => item.kind === 'profile' && ['top', 'bottom'].includes(item.cabinetFrameLevel || '')).every(item => !item.holes?.length && !item.tapping));
+assert(supported.filter(item => item.kind === 'profile' && ['top', 'bottom'].includes(item.cabinetFrameLevel || '')).every(item => !item.holes?.length && !item.tappingLeft && !item.tappingRight));
 console.log('Approved 2047 fixture and 18mm support production/pricing checks passed.');
 
 for (const frame of ['2040_2020', '2047_2020', '3030'] as const) {
@@ -122,12 +116,12 @@ for (const frame of ['2040_2020', '2047_2020', '3030'] as const) {
       const completed = completeParametricFurnitureTemplate(payload);
       assert(completed.check.valid, `${frame}/${edge}/${columns}: ${completed.check.issues.join('; ')}`);
       if (frame !== '3030') {
-        const setback = frame === '2047_2020' ? 27 : sealed ? 20 : 0;
+        const setback = 0;
         assert.equal(payload.summary.frontRailSetbackMm, setback);
         const middleBoards = completed.items.filter(item => item.kind === 'marine_board' && /^WARDROBE:SHELF:[1-9]/.test(item.attachmentKey || ''));
         assert.equal(middleBoards.length, columns * 2);
         for (const board of middleBoards) {
-          assert.equal(board.position[2], -setback / 2);
+          assert.equal(board.position[2], -setback / 2 || 0);
           assert.equal(board.height, 600 - 42 - setback);
           const rails = completed.items.filter(item => item.kind === 'profile' && board.attachedProfileIds?.includes(item.id) && item.rotation[1] === 0);
           const front = rails.find(item => item.position[2] > 0)!;
@@ -144,18 +138,10 @@ for (const frame of ['2040_2020', '2047_2020', '3030'] as const) {
         assert(outerBoards.every(item => item.position[2] === 0 && item.height === 558), 'Top/bottom boards stay unchanged');
       }
       if (frame === '3030') {
-        const fronts = completed.items.filter(item => item.kind === 'profile' && item.wardrobeFrontSetbackMm === 30);
+        const fronts = completed.items.filter(item => item.wardrobeDoorClearance?.frontRail);
         assert.equal(fronts.length, columns * 2);
-        assert(fronts.every(item => item.position[2] === 600 / 2 - 15 - 30 && !item.tappingLeft && !item.tappingRight));
-        for (const rail of fronts) {
-          const joints = completed.items.filter(item => item.kind === 'hidden_connector' && item.attachedProfileIds?.includes(rail.id));
-          assert.equal(joints.length, 2, 'Each recessed rail requires two No.5 brackets');
-          assert(joints.every(item => item.lockedPosition && item.attachedProfileIds?.some(id => completed.items.some(p => p.id === id && p.kind === 'profile' && p.rotation[1] === 90 && p.rotation[2] === 0))));
-        }
-        const middleBoards = completed.items.filter(item => item.kind === 'marine_board' && item.position[2] === -15);
-        assert.equal(middleBoards.length, columns * 2);
-        assert(middleBoards.every(item => item.height === 508));
-        assert.equal(600 / 2 - 20 - (fronts[0].position[2] + 15), 10, '18mm inset door must clear front rail by 10mm');
+        assert(fronts.every(item => item.position[2] === 285 && !item.wardrobeFrontSetbackMm));
+        assert(completed.items.filter(item => item.kind === 'marine_board').every(item => item.position[2] === 0 && item.height === 538));
       }
 
       assert(completed.items.filter(item => item.kind === 'connector').every(item => item.lockedPosition), 'Sealed-frame brackets must stay seated');

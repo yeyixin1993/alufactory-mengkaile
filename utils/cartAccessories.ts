@@ -82,7 +82,7 @@ const isGroupableDiyAccessory = (item: CartItem) => {
   if (item.product.type !== ProductType.ACCESSORY || isDiyScrewAccessory(item)) return false;
   const config = (item.config || {}) as any;
   const lines = Array.isArray(config.lines) ? config.lines : [];
-  if (lines.length !== 1) return false;
+  if (lines.filter((line: any) => !line.kitRole).length !== 1) return false;
   return config.type === 'profile_accessory'
     && Boolean(config.diyPosition || (Array.isArray(config.diyPositions) && config.diyPositions.length));
 };

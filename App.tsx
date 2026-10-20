@@ -1,3 +1,4 @@
+import { scaleAccessoryKitConfig } from './utils/accessoryKit';
 import { DraftNumberInput, NumericActionButton } from './components/DraftNumberInput';
 import { frameTypeName } from './utils/framePricing';
 import FrameQuoteEditor from './components/FrameQuoteEditor';
@@ -79,7 +80,8 @@ const mergeCartItems = (currentCart: CartItem[], newItems: CartItem[]): CartItem
       nextCart[existingIndex] = {
         ...existingItem,
         quantity: newQty,
-        totalPrice: Number((unitPrice * newQty).toFixed(1))
+        config: scaleAccessoryKitConfig(existingItem.config, newQty / existingItem.quantity),
+        totalPrice: Number((unitPrice * newQty).toFixed(2))
       };
     } else {
       nextCart.push({ ...newItem });
@@ -1299,6 +1301,7 @@ const Cart: React.FC<{
         return {
           ...item,
           quantity: qty,
+          config: scaleAccessoryKitConfig(item.config, qty / item.quantity),
           totalPrice: parseFloat((unitPrice * qty).toFixed(2))
         };
       }
@@ -1574,7 +1577,7 @@ const Cart: React.FC<{
                                     <div key={`${line?.code || idx}-${idx}`} className="flex items-center justify-between gap-3">
                                       <span className="text-slate-700">{line?.name || `#${line?.code || idx + 1}`}</span>
                                       <span className="text-slate-500">x{Number(line?.quantity || 0)}</span>
-                                      <span className="text-slate-800 font-black">{currency}{Number(line?.subtotal || 0).toFixed(1)}</span>
+                                      <span className="text-slate-800 font-black">{currency}{Number(line?.subtotal || 0).toFixed(2)}</span>
                                     </div>
                                   ))}
                                 </div>
@@ -1582,7 +1585,7 @@ const Cart: React.FC<{
                             </div>
 
                             <div className="mt-3 text-xs font-black text-slate-700">
-                              {language === 'cn' ? '配件小计' : language === 'jp' ? '部品小計' : 'Accessory Subtotal'}: {currency}{accessoryUnitTotal.toFixed(1)}
+                              {language === 'cn' ? '配件小计' : language === 'jp' ? '部品小計' : 'Accessory Subtotal'}: {currency}{accessoryUnitTotal.toFixed(2)}
                             </div>
 
                             <div className="mt-4">

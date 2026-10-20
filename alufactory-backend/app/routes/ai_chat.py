@@ -22,6 +22,7 @@ from sqlalchemy import func, or_
 from sqlalchemy.exc import IntegrityError
 from app.models.user import db, User, normalize_membership_level
 from app.ai_models import AIAccount, AISettings, AILedger, AIRequest, AIRateWindow, AIFaqRule, SCALE
+from app.ai_advice import advice, CONTACT
 from app.ai_faq import match_faq, serialize_rule, validate_rule
 from app.ai_quote import normalize_extracted_spec, clarification_questions, recognized_lines, CATALOG, quote_profile
 from app.ai_review import build_review, confirmed_configuration
@@ -160,7 +161,7 @@ def account_view(account, user, membership):
     history = transcript(account)
     db.session.commit()
     return {'balance_cny': account.balance / SCALE, 'trial_remaining': max(0, account.trial_limit-account.trial_used),
-            'trial_limit': account.trial_limit,
+            'trial_limit': account.trial_limit, 'local_unlimited': bool(current_app.config.get('AI_LOCAL_UNLIMITED')), 
             'local_answers_available': AIFaqRule.query.filter_by(enabled=True).first() is not None,
             'trial_mode': trial, 'enabled': conf.enabled and account.enabled, 'configured': configured(),
             'signed_in': bool(user), 'history': history, 'conversation_id': conversation.id, 'conversations': conversation_list(account), 'vision_enabled': provider_name() == 'deepseek' and configured(),
@@ -248,6 +249,21 @@ def visual_reply(spec, membership='standard'):
     return '\n'.join(lines)
 
 
+def retain_quote_context(history):
+    """Keep the latest BOM while customers ask several intervening questions."""
+    recent = history[-8:]
+    for item in reversed(history[:-8]):
+        if item.get('role') != 'assistant':
+            continue
+        try:
+            state = json.loads(item.get('content', ''))
+        except (ValueError, TypeError):
+            continue
+        if isinstance(state, dict) and state.get('intent') != 'answer':
+            return [item, *recent]
+    return recent
+
+
 def compact_context(history):
     """Each extraction is a full state snapshot; do not resend every old BOM."""
     latest_index = None
@@ -304,6 +320,8 @@ JSON 字段：model, color(目录id), length(整数mm), quantity(整数根数), 
 相框输入通常用厘米，必须换算为整数毫米存入inner_width/inner_height，计价程序会按厘米计算。
 画框行：product=frame,frame_type=wood/aluminum/alu_wood,inner_width,inner_height（内尺寸mm）,quantity。配件行：product=accessory,accessory_key（目录key）,color=natural/colored,quantity；轴类另需length(mm)。不能猜相似配件key，型号或系列不明确时保留null并追问具体名称/编号/系列。只有客户明确要求才添加配件，不能自动加螺丝。涉及其他品类仍保留全部型材加工状态。只有唯一选项的颜色/加工不追问；海洋板表面类型和颜色影响价格，缺失必须问。
 目录：''' + json.dumps(compact, ensure_ascii=False)
+    prompt += '''
+最高优先级：先判断客户是在咨询还是明确要求报价/修改清单。知识、用途、安装、比较、运费、设计讨论等问题，输出 {"intent":"answer","answer":"针对最新问题的自然回答"}，不要输出空型材或索要整套报价字段。结合上下文直接解答，必要时只追问一个关键问题。没有模板也必须针对性回答。攻丝深度20mm。网站没有的玻璃、耐力板明确自配，可替代为铝框门、海洋板；不可虚构库存、尺寸、价格和承载能力。复杂设计或不确定时附微信19821200413。常见选型可给出明确标注的暂定建议，不视为客户生产确认。只有实际报价/清单修改才返回前述清单JSON。'''
     messages = [{'role': 'system', 'content': prompt}, *compact_context(history), {'role': 'user', 'content': message}]
     if image:
         images = image if isinstance(image,list) else [image]
@@ -387,7 +405,7 @@ def chat():
     # Snapshot the published answer before reserving the account. An edit during
     # a response must not change which version is recorded in the usage ledger.
     matched = match_faq(message) if not image and not attachments and not draft else None
-    faq = serialize_rule(matched) if matched else None
+    faq = (advice(message) if not image and not attachments and not confirmation else None) or (serialize_rule(matched) if matched else None)
     if not faq and not configured():
         return jsonify(error='暂未匹配到已发布问答，智能咨询尚未开通。请使用快速报价或联系人工。'), 503
     hour = datetime.utcnow().strftime('%Y-%m-%d-%H')
@@ -397,7 +415,9 @@ def chat():
     reserve = int(maximum_cost() * SCALE * (10000+markup) / 10000) + 1
     trial = membership == 'standard' and account.balance == 0
     query = AIAccount.query.filter_by(id=account.id, enabled=True, busy=None)
-    if trial:
+    if current_app.config.get('AI_LOCAL_UNLIMITED'):
+        pass
+    elif trial:
         query = query.filter(AIAccount.trial_used < AIAccount.trial_limit)
     elif not faq and not confirmation:
         query = query.filter(AIAccount.balance >= reserve)
@@ -426,9 +446,9 @@ def chat():
     history = list(account.history or [])
     if faq:
         response = {'reply': faq['answer'], 'quote': None, 'charged_cny': 0, 'visitor_token': token,
-                    'source': 'faq', 'rule_id': faq['id'], 'rule_version': faq['version']}
-        changes = {'busy': None, 'history': (history + [{'role': 'user', 'content': message},
-                    {'role': 'assistant', 'content': faq['answer']}])[-8:]}
+                    'guidance': faq.get('guidance', []), 'source': 'faq', 'rule_id': faq['id'], 'rule_version': faq['version']}
+        changes = {'busy': None, 'history': retain_quote_context(history + [{'role': 'user', 'content': message},
+                    {'role': 'assistant', 'content': faq['answer']}])}
         if trial:
             changes['trial_used'] = AIAccount.trial_used + 1
         if not AIAccount.query.filter_by(id=account.id, busy=request_id).update(changes):
@@ -483,31 +503,34 @@ def chat():
                 spec['section'] = 'colored'
             elif spec.get('color') == 'natural':
                 spec['section'] = 'natural'
-            spec = normalize_extracted_spec(spec)
+            is_answer = spec.get('intent') == 'answer' and isinstance(spec.get('answer'), str) and bool(spec['answer'].strip())
+            spec = spec if is_answer else normalize_extracted_spec(spec)
             spec['_visual_pending'] = bool(image or attachments or (draft and not confirmation))
-            if spec['_visual_pending']:
+            if is_answer:
+                reply, quote = spec['answer'], None
+            elif spec['_visual_pending']:
                 reply = visual_reply(spec, membership)
                 _, quote = quote_profile(spec, membership)
                 if quote: quote['recognition_pending'] = True
             else:
                 reply, quote = quote_profile(spec, membership)
         except (ValueError, TypeError, KeyError):
-            reply, quote = '未能可靠理解需求，请换一种说法。本次未扣额度。', None
+            reply, quote = '这部分需求还需进一步核对。请发送用途或参考图，也可以加微信19821200413沟通。本次未扣额度。', None
             valid = False
         else:
             valid = True
-        charged = (cost * (10000+markup) + 9999)//10000 if valid and not trial else 0
+        charged = (cost * (10000+markup) + 9999)//10000 if valid and not trial and not current_app.config.get('AI_LOCAL_UNLIMITED') else 0
         try:
-            review = build_review(spec, quote) if valid else None
+            review = build_review(spec, quote) if valid and not is_answer else None
         except (ValueError, TypeError, KeyError):
             review = {'ready': False, 'questions': ['加工信息还不完整，请重新说明孔型、加工面和孔位。'], 'items': [], 'view': '2d'}
         if review and spec.get('order_review'):
             reply = ('请核对下方图示。' + ('还需确认：\n' + '\n'.join(review['blocking_questions'][:3]) if review['blocking_questions'] else '无误可勾选确认型材配置。')) if not review['ready'] else '已按你的描述配置好加工，请核对下方图示和明细。确认后可加入购物车，地址和配送在购物车填写。'
-        response = {'review': review, 'reply': reply, 'quote': quote, 'charged_cny': charged / SCALE, 'visitor_token': token,
-                    'needs_confirmation': bool(valid and spec.get('_visual_pending') and quote_profile(spec, membership)[1] is not None)}
+        response = {'guidance': ([{'kind':'contact'}] if not valid or is_answer else []), 'review': review, 'reply': reply, 'quote': quote, 'charged_cny': charged / SCALE, 'visitor_token': token,
+                    'needs_confirmation': bool(valid and not is_answer and spec.get('_visual_pending') and quote_profile(spec, membership)[1] is not None)}
         changes = {'busy': None, 'balance': AIAccount.balance-charged}
         if valid:
-            changes['history'] = (history + [{'role': 'user', 'content': message}, {'role': 'assistant', 'content': json.dumps(spec, ensure_ascii=False)}])[-8:]
+            changes['history'] = retain_quote_context(history + [{'role': 'user', 'content': message}, {'role': 'assistant', 'content': reply if is_answer else json.dumps(spec, ensure_ascii=False)}])
             if trial:
                 changes['trial_used'] = AIAccount.trial_used + 1
         updated = AIAccount.query.filter_by(id=account.id, busy=request_id).filter(AIAccount.balance >= charged).update(changes)
@@ -523,7 +546,7 @@ def chat():
     AIAccount.query.filter_by(id=account.id, busy=request_id).update({'busy': None})
     row = db.session.get(AIRequest, key)
     row.status = 'reconcile' if uncertain else 'failed'
-    row.response = {'reply': failure, 'quote': None, 'charged_cny': 0, 'visitor_token': token}
+    row.response = {'guidance': [{'kind':'contact'}], 'reply': failure + '\n' + CONTACT, 'quote': None, 'charged_cny': 0, 'visitor_token': token}
     db.session.commit()
     return jsonify(**row.response)
 
