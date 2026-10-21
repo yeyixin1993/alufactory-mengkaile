@@ -1,3 +1,4 @@
+import { accessoryProperName } from '../data/accessoryProperNames';
 import AccessoryKitOption from './AccessoryKitOption';
 import { buildAccessoryKitLines, kitLinesTotal, roundKitMoney } from '../utils/accessoryKit';
 import { DraftNumberInput, NumericActionButton } from './DraftNumberInput';
@@ -126,7 +127,7 @@ const AccessoryQuoteEditor: React.FC<{
     if (language === 'cn') {
       return {
         title: '配件选购',
-        hint: '找到配件和适配型号，填写数量即可默认配齐安装件；已有螺丝螺母可取消勾选。1号、3号整套原价已含；其他套装螺丝五折，螺母原价。4040暂不配套。',
+        hint: '找到配件和适配型号，填写数量即可默认配齐螺丝螺母；已有螺丝螺母可取消勾选。1号、3号整套原价已含；其他套装螺丝螺母5折。4040暂不配套。',
         fitModel: '适配型号',
         colorMode: '颜色',
         natural: '本色',
@@ -236,6 +237,7 @@ const AccessoryQuoteEditor: React.FC<{
         String(row.code),
         row.codeLabel?.[language] || '',
         row.name[language],
+        accessoryProperName(row.defId, language),
         getAccessoryRowSeriesLabel(row, language),
         row.series,
         row.note || '',
@@ -473,7 +475,7 @@ const AccessoryQuoteEditor: React.FC<{
                     key={row.key}
                     className={`odd:bg-white even:bg-slate-50/60 ${startsGroup && rowIndex > 0 ? 'border-t-2 border-slate-200' : ''}`}
                   >
-                    <td className="p-2 border border-slate-100 font-black whitespace-nowrap">{row.codeLabel?.[language] || `${row.code}号`}</td>
+                    <td className="p-2 border border-slate-100 font-black whitespace-nowrap">{row.codeLabel?.[language] || `${row.code}号`}{accessoryProperName(row.defId, language) && <span className="ml-2 text-xs font-semibold text-slate-600 whitespace-normal">{accessoryProperName(row.defId, language)}</span>}</td>
                     <td className="p-2 border border-slate-100">
                       <div className={`font-semibold ${startsGroup ? 'text-slate-900' : 'text-slate-600'}`}>{row.name[language]}</div>
                       {row.lengthPriced && (
@@ -548,7 +550,7 @@ const AccessoryQuoteEditor: React.FC<{
 
         <div className="flex flex-wrap items-center justify-between gap-4 pt-2">
           <div className="text-sm font-bold text-slate-700">
-            {ui.totalQty}: <span className="text-slate-900">{baseSummary.totalQuantity}</span>{language === 'cn' ? ` 件配件 + ${kitLines.reduce((sum, line) => sum + line.quantity, 0)} 件安装件` : ` + ${kitLines.reduce((sum, line) => sum + line.quantity, 0)} kit parts`}
+            {ui.totalQty}: <span className="text-slate-900">{baseSummary.totalQuantity}</span>{language === 'cn' ? ` 件配件 + ${kitLines.reduce((sum, line) => sum + line.quantity, 0)}套螺丝螺母` : ` + ${kitLines.reduce((sum, line) => sum + line.quantity, 0)} kit parts`}
           </div>
           <div className="text-lg font-black text-slate-900">
             {ui.total}: ¥{summary.total.toFixed(2)}

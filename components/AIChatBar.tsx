@@ -19,6 +19,20 @@ const VISITOR_KEY = 'mengkaile-ai-visitor';
 const visitor = () => { try { return localStorage.getItem(VISITOR_KEY) || ''; } catch { return ''; } };
 const saveVisitor = (token: string) => { if (token) try { localStorage.setItem(VISITOR_KEY, token); } catch { /* server still limits new visitors */ } };
 const money = (value: number) => value.toFixed(4);
+// Local test databases have separate signing secrets. Recover only the obsolete
+// local visitor token; production identity and quota rules remain unchanged.
+const loadAdvisorStatus = async () => {
+  try { return await ApiService.aiRequest('/status', { visitor_token: visitor() }); }
+  catch (error:any) {
+    if (import.meta.env.DEV && ['localhost','127.0.0.1'].includes(window.location.hostname)
+      && ['visitor_token_expired','visitor_token_invalid'].includes(error.payload?.reason)) {
+      localStorage.removeItem(VISITOR_KEY);
+      return ApiService.aiRequest('/status', { visitor_token: '' });
+    }
+    throw error;
+  }
+};
+
 
 // A refused connection arrives as a fetch TypeError, or as a 5xx when the dev proxy
 // cannot reach the API. Those are the only cases where "cannot connect" is the truth;
@@ -114,7 +128,7 @@ export default function AIChatBar({ user, onAddToCart, cart=[], language, onLang
   const [entries, setEntries] = useState<any[] | null>(null);
   const [pending, setPending] = useState<{ id: string; text: string } | null>(null);
   const refresh = async () => {
-    const data = await ApiService.aiRequest('/status', { visitor_token: visitor() });
+    const data = await loadAdvisorStatus();
     saveVisitor(data.visitor_token);
     setStatus(data);
     setMessages(data.history || []);
@@ -125,7 +139,7 @@ export default function AIChatBar({ user, onAddToCart, cart=[], language, onLang
   useEffect(() => {
     let active = true;
     setMessages([]); setAttachment([]); setInput(''); setStatus(null); setError(''); setLock(''); setPending(null); setEntries(null); setOpen(workspace);
-    ApiService.aiRequest('/status', { visitor_token: visitor() }).then(data => {
+    loadAdvisorStatus().then(data => {
       if (active) { saveVisitor(data.visitor_token); setStatus(data); setMessages(data.history || []); setLock(''); }
     }).catch((err: any) => { const failure = statusFailure(err); if (active) { setError(failure.message); setLock(failure.lock); } });
     return () => { active = false; };
@@ -220,13 +234,13 @@ export default function AIChatBar({ user, onAddToCart, cart=[], language, onLang
   // A visitor always sees how much of the device allowance is left (3/3 → 0/3). The count is
   // per device and does not expire, so 0/3 simply means "this browser has spent its three";
   // the composer then stops accepting messages and offers signing in instead of a dead button.
-  const trialRemaining = status?.trial_mode ? Math.max(0, Number(status.trial_remaining) || 0) : null;
+  const trialRemaining = status?.trial_mode && !status?.local_unlimited ? Math.max(0, Number(status.trial_remaining) || 0) : null;
   const trialLimit = Number(status?.trial_limit) > 0 ? Number(status.trial_limit) : 3;
   const trialExhausted = trialRemaining !== null && trialRemaining <= 0;
   const lockKind: AdvisorLock = lock || (trialExhausted ? 'trial_exhausted' : '');
   const needsLogin = !user && LOCKED(lockKind);
   const quotaText = status
-    ? trialRemaining !== null
+    ? status.local_unlimited ? label('本地测试 · 不限额度','Local testing · unlimited','ローカルテスト · 制限なし') : trialRemaining !== null
       ? label(
           trialExhausted ? `${user ? '试用额度' : '游客试用'}已用完（${trialRemaining}/${trialLimit}）` : `剩余 ${trialRemaining}/${trialLimit} 条免费消息`,
           trialExhausted ? `${user ? 'Trial' : 'Guest trial'} used up (${trialRemaining}/${trialLimit})` : `${trialRemaining}/${trialLimit} free messages left`,
@@ -310,7 +324,7 @@ export default function AIChatBar({ user, onAddToCart, cart=[], language, onLang
         {['报价需要提供什么信息', '截面本色/彩色是什么意思', '能做和图片一样的吗'].map(example => <button key={example} onClick={() => { setInput(example); inputRef.current?.focus(); }}><Plus size={13} />{example}</button>)}
       </div>}
       <div className="ai-entry-notices">
-      <p className="text-xs text-slate-500 mb-3">{!paidMember && tr("游客/普通用户每台设备免费发送 3 条消息，回复追问也计入次数。")}{tr("登录后使用账户额度，VIP/VIP+ 含赠送额度。")}</p>
+      <p className="text-xs text-slate-500 mb-3">{status?.local_unlimited ? label("本地测试不限额度 · DeepSeek API按实际用量收费", "Unlimited local testing · DeepSeek API usage is billed", "ローカルテストは制限なし · API利用料は発生します") : <>{!paidMember && tr("游客/普通用户每台设备免费发送 3 条消息，回复追问也计入次数。")}{tr("登录后使用账户额度，VIP/VIP+ 含赠送额度。")}</>}</p>
       {lockNotice && <p className="ai-entry-lock mb-3">{lockNotice} <Link to="/login" className="underline">{tr("登录")}</Link></p>}
       {status && (!status.enabled || (!status.configured && !status.local_answers_available)) && <p className="text-sm text-amber-800 mb-3">AI 咨询暂未开通，您可以先使用<Link to="/quick-quote" className="underline">{tr("快速报价")}</Link>。</p>}
       {status?.enabled && !status.configured && status.local_answers_available && <p className="text-sm text-slate-600 mb-3">目前可回答已收录的常见问题；智能规格识别暂未开通，估价请使用<Link to="/quick-quote" className="underline">{tr("快速报价")}</Link>。</p>}

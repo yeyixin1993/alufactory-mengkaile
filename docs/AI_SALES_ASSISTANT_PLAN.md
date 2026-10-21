@@ -121,3 +121,25 @@ Implemented explicit backend `AI_PROVIDER=deepseek` with `DEEPSEEK_API_KEY`, off
 - 回归：`npm run`/后台测试新增 `tests/test_ai_conversations_admin.py`（6 项：权限、游客来源与明细、搜索与过滤、附件按需、分页与空会话隐藏、孤儿收编幂等）。
 
 2026-10-19: One-time AI grants are VIP RMB 5 / VIP+ cumulative RMB 50. Previously granted credits are retained, never clawed back; an old RMB 10 VIP grant receives only RMB 40 on upgrade. Recharge and usage pricing are unchanged.
+
+## 问答库三层应答与「待补知识」闭环（2026-10-20）
+
+店主诉求：外包客服在微信群里反复问同一批问题，网站 AI 又答不上来新问法。本轮把「问答库」从**只能整句精确命中**扩成三层，并补上「问了没答上」的收集面。
+
+- 回答顺序：`advice()` 本地话术 → 整句/同义问法精确命中 → **近似命中** → 模型。
+- 近似命中（`app/ai_knowledge.py`，不调模型）：归一化后取字符二元组 Dice 与 `SequenceMatcher` 的加权分（0.6/0.4）；`AUTO_ANSWER=0.68`、`MIN_COVERAGE=0.55`，且与第二名的分差 `<0.06` 视为歧义——**一律不答**，与精确通道一样 fail closed。
+- **钱相关分类（报价咨询 / 付款与充值 / 账户与额度）永不由近似命中回答**：报价、余额、优惠说错一次就是真金白银。价格与账户只走精确问法，或模型 + 现有计价工具。
+- 近似命中同样免模型、免扣费，响应 `source='knowledge'`（精确命中仍是 `'faq'`），流水 `detail.match` 记 `exact` / `recalled` 便于事后复核。
+- 未命中落 `ai_knowledge_misses`：按归一化问法去重（sha1 前 32 位）、累加 `count`、保存最近一次的最接近条目。只收「像提问」的消息（含问句特征且不含尺寸+数量的纯报价），避免报价需求污染列表。
+- 后台「待补知识」面板（`/admin/ai-faq.html`）：按被问次数排序，可**加为已有条目的同义问法**或**用它新建问答**，保存后该记录自动标记已处理；也可忽略。这是「知识库该补什么」的唯一依据，取代凭印象补规则。
+- 走模型的路径会把最接近的 2 条知识作为「参考知识」附在用户消息后，明确要求：不相关就忽略、不得据此编造价格/库存/交期、不得改变输出格式。
+- 批量导入：`python import_ai_knowledge.py qa.csv --category 常见问题`，默认写**未启用草稿**（`--publish` 才启用，`--update` 覆盖）。id 由问题文本哈希，可重复执行；模板 `outputs/ai-knowledge-qa-template.csv`。
+- 建表：`ai_knowledge_misses` 由 `create_app()` 里的 `db.create_all()` 自动创建，生产升级只需重启服务，无需手工 ALTER。
+- 回归：`tests/test_ai_knowledge.py`（10 项：精确优先、未录入问法免模型命中、歧义不答、钱分类不命中、停用条目不命中、未命中去重累加、报价不入队、后台权限与忽略、测试匹配建议、归一化等价）。
+- 顺手修了一个既有 bug：`admin/ai-faq.html` 的 `newId()` 在 `crypto.randomUUID` 存在时**递归调用自己**，导致 localhost / https 打开后台时整页脚本栈溢出、页面看似空白；已改为 `return crypto.randomUUID()`。
+
+### Local live verification (2026-10-21)
+- `run_deepseek_local.py` alone enables `AI_LOCAL_UNLIMITED`; the storefront reflects this and does not lock after the three-message trial. Production still enforces balances and trials.
+- In local Vite development only, expired visitor credentials from a different local database are replaced once; production visitor identity is unchanged.
+- Reproduced a DeepSeek response containing only whitespace after mixed informational turns. Retry that response once with an explicit JSON instruction, retaining both attempts' measured costs and reserving for both before paid production requests.
+- Real API checks: tapping depth, shipping, cross-section, accessories, cabinet dimensions, unavailable materials, cleaning advice, pegboard quote, intervening advice, then quantity update. Pegboard 800×600×2mm × 1 = ¥518.4; × 2 = ¥1036.8, shipping included. Regression script and production build pass.

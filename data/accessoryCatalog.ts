@@ -120,7 +120,7 @@ const AUTHORED_ACCESSORY_DEFINITIONS: AccessoryDefinition[] = [
   {
     id: '1',
     code: 1,
-    name: { en: 'No.1 Corner Bracket + Screws', cn: '1号角码配螺丝', jp: '1番コーナーブラケット+ねじ' },
+    name: { en: 'No.1 External Corner Bracket (with screws)', cn: '1号 外置角码（含螺丝）', jp: '1番コーナーブラケット+ねじ' },
     prices: {
       '2020': { natural: 1, colored: 3, naturalBulk: 0.9, coloredBulk: 2.5 },
       '3030': { natural: 2, colored: 4, naturalBulk: 1.5, coloredBulk: 3.1 },
@@ -129,7 +129,7 @@ const AUTHORED_ACCESSORY_DEFINITIONS: AccessoryDefinition[] = [
   {
     id: '2',
     code: 2,
-    name: { en: 'No.2 Corner Bracket (Only)', cn: '2号角码 only', jp: '2番コーナーブラケットのみ' },
+    name: { en: 'No.2 Extruded Corner Bracket (without screws)', cn: '2号 挤压角码（不含螺丝）', jp: '2番コーナーブラケットのみ' },
     prices: {
       '1515': { natural: 3, colored: 3.5, naturalBulk: 2.5, coloredBulk: 3 },
       '2020': { natural: 4, colored: 5, naturalBulk: 3.2, coloredBulk: 4 },
@@ -139,13 +139,13 @@ const AUTHORED_ACCESSORY_DEFINITIONS: AccessoryDefinition[] = [
   {
     id: '3',
     code: 3,
-    name: { en: 'No.3 Angle Bracket', cn: '3号角码', jp: '3番コーナーブラケット' },
+    name: { en: 'No.3 Aluminum Angle', cn: '3号 角铝', jp: '3番コーナーブラケット' },
     prices: NO3_AND_NO7_PRICES,
   },
   {
     id: '5',
     code: 5,
-    name: { en: 'No.5 Corner Bracket + Set Screw', cn: '5号角码配顶丝', jp: '5番コーナーブラケット+止めねじ' },
+    name: { en: 'No.5 Inner Slot Connector (hidden bracket, with set screw)', cn: '5号 内置角槽连接件（隐藏角码 · 含顶丝）', jp: '5番コーナーブラケット+止めねじ' },
     prices: {
       '2020': { natural: 1, colored: 3, naturalBulk: 0.9, coloredBulk: 2.5 },
       '3030': { natural: 1.5, colored: 3.5, naturalBulk: 1.3, coloredBulk: 3.1 },
@@ -155,20 +155,20 @@ const AUTHORED_ACCESSORY_DEFINITIONS: AccessoryDefinition[] = [
     id: '7L',
     code: 7,
     imageKey: '7L',
-    name: { en: 'No.7 Corner Bracket (L Type)', cn: '7号角码 L型', jp: '7番コーナーブラケット L型' },
+    name: { en: 'No.7 L-shaped Connecting Plate', cn: '7号 L型连接片', jp: '7番コーナーブラケット L型' },
     prices: NO3_AND_NO7_PRICES,
   },
   {
     id: '7T',
     code: 7,
     imageKey: '7T',
-    name: { en: 'No.7 Corner Bracket (T Type)', cn: '7号角码 T型', jp: '7番コーナーブラケット T型' },
+    name: { en: 'No.7 T-shaped Connecting Plate', cn: '7号 T型连接片', jp: '7番コーナーブラケット T型' },
     prices: NO3_AND_NO7_PRICES,
   },
   {
     id: '9',
     code: 9,
-    name: { en: 'No.9 Tee Connector', cn: '9号三通', jp: '9番T字コネクタ' },
+    name: { en: 'No.9 Tee Connector', cn: '9号 三通连接件', jp: '9番T字コネクタ' },
     prices: {
       '1515': { natural: 3, colored: 4, naturalBulk: 2.5, coloredBulk: 3 },
       '2020': { natural: 4, colored: 5, naturalBulk: 3.5, coloredBulk: 4 },
@@ -206,7 +206,7 @@ const AUTHORED_ACCESSORY_DEFINITIONS: AccessoryDefinition[] = [
   {
     id: '10_1515_m4x6_cap',
     code: 10,
-    name: { en: 'No.10 Screw · 304 M4*6 Socket Cap', cn: '10号螺丝 · 304 M4*6 圆柱头内六角', jp: '10番ねじ · 304 M4*6 六角穴付きボルト' },
+    name: { en: 'M4×6 Socket Cap', cn: 'M4×6 圆柱头内六角螺丝', jp: 'M4×6 六角穴付きボルト' },
     note: '1515：搭配7号配件',
     prices: {
       '1515': { natural: 0.5, colored: 1, naturalBulk: 0.33, coloredBulk: 0.8 },
@@ -215,7 +215,7 @@ const AUTHORED_ACCESSORY_DEFINITIONS: AccessoryDefinition[] = [
   {
     id: '10_1515_m4x12_cap',
     code: 10,
-    name: { en: 'No.10 Screw · 304 M4*12 Socket Cap', cn: '10号螺丝 · 304 M4*12 圆柱头内六角', jp: '10番ねじ · 304 M4*12 六角穴付きボルト' },
+    name: { en: 'M4×12 Socket Cap', cn: 'M4×12 圆柱头内六角螺丝', jp: 'M4×12 六角穴付きボルト' },
     note: '1515：搭配2号配件',
     prices: {
       '1515': { natural: 0.5, colored: 1, naturalBulk: 0.33, coloredBulk: 0.8 },
@@ -224,7 +224,7 @@ const AUTHORED_ACCESSORY_DEFINITIONS: AccessoryDefinition[] = [
   {
     id: '10_1515_m4x10_cs',
     code: 10,
-    name: { en: 'No.10 Screw · 304 M4*10 Countersunk', cn: '10号螺丝 · 304 M4*10 沉头内六角', jp: '10番ねじ · 304 M4*10 皿六角' },
+    name: { en: 'M4×10 Countersunk', cn: 'M4×10 沉头内六角螺丝', jp: 'M4×10 皿六角' },
     note: '1515：搭配9号配件',
     prices: {
       '1515': { natural: 0.5, colored: 1, naturalBulk: 0.33, coloredBulk: 0.8 },
@@ -233,8 +233,8 @@ const AUTHORED_ACCESSORY_DEFINITIONS: AccessoryDefinition[] = [
   {
     id: '10_1515_m4_tnut',
     code: 10,
-    name: { en: 'No.10 · 304 1515 M4 T Nut', cn: '10号配件 · 304 1515 M4 T型螺母', jp: '10番部品 · 304 1515 M4 Tナット' },
-    note: '1515：T型螺母',
+    name: { en: 'M4 T-Nut (1515 series)', cn: 'M4 T型螺母', jp: 'M4 Tナット' },
+    note: '1515 系列 · 304 不锈钢 · No.10 配件',
     prices: {
       '1515': { natural: 0.5, colored: 1, naturalBulk: 0.33, coloredBulk: 0.8 },
     },
@@ -242,7 +242,7 @@ const AUTHORED_ACCESSORY_DEFINITIONS: AccessoryDefinition[] = [
   {
     id: '10_2020_m5x14_cap',
     code: 10,
-    name: { en: 'No.10 Screw · 304 M5*14 Socket Cap', cn: '10号螺丝 · 304 M5*14 圆柱头内六角', jp: '10番ねじ · 304 M5*14 六角穴付きボルト' },
+    name: { en: 'M5×14 Socket Cap', cn: 'M5×14 圆柱头内六角螺丝', jp: 'M5×14 六角穴付きボルト' },
     note: '2020：搭配2号配件',
     prices: {
       '2020': { natural: 0.5, colored: 1, naturalBulk: 0.33, coloredBulk: 0.8 },
@@ -251,7 +251,7 @@ const AUTHORED_ACCESSORY_DEFINITIONS: AccessoryDefinition[] = [
   {
     id: '10_2020_m5x8_cap',
     code: 10,
-    name: { en: 'No.10 Screw · 304 M5*8 Socket Cap', cn: '10号螺丝 · 304 M5*8 圆柱头内六角', jp: '10番ねじ · 304 M5*8 六角穴付きボルト' },
+    name: { en: 'M5×8 Socket Cap', cn: 'M5×8 圆柱头内六角螺丝', jp: 'M5×8 六角穴付きボルト' },
     note: '2020：搭配7号配件',
     prices: {
       '2020': { natural: 0.5, colored: 1, naturalBulk: 0.33, coloredBulk: 0.8 },
@@ -260,7 +260,7 @@ const AUTHORED_ACCESSORY_DEFINITIONS: AccessoryDefinition[] = [
   {
     id: '10_2020_m6x20_cs',
     code: 10,
-    name: { en: 'No.10 Screw · 304 M6*20 Countersunk', cn: '10号螺丝 · 304 M6*20 沉头内六角', jp: '10番ねじ · 304 M6*20 皿六角' },
+    name: { en: 'M6×20 Countersunk', cn: 'M6×20 沉头内六角螺丝', jp: 'M6×20 皿六角' },
     note: '2020：搭配9号配件',
     prices: {
       '2020': { natural: 0.5, colored: 1, naturalBulk: 0.33, coloredBulk: 0.8 },
@@ -269,8 +269,8 @@ const AUTHORED_ACCESSORY_DEFINITIONS: AccessoryDefinition[] = [
   {
     id: '10_2020_m5_tnut',
     code: 10,
-    name: { en: 'No.10 · 304 2020 M5 T Nut', cn: '10号配件 · 304 2020 M5 T型螺母', jp: '10番部品 · 304 2020 M5 Tナット' },
-    note: '2020：T型螺母',
+    name: { en: 'M5 T-Nut (2020 series)', cn: 'M5 T型螺母', jp: 'M5 Tナット' },
+    note: '2020 系列 · 304 不锈钢 · No.10 配件',
     prices: {
       '2020': { natural: 0.5, colored: 1, naturalBulk: 0.33, coloredBulk: 0.8 },
     },
@@ -278,7 +278,7 @@ const AUTHORED_ACCESSORY_DEFINITIONS: AccessoryDefinition[] = [
   {
     id: '10_3030_m6x18_cap',
     code: 10,
-    name: { en: 'No.10 Screw · 304 M6*18 Socket Cap', cn: '10号螺丝 · 304 M6*18 圆柱头内六角', jp: '10番ねじ · 304 M6*18 六角穴付きボルト' },
+    name: { en: 'M6×18 Socket Cap', cn: 'M6×18 圆柱头内六角螺丝', jp: 'M6×18 六角穴付きボルト' },
     note: '3030：搭配2号配件',
     prices: {
       '3030': { natural: 0.75, colored: 1.25, naturalBulk: 0.5, coloredBulk: 1 },
@@ -287,7 +287,7 @@ const AUTHORED_ACCESSORY_DEFINITIONS: AccessoryDefinition[] = [
   {
     id: '10_3030_m6x12_cap',
     code: 10,
-    name: { en: 'No.10 Screw · 304 M6*12 Socket Cap', cn: '10号螺丝 · 304 M6*12 圆柱头内六角', jp: '10番ねじ · 304 M6*12 六角穴付きボルト' },
+    name: { en: 'M6×12 Socket Cap', cn: 'M6×12 圆柱头内六角螺丝', jp: 'M6×12 六角穴付きボルト' },
     note: '3030：搭配7号配件',
     prices: {
       '3030': { natural: 0.75, colored: 1.25, naturalBulk: 0.5, coloredBulk: 1 },
@@ -296,7 +296,7 @@ const AUTHORED_ACCESSORY_DEFINITIONS: AccessoryDefinition[] = [
   {
     id: '10_3030_m8x20_cs',
     code: 10,
-    name: { en: 'No.10 Screw · 304 M8*20 Countersunk', cn: '10号螺丝 · 304 M8*20 沉头内六角', jp: '10番ねじ · 304 M8*20 皿六角' },
+    name: { en: 'M8×20 Countersunk', cn: 'M8×20 沉头内六角螺丝', jp: 'M8×20 皿六角' },
     note: '3030：搭配9号配件',
     prices: {
       '3030': { natural: 0.75, colored: 1.25, naturalBulk: 0.5, coloredBulk: 1 },
@@ -305,8 +305,8 @@ const AUTHORED_ACCESSORY_DEFINITIONS: AccessoryDefinition[] = [
   {
     id: '10_3030_m6_tnut',
     code: 10,
-    name: { en: 'No.10 · 304 3030 M6 T Nut', cn: '10号配件 · 304 3030 M6 T型螺母', jp: '10番部品 · 304 3030 M6 Tナット' },
-    note: '3030：T型螺母',
+    name: { en: 'M6 T-Nut (3030 series)', cn: 'M6 T型螺母', jp: 'M6 Tナット' },
+    note: '3030 系列 · 304 不锈钢 · No.10 配件',
     prices: {
       '3030': { natural: 0.75, colored: 1.25, naturalBulk: 0.5, coloredBulk: 1 },
     },

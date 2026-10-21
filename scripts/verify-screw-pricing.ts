@@ -74,7 +74,17 @@ for (const definition of generatedDefinitions) {
 assert.ok(DESIGNER_SCREW_FAMILY_DEFINITIONS.length > 0, '必须生成兜底行');
 for (const definition of DESIGNER_SCREW_FAMILY_DEFINITIONS) {
   assert.equal(definition.designerInternalOnly, true, `${definition.id} 应标记为仅设计器内部`);
-  assert.equal(definition.name.cn.includes('长度按设计取值'), true, `${definition.id} 的名称应说明长度按设计取值`);
+  // 「长度按设计取值」是内部契约，改成断言 note 而不是商品名——
+  // 商品名里带这个后缀会让客户在报价单上看到一句他看不懂的内部说明。
+  assert.equal(
+    Boolean(definition.note && definition.note.includes('长度按设计取值')),
+    true,
+    `${definition.id} 的 note 应说明长度按设计取值`,
+  );
+  assert.ok(
+    !definition.name.cn.includes('10号'),
+    `${definition.id} 的商品名不应包含内部编号 No.10`,
+  );
 }
 for (const definition of DESIGNER_CONFIRMED_SCREW_DEFINITIONS) {
   assert.ok(!definition.designerInternalOnly, `${definition.id} 是已确认订购规格，必须保持客户端可选`);

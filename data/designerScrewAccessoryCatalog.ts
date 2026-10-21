@@ -83,18 +83,26 @@ const buildPrices = (series: string): AccessoryDefinition['prices'] => {
   };
 };
 
+/**
+ * Customer-facing name for one screw identity.
+ *
+ * Kept free of two things on purpose:
+ * - the internal `No.10` code — buyers search "M5×14 内六角螺丝", never "10号螺丝";
+ * - the "长度按设计取值" hint — that is an internal contract, so it lives in
+ *   `note` (where the price list and the factory sheet already read it) instead
+ *   of inside the product name a customer sees.
+ */
 const buildName = (spec: ScrewSpecIdentity) => {
   const head = SCREW_HEAD_NAMES[spec.screwHead];
   const length = Number(spec.lengthMm);
   const hasLength = Number.isFinite(length) && length > 0;
-  const dimensionsCn = hasLength ? `${spec.threadSize}*${length}` : spec.threadSize;
-  const hint = hasLength
-    ? { cn: '', en: '', jp: '' }
-    : { cn: '（长度按设计取值）', en: ' (length from design)', jp: '（長さは設計値）' };
+  const dimensions = hasLength
+    ? `${spec.threadSize}×${Number.isInteger(length) ? length : length.toFixed(1)}`
+    : spec.threadSize;
   return {
-    cn: `10号螺丝 · 304 ${dimensionsCn} ${head.cn}${hint.cn}`,
-    en: `No.10 Screw · 304 ${dimensionsCn} ${head.en}${hint.en}`,
-    jp: `10番ねじ · 304 ${dimensionsCn} ${head.jp}${hint.jp}`,
+    cn: `${dimensions} ${head.cn}螺丝`,
+    en: `${dimensions} ${head.en}`,
+    jp: `${dimensions} ${head.jp}`,
   };
 };
 

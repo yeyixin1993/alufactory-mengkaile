@@ -329,7 +329,9 @@ const FactorySheet: React.FC<FactorySheetProps> = ({ cart, user, language, order
       } else if (item.product.type === ProductType.ACCESSORY) {
         hasAccessory = true;
       } else {
-        totalWeightKg += 1 * item.quantity;
+        // 网站自营板块（洞洞板配件 / 成品家具 / 样品）带单件估算重量，缺省仍按 1kg/件
+        const declaredKg = Number((item.config as any)?.shippingWeightKg);
+        totalWeightKg += (Number.isFinite(declaredKg) && declaredKg > 0 ? declaredKg : 1) * item.quantity;
       }
     });
     return totalWeightKg + getAccessoryShippingWeightKg(user, hasAccessory, baseTotal);
@@ -606,6 +608,7 @@ const FactorySheet: React.FC<FactorySheetProps> = ({ cart, user, language, order
         {nonScrewDisplayCart.map((item, idx) => {
            const isProfile = item.product.type === ProductType.PROFILE;
             const isAccessory = item.product.type === ProductType.ACCESSORY;
+           const isStorefrontSku = item.product.type === ProductType.STOREFRONT_SKU;
            const rawCfg = (item.config || {}) as any;
            const showComponentPrice = showPrice && !rawCfg.hideComponentPrice;
            const isMarineMaterial = item.product.type === ProductType.MARINE_BOARD
@@ -785,6 +788,28 @@ const FactorySheet: React.FC<FactorySheetProps> = ({ cart, user, language, order
                       </div>
                     )}
                  </div>
+               ) : isStorefrontSku ? (
+                <div className="space-y-3">
+                  {(() => {
+                    const labels = Array.isArray(cfg?.optionLabels) ? cfg.optionLabels : [];
+                    const specText = labels.map((label: any) => label?.[language]).filter(Boolean).join(' / ')
+                      || (cfg?.specText ? cfg.specText[language] : '-');
+                    const unitPrice = Number(cfg?.unitPrice || (item.totalPrice / Math.max(1, item.quantity)));
+                    return (
+                      <div className="bg-slate-50 p-4 rounded-xl border border-slate-100">
+                        <h4 className="text-xs font-black text-slate-400 uppercase tracking-widest border-b border-slate-200 pb-2 mb-3">
+                          {language === 'cn' ? '外购件（不加工）' : language === 'jp' ? '外注品（加工なし）' : 'Purchased item (no machining)'}
+                        </h4>
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-xs">
+                          <div><span className="text-slate-400">{language === 'cn' ? '规格' : language === 'jp' ? '仕様' : 'Option'}:</span> <span className="font-black">{specText}</span></div>
+                          <div><span className="text-slate-400">{language === 'cn' ? '单价' : language === 'jp' ? '単価' : 'Unit'}:</span> <span className="font-black">{currency}{unitPrice.toFixed(2)}</span></div>
+                          <div><span className="text-slate-400">{language === 'cn' ? '数量' : language === 'jp' ? '数量' : 'Qty'}:</span> <span className="font-black">{item.quantity}</span></div>
+                          <div><span className="text-slate-400">{language === 'cn' ? '小计' : language === 'jp' ? '小計' : 'Subtotal'}:</span> <span className="font-black">{currency}{item.totalPrice.toFixed(2)}</span></div>
+                        </div>
+                      </div>
+                    );
+                  })()}
+                </div>
                ) : isAccessory ? (
                 <div className="space-y-4">
                   {(() => {

@@ -16,11 +16,11 @@ for (const series of ['1515', '2020', '3030']) {
     assert.equal(lines[0].quantity, ratio * 3);
     assert.equal(lines[0].unitPrice, lines[0].originalUnitPrice / 2);
     assert.equal(lines.length, def === '9' ? 1 : 2);
-    if (lines[1]) { assert.equal(lines[1].quantity, ratio * 3); assert.equal(lines[1].unitPrice, lines[1].originalUnitPrice); }
+    if (lines[1]) { assert.equal(lines[1].quantity, ratio * 3); assert.equal(lines[1].unitPrice, lines[1].originalUnitPrice / 2); }
   }
 }
-assert.equal(kitLinesTotal(buildAccessoryKitLines('2', '2020', 1, 'natural', 'cn')), 1.5);
-assert.equal(kitLinesTotal(buildAccessoryKitLines('2', '2020', 10, 'natural', 'cn')), 9.9);
+assert.equal(kitLinesTotal(buildAccessoryKitLines('2', '2020', 1, 'natural', 'cn')), 1);
+assert.equal(kitLinesTotal(buildAccessoryKitLines('2', '2020', 10, 'natural', 'cn')), 6.6);
 assert.equal(buildAccessoryKitLines('2', '2020', 10, 'natural', 'cn')[0].unitPrice, .165);
 for (const def of ['1', '2', '3', '7L', '7T', '9']) assert.equal(getAccessoryKit(def, '4040'), null);
 assert.equal(getAccessoryKit('3', '3030')?.screw.key, getAccessoryKit('7L', '3030')?.screw.key);

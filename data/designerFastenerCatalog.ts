@@ -84,14 +84,14 @@ export const DESIGNER_FASTENER_CATALOG: readonly DesignerFastenerCatalogEntry[] 
   makeEntry({
     id: 'aluformula.fastener.2020.button_socket.m6x20',
     profileId: '2020',
-    names: { 'zh-CN': 'M6×20 内六角按钮头螺钉', en: 'M6×20 hex socket button head screw', ja: 'M6×20 六角穴付きボタンボルト' },
+    names: { 'zh-CN': 'M6×20 内六角半圆头螺钉', en: 'M6×20 hex socket button head screw', ja: 'M6×20 六角穴付きボタンボルト' },
     headType: 'button_socket',
     threadSize: 'M6',
     lengthMm: 20,
     includesElasticFastener: false,
     standard: 'ISO 7380-1',
     driveSizeMm: 4,
-    designRule: '2020槽内按钮头连接：M6×20',
+    designRule: '2020槽内半圆头连接：M6×20',
   }),
   makeEntry({
     id: 'aluformula.fastener.2020.flat_socket.m6x8',
@@ -120,14 +120,14 @@ export const DESIGNER_FASTENER_CATALOG: readonly DesignerFastenerCatalogEntry[] 
   makeEntry({
     id: 'aluformula.fastener.3030.button_socket.m8x20-spring-kit',
     profileId: '3030',
-    names: { 'zh-CN': 'M8×20 内六角按钮头螺钉＋弹性紧固件', en: 'M8×20 hex socket button head screw + elastic fastener', ja: 'M8×20 六角穴付きボタンボルト＋弾性ナット' },
+    names: { 'zh-CN': 'M8×20 内六角半圆头螺钉＋弹性紧固件', en: 'M8×20 hex socket button head screw + elastic fastener', ja: 'M8×20 六角穴付きボタンボルト＋弾性ナット' },
     headType: 'button_socket',
     threadSize: 'M8',
     lengthMm: 20,
     includesElasticFastener: true,
     standard: 'ISO 7380-1',
     driveSizeMm: 5,
-    designRule: '3030槽内按钮头连接：M8×20＋弹性紧固件',
+    designRule: '3030槽内半圆头连接：M8×20＋弹性紧固件',
   }),
 ]);
 

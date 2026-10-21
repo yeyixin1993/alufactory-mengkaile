@@ -8,6 +8,7 @@ import { ACCESSORY_DEFINITIONS } from '../data/accessoryCatalog';
 import type { Language } from '../types';
 import { catalogLocale, catalogText } from '../utils/catalogLocalization';
 import * as boardPricing from '../data/boardPricing';
+import { STOREFRONT_SECTIONS } from '../data/storefrontSections';
 
 // One self-contained HTML snapshot, rendered from the same component/data as #/catalog.
 // Run via npm run catalog:html before a deployment so the downloadable snapshot is current.
@@ -39,7 +40,14 @@ document.querySelector('[data-catalog-print]').addEventListener('click', async f
 const directory = path.join(root, 'public/catalog');
 await mkdir(directory, { recursive: true });
 await writeFile(path.join(directory, `mengkaile-catalog-2026${language === 'cn' ? '' : '-' + language}.html`), html);
-await writeFile(path.join(root, '.catalog-export/prices.json'), JSON.stringify({ profiles: PROFILE_VARIANTS, accessories: ACCESSORY_DEFINITIONS, boards: boardPricing }, null, 2));
+await writeFile(path.join(root, '.catalog-export/prices.json'), JSON.stringify({
+  profiles: PROFILE_VARIANTS,
+  accessories: ACCESSORY_DEFINITIONS,
+  boards: boardPricing,
+  // 网站自营三板块（洞洞板配件 / 成品家具 / 样品购买）。
+  // 网店主数据（eshop）读这个键来把「网店有、网站缺」的缺口标成已补。
+  storefrontSections: STOREFRONT_SECTIONS,
+}, null, 2));
 console.log(`Catalog ${language} exported: ${imageSources.length} embedded images, ${Buffer.byteLength(html)} bytes.`);
 }
 

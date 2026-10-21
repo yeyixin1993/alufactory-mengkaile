@@ -381,8 +381,8 @@
       "defId": "1",
       "code": 1,
       "name": {
-        "en": "No.1 Corner Bracket + Screws",
-        "cn": "1号角码配螺丝",
+        "en": "No.1 External Corner Bracket (with screws)",
+        "cn": "1号 外置角码（含螺丝）",
         "jp": "1番コーナーブラケット+ねじ"
       },
       "series": "2020",
@@ -398,8 +398,8 @@
       "defId": "1",
       "code": 1,
       "name": {
-        "en": "No.1 Corner Bracket + Screws",
-        "cn": "1号角码配螺丝",
+        "en": "No.1 External Corner Bracket (with screws)",
+        "cn": "1号 外置角码（含螺丝）",
         "jp": "1番コーナーブラケット+ねじ"
       },
       "series": "3030",
@@ -415,8 +415,8 @@
       "defId": "2",
       "code": 2,
       "name": {
-        "en": "No.2 Corner Bracket (Only)",
-        "cn": "2号角码 only",
+        "en": "No.2 Extruded Corner Bracket (without screws)",
+        "cn": "2号 挤压角码（不含螺丝）",
         "jp": "2番コーナーブラケットのみ"
       },
       "series": "1515",
@@ -432,8 +432,8 @@
       "defId": "2",
       "code": 2,
       "name": {
-        "en": "No.2 Corner Bracket (Only)",
-        "cn": "2号角码 only",
+        "en": "No.2 Extruded Corner Bracket (without screws)",
+        "cn": "2号 挤压角码（不含螺丝）",
         "jp": "2番コーナーブラケットのみ"
       },
       "series": "2020",
@@ -449,8 +449,8 @@
       "defId": "2",
       "code": 2,
       "name": {
-        "en": "No.2 Corner Bracket (Only)",
-        "cn": "2号角码 only",
+        "en": "No.2 Extruded Corner Bracket (without screws)",
+        "cn": "2号 挤压角码（不含螺丝）",
         "jp": "2番コーナーブラケットのみ"
       },
       "series": "3030",
@@ -466,8 +466,8 @@
       "defId": "3",
       "code": 3,
       "name": {
-        "en": "No.3 Angle Bracket",
-        "cn": "3号角码",
+        "en": "No.3 Aluminum Angle",
+        "cn": "3号 角铝",
         "jp": "3番コーナーブラケット"
       },
       "series": "1515",
@@ -483,8 +483,8 @@
       "defId": "3",
       "code": 3,
       "name": {
-        "en": "No.3 Angle Bracket",
-        "cn": "3号角码",
+        "en": "No.3 Aluminum Angle",
+        "cn": "3号 角铝",
         "jp": "3番コーナーブラケット"
       },
       "series": "2020",
@@ -500,8 +500,8 @@
       "defId": "3",
       "code": 3,
       "name": {
-        "en": "No.3 Angle Bracket",
-        "cn": "3号角码",
+        "en": "No.3 Aluminum Angle",
+        "cn": "3号 角铝",
         "jp": "3番コーナーブラケット"
       },
       "series": "3030",
@@ -517,8 +517,8 @@
       "defId": "3",
       "code": 3,
       "name": {
-        "en": "No.3 Angle Bracket",
-        "cn": "3号角码",
+        "en": "No.3 Aluminum Angle",
+        "cn": "3号 角铝",
         "jp": "3番コーナーブラケット"
       },
       "series": "4040",
@@ -534,8 +534,8 @@
       "defId": "5",
       "code": 5,
       "name": {
-        "en": "No.5 Corner Bracket + Set Screw",
-        "cn": "5号角码配顶丝",
+        "en": "No.5 Inner Slot Connector (hidden bracket, with set screw)",
+        "cn": "5号 内置角槽连接件（隐藏角码 · 含顶丝）",
         "jp": "5番コーナーブラケット+止めねじ"
       },
       "series": "2020",
@@ -551,8 +551,8 @@
       "defId": "5",
       "code": 5,
       "name": {
-        "en": "No.5 Corner Bracket + Set Screw",
-        "cn": "5号角码配顶丝",
+        "en": "No.5 Inner Slot Connector (hidden bracket, with set screw)",
+        "cn": "5号 内置角槽连接件（隐藏角码 · 含顶丝）",
         "jp": "5番コーナーブラケット+止めねじ"
       },
       "series": "3030",
@@ -568,8 +568,8 @@
       "defId": "7L",
       "code": 7,
       "name": {
-        "en": "No.7 Corner Bracket (L Type)",
-        "cn": "7号角码 L型",
+        "en": "No.7 L-shaped Connecting Plate",
+        "cn": "7号 L型连接片",
         "jp": "7番コーナーブラケット L型"
       },
       "series": "1515",
@@ -586,8 +586,8 @@
       "defId": "7L",
       "code": 7,
       "name": {
-        "en": "No.7 Corner Bracket (L Type)",
-        "cn": "7号角码 L型",
+        "en": "No.7 L-shaped Connecting Plate",
+        "cn": "7号 L型连接片",
         "jp": "7番コーナーブラケット L型"
       },
       "series": "2020",
@@ -604,8 +604,8 @@
       "defId": "7L",
       "code": 7,
       "name": {
-        "en": "No.7 Corner Bracket (L Type)",
-        "cn": "7号角码 L型",
+        "en": "No.7 L-shaped Connecting Plate",
+        "cn": "7号 L型连接片",
         "jp": "7番コーナーブラケット L型"
       },
       "series": "3030",
@@ -622,8 +622,8 @@
       "defId": "7L",
       "code": 7,
       "name": {
-        "en": "No.7 Corner Bracket (L Type)",
-        "cn": "7号角码 L型",
+        "en": "No.7 L-shaped Connecting Plate",
+        "cn": "7号 L型连接片",
         "jp": "7番コーナーブラケット L型"
       },
       "series": "4040",
@@ -640,8 +640,8 @@
       "defId": "7T",
       "code": 7,
       "name": {
-        "en": "No.7 Corner Bracket (T Type)",
-        "cn": "7号角码 T型",
+        "en": "No.7 T-shaped Connecting Plate",
+        "cn": "7号 T型连接片",
         "jp": "7番コーナーブラケット T型"
       },
       "series": "1515",
@@ -658,8 +658,8 @@
       "defId": "7T",
       "code": 7,
       "name": {
-        "en": "No.7 Corner Bracket (T Type)",
-        "cn": "7号角码 T型",
+        "en": "No.7 T-shaped Connecting Plate",
+        "cn": "7号 T型连接片",
         "jp": "7番コーナーブラケット T型"
       },
       "series": "2020",
@@ -676,8 +676,8 @@
       "defId": "7T",
       "code": 7,
       "name": {
-        "en": "No.7 Corner Bracket (T Type)",
-        "cn": "7号角码 T型",
+        "en": "No.7 T-shaped Connecting Plate",
+        "cn": "7号 T型连接片",
         "jp": "7番コーナーブラケット T型"
       },
       "series": "3030",
@@ -694,8 +694,8 @@
       "defId": "7T",
       "code": 7,
       "name": {
-        "en": "No.7 Corner Bracket (T Type)",
-        "cn": "7号角码 T型",
+        "en": "No.7 T-shaped Connecting Plate",
+        "cn": "7号 T型连接片",
         "jp": "7番コーナーブラケット T型"
       },
       "series": "4040",
@@ -713,7 +713,7 @@
       "code": 9,
       "name": {
         "en": "No.9 Tee Connector",
-        "cn": "9号三通",
+        "cn": "9号 三通连接件",
         "jp": "9番T字コネクタ"
       },
       "series": "1515",
@@ -730,7 +730,7 @@
       "code": 9,
       "name": {
         "en": "No.9 Tee Connector",
-        "cn": "9号三通",
+        "cn": "9号 三通连接件",
         "jp": "9番T字コネクタ"
       },
       "series": "2020",
@@ -747,7 +747,7 @@
       "code": 9,
       "name": {
         "en": "No.9 Tee Connector",
-        "cn": "9号三通",
+        "cn": "9号 三通连接件",
         "jp": "9番T字コネクタ"
       },
       "series": "3030",
@@ -807,9 +807,9 @@
       "defId": "10_1515_m4x6_cap",
       "code": 10,
       "name": {
-        "en": "No.10 Screw · 304 M4*6 Socket Cap",
-        "cn": "10号螺丝 · 304 M4*6 圆柱头内六角",
-        "jp": "10番ねじ · 304 M4*6 六角穴付きボルト"
+        "en": "M4×6 Socket Cap",
+        "cn": "M4×6 圆柱头内六角螺丝",
+        "jp": "M4×6 六角穴付きボルト"
       },
       "series": "1515",
       "note": "1515：搭配7号配件",
@@ -825,9 +825,9 @@
       "defId": "10_1515_m4x12_cap",
       "code": 10,
       "name": {
-        "en": "No.10 Screw · 304 M4*12 Socket Cap",
-        "cn": "10号螺丝 · 304 M4*12 圆柱头内六角",
-        "jp": "10番ねじ · 304 M4*12 六角穴付きボルト"
+        "en": "M4×12 Socket Cap",
+        "cn": "M4×12 圆柱头内六角螺丝",
+        "jp": "M4×12 六角穴付きボルト"
       },
       "series": "1515",
       "note": "1515：搭配2号配件",
@@ -843,9 +843,9 @@
       "defId": "10_1515_m4x10_cs",
       "code": 10,
       "name": {
-        "en": "No.10 Screw · 304 M4*10 Countersunk",
-        "cn": "10号螺丝 · 304 M4*10 沉头内六角",
-        "jp": "10番ねじ · 304 M4*10 皿六角"
+        "en": "M4×10 Countersunk",
+        "cn": "M4×10 沉头内六角螺丝",
+        "jp": "M4×10 皿六角"
       },
       "series": "1515",
       "note": "1515：搭配9号配件",
@@ -861,12 +861,12 @@
       "defId": "10_1515_m4_tnut",
       "code": 10,
       "name": {
-        "en": "No.10 · 304 1515 M4 T Nut",
-        "cn": "10号配件 · 304 1515 M4 T型螺母",
-        "jp": "10番部品 · 304 1515 M4 Tナット"
+        "en": "M4 T-Nut (1515 series)",
+        "cn": "M4 T型螺母",
+        "jp": "M4 Tナット"
       },
       "series": "1515",
-      "note": "1515：T型螺母",
+      "note": "1515 系列 · 304 不锈钢 · No.10 配件",
       "price": {
         "natural": 0.5,
         "colored": 1,
@@ -879,9 +879,9 @@
       "defId": "10_2020_m5x14_cap",
       "code": 10,
       "name": {
-        "en": "No.10 Screw · 304 M5*14 Socket Cap",
-        "cn": "10号螺丝 · 304 M5*14 圆柱头内六角",
-        "jp": "10番ねじ · 304 M5*14 六角穴付きボルト"
+        "en": "M5×14 Socket Cap",
+        "cn": "M5×14 圆柱头内六角螺丝",
+        "jp": "M5×14 六角穴付きボルト"
       },
       "series": "2020",
       "note": "2020：搭配2号配件",
@@ -897,9 +897,9 @@
       "defId": "10_2020_m5x8_cap",
       "code": 10,
       "name": {
-        "en": "No.10 Screw · 304 M5*8 Socket Cap",
-        "cn": "10号螺丝 · 304 M5*8 圆柱头内六角",
-        "jp": "10番ねじ · 304 M5*8 六角穴付きボルト"
+        "en": "M5×8 Socket Cap",
+        "cn": "M5×8 圆柱头内六角螺丝",
+        "jp": "M5×8 六角穴付きボルト"
       },
       "series": "2020",
       "note": "2020：搭配7号配件",
@@ -915,9 +915,9 @@
       "defId": "10_2020_m6x20_cs",
       "code": 10,
       "name": {
-        "en": "No.10 Screw · 304 M6*20 Countersunk",
-        "cn": "10号螺丝 · 304 M6*20 沉头内六角",
-        "jp": "10番ねじ · 304 M6*20 皿六角"
+        "en": "M6×20 Countersunk",
+        "cn": "M6×20 沉头内六角螺丝",
+        "jp": "M6×20 皿六角"
       },
       "series": "2020",
       "note": "2020：搭配9号配件",
@@ -933,12 +933,12 @@
       "defId": "10_2020_m5_tnut",
       "code": 10,
       "name": {
-        "en": "No.10 · 304 2020 M5 T Nut",
-        "cn": "10号配件 · 304 2020 M5 T型螺母",
-        "jp": "10番部品 · 304 2020 M5 Tナット"
+        "en": "M5 T-Nut (2020 series)",
+        "cn": "M5 T型螺母",
+        "jp": "M5 Tナット"
       },
       "series": "2020",
-      "note": "2020：T型螺母",
+      "note": "2020 系列 · 304 不锈钢 · No.10 配件",
       "price": {
         "natural": 0.5,
         "colored": 1,
@@ -951,9 +951,9 @@
       "defId": "10_3030_m6x18_cap",
       "code": 10,
       "name": {
-        "en": "No.10 Screw · 304 M6*18 Socket Cap",
-        "cn": "10号螺丝 · 304 M6*18 圆柱头内六角",
-        "jp": "10番ねじ · 304 M6*18 六角穴付きボルト"
+        "en": "M6×18 Socket Cap",
+        "cn": "M6×18 圆柱头内六角螺丝",
+        "jp": "M6×18 六角穴付きボルト"
       },
       "series": "3030",
       "note": "3030：搭配2号配件",
@@ -969,9 +969,9 @@
       "defId": "10_3030_m6x12_cap",
       "code": 10,
       "name": {
-        "en": "No.10 Screw · 304 M6*12 Socket Cap",
-        "cn": "10号螺丝 · 304 M6*12 圆柱头内六角",
-        "jp": "10番ねじ · 304 M6*12 六角穴付きボルト"
+        "en": "M6×12 Socket Cap",
+        "cn": "M6×12 圆柱头内六角螺丝",
+        "jp": "M6×12 六角穴付きボルト"
       },
       "series": "3030",
       "note": "3030：搭配7号配件",
@@ -987,9 +987,9 @@
       "defId": "10_3030_m8x20_cs",
       "code": 10,
       "name": {
-        "en": "No.10 Screw · 304 M8*20 Countersunk",
-        "cn": "10号螺丝 · 304 M8*20 沉头内六角",
-        "jp": "10番ねじ · 304 M8*20 皿六角"
+        "en": "M8×20 Countersunk",
+        "cn": "M8×20 沉头内六角螺丝",
+        "jp": "M8×20 皿六角"
       },
       "series": "3030",
       "note": "3030：搭配9号配件",
@@ -1005,12 +1005,12 @@
       "defId": "10_3030_m6_tnut",
       "code": 10,
       "name": {
-        "en": "No.10 · 304 3030 M6 T Nut",
-        "cn": "10号配件 · 304 3030 M6 T型螺母",
-        "jp": "10番部品 · 304 3030 M6 Tナット"
+        "en": "M6 T-Nut (3030 series)",
+        "cn": "M6 T型螺母",
+        "jp": "M6 Tナット"
       },
       "series": "3030",
-      "note": "3030：T型螺母",
+      "note": "3030 系列 · 304 不锈钢 · No.10 配件",
       "price": {
         "natural": 0.75,
         "colored": 1.25,
@@ -1023,9 +1023,9 @@
       "defId": "10_2020_m6x30_cap",
       "code": 10,
       "name": {
-        "cn": "10号螺丝 · 304 M6*30 圆柱头内六角",
-        "en": "No.10 Screw · 304 M6*30 Socket Cap",
-        "jp": "10番ねじ · 304 M6*30 六角穴付きボルト"
+        "cn": "M6×30 圆柱头内六角螺丝",
+        "en": "M6×30 Socket Cap",
+        "jp": "M6×30 六角穴付きボルト"
       },
       "series": "2020",
       "note": "设计器结构螺丝 · 2020 · ISO 4762 · 2020直锁连接：M6×30圆柱头",
@@ -1042,12 +1042,12 @@
       "defId": "10_2020_m6x20_btn",
       "code": 10,
       "name": {
-        "cn": "10号螺丝 · 304 M6*20 按钮头内六角",
-        "en": "No.10 Screw · 304 M6*20 Button-Head Socket",
-        "jp": "10番ねじ · 304 M6*20 六角穴付きボタンボルト"
+        "cn": "M6×20 半圆头内六角螺丝",
+        "en": "M6×20 Button-Head Socket",
+        "jp": "M6×20 六角穴付きボタンボルト"
       },
       "series": "2020",
-      "note": "设计器结构螺丝 · 2020 · ISO 7380-1 · 2020槽内按钮头连接：M6×20",
+      "note": "设计器结构螺丝 · 2020 · ISO 7380-1 · 2020槽内半圆头连接：M6×20",
       "imageKey": "10",
       "price": {
         "natural": 0.5,
@@ -1061,9 +1061,9 @@
       "defId": "10_2020_m6x8_cs",
       "code": 10,
       "name": {
-        "cn": "10号螺丝 · 304 M6*8 沉头内六角",
-        "en": "No.10 Screw · 304 M6*8 Countersunk Socket",
-        "jp": "10番ねじ · 304 M6*8 皿六角"
+        "cn": "M6×8 沉头内六角螺丝",
+        "en": "M6×8 Countersunk Socket",
+        "jp": "M6×8 皿六角"
       },
       "series": "2020",
       "note": "设计器结构螺丝 · 2020 · ISO 10642 · 2020柜体沉头连接：M6×8",
@@ -1080,9 +1080,9 @@
       "defId": "10_3030_m8x45_cap",
       "code": 10,
       "name": {
-        "cn": "10号螺丝 · 304 M8*45 圆柱头内六角",
-        "en": "No.10 Screw · 304 M8*45 Socket Cap",
-        "jp": "10番ねじ · 304 M8*45 六角穴付きボルト"
+        "cn": "M8×45 圆柱头内六角螺丝",
+        "en": "M8×45 Socket Cap",
+        "jp": "M8×45 六角穴付きボルト"
       },
       "series": "3030",
       "note": "设计器结构螺丝 · 3030 · ISO 4762 · 3030直锁连接：M8×45圆柱头",
@@ -1099,12 +1099,12 @@
       "defId": "10_3030_m8x20_btn",
       "code": 10,
       "name": {
-        "cn": "10号螺丝 · 304 M8*20 按钮头内六角",
-        "en": "No.10 Screw · 304 M8*20 Button-Head Socket",
-        "jp": "10番ねじ · 304 M8*20 六角穴付きボタンボルト"
+        "cn": "M8×20 半圆头内六角螺丝",
+        "en": "M8×20 Button-Head Socket",
+        "jp": "M8×20 六角穴付きボタンボルト"
       },
       "series": "3030",
-      "note": "设计器结构螺丝 · 3030 · ISO 7380-1＋弹性紧固件 · 3030槽内按钮头连接：M8×20＋弹性紧固件",
+      "note": "设计器结构螺丝 · 3030 · ISO 7380-1＋弹性紧固件 · 3030槽内半圆头连接：M8×20＋弹性紧固件",
       "imageKey": "10",
       "price": {
         "natural": 0.75,

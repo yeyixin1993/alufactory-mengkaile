@@ -13148,7 +13148,7 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({
                                       {t.accessoryColorNatural} {currency}{(prices[series]!.natural + kitLinesTotal(buildAccessoryKitLines(KIT_DEFINITION_BY_KIND[entry.kind], series, 1, 'natural', language))).toFixed(2)}
                                       {' · '}
                                       {t.accessoryColorColored} {currency}{(prices[series]!.colored + kitLinesTotal(buildAccessoryKitLines(KIT_DEFINITION_BY_KIND[entry.kind], series, 1, 'colored', language))).toFixed(2)}
-                                      {getAccessoryKit(KIT_DEFINITION_BY_KIND[entry.kind], series) && <span className="block text-emerald-700">{language === 'cn' ? (entry.kind === 'connector' ? '现价已含配套安装件' : '默认配齐安装件 · 螺丝五折') : 'Installation kit included · screws 50% off'}</span>}
+                                      {getAccessoryKit(KIT_DEFINITION_BY_KIND[entry.kind], series) && <span className="block text-emerald-700">{language === 'cn' ? (entry.kind === 'connector' ? '现价已含配套安装件' : '默认配齐螺丝螺母 · 螺丝螺母5折') : 'Installation kit included · screws and nuts 50% off'}</span>}
                                     </span>
                                   )}
                                 </span>

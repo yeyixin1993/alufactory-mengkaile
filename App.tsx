@@ -41,6 +41,13 @@ const DIYDesigner = React.lazy(() => import('./components/DIYDesigner'));
 const FactorySheetPreviewPage = React.lazy(() => import('./components/FactorySheetPreviewPage'));
 const PrintableCatalog = React.lazy(() => import('./components/PrintableCatalog'));
 const QuickQuote = React.lazy(() => import('./components/QuickQuote'));
+import {
+  StorefrontSectionCards,
+  StorefrontSectionPage,
+  StorefrontSkuEditor,
+  buildStorefrontProduct,
+} from './components/StorefrontSections';
+import { findStorefrontItem } from './data/storefrontSections';
 
 const COLOR_SWATCH_IMAGE_URLS = [
   ...PROFILE_COLORS.map((color) => `/images/color_${color.id}.png`),
@@ -636,6 +643,9 @@ const Catalog: React.FC<{ language: Language }> = ({ language }) => {
           </div>
         </div>
       </div>
+
+      {/* 新增三块板块：洞洞板配件 / 成品家具 / 样品购买 */}
+      <StorefrontSectionCards language={language} />
 
       {/* 快速报价（首页最底部） */}
       <Link to="/quick-quote" className="mt-12 group flex flex-col items-center justify-between gap-4 rounded-[2rem] border-2 border-dashed border-blue-200 ai-soft-surface px-6 py-8 text-center text-blue-700 shadow-lg shadow-blue-600/5 transition-all hover:-translate-y-1 hover:border-blue-400 hover:bg-blue-50 sm:flex-row sm:text-left">
@@ -1632,7 +1642,26 @@ const Cart: React.FC<{
                       })()}
                     </div>
                   )}
-                  {!isFinishedFurniture && item.product.type !== ProductType.PROFILE && item.product.type !== ProductType.ACCESSORY && (
+                  {item.product.type === ProductType.STOREFRONT_SKU && (
+                    <div className="mt-8 pt-8 border-t border-slate-100">
+                      {(() => {
+                        const cfg: any = item.config || {};
+                        const labels = Array.isArray(cfg.optionLabels) ? cfg.optionLabels : [];
+                        const specText = labels.map((label: any) => label?.[language]).filter(Boolean).join(' / ')
+                          || (cfg.specText ? cfg.specText[language] : '');
+                        const unitPrice = Number(cfg.unitPrice || (item.totalPrice / Math.max(1, item.quantity)));
+                        return (
+                          <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-xs font-bold">
+                            <span className="px-3 py-1.5 rounded-xl bg-slate-100 text-slate-700">{language === 'cn' ? '规格' : language === 'jp' ? '仕様' : 'Option'}: {specText || '-'}</span>
+                            <span className="px-3 py-1.5 rounded-xl bg-slate-100 text-slate-700">{language === 'cn' ? '单价' : language === 'jp' ? '単価' : 'Unit'}: {currency}{unitPrice.toFixed(2)}</span>
+                            <span className="px-3 py-1.5 rounded-xl bg-slate-100 text-slate-700">{language === 'cn' ? '数量' : language === 'jp' ? '数量' : 'Qty'}: {item.quantity}</span>
+                            <span className="px-3 py-1.5 rounded-xl bg-emerald-50 text-emerald-700">{language === 'cn' ? '小计' : language === 'jp' ? '小計' : 'Subtotal'}: {currency}{item.totalPrice.toFixed(2)}</span>
+                          </div>
+                        );
+                      })()}
+                    </div>
+                  )}
+                  {!isFinishedFurniture && item.product.type !== ProductType.PROFILE && item.product.type !== ProductType.ACCESSORY && item.product.type !== ProductType.STOREFRONT_SKU && (
                     <div className="mt-8 pt-8 border-t border-slate-100">
                       {(() => {
                         const cfg: any = item.config || {};
@@ -2198,7 +2227,10 @@ const ProductDetail: React.FC<{
   const { id } = useParams();
   const navigate = useNavigate();
   const location = useLocation();
-  const product = INITIAL_PRODUCTS.find(p => p.id === id) || (id === ACCESSORY_PRODUCT.id ? ACCESSORY_PRODUCT : undefined);
+  const storefrontItem = findStorefrontItem(id);
+  const product = INITIAL_PRODUCTS.find(p => p.id === id)
+    || (id === ACCESSORY_PRODUCT.id ? ACCESSORY_PRODUCT : undefined)
+    || (storefrontItem ? buildStorefrontProduct(storefrontItem) : undefined);
   const t = TRANSLATIONS[language];
 
   const editItem = location.state?.editItem as CartItem | undefined;
@@ -2267,6 +2299,16 @@ const ProductDetail: React.FC<{
               returnCartPath={returnCartPath}
               onAddToCart={onAddToCart}
               onUpdateItem={onUpdateCartItem}
+            />
+          ) : product.type === ProductType.STOREFRONT_SKU ? (
+            <StorefrontSkuEditor
+              language={language}
+              itemId={(editItem?.config as any)?.itemId || product.id}
+              initialItem={editItem}
+              onSave={item => {
+                if (editItem) onUpdateCartItem(item); else onAddToCart(item);
+                navigate(returnCartPath);
+              }}
             />
           ) : product.type === ProductType.CALLIGRAPHY_CABINET
             || product.type === ProductType.WARDROBE
@@ -2632,6 +2674,7 @@ const App: React.FC = () => {
           )} />
           <Route path="/login" element={<Auth language={language} onLogin={(u) => { setUser(u); }} />} />
           <Route path="/history" element={user ? <UserProfile user={user} language={language} setUser={setUser} onEditOrder={onEditOrder} onGoToPayment={onGoToPayment} /> : <div className="p-40 text-center flex flex-col items-center"><UserIcon className="w-20 h-20 text-slate-100 mb-6"/><p className="font-black text-slate-300 text-2xl">Please login to view your orders</p></div>} />
+          <Route path="/section/:sectionId" element={<StorefrontSectionPage language={language} onAddToCart={(item) => setCart(mergeCartItems(cart, [item]))} />} />
           <Route path="/product/:id" element={<ProductDetail language={language} user={user} onAddToCart={(item) => setCart(mergeCartItems(cart, [item]))} onAddBatchToCart={(items) => setCart(mergeCartItems(cart, items))} onUpdateCartItem={(item) => setCart(cart.map(x => x.id === item.id ? item : x))} draftProfiles={draftProfiles} setDraftProfiles={setDraftProfiles} />} />
           <Route path="/cart" element={<Cart cart={cart} language={language} setCart={setCart} user={user} updateUser={setUser} onSaveCartSuccess={onSaveCartSuccess} />} />
           <Route path="/payment/:orderId" element={<PaymentPage language={language} user={user} />} />

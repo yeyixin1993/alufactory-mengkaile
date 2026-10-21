@@ -7,7 +7,7 @@
 </style></head>
 <body><main>
 <a href="/admin/">← 返回后台</a> · <a href="/admin/ai.html">额度与充值管理</a> · <a href="/admin/ai-conversations.html">AI 聊天记录</a>
-<div class="panel"><h1>AI 问答规则库</h1><p>把常见问题和正确回答维护在这里。保存并启用后立即参与匹配，无需重启服务。</p><p class="muted">完整问题或同义问法命中时直接回答，不调用模型、不扣人民币额度；游客和普通用户仍计一条试用消息。未命中才交给已配置的 AI。聊天服务仍受全局与客户开关控制。</p>
+<div class="panel"><h1>AI 问答规则库</h1><p>把常见问题和正确回答维护在这里。保存并启用后立即参与匹配，无需重启服务。</p><p class="muted">完全一致的问题或同义问法直接回答，不调用模型、不扣人民币额度；游客和普通用户仍计一条试用消息。「近似命中」只在唯一最佳匹配足够接近、且分类不涉及价格与账户时直接回答，否则交给已配置的 AI。聊天服务仍受全局与客户开关控制。</p>
 <div class="toolbar"><button id="newRule" class="primary">新增问答</button><button id="exportRules">导出 JSON 备份</button><button id="reloadRules">刷新列表</button><span id="counts" class="muted"></span></div></div>
 <p id="notice" role="status" aria-live="polite"></p>
 <div class="layout">
@@ -24,27 +24,50 @@
 <label class="check"><input type="checkbox" id="enabled">启用此条问答</label><div class="toolbar"><button id="saveRule" type="submit" class="primary">保存问答</button><button type="button" id="cancelEdit">清空并新建</button></div>
 </form>
 </section></div>
+<section class="panel"><h2>待补知识 · 客户问过但没有标准答案</h2><p class="muted">按被问次数排序，只记录像提问的消息，纯报价需求不会进来。写一条新问答、或把这句话加成已有条目的同义问法，之后同类问题就能不经过模型直接回答。这张列表就是知识库该补什么的最直接依据。</p><div class="toolbar"><button id="reloadMisses">刷新</button><select id="missFilter" aria-label="筛选待补知识"><option value="open">仅待处理</option><option value="ignored">已忽略</option></select><span id="missCounts" class="muted"></span></div><div id="misses" class="cards"></div></section>
 <section class="panel"><h2>测试匹配</h2><p class="muted">测试已保存且启用的规则。不会调用 API，也不会消耗消息次数。先保存修改再测试。</p><form id="previewForm" class="toolbar"><input id="previewInput" aria-label="测试问题" class="full" maxlength="2000" required placeholder="输入客户可能会问的问题"><button type="submit">测试这句话</button></form><div id="previewResult" aria-live="polite">等待测试。</div></section>
 </main>
 <script>
 const el=id=>document.getElementById(id);
 // crypto.randomUUID only exists in a secure context; this console is commonly opened over
 // plain http://<ip>/admin/, where it is undefined and used to kill the whole script silently.
-const newId=()=>{if(crypto.randomUUID)return newId();const b=new Uint8Array(16);if(crypto.getRandomValues)crypto.getRandomValues(b);else for(let i=0;i<16;i++)b[i]=Math.random()*256|0;b[6]=b[6]&15|64;b[8]=b[8]&63|128;const h=[...b].map(x=>x.toString(16).padStart(2,'0')).join('');return h.slice(0,8)+'-'+h.slice(8,12)+'-'+h.slice(12,16)+'-'+h.slice(16,20)+'-'+h.slice(20);};
+const newId=()=>{if(crypto.randomUUID)return crypto.randomUUID();const b=new Uint8Array(16);if(crypto.getRandomValues)crypto.getRandomValues(b);else for(let i=0;i<16;i++)b[i]=Math.random()*256|0;b[6]=b[6]&15|64;b[8]=b[8]&63|128;const h=[...b].map(x=>x.toString(16).padStart(2,'0')).join('');return h.slice(0,8)+'-'+h.slice(8,12)+'-'+h.slice(12,16)+'-'+h.slice(16,20)+'-'+h.slice(20);};
 window.addEventListener('error',e=>{const n=el('notice');if(n&&!n.textContent)n.textContent='页面脚本出错：'+e.message;});
-let rules=[],editingId=newId(),editingVersion=0,saving=false;
+let rules=[],misses=[],editingId=newId(),editingVersion=0,editingMiss=null,saving=false;
 const fields=['category','question','aliases','answer','notes','source'];
-async function api(path,data){const token=localStorage.getItem('authToken');if(!token){location.href='/admin/login.html';throw Error('请先登录管理员账号。');}const res=await fetch('/api/ai/admin/faq'+path,{method:data===undefined?'GET':'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+token},body:data===undefined?undefined:JSON.stringify(data)});const result=await res.json();if(!res.ok)throw Error(result.error||'请求失败');return result;}
+async function request(base,path,data){const token=localStorage.getItem('authToken');if(!token){location.href='/admin/login.html';throw Error('请先登录管理员账号。');}const res=await fetch(base+path,{method:data===undefined?'GET':'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+token},body:data===undefined?undefined:JSON.stringify(data)});const result=await res.json();if(!res.ok)throw Error(result.error||'请求失败');return result;}
+const api=(path,data)=>request('/api/ai/admin/faq',path,data);
+const missApi=(path,data)=>request('/api/ai/admin/knowledge/misses',path,data);
 function notice(message,ok=false){el('notice').textContent=message;el('notice').className=ok?'ok':'';}
 const run=fn=>async event=>{if(event)event.preventDefault();try{await fn();}catch(error){notice(error.message);}};
 function render(){const query=el('search').value.trim().toLowerCase(),filter=el('filter').value;el('cards').replaceChildren();const visible=rules.filter(r=>(filter==='all'||r.enabled===(filter==='enabled'))&&[r.question,r.answer,r.category,r.notes,...r.aliases].join(' ').toLowerCase().includes(query));el('counts').textContent=`共 ${rules.length} 条 · 已启用 ${rules.filter(r=>r.enabled).length} 条 · 未启用 ${rules.filter(r=>!r.enabled).length} 条`;
 for(const r of visible){const card=document.createElement('article');card.className='card'+(r.id===editingId?' editing':'');const title=document.createElement('h3');title.textContent=r.question;const tag=document.createElement('span');tag.className='badge'+(r.enabled?'':' draft');tag.textContent=r.category+' · '+(r.enabled?'已启用':'未启用');const text=document.createElement('p');text.textContent=r.answer;const btn=document.createElement('button');btn.textContent='编辑';btn.onclick=()=>edit(r);card.append(title,tag,text,btn);el('cards').append(card);}if(!visible.length){const p=document.createElement('p');p.textContent='没有匹配条目。';el('cards').append(p);}}
 function edit(rule){editingId=rule.id;editingVersion=rule.version;for(const field of fields)el(field).value=field==='aliases'?rule.aliases.join('\n'):rule[field];el('enabled').checked=rule.enabled;el('editorTitle').textContent='编辑：'+rule.question;el('versionInfo').textContent=`版本 ${rule.version} · 最后更新 ${new Date(rule.updated_at).toLocaleString()}`;render();el('question').focus();}
-function reset(){editingId=newId();editingVersion=0;el('editor').reset();el('editorTitle').textContent='新增问答';el('versionInfo').textContent='新条目默认不启用，确认答案后再勾选。';render();}
+function reset(){editingId=newId();editingVersion=0;editingMiss=null;el('editor').reset();el('editorTitle').textContent='新增问答';el('versionInfo').textContent='新条目默认不启用，确认答案后再勾选。';render();}
 async function load(){const data=await api('');rules=data.rules;render();}
+function missBadge(text,cls){const span=document.createElement('span');span.className='badge'+(cls?' '+cls:'');span.textContent=text;return span;}
+function renderMisses(){el('misses').replaceChildren();if(!misses.length){const p=document.createElement('p');p.className='muted';p.textContent=el('missFilter').value==='open'?'目前没有待补知识。客户问过、但规则库答不上的问题会自动出现在这里。':'没有已忽略的记录。';el('misses').append(p);return;}
+for(const miss of misses){const card=document.createElement('article');card.className='card';
+const title=document.createElement('h3');title.textContent=miss.question;
+const meta=document.createElement('p');meta.className='muted';meta.textContent=`被问 ${miss.count} 次 · 最近 ${new Date(miss.last_seen_at).toLocaleString()} · 去向 ${miss.last_source==='model'?'已交给模型':miss.last_source==='no-provider'?'无可用模型':'未解析'}`;
+card.append(title,meta);
+if(miss.candidates.length){const hint=document.createElement('p');hint.className='muted';hint.textContent='最接近的现有条目：'+miss.candidates.slice(0,2).map(c=>`${c.question}（${Math.round(c.score*100)}%）`).join('；');card.append(hint);
+const best=miss.candidates[0];const alias=document.createElement('button');alias.textContent='加为这条的同义问法';alias.onclick=run(()=>aliasFromMiss(miss,best));card.append(alias);}
+const create=document.createElement('button');create.textContent='用它新建问答';create.className='primary';create.onclick=run(async()=>{newFromMiss(miss);});
+const ignore=document.createElement('button');ignore.textContent=miss.status==='open'?'忽略':'恢复待处理';ignore.onclick=run(async()=>{await missApi('/'+miss.id,{status:miss.status==='open'?'ignored':'open'});await loadMisses();notice(miss.status==='open'?'已忽略这条记录。':'已恢复为待处理。',true);});
+card.append(' ',create,' ',ignore);el('misses').append(card);}}
+async function loadMisses(){const data=await missApi('?status='+el('missFilter').value);misses=data.misses;el('missCounts').textContent=`待处理 ${data.open_total} 条 · 累计被问 ${data.asked_total} 次`;renderMisses();}
+function newFromMiss(miss){reset();el('question').value=miss.question;el('aliases').value='';if(miss.candidates[0])el('category').value=miss.candidates[0].category||'';editingMiss=miss.id;el('editorTitle').textContent='从待补知识新建：'+miss.question;notice('已带入问题，填好答案并勾选启用后保存，这条记录会自动标记为已处理。');el('answer').focus();}
+function aliasFromMiss(miss,candidate){const rule=rules.find(r=>r.id===candidate.rule_id);if(!rule){notice('这条问答已不在列表中，请刷新后重试。');return;}edit(rule);const box=el('aliases');const list=box.value.split('\n').map(s=>s.trim()).filter(Boolean);if(!list.includes(miss.question))list.push(miss.question);box.value=list.join('\n');editingMiss=miss.id;notice('已把这句话加进「'+rule.question+'」的同义问法，确认后点保存即可生效。');}
 el('search').oninput=render;el('filter').onchange=render;el('newRule').onclick=reset;el('cancelEdit').onclick=reset;el('reloadRules').onclick=run(load);
-el('editor').onsubmit=run(async()=>{if(saving)return;saving=true;el('saveRule').disabled=true;try{const payload={version:editingVersion,enabled:el('enabled').checked};for(const field of fields)payload[field]=field==='aliases'?el(field).value.split('\n').map(s=>s.trim()).filter(Boolean):el(field).value;const result=await api('/'+encodeURIComponent(editingId),payload);await load();edit(result.rule);notice(result.rule.enabled?'已保存并启用，下一条匹配消息立即生效。':'已保存为未启用条目，不会回答客户。',true);}finally{saving=false;el('saveRule').disabled=false;}});
-el('previewForm').onsubmit=run(async()=>{const result=await api('/preview',{message:el('previewInput').value});el('previewResult').textContent=result.matched?`命中：${result.rule.question}（版本 ${result.rule.version}）\n\n${result.rule.answer}\n\n${result.note}`:`未命中：可能未添加该问法、条目未启用，或存在重复问法冲突。\n${result.note}`;});
+el('reloadMisses').onclick=run(loadMisses);el('missFilter').onchange=run(loadMisses);
+el('editor').onsubmit=run(async()=>{if(saving)return;saving=true;el('saveRule').disabled=true;try{const payload={version:editingVersion,enabled:el('enabled').checked};for(const field of fields)payload[field]=field==='aliases'?el(field).value.split('\n').map(s=>s.trim()).filter(Boolean):el(field).value;const result=await api('/'+encodeURIComponent(editingId),payload);if(editingMiss){const handled=editingMiss;editingMiss=null;await missApi('/'+handled,{status:'ignored'});}await load();edit(result.rule);if(el('misses'))await loadMisses();notice(result.rule.enabled?'已保存并启用，下一条匹配消息立即生效。':'已保存为未启用条目，不会回答客户。',true);}finally{saving=false;el('saveRule').disabled=false;}});
+el('previewForm').onsubmit=run(async()=>{const result=await api('/preview',{message:el('previewInput').value});let text;
+if(result.matched)text=`原样命中：${result.rule.question}（版本 ${result.rule.version}）\n\n${result.rule.answer}`;
+else if(result.recalled)text=`近似命中：${result.recalled.question}（版本 ${result.recalled.version}）\n这句话没有逐字收录，但它是唯一最佳匹配且足够接近，网站会直接用这条回答、不调用模型。\n\n${result.recalled.answer}`;
+else text='不会直接回答，会交给已配置的模型。';
+if(result.suggestions.length)text+='\n\n最接近的条目：\n'+result.suggestions.map((s,i)=>`${i+1}. ${s.question}（${Math.round(s.score*100)}%${s.would_answer?' · 会直接回答':''}）`).join('\n');
+el('previewResult').textContent=text+'\n\n'+result.note;});
 el('exportRules').onclick=run(async()=>{await load();const blob=new Blob([JSON.stringify({exported_at:new Date().toISOString(),rules},null,2)],{type:'application/json'});const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download='mengkaile-ai-faq.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);});
-run(load)();
+run(load)();run(loadMisses)();
 </script></body></html>

@@ -70,3 +70,9 @@ outputs/stool-import-fix-20260930/
 .env.*
 !.env.example
 !.env.*.example
+
+# Local backend test virtualenv; rebuild with python3.11 -m venv + requirements + pytest.
+alufactory-backend/.venv-tests/
+
+# 群聊原文（外包客服的个人发言），只作知识采集原料，不进版本库。
+outputs/chat-dump/

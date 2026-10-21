@@ -43,8 +43,8 @@ export function buildAccessoryKitLines(defId: string, series: string, quantity: 
     const originalUnitPrice = color === 'natural' ? (isBulk ? row.price.naturalBulk : row.price.natural) : (isBulk ? row.price.coloredBulk : row.price.colored);
     // Keep sub-fen unit precision (e.g. 0.33 / 2); round only the line payable.
     const included = defId === '1' || defId === '3';
-    const unitPrice = included ? 0 : originalUnitPrice * (role === 'screw' ? KIT_SCREW_DISCOUNT : 1);
-    return { id: row.key, code: row.code, name: `${row.name[language]} · ${included ? (language === 'cn' ? '已含配发，不另收费' : 'Included') : role === 'screw' ? (language === 'cn' ? '套装五折' : 'Kit 50%') : (language === 'cn' ? '套装配套' : 'Kit')}`, series, imageKey: row.imageKey || row.defId, quantity: qty, unitPrice, subtotal: roundKitMoney(unitPrice * qty), isBulk, kitParentKey: parentKey, kitRole: role, originalUnitPrice };
+    const unitPrice = included ? 0 : originalUnitPrice * KIT_SCREW_DISCOUNT;
+    return { id: row.key, code: row.code, name: `${row.name[language]} · ${included ? (language === 'cn' ? '已含配发，不另收费' : 'Included') : (language === 'cn' ? '套装五折' : 'Kit 50%')}`, series, imageKey: row.imageKey || row.defId, quantity: qty, unitPrice, subtotal: roundKitMoney(unitPrice * qty), isBulk, kitParentKey: parentKey, kitRole: role, originalUnitPrice };
   };
   return [line(kit.screw, kit.screws, 'screw'), ...(kit.nut ? [line(kit.nut, kit.nuts, 'nut')] : [])];
 }

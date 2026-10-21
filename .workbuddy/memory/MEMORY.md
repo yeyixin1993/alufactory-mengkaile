@@ -10,15 +10,24 @@
 - **`git push` 前必须 `export CODEBUDDY_SAFE_DELETE_BULK_THRESHOLD=5000`**：`pre-push` 的 `package:dist` 里 vite `emptyDir(dist/assets)`（244 个文件）会被沙箱安全删除守卫拦下（`SAFE_DELETE_BULK_CONFIRM_REQUIRED`），表现为 `error: failed to push some refs`。用 `export`，行内前缀传不进子进程钩子。
 - **`public/catalog/mengkaile-catalog-2026-jp.html` 是 `prebuild`(`catalog:html`) 的确定性产物，却被 git 跟踪、且是 55MB 单行文件**：一旦它出现在 `git status`，**先查 NUL 再决定**（`python3 -c "print(open(p,'rb').read().count(0))"`）。10-14 曾出现等长 16KB 全 0 空洞（写入中断，`dist/catalog/` 副本同时损坏）——等长的「1+/1-」在单行大文件里看不出内容差异，极易被误提交。恢复 `git checkout --` 后重新 build 即得干净版本。注意**只对文本扩展名查 NUL**，PNG/JPG 本就含 NUL，扫 dist 会大量误报。
 - `npm run dev` 曾因 watcher 在 `.venv-local` 符号链接 ELOOP 崩溃；冒烟改 `vite preview --port 4173`（或 `python3 -m http.server 4180 --directory dist`）。3000/5001 可能被业主占用，**别杀**。hash 路由 `#/diy-designer`，首屏外按钮先 `scrollIntoView`。
-- 后端测试：`alufactory-backend/.venv-local/bin/python -m pytest tests -q`（基线 105）。**10-20 起这个 venv 已失效**：`bin/python3.11` 指向 homebrew python3.11，但 sys.prefix 仍是 `/private/tmp/mengkaile-ai-quota-venv`（被清理），报 `No module named pytest` —— 要跑后端测试先重建。纯逻辑测试 `python3 scripts/test-ai-sales-advice.py` 自带 `app` stub，**不需要 Flask/DB**，可直接用托管 python3 跑。`curl` 本地必加 `--noproxy '*'`。
+- 后端测试：**用 `alufactory-backend/.venv-tests/bin/python -m pytest tests -q`**（10-20 新建，python3.11 + requirements + pytest，已 gitignore）。旧 `.venv-local` 是符号链接 → `/private/tmp/mengkaile-ai-quota-venv`（已被清理），**永久不可用**，别再用。**基线 = 118 项 / 117 passed / 1 failed**：失败项 `test_ai_chat.py::test_free_allowance_applies_locally_too` 是**既有**（`5c732dd` 重新引入 `AI_LOCAL_UNLIMITED`，与 `docs/AI_SALES_ASSISTANT_PLAN.md:107` 记的「2026-10-09 店主确认删除该开关」冲突），改动前就红，别当成自己改坏的。纯逻辑测试 `python3 scripts/test-ai-sales-advice.py` 自带 `app` stub，**不需要 Flask/DB**，可直接用托管 python3 跑。`curl` 本地必加 `--noproxy '*'`。
 - 部署：**手工上传 ZIP 内 dist/**。`core.hooksPath=.githooks` 有一个 **`pre-push`** 会跑 `npm run package:dist`（build + 打 ZIP），所以 **push 会构建但不会部署**；`dist` 本身 gitignore。ZIP 产物固定落在 **`/Users/eliye/Downloads/mengkaile-dist-latest.zip`**（约 159MB）。验 dist 新旧：工作区 clean + dist mtime 晚于最后 commit + grep 特征串（源码改了没 build，线上仍是旧串）。
 
 ## AI 聊天（只在 codex/ai-sales-assistant worktree：`/Users/eliye/.codex/worktrees/ai-sales-assistant/alufactory-mengkaile`）
 
-- **后台 admin 页只能走 `http://47.98.229.152/admin/`（纯 HTTP，非安全上下文）**：nginx 主域 `/admin/` 被 SPA 吃掉、`/api/` 才代理 Flask；Flask 把 `alufactory-backend/admin/` 当静态目录（不参与 Vite 构建，改完直接同步文件）。所以 admin 页里**绝不能用 `crypto.randomUUID`**（http 下 undefined，顶层抛错会让整页脚本静默死掉）——已改成 `newId()` 兜底 `getRandomValues`。
+- **后台 admin 页只能走 `http://47.98.229.152/admin/`（纯 HTTP，非安全上下文）**：nginx 主域 `/admin/` 被 SPA 吃掉、`/api/` 才代理 Flask；Flask 把 `alufactory-backend/admin/` 当静态目录（不参与 Vite 构建，改完直接同步文件）。所以 admin 页里**绝不能用 `crypto.randomUUID`**（http 下 undefined，顶层抛错会让整页脚本静默死掉）——已改成 `newId()` 兜底 `getRandomValues`。⚠️ 10-20 发现 `newId()` 自己写错了：`if(crypto.randomUUID)return newId()` **递归调自己**，所以在 localhost/https（有 randomUUID 的环境）打开后台会直接栈溢出、页面空白；已修为 `return crypto.randomUUID()`。以后改 admin 页仍统一走 `newId()`。
 - **线上后端（2026-10-11 查实）**：systemd 服务名 `alufactory.service`，目录 `/home/alufactory/alufactory-mengkaile/alufactory-backend`（venv 叫 `venv`，不是 `.venv-local`），重启 `sudo systemctl restart alufactory`；无 supervisor。**实际入口是 `run_prod.py`（不是 `wsgi.py`）**：`venv/bin/python run_prod.py`，里面只有 bare `load_dotenv()` → **只读工作目录 `.env`**，所以密钥写 `.env.deepseek.production`（wsgi.py 的方案）在当前配置下**根本不生效**。两种真修法：① systemd drop-in `EnvironmentFile=` 指向 `.env.deepseek.production`（推荐，密钥不进 git）；② 直接追加到 `.env`（立即生效，但该文件被 git 跟踪）。本地 = `.env.deepseek.local`。光配 key 不够：总开关是 DB `AISettings(id=1).enabled`（默认 false），在 `/admin/ai.html`「全局设置」勾选保存。
 - 调试用 `npm run dev:deepseek`（Flask 5001 + Vite 3000；端口被占直接退出）。后端起不来 = 缺 `DEEPSEEK_API_KEY`。
 - **游客/账号额度完全独立**：游客 3 条、同 IP 每日 10 个新游客；真发消息扣 DeepSeek 余额，验证用 FAQ 命中问题（免费）。引导词须 FAQ 精确命中；`seed_faq_rules()` 只补缺不更新。停服用 `reason` 码。SQLite 加列用 `db.session.execute(text(...))+commit()`。
+- **应答顺序（2026-10-20 起）**：`ai_advice.advice()` 本地话术 → `match_faq` 精确命中 → `ai_knowledge.pick()` 近似命中（`source='knowledge'`，同样免费）→ 模型。近似命中 = 二元组 Dice×0.6 + SequenceMatcher×0.4，阈值 0.68 / 覆盖率 0.55 / 与第二名分差 <0.06 视为歧义→不答。
+- **钱分类护栏**：`ai_knowledge.BLOCKED_CATEGORIES = (报价咨询, 付款与充值, 账户与额度)` **永不由近似命中回答**（说错价格/余额是真金白银）。价格、账户只走精确问法或模型+计价工具。
+- **未命中闭环**：表 `ai_knowledge_misses`（sha1 去重、count 排序、存最近候选），只收「像提问」的消息（纯报价带尺寸+数量不入队）。后台 `/admin/ai-faq.html`「待补知识」可加为同义问法/新建问答/忽略；接口 `GET/POST /api/ai/admin/knowledge/misses`；`/admin/faq/preview` 返回 `recalled` + `suggestions`。批量导入 `import_ai_knowledge.py qa.csv --category X`（默认草稿，id 由问题哈希，可重复执行；模板 `outputs/ai-knowledge-qa-template.csv`）。
+- **匹配层有前缀剥离（2026-10-21 加）**：`ai_knowledge._strip_wrappers` 剥开头 `老板/买家问/买家说/请问/在吗/@某某`（剥后 ≥4 字才生效），`rank()` 用「剥离版+原版」取最高分。实测网站访客短问法 26/26 全中，客服原话长句仅 ~36%——**长句是固有短板，别再调阈值**，未命中会走模型且 `references()` 喂 2 条知识兜底。
+- **新增知识前必须先 grep `app/ai_faq_seed.json` 的 question/aliases**：导入脚本按 normalize 后全等去重，撞了整行静默跳过（本轮撞过 `profile-length`「型材最长能做多长/3000mm」和 `machining-tapping`「两端攻丝是什么意思」）。
+- **线上知识库导入（2026-10-21 实测确认，别指望 update.sh 自动做）**：`/home/alufactory/update.sh` 只做 `cd alufactory-backend && source venv/bin/activate && git pull && pip install -r requirements.txt && systemctl restart alufactory`，**不会跑 import_ai_knowledge.py**。完整流程：① 本地 `git add outputs/客服知识库-可导入.csv` 并提交（push 前仍要 `export CODEBUDDY_SAFE_DELETE_BULK_THRESHOLD=5000`）；② ECS 跑 update.sh（新表 `ai_knowledge_misses` 由 `db.create_all()` 随重启自动建）；③ 手动导入，**必须显式指定生产库**（脚本默认 `instance/alufactory-local.db` 不是生产库）：
+  `python import_ai_knowledge.py ../outputs/客服知识库-可导入.csv --database "sqlite:////home/alufactory/alufactory-mengkaile/alufactory-backend/instance/alufactory.db" --dry-run`
+  生产 DATABASE_URL 是相对路径 `sqlite:///alufactory.db` → Flask 解析到 `alufactory-backend/instance/alufactory.db`（约 606MB）。④ 先默认导入草稿 → 后台 `/admin/ai-faq.html` 核对 → 再跑一次 `--update --publish` 批量启用（`--publish` 才会把已存在的草稿翻成 enabled，**不加 `--update` 重跑只会全部 skip**）。⑤ 导入后**无需重启**（规则每次请求实时查表）。
+- **`outputs/chat-dump/` 已写进 .gitignore**（群聊原文含外包客服个人发言，不进版本库）；只提交那份 CSV 和待答清单。
 
 ## 设计文件合同 mengkaile-diy（docs §13.6）
 
@@ -31,6 +40,9 @@
 - 导入件计价 `utils/designerComponentPricing.ts`；源件→目录配件链接唯一来源 `data/designerSourceAccessoryLinks.ts`（系列由包络推，fail-closed 回 ¥2）。螺丝 `utils/designerScrewPricing.ts`。**¥952 落地基线**由 pricing/screw-pricing/stool-landed-total 冻结（安能 ¥33）。
 - 制造门禁：`blocking`（确认清不掉）vs `advisories`（勾一次放行）；`decideDesignerReleaseGate` 纯函数，声明一变确认失效。**几何容差统一 1 µm**；文件里 `productionRelease` 只是历史，导入后重算。
 - `toCartItems` 每个 kind 都要分支（漏过会线上崩）；相同件并一行，行 id = 分组键（源件 id 含包络尺寸）。型材按长度计价，加工费按件，20–100mm 短件 +¥5/根；板材 0.2m² 起计。库存 UTC、界面东八区。
+- **加工公差（2026-10-21 店主确认）**：**开孔按正公差 +1~3 丝（+0.01~0.03mm）**；**光轴按负公差 −3~5 丝（−0.03~−0.05mm）**；1 丝 = 0.01mm。外购光轴/硬轴的公差不由我方控制，客户拿外面的轴来配时不要替他保证。
+- **两条对外口径（2026-10-21 店主定）**：① 外购轴**以实物实测为准**，厂商一般按负公差标注，配孔前先卡尺量实际直径（不替外购厂商打包票）。② 「会不会倒」= **一般不会倒，放的东西较轻、位置不太偏离底座重心就稳**；偏重或明显偏向一侧／探出底座较多，建议加配重或上墙固定。
+- **加工单价唯一出处 `utils/quickQuoteProfile.ts:10`**（别再翻 PrintableCatalog/profileMachining/CATALOG.md，都没有）：`tapping×1.5 + through×1 + countersunk×1.8 + threaded×1.8 + miter45Cut×1` → 攻丝 ¥1.5/端、通孔 ¥1、沉头孔 ¥1.8、螺纹孔 ¥1.8、45°斜切 ¥1/刀。**2026-10-21 店主已确认螺纹孔就是 1.8**（此前口述 1.5 是记混，1.5 实为端面攻丝价），线上公式正确，无需改代码。另：非 VIP+ 且长度 ≤100mm 每根 +¥5；长度上限 3000mm。
 
 ## 分支 / 用户
 

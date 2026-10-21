@@ -75,6 +75,26 @@ class AIFaqRule(db.Model):
     updated_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
 
 
+class AIKnowledgeMiss(db.Model):
+    """One row per distinct question the site could not answer from the library.
+
+    `count` is how many times customers asked the same thing, which is the only
+    reliable priority signal for what the owner should write next. `candidates`
+    keeps the closest existing rules at the last occurrence so the admin can turn
+    a miss into an alias instead of a duplicate question.
+    """
+    __tablename__ = 'ai_knowledge_misses'
+    id = db.Column(db.String(32), primary_key=True)
+    question = db.Column(db.Text, nullable=False)
+    normalized = db.Column(db.String(300), nullable=False)
+    count = db.Column(db.Integer, nullable=False, default=1)
+    candidates = db.Column(db.JSON, nullable=False, default=list)
+    status = db.Column(db.String(20), nullable=False, default='open', index=True)
+    last_source = db.Column(db.String(40), nullable=False, default='')
+    first_seen_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+    last_seen_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+
+
 class AIConversation(db.Model):
     __tablename__ = 'ai_conversations'
     id = db.Column(db.String(36), primary_key=True)

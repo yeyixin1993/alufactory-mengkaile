@@ -69,7 +69,7 @@ export const SCREW_HEAD_STANDARD: Readonly<Record<ScrewHeadType, string>> = {
 /** Bilingual naming used by the generated accessory rows. */
 export const SCREW_HEAD_NAMES: Readonly<Record<ScrewHeadType, { cn: string; en: string; jp: string }>> = {
   socket_cylinder: { cn: '圆柱头内六角', en: 'Socket Cap', jp: '六角穴付きボルト' },
-  button_socket: { cn: '按钮头内六角', en: 'Button-Head Socket', jp: '六角穴付きボタンボルト' },
+  button_socket: { cn: '半圆头内六角', en: 'Button-Head Socket', jp: '六角穴付きボタンボルト' },
   flat_socket: { cn: '沉头内六角', en: 'Countersunk Socket', jp: '皿六角' },
 };
 

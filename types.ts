@@ -11,7 +11,13 @@ export enum ProductType {
   CALLIGRAPHY_CABINET = 'CALLIGRAPHY_CABINET',
   WARDROBE = 'WARDROBE',
   DISPLAY_RACK_3_0 = 'DISPLAY_RACK_3_0',
-  ACCESSORY = 'ACCESSORY'
+  ACCESSORY = 'ACCESSORY',
+  /**
+   * 网站自营板块的固定价商品（洞洞板配件 / 成品家具 / 样品购买）。
+   * 不进入型材、板材、家具配置器的计价链，只按单价 × 数量成交；
+   * 生产端视为外购件，不生成加工工序。
+   */
+  STOREFRONT_SKU = 'STOREFRONT_SKU'
 }
 
 export interface Product {
