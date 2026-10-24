@@ -116,7 +116,7 @@ const buildDefinition = (
   name: buildName(spec),
   note,
   designerInternalOnly: designerInternalOnly || undefined,
-  imageKey: '10',
+  imageKey: `screw_${spec.screwHead}`,
   prices: buildPrices(spec.series),
 });
 

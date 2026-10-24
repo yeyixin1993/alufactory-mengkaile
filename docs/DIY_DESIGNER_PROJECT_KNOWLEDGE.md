@@ -767,3 +767,6 @@ Save separate conversations in the server database, with request membership and 
 - Accessory browsing uses the existing accessory quote editor and cart path. No automatic screw purchase. Explicit accessory quote requests remain in the normal quote flow.
 - Glass and polycarbonate are self-sourced; show aluminum-frame doors and marine board as alternatives, subject to customer choice. Complex/uncertain needs show contact WeChat 19821200413 and the contact QR (not the payment QR).
 - Unmatched conversational questions use the provider's answer mode, with no fabricated quote rows. Keep the latest structured BOM while answering intervening questions. Guidance cards persist with the chat transcript.
+
+### 2026-10-22 — 结构螺丝目录头型图
+设计器生成的螺丝目录按圆柱头、沉头、半圆头分别选图，禁止统一回退到10号螺丝螺母总图。圆柱头/沉头复用现有产品JPG；半圆头新增SVG头型示意，保留原产品照片。缩略图表达头型，具体螺纹、长度及弹性紧固件以商品规格为准。

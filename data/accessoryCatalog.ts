@@ -82,6 +82,10 @@ export const ACCESSORY_CODE_IMAGE_MAP: Record<string, string> = {
   '8': '/images/accessory/8.jpg',
   '9': '/images/accessory/9.jpg',
   '10': '/images/accessory/10.jpg',
+  // Head-type previews for generated screw specifications; preserve product photos.
+  'screw_socket_cylinder': '/images/accessory/10_2020_m5x14_cap.jpg',
+  'screw_flat_socket': '/images/accessory/10_2020_m6x20_cs.jpg',
+  'screw_button_socket': '/images/accessory/screw_button_socket.svg',
   '10_1515_m4x6_cap': '/images/accessory/10_1515_m4x6_cap.jpg',
   '10_1515_m4x10_cs': '/images/accessory/10_1515_m4x10_cs.jpg',
   '10_1515_m4x12_cap': '/images/accessory/10_1515_m4x12_cap.jpg',

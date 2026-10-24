@@ -1029,7 +1029,7 @@
       },
       "series": "2020",
       "note": "设计器结构螺丝 · 2020 · ISO 4762 · 2020直锁连接：M6×30圆柱头",
-      "imageKey": "10",
+      "imageKey": "screw_socket_cylinder",
       "price": {
         "natural": 0.5,
         "colored": 0.5,
@@ -1048,7 +1048,7 @@
       },
       "series": "2020",
       "note": "设计器结构螺丝 · 2020 · ISO 7380-1 · 2020槽内半圆头连接：M6×20",
-      "imageKey": "10",
+      "imageKey": "screw_button_socket",
       "price": {
         "natural": 0.5,
         "colored": 0.5,
@@ -1067,7 +1067,7 @@
       },
       "series": "2020",
       "note": "设计器结构螺丝 · 2020 · ISO 10642 · 2020柜体沉头连接：M6×8",
-      "imageKey": "10",
+      "imageKey": "screw_flat_socket",
       "price": {
         "natural": 0.5,
         "colored": 0.5,
@@ -1086,7 +1086,7 @@
       },
       "series": "3030",
       "note": "设计器结构螺丝 · 3030 · ISO 4762 · 3030直锁连接：M8×45圆柱头",
-      "imageKey": "10",
+      "imageKey": "screw_socket_cylinder",
       "price": {
         "natural": 0.75,
         "colored": 0.75,
@@ -1105,7 +1105,7 @@
       },
       "series": "3030",
       "note": "设计器结构螺丝 · 3030 · ISO 7380-1＋弹性紧固件 · 3030槽内半圆头连接：M8×20＋弹性紧固件",
-      "imageKey": "10",
+      "imageKey": "screw_button_socket",
       "price": {
         "natural": 0.75,
         "colored": 0.75,

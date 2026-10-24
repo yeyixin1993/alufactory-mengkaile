@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 480 360" role="img" aria-labelledby="title">
+<title id="title">半圆头内六角螺丝头型示意</title>
+<defs>
+ <linearGradient id="steel" x1="0" y1="0" x2="0" y2="1"><stop stop-color="#646b73"/><stop offset=".26" stop-color="#b6bcc2"/><stop offset=".48" stop-color="#edf0f2"/><stop offset=".7" stop-color="#9299a1"/><stop offset="1" stop-color="#565e67"/></linearGradient>
+ <radialGradient id="head" cx=".3" cy=".25" r=".8"><stop stop-color="#f0f2f4"/><stop offset=".5" stop-color="#b2bac1"/><stop offset="1" stop-color="#646e78"/></radialGradient>
+</defs>
+<rect width="480" height="360" fill="white"/>
+<ellipse cx="251" cy="234" rx="163" ry="11" fill="#283440" opacity=".08"/>
+<path d="M166 158 H374 L387 168 V193 L374 204 H166Z" fill="url(#steel)" stroke="#717b85" stroke-width="1.5"/>
+<g fill="none" stroke="#66717b" stroke-width="2.5" opacity=".75"><path d="M191 159 Q200 180 191 202"/><path d="M200 159 Q209 180 200 202"/><path d="M209 159 Q218 180 209 202"/><path d="M218 159 Q227 180 218 202"/><path d="M227 159 Q236 180 227 202"/><path d="M236 159 Q245 180 236 202"/><path d="M245 159 Q254 180 245 202"/><path d="M254 159 Q263 180 254 202"/><path d="M263 159 Q272 180 263 202"/><path d="M272 159 Q281 180 272 202"/><path d="M281 159 Q290 180 281 202"/><path d="M290 159 Q299 180 290 202"/><path d="M299 159 Q308 180 299 202"/><path d="M308 159 Q317 180 308 202"/><path d="M317 159 Q326 180 317 202"/><path d="M326 159 Q335 180 326 202"/><path d="M335 159 Q344 180 335 202"/><path d="M344 159 Q353 180 344 202"/><path d="M353 159 Q362 180 353 202"/><path d="M362 159 Q371 180 362 202"/></g>
+<path d="M157 124 C125 123 106 145 105 180 C106 214 126 236 157 237 L179 229 L179 131Z" fill="url(#steel)" stroke="#707c87" stroke-width="1.5"/>
+<ellipse cx="145" cy="180" rx="39" ry="56" fill="url(#head)" stroke="#7e8993" stroke-width="1.5"/>
+<path d="M130 163 L145 153 L160 163 L160 191 L145 202 L130 191Z" fill="#444e59" stroke="#dce1e5" stroke-width="2"/>
+<path d="M135 168 L146 161 L156 168 V188 L146 195 L135 188Z" fill="#252e38"/>
+<path d="M112 165 Q117 140 136 132" fill="none" stroke="#fff" stroke-opacity=".65" stroke-width="3" stroke-linecap="round"/>
+</svg>

@@ -24,10 +24,14 @@
 - **未命中闭环**：表 `ai_knowledge_misses`（sha1 去重、count 排序、存最近候选），只收「像提问」的消息（纯报价带尺寸+数量不入队）。后台 `/admin/ai-faq.html`「待补知识」可加为同义问法/新建问答/忽略；接口 `GET/POST /api/ai/admin/knowledge/misses`；`/admin/faq/preview` 返回 `recalled` + `suggestions`。批量导入 `import_ai_knowledge.py qa.csv --category X`（默认草稿，id 由问题哈希，可重复执行；模板 `outputs/ai-knowledge-qa-template.csv`）。
 - **匹配层有前缀剥离（2026-10-21 加）**：`ai_knowledge._strip_wrappers` 剥开头 `老板/买家问/买家说/请问/在吗/@某某`（剥后 ≥4 字才生效），`rank()` 用「剥离版+原版」取最高分。实测网站访客短问法 26/26 全中，客服原话长句仅 ~36%——**长句是固有短板，别再调阈值**，未命中会走模型且 `references()` 喂 2 条知识兜底。
 - **新增知识前必须先 grep `app/ai_faq_seed.json` 的 question/aliases**：导入脚本按 normalize 后全等去重，撞了整行静默跳过（本轮撞过 `profile-length`「型材最长能做多长/3000mm」和 `machining-tapping`「两端攻丝是什么意思」）。
-- **线上知识库导入（2026-10-21 实测确认，别指望 update.sh 自动做）**：`/home/alufactory/update.sh` 只做 `cd alufactory-backend && source venv/bin/activate && git pull && pip install -r requirements.txt && systemctl restart alufactory`，**不会跑 import_ai_knowledge.py**。完整流程：① 本地 `git add outputs/客服知识库-可导入.csv` 并提交（push 前仍要 `export CODEBUDDY_SAFE_DELETE_BULK_THRESHOLD=5000`）；② ECS 跑 update.sh（新表 `ai_knowledge_misses` 由 `db.create_all()` 随重启自动建）；③ 手动导入，**必须显式指定生产库**（脚本默认 `instance/alufactory-local.db` 不是生产库）：
+- **线上知识库导入（2026-10-21 实测确认，别指望 update.sh 自动做）**：`/home/alufactory/update.sh` 只做 `cd alufactory-backend && source venv/bin/activate && git pull && pip install -r requirements.txt && systemctl restart alufactory`，**不含导入那一步**，知识不会自动进库。完整流程：① 本地 `git add outputs/客服知识库-可导入.csv` 并提交（push 前仍要 `export CODEBUDDY_SAFE_DELETE_BULK_THRESHOLD=5000`）；② ECS 跑 update.sh（新表 `ai_knowledge_misses` 由 `db.create_all()` 随重启自动建）；③ 手动导入，**必须显式指定生产库**（脚本默认 `instance/alufactory-local.db` 不是生产库）：
   `python import_ai_knowledge.py ../outputs/客服知识库-可导入.csv --database "sqlite:////home/alufactory/alufactory-mengkaile/alufactory-backend/instance/alufactory.db" --dry-run`
   生产 DATABASE_URL 是相对路径 `sqlite:///alufactory.db` → Flask 解析到 `alufactory-backend/instance/alufactory.db`（约 606MB）。④ 先默认导入草稿 → 后台 `/admin/ai-faq.html` 核对 → 再跑一次 `--update --publish` 批量启用（`--publish` 才会把已存在的草稿翻成 enabled，**不加 `--update` 重跑只会全部 skip**）。⑤ 导入后**无需重启**（规则每次请求实时查表）。
 - **`outputs/chat-dump/` 已写进 .gitignore**（群聊原文含外包客服个人发言，不进版本库）；只提交那份 CSV 和待答清单。
+- **ECS 上临时跑 Python 脚本的坑**：直接 `create_app("production")` 会报 `Can't connect to MySQL server on 'localhost'`（ProductionConfig 的默认 DB 是 MySQL，而实际是 SQLite）。临时脚本要先 `load_dotenv()` 并设 `DATABASE_URL=sqlite:///alufactory.db`（相对路径 → Flask 解析到 `instance/alufactory.db`）。
+- **生产库真实表名/列名（和 ORM 类名不同，别猜）**：表 `ai_faq_rules`（**复数**）、备注列 `notes`（**不是 note**）；字段 `id/category/question/aliases/answer/enabled/notes/source/version/updated_by/updated_at`。`ai_knowledge_misses` 列：`id/question/normalized/count/candidates/status/last_source/first_seen_at/last_seen_at`。
+- **只读预判「启用后是否会命中」的方法**：`match_faq(q)` 只看启用条目；对草稿可用 `rank(q, rules=AIFaqRule.query.filter_by(enabled=False).all())` 强制纳入，不用真改 enabled 标记。
+- **2026-10-21 13:20 已生产上线**：37 条知识全部启用（规则总数 73 = 36 种子 + 37 新增，草稿 0），`AISettings.enabled=True`；curl 冒烟「老板 买家问 3030有端盖吗」返回 `source=knowledge`、`charged_cny=0`。未命中榜从 0 开始计。
 
 ## 设计文件合同 mengkaile-diy（docs §13.6）
 
