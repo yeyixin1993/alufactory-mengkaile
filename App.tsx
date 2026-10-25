@@ -244,6 +244,27 @@ const Auth: React.FC<{ language: Language, onLogin: (user: User) => void }> = ({
 };
 
 // --- Profile & History Page ---
+const RouteHashSync: React.FC<{ onChange: (hash: string) => void }> = ({ onChange }) => {
+  const location = useLocation();
+  useEffect(() => onChange(`#${location.pathname}${location.search}`), [location.pathname, location.search, onChange]);
+  return null;
+};
+
+// Keep separate complete-product quotes separate when reopening a mixed order.
+const DesignerOrderLinks: React.FC<{ items: CartItem[]; language: Language }> = ({ items, language }) => {
+  const navigate = useNavigate();
+  const groups = new Map<string, CartItem[]>();
+  items.forEach(item => {
+    const key = item.config?.designerProjectId || item.config?.designerSnapshot || 'catalog';
+    groups.set(key, [...(groups.get(key) || []), item]);
+  });
+  return <>{[...groups.values()].map((rows, index) => <button key={index}
+    onClick={() => navigate('/diy-designer', { state: { designerCartRows: rows } })}
+    className="bg-blue-50 text-blue-700 px-3 py-2 rounded-xl text-xs font-black">
+    {language === 'cn' ? '在设计器里查看 / 再次设计' : language === 'jp' ? 'デザイナーで開く' : 'Open in designer'}{groups.size > 1 ? ` ${index + 1} · ${rows[0].product.name[language]}` : ''}
+  </button>)}</>;
+};
+
 const UserProfile: React.FC<{ 
   user: User, 
   language: Language, 
@@ -459,6 +480,7 @@ const UserProfile: React.FC<{
                                  {language === 'cn' ? '去支付' : language === 'jp' ? '支払いへ' : 'Pay Now'}
                                </button>
                              )}
+                             <DesignerOrderLinks items={o.items} language={language} />
                              <button onClick={() => onEditOrder(o)} className="p-2.5 bg-slate-50 hover:bg-slate-100 text-slate-600 rounded-xl transition-colors border border-slate-200"><Edit2 className="w-4 h-4"/></button>
                              {(o.status === 'pending' || o.status === 'cancelled') && (
                                <button
@@ -1429,6 +1451,7 @@ const Cart: React.FC<{
           </div>
 
           <div className="space-y-6">
+            {!!cart.length && <DesignerOrderLinks items={cart} language={language} />}
             {cart.map(item => {
               const profileConfig = item.config as ProfileConfig;
               const colorDef = profileConfig?.colorId ? PROFILE_COLORS.find(c => c.id === profileConfig.colorId) : null;
@@ -1462,6 +1485,7 @@ const Cart: React.FC<{
                     <div className="text-right">
                       <div className="text-3xl font-black text-slate-900 mb-4">{currency}{item.totalPrice.toFixed(1)}</div>
                       <div className="flex gap-2 justify-end">
+                        <button onClick={() => navigate('/diy-designer', { state: { designerCartRows: item.config?.designerProjectId ? cart.filter(row => row.config?.designerProjectId === item.config.designerProjectId) : [item] } })} className="bg-indigo-50 text-indigo-700 px-4 py-2 rounded-xl text-xs font-black">{language === 'cn' ? '在设计器里查看' : language === 'jp' ? 'デザイナーで開く' : 'Open in designer'}</button>
                         <button onClick={() => navigate(`/product/${item.product.id}`, { state: { editItem: item, returnCartSearch: location.search } })} className="bg-blue-50 text-blue-600 px-4 py-2 rounded-xl text-xs font-black hover:bg-blue-600 hover:text-white transition-all flex items-center gap-2"><Pencil className="w-4 h-4"/>{t.edit}</button>
                         <button onClick={() => setCart(cart.filter(x => x.id !== item.id))} className="bg-red-50 text-red-500 px-4 py-2 rounded-xl text-xs font-black hover:bg-red-600 hover:text-white transition-all flex items-center gap-2"><Trash2 className="w-4 h-4"/>{t.remove}</button>
                       </div>
@@ -2570,6 +2594,7 @@ const App: React.FC = () => {
 
   return (
     <HashRouter>
+      <RouteHashSync onChange={setCurrentHash} />
       <div className={`min-h-screen font-sans text-slate-900 selection:bg-blue-100 selection:text-blue-900 ${isPreviewRoute || isDesignerRoute || isAIChatRoute ? '' : 'bg-slate-50 pb-20'}`}>
         {showWeChatBrowserNotice && (
           <div className="fixed inset-0 z-[10000] flex items-start justify-center bg-slate-950/65 px-4 pt-16 backdrop-blur-sm" role="dialog" aria-modal="true" aria-labelledby="wechat-browser-title">

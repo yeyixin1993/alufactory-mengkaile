@@ -50,6 +50,10 @@ for (const frame of ['2040_2020', '2047_2020', '3030'] as const) {
     }
     if (frame === '3030') {
       assert(profiles.every((item) => item.variantId === '3030'));
+      if (columns <= 3 || layers === 1) {
+        const completed = completeParametricFurnitureTemplate(payload);
+        assert(completed.items.filter(item => item.kind === 'profile').every(item => !item.holes?.length), '3030 wardrobe shelves must remain adjustable without fixed post holes');
+      }
       const supports = payload.items.filter(item => item.shelfSupportType === 'board_18mm');
       assert.equal(supports.length, boards.length * 8);
       assert(supports.every(item => item.accessoryPrice === 1.7 && item.attachedProfileIds?.length === 2));

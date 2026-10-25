@@ -962,7 +962,7 @@ const build3030Wardrobe = (lengthMm: number, widthMm: number, heightMm: number, 
         length: Math.abs(end[axis] - start[axis]),
         position: start.map((value, index) => (value + end[index]) / 2) as [number, number, number],
         rotation: axis === 1 ? [0, 0, 90] : axis === 2 ? [0, 90, 0] : [0, 0, 0],
-        remark: `3030衣柜${label}；复用3.0展示架柜体框架；顶底框只用1号角码，不打连接孔；中间连接按层高定位`,
+        remark: `3030衣柜${label}；复用3.0展示架柜体框架；顶底框只用1号角码，不打连接孔；中间层同样使用1号角码，可沿立柱槽调节层高`,
       });
     },
   });

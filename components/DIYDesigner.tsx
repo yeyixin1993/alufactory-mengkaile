@@ -1,3 +1,6 @@
+import { MARINE_BOARD_SPEC_PRICE_PER_SQM } from '../data/boardPricing';
+import { scaleAccessoryKitConfig } from '../utils/accessoryKit';
+import { encodeDesignerSnapshot, decodeDesignerSnapshot } from '../utils/designerCartSnapshot';
 import { syncWardrobeDoorClearance, type WardrobeDoorClearance } from '../utils/wardrobeDoorClearance';
 import AccessoryKitOption from './AccessoryKitOption';
 import { buildAccessoryKitLines, getAccessoryKit, kitLinesTotal, roundKitMoney } from '../utils/accessoryKit';
@@ -186,6 +189,9 @@ interface DIYSceneItem extends StoolSceneItem {
   colorId: string;
   quantity: number;
   variantId?: string;
+  originalCartItem?: CartItem;
+  originalDesignerSpec?: string;
+  catalogPreviewOnly?: boolean;
   cabinetFrameLevel?: 'bottom' | 'top' | 'storage';
   wardrobeFrontSetbackMm?: number;
   wardrobeDoorClearance?: WardrobeDoorClearance;
@@ -253,6 +259,8 @@ const MIN_BOARD_AREA = 0.2;
 const ALUMINUM_PLATE_PRICE: Record<number, number> = { 1: 500, 2: 700, 3: 1000, 4: 1300, 5: 1600 };
 const PEGBOARD_PRICE: Record<number, number> = { 1: 780, 2: 1080, 3: 1380, 4: 1680, 5: 1980 };
 const MARINE_BOARD_PRICE: Record<number, number> = { 12: 155, 18: 200 };
+const marineSpecForItem = (item: DIYSceneItem) => item.originalCartItem?.config?.marineSpecId === 'marine_bbb_plain' ? 'marine_bbb_plain' : 'marine_bbb_uv_film';
+const marineRateForItem = (item: DIYSceneItem, thickness: number) => MARINE_BOARD_SPEC_PRICE_PER_SQM[marineSpecForItem(item)][thickness] || 0;
 const MARINE_COLOR_SURCHARGE = 100;
 const FOOT_UNIT_PRICE = 10;
 const END_CAP_FALLBACK_ESTIMATED_PRICE = { natural: 6, colored: 8 };
@@ -1596,7 +1604,7 @@ export const normalizeDesignItems = (source: DIYSceneItem[]): DIYSceneItem[] => 
       thickness: item.doorMaterial === 'marine'
         ? (item.thickness || 18)
         : CABINET_DOOR_ALUMINUM_DEPTH_MM,
-      quantity: 1,
+      quantity: item.originalCartItem && !item.attachmentKey ? Math.max(1, item.quantity || 1) : 1,
     } : {}),
     ...(item.kind === 'shelf_support' ? {
       shelfSupportType: item.shelfSupportType || 'linear',
@@ -1616,17 +1624,26 @@ export const normalizeDesignItems = (source: DIYSceneItem[]): DIYSceneItem[] => 
   };
 });
 
+const sceneTappingPorts = (item: DIYSceneItem, side: 'left' | 'right'): boolean[] => {
+  const enabled = side === 'left' ? item.tappingLeft : item.tappingRight;
+  const original = item.originalCartItem?.config?.tapping?.[side];
+  const count = getProfileTapPortCount(item.variantId);
+  return Array.isArray(original) && original.length === count && original.some(Boolean) === Boolean(enabled)
+    ? original.map(Boolean) : Array(count).fill(Boolean(enabled));
+};
+
 export const buildProductionData = (items: DIYSceneItem[], language: Language) => {
   const normalizedItems = normalizeDesignItems(items);
   const parts = normalizedItems.map((item, index) => ({
     line: index + 1,
     id: item.id,
-    type: item.kind,
+    type: item.catalogPreviewOnly ? 'imported_component' as const : item.kind,
+    originalCartItem: item.originalCartItem,
     model: item.variantId || item.name,
-    lengthMm: item.length,
-    widthMm: item.width,
-    heightMm: item.height,
-    thicknessMm: item.thickness,
+    lengthMm: item.catalogPreviewOnly ? undefined : item.length,
+    widthMm: item.catalogPreviewOnly ? undefined : item.width,
+    heightMm: item.catalogPreviewOnly ? undefined : item.height,
+    thicknessMm: item.catalogPreviewOnly ? undefined : item.thickness,
     finish: item.finish,
     shelfSupportType: item.shelfSupportType,
     fixedReferenceId: item.fixedReferenceId,
@@ -1658,8 +1675,8 @@ export const buildProductionData = (items: DIYSceneItem[], language: Language) =
     quantity: item.quantity,
     positionMm: item.position,
     rotationDeg: item.rotation,
-    leftTappingPorts: item.kind === 'profile' && item.tappingLeft ? getProfileTapPortCount(item.variantId) : 0,
-    rightTappingPorts: item.kind === 'profile' && item.tappingRight ? getProfileTapPortCount(item.variantId) : 0,
+    leftTappingPorts: item.kind === 'profile' ? sceneTappingPorts(item, 'left').filter(Boolean).length : 0,
+    rightTappingPorts: item.kind === 'profile' ? sceneTappingPorts(item, 'right').filter(Boolean).length : 0,
     screwHead: item.screwHead,
     linkedProfileId: item.linkedProfileId,
     linkedHoleId: item.linkedHoleId,
@@ -2078,6 +2095,96 @@ const mapSystemOrderProfileItemsToDesignerItems = (
     remark: typeof config.remark === 'string' ? config.remark : (base.remark || ''),
   } satisfies DIYSceneItem];
 });
+
+const scenePurchaseSpec = (item: DIYSceneItem) => JSON.stringify([
+  item.kind, item.variantId, item.length, item.width, item.height, item.thickness,
+  item.colorId, item.finish, item.holes, item.tappingLeft, item.tappingRight,
+  item.doorMaterial, item.doorOverlay, item.openingSide, item.remark,
+]);
+export const originalCartRowForSceneItem = (item: DIYSceneItem): CartItem | null => {
+  const original = item.originalCartItem;
+  if (!original || (!item.catalogPreviewOnly && item.originalDesignerSpec !== scenePurchaseSpec(item))) return null;
+  const ratio = item.quantity / Math.max(1, original.quantity);
+  return { ...original, id: makeId(), quantity: item.quantity,
+    config: scaleAccessoryKitConfig(original.config, ratio),
+    totalPrice: Number((original.totalPrice * ratio).toFixed(2)),
+  };
+};
+
+export const restoreCartDesign = (rows: CartItem[]) => {
+  const seen = new Set<string>();
+  const restored: DIYSceneItem[] = [];
+  let quote: FinishedFurnitureQuote | null = null;
+  let provenance: DesignSourceInfo = createDesignSourceInfo('system_order');
+  let projectCount = 0;
+  let flatOffset = 0;
+  const flatten = (row: CartItem) => {
+    const config = row.config || {};
+    if (Array.isArray(config.productionItems)) {
+      config.productionItems.forEach((part: CartItem) => flatten({ ...part, quantity: part.quantity * row.quantity }));
+      return;
+    }
+    const kind: DIYItemKind | undefined = config.cabinetDoor ? 'cabinet_door' : ({
+      PROFILE: 'profile', ALUMINUM_PLATE: 'plate', PEGBOARD: 'pegboard',
+      MARINE_BOARD: 'marine_board', CABINET_DOOR: 'cabinet_door',
+    } as Record<string, DIYItemKind>)[row.product.type];
+    const dimensions = Array.isArray(config.items) && kind !== 'profile' ? config.items : [config];
+    dimensions.forEach((dimension: any) => {
+      const spec = { ...config, ...dimension };
+      const base = kind === 'profile'
+        ? mapSystemOrderProfileItemsToDesignerItems([{ ...row, product_type: 'PROFILE' }], (index, variant) => createItem('profile', index, variant))[0]
+        : { ...createItem(kind || 'plate'), ...Object.fromEntries(
+          ['width', 'height', 'thickness', 'colorId', 'doorMaterial', 'doorOverlay', 'doorLeafMode', 'openingSide', 'finish']
+            .filter(key => spec[key] !== undefined).map(key => [key, spec[key]])
+        ) };
+      const splitRow = dimensions.length > 1;
+      const originalConfig = { ...(splitRow ? spec : config) };
+      if (splitRow) delete originalConfig.items;
+      delete originalConfig.designerSnapshot;
+      delete originalConfig.designerProjectId;
+      const item: DIYSceneItem = {
+        ...base, id: makeId(), name: row.product.name.cn,
+        quantity: Math.max(1, row.quantity * (dimension !== config ? Number(dimension.quantity || 1) : 1)),
+        originalCartItem: { ...row, config: originalConfig,
+          ...(splitRow ? {
+            quantity: row.quantity * Number(dimension.quantity || 1),
+            totalPrice: row.totalPrice * (Number(dimension.width || 1) * Number(dimension.height || 1) * Number(dimension.quantity || 1))
+              / dimensions.reduce((sum: number, part: any) => sum + Number(part.width || 1) * Number(part.height || 1) * Number(part.quantity || 1), 0),
+          } : {}),
+        },
+        catalogPreviewOnly: !kind,
+        remark: spec.remark || (!kind ? '目录商品示意：保留原商品规格与价格；通过商品详情修改规格。' : ''),
+        rotation: kind === 'profile' ? [0, 0, 0] : [-90, 0, 0],
+        position: [0, 40, flatOffset + (kind === 'profile' ? Math.max(...profileSize(base.variantId)) : base.height || 500) / 2],
+      };
+      flatOffset += (kind === 'profile' ? Math.max(...profileSize(item.variantId)) : item.height || 500) + 100;
+      const normalized = normalizeDesignItems([item])[0];
+      normalized.originalDesignerSpec = scenePurchaseSpec(normalized);
+      restored.push(normalized);
+    });
+  };
+  rows.forEach(row => {
+    const config = row.config || {};
+    if (!config.designerSnapshot) { flatten(row); return; }
+    const key = config.designerProjectId || config.designerSnapshot;
+    if (seen.has(key)) return;
+    seen.add(key);
+    const document = decodeDesignerSnapshot(config.designerSnapshot);
+    if (document.format !== 'mengkaile-diy' || !Array.isArray(document.items)) throw new Error('Invalid saved design');
+    const expanded = expandImportedSourceGeometries(document.items as DIYSceneItem[], document.sourceGeometries);
+    const checked = inspectDesignerImportItems(expanded);
+    if (!checked.valid) throw new Error(checked.issues.map(issue => issue.message).join(' '));
+    // Remap only when combining projects; a single project's stable IDs survive intact.
+    restored.push(...(projectCount ? rekeyImportedDesignItems(expanded) : expanded));
+    projectCount++;
+    quote = normalizeFinishedFurnitureQuote(document.finishedFurniture);
+    provenance = designSourceFromDocument(document, 'designer_json');
+  });
+  return {
+    items: normalizeDesignItems(restored), provenance,
+    finishedFurniture: projectCount === 1 && rows.every(row => row.config?.designerSnapshot) ? quote : null,
+  };
+};
 
 const downloadTextFile = (content: string, mimeType: string, filename: string) => {
   const blob = new Blob([content], { type: mimeType });
@@ -4886,6 +4993,7 @@ const withDisplayRackConnectionSystem = (source: DIYSceneItem[], rebuildBranches
     for (const connection of ranked) {
       // Outer cabinet frames are bracket-only. Drilling here used to create
       // incorrect 15mm end holes/taps on the top and bottom horizontal rails.
+      if (connection.branchProfile.id.startsWith('wardrobe-3030-')) continue;
       if (connection.branchProfile.wardrobeFrontSetbackMm || connection.branchProfile.wardrobeDoorClearance?.frontRail) continue;
       if (connection.branchProfile.cabinetFrameLevel === 'bottom' || connection.branchProfile.cabinetFrameLevel === 'top') continue;
       const plan = drillTapJointPlan(connection.joint);
@@ -10698,6 +10806,7 @@ const getShelfSupportFinishLabel = (item: DIYSceneItem, t: Record<string, string
 );
 
 const getItemLabel = (item: DIYSceneItem, language: Language) => {
+  if (item.catalogPreviewOnly && item.originalCartItem) return `${item.originalCartItem.product.name[language]} · ${language === 'cn' ? '商品示意' : 'Catalog preview'}`;
   const t = TEXT[language];
   if (item.kind === 'imported_component') {
     // A source part the owner has identified as a numbered catalog accessory is
@@ -10888,7 +10997,7 @@ const getCabinetDoorPricing = (item: DIYSceneItem, user?: User | null) => {
     ? (membership === 'vip_plus' ? VIP_PLUS_ALUMINUM_DOOR_PRICE : ALUMINUM_PLATE_PRICE[2])
     : material === 'pegboard'
       ? (membership === 'vip_plus' ? VIP_PLUS_PEGBOARD_DOOR_PRICE : PEGBOARD_PRICE[2])
-      : (MARINE_BOARD_PRICE[materialThickness] || 0) + (isMarineNaturalColor(item.colorId) ? 0 : MARINE_COLOR_SURCHARGE);
+      : marineRateForItem(item, materialThickness) + (isMarineNaturalColor(item.colorId) ? 0 : MARINE_COLOR_SURCHARGE);
   const hingeCount = getDoorHingePositions(item.height || 0).length;
   const hingeFee = hingeCount * DOOR_HINGE_UNIT_PRICE;
   return {
@@ -10905,6 +11014,8 @@ const getCabinetDoorPricing = (item: DIYSceneItem, user?: User | null) => {
 
 export const calculatePrice = (item: DIYSceneItem, user?: User | null) => {
   const quantity = Math.max(1, item.quantity || 1);
+  const originalRow = originalCartRowForSceneItem(item);
+  if (originalRow) return originalRow.totalPrice;
   if (item.kind === 'profile') {
     const variant = PROFILE_VARIANTS.find((entry) => entry.id === item.variantId) || PROFILE_VARIANTS[0];
     const membership = normalizeMembershipLevel(user?.membershipLevel);
@@ -10912,7 +11023,7 @@ export const calculatePrice = (item: DIYSceneItem, user?: User | null) => {
     const material = ((item.length || 1000) / 1000) * Math.max(0, variant.price[profileFinishForColor(item.colorId)] - discount);
     const holes = (item.holes || []).reduce((sum, hole) => sum + (hole.type === 'through' ? 1 : 1.8), 0);
     const tapPortCount = getProfileTapPortCount(item.variantId);
-    const tapping = (item.tappingLeft ? tapPortCount * 1.5 : 0) + (item.tappingRight ? tapPortCount * 1.5 : 0);
+    const tapping = (sceneTappingPorts(item, 'left').filter(Boolean).length + sceneTappingPorts(item, 'right').filter(Boolean).length) * 1.5;
     const danger = membership !== 'vip_plus' && (item.length || 0) > 20 && (item.length || 0) <= 100 ? 5 : 0;
     return Number(((material + holes + tapping + danger) * quantity).toFixed(1));
   }
@@ -10923,10 +11034,10 @@ export const calculatePrice = (item: DIYSceneItem, user?: User | null) => {
       ? (ALUMINUM_PLATE_PRICE[thickness] || 0)
       : item.kind === 'pegboard'
         ? (PEGBOARD_PRICE[thickness] || 0)
-        : (MARINE_BOARD_PRICE[thickness] || 0) + (isMarineNaturalColor(item.colorId) ? 0 : MARINE_COLOR_SURCHARGE);
+        : marineRateForItem(item, thickness) + (isMarineNaturalColor(item.colorId) ? 0 : MARINE_COLOR_SURCHARGE);
     return Number((area * rate * quantity).toFixed(1));
   }
-  if (item.kind === 'cabinet_door') return getCabinetDoorPricing(item, user).unitPrice;
+  if (item.kind === 'cabinet_door') return getCabinetDoorPricing(item, user).unitPrice * quantity;
   if (item.kind === 'shelf_support') {
     const unitPrice = isBoardShelfSupport(item)
       ? boardShelfSupportPrice(item)
@@ -11085,14 +11196,15 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({
   // another account's previously saved draft with the open guest scene.
   const [draftKey] = useState(() => designerDraftKey(user?.id));
   const [initialDraft] = useState(() => {
-    if (new URLSearchParams(location.search).has('template')) return { items: [] as DIYSceneItem[], failed: false };
+    if ((location.state as any)?.designerCartRows || new URLSearchParams(location.search).has('template')) return { items: [] as DIYSceneItem[], failed: false };
     try {
       const restored = readDesignerDraft<DIYSceneItem>(window.localStorage, draftKey);
+      const metadata = JSON.parse(window.localStorage.getItem(draftKey) || '{}');
       if (restored.length) {
         const inspected = inspectDesignerImportItems(restored);
         if (!inspected.valid) throw new Error(inspected.issues.map(issue => issue.message).join(' '));
       }
-      return { items: synchronizeDesignerSceneItems(normalizeDesignItems(restored)), failed: false };
+      return { items: synchronizeDesignerSceneItems(normalizeDesignItems(restored)), failed: false, metadata };
     } catch {
       return { items: [] as DIYSceneItem[], failed: true };
     }
@@ -11100,9 +11212,9 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({
   const [items, setItems] = useState<DIYSceneItem[]>(initialDraft.items);
   const [draftError, setDraftError] = useState(initialDraft.failed ? t.draftReadFailed : '');
   const [designSource, setDesignSource] = useState<DesignSourceInfo>(() => (
-    createDesignSourceInfo('manual_designer')
+    initialDraft.metadata?.provenance || createDesignSourceInfo('manual_designer')
   ));
-  const [finishedFurnitureQuote, setFinishedFurnitureQuote] = useState<FinishedFurnitureQuote | null>(null);
+  const [finishedFurnitureQuote, setFinishedFurnitureQuote] = useState<FinishedFurnitureQuote | null>(() => normalizeFinishedFurnitureQuote(initialDraft.metadata?.finishedFurniture));
   const [selectedId, setSelectedIdState] = useState<string | null>(null);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [history, setHistory] = useState<DIYSceneItem[][]>([]);
@@ -11139,7 +11251,7 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({
    * place, so a rejected gate can never half-run the action it was guarding.
    */
   const [manufacturingReleaseTarget, setManufacturingReleaseTarget] = useState<DesignerManufacturingRelease | null>(null);
-  const [manufacturingAcknowledgement, setManufacturingAcknowledgement] = useState<ManufacturingAcknowledgement | null>(null);
+  const [manufacturingAcknowledgement, setManufacturingAcknowledgement] = useState<ManufacturingAcknowledgement | null>(initialDraft.metadata?.manufacturingAcknowledgement || null);
   /** The tick box is deliberately not sticky: every prompt starts unticked. */
   const [manufacturingReleaseAcknowledged, setManufacturingReleaseAcknowledged] = useState(false);
   const manufacturingReleaseResolverRef = useRef<((decision: ManufacturingReleaseDecision) => void) | null>(null);
@@ -11333,6 +11445,10 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({
 
   const updateSelected = (patch: Partial<DIYSceneItem>) => {
     if (!selected) return;
+    if (selected.catalogPreviewOnly && Object.keys(patch).some(key => !['quantity', 'position', 'rotation', 'remark'].includes(key))) {
+      showNotice(language === 'cn' ? '此商品为平铺示意，请在商品详情修改规格。' : 'Edit this catalog product in its product details.');
+      return;
+    }
     if (hasImportedSourceMesh(selected) && ['kind', 'length', 'width', 'height', 'thickness', 'quantity', 'variantId', 'colorId', 'sourceMesh'].some(key => key in patch)) {
       showNotice('源模型部件保持原始几何；可移动、旋转或复制独立部件。'); return;
     }
@@ -12202,6 +12318,26 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({
     }
   }, [location.search, navigate, t.rackConnectionCheckFailed, t.rackConnectionCheckPassed, t.templateLoaded]);
 
+  const openedCartRef = useRef<unknown>(null);
+  useEffect(() => {
+    const rows = (location.state as any)?.designerCartRows as CartItem[] | undefined;
+    if (!rows || openedCartRef.current === rows) return;
+    openedCartRef.current = rows;
+    try {
+      const restored = restoreCartDesign(rows);
+      if (!restored.items.length) throw new Error(t.jsonImportUnsupported);
+      setDraftError('');
+      setItems(synchronizeDesignerSceneItems(restored.items));
+      setDesignSource(restored.provenance);
+      setFinishedFurnitureQuote(restored.finishedFurniture);
+      setHistory([]); setFuture([]); setSelectedIdState(null); setSelectedIds([]);
+      showNotice(language === 'cn' ? '已打开购物清单，可修改后重新加入购物车；原订单保持不变。' : 'Design opened. Edit and add to cart to order again.');
+      navigate('/diy-designer', { replace: true, state: null });
+    } catch (error) {
+      setDraftError(`${t.draftReadFailed} ${String(error)}`);
+    }
+  }, [location.state]);
+
   const save = () => {
     downloadTextFile(
       JSON.stringify(buildDesignDocument(
@@ -12217,14 +12353,44 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({
     showNotice(t.saved);
   };
 
-  const returnHome = () => {
+  const [draftSavedAt, setDraftSavedAt] = useState('');
+  const persistDraft = () => {
+    if (items === initialDraft.items && (initialDraft.failed || (location.state as any)?.designerCartRows || new URLSearchParams(location.search).has('template'))) return false;
     try {
-      writeDesignerDraft(window.localStorage, draftKey, normalizeDesignItems(items));
-      navigate('/');
+      writeDesignerDraft(window.localStorage, draftKey, normalizeDesignItems(items), {
+        provenance: designSource, finishedFurniture: finishedFurnitureQuote, manufacturingAcknowledgement,
+      });
+      setDraftError('');
+      setDraftSavedAt(new Date().toLocaleTimeString());
+      return true;
     } catch {
       setDraftError(t.draftWriteFailed);
+      return false;
     }
   };
+  const latestDraftSave = useRef(persistDraft);
+  latestDraftSave.current = persistDraft;
+  useEffect(() => {
+    // Leave a corrupt cache intact until the customer makes an actual change.
+    if (initialDraft.failed && items === initialDraft.items) return;
+    const timer = window.setTimeout(() => latestDraftSave.current(), 600);
+    return () => window.clearTimeout(timer);
+  }, [items, designSource, finishedFurnitureQuote, manufacturingAcknowledgement]);
+  useEffect(() => {
+    const flush = () => {
+      latestDraftSave.current();
+    };
+    const onHidden = () => { if (document.visibilityState === 'hidden') flush(); };
+    window.addEventListener('pagehide', flush);
+    document.addEventListener('visibilitychange', onHidden);
+    return () => {
+      flush();
+      window.removeEventListener('pagehide', flush);
+      document.removeEventListener('visibilitychange', onHidden);
+    };
+  }, []);
+  const returnHome = () => { if (persistDraft()) navigate('/'); };
+
 
   const load = () => importRef.current?.click();
 
@@ -12432,18 +12598,21 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({
       imageUrl: '/images/accessory/accessory_codes.jpg',
     };
     const rawCartItems = items.map((item) => {
+      const originalRow = originalCartRowForSceneItem(item);
+      if (originalRow) return originalRow;
       const totalPrice = calculatePrice(item, user);
       if (item.kind === 'profile') {
         const tapPortCount = getProfileTapPortCount(item.variantId);
         const config = {
+          ...(item.originalCartItem?.config || {}),
           length: item.length || 1000,
           variantId: item.variantId || '2020',
           finish: profileFinishForColor(item.colorId),
           colorId: item.colorId,
           holes: item.holes || [],
           tapping: {
-            left: Array(tapPortCount).fill(!!item.tappingLeft),
-            right: Array(tapPortCount).fill(!!item.tappingRight),
+            left: sceneTappingPorts(item, 'left'),
+            right: sceneTappingPorts(item, 'right'),
           },
           unitPrice: Number((totalPrice / Math.max(1, item.quantity)).toFixed(1)),
           // Scene transforms stay in editable designer/production data. The
@@ -12467,6 +12636,7 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({
               : { cn: '铝柜门', en: 'Aluminum Cabinet Door', jp: 'アルミ扉' },
         };
         const config = {
+          ...(item.originalCartItem?.config || {}),
           width: item.width,
           height: item.height,
           thickness: pricing.thickness,
@@ -12494,7 +12664,7 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({
           unitRate: pricing.unitRate,
           minAreaApplied: pricing.areaSqm > 0 && pricing.areaSqm < MIN_BOARD_AREA,
           pegHolePattern: item.doorMaterial === 'pegboard' ? 'ikea' : undefined,
-          marineSpecId: item.doorMaterial === 'marine' ? 'marine_bbb_uv_film' : undefined,
+          marineSpecId: item.doorMaterial === 'marine' ? marineSpecForItem(item) : undefined,
           materialThicknessMm: pricing.materialThickness,
           frameThicknessMm: item.doorMaterial === 'aluminum' || item.doorMaterial === 'pegboard'
             ? CABINET_DOOR_ALUMINUM_DEPTH_MM
@@ -12506,7 +12676,7 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({
           diyRotation: item.rotation,
           remark: item.remark?.trim() || undefined,
         };
-        return { id: makeId(), product, quantity: 1, config, totalPrice };
+        return { id: makeId(), product, quantity: item.quantity, config, totalPrice };
       }
       if (item.kind === 'plate' || item.kind === 'pegboard' || item.kind === 'marine_board') {
         const product = item.kind === 'plate' ? plateProduct : item.kind === 'pegboard' ? pegboardProduct : marineProduct;
@@ -12517,8 +12687,9 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({
           ? (ALUMINUM_PLATE_PRICE[thickness] || 0)
           : item.kind === 'pegboard'
             ? (PEGBOARD_PRICE[thickness] || 0)
-            : (MARINE_BOARD_PRICE[thickness] || 0) + (isMarineNaturalColor(item.colorId) ? 0 : MARINE_COLOR_SURCHARGE);
+            : marineRateForItem(item, thickness) + (isMarineNaturalColor(item.colorId) ? 0 : MARINE_COLOR_SURCHARGE);
         const config = {
+          ...(item.originalCartItem?.config || {}),
           width: item.width,
           height: item.height,
           thickness,
@@ -12530,7 +12701,7 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({
           pegHolePatternName: item.kind === 'pegboard'
             ? (language === 'cn' ? '宜家孔（竖向长圆孔）' : language === 'jp' ? 'IKEA穴（縦長穴）' : 'IKEA holes (vertical slots)')
             : undefined,
-          marineSpecId: item.kind === 'marine_board' ? 'marine_bbb_uv_film' : undefined,
+          marineSpecId: item.kind === 'marine_board' ? marineSpecForItem(item) : undefined,
           unitPrice: Number((totalPrice / Math.max(1, item.quantity)).toFixed(1)),
           areaSqm,
           chargedArea,
@@ -12782,7 +12953,16 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({
       showNotice(t.importCancelled);
       return;
     }
-    onAddBatchToCart(toCartItems(release.acknowledgement), choice);
+    const document = buildDesignDocument(items, language, designSource, finishedFurnitureQuote, {
+      shareSourceGeometries: true,
+      ...(release.acknowledgement ? { manufacturingAcknowledgement: release.acknowledgement } : {}),
+    });
+    const projectId = makeId();
+    const designerSnapshot = encodeDesignerSnapshot(document);
+    onAddBatchToCart(toCartItems(release.acknowledgement).map(row => ({
+      ...row, config: { ...row.config, designerProjectId: projectId, designerSnapshot },
+    })), choice);
+    persistDraft();
     showNotice(t.cartAdded);
     window.setTimeout(() => navigate('/cart'), 450);
   };
@@ -12862,9 +13042,12 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({
           <div>
             <h1 className="text-2xl font-black tracking-tight text-slate-950 sm:text-3xl">{t.title}</h1>
             <p className="mt-1 text-sm font-medium text-slate-500">{t.subtitle}</p>
+            {items.some(item => item.catalogPreviewOnly) && <p className="mt-2 text-sm text-amber-700">{language === 'cn' ? '部分目录商品以平铺示意块显示，保留原商品详情与价格。请从购物车商品详情修改这些商品的规格。' : 'Some catalog products are shown as schematic blocks; their original specifications and prices are preserved.'}</p>}
             {draftError && <p role="alert" className="mt-2 max-w-xl text-sm font-bold text-red-700">{draftError}</p>}
           </div>
           <div className="flex flex-wrap items-center gap-2">
+            <NumericActionButton type="button" onClick={persistDraft} className="diy-toolbar-button gap-2" data-testid="diy-save"><Save className="h-4 w-4" />{language === 'cn' ? '保存设计' : language === 'jp' ? '設計を保存' : 'Save design'}</NumericActionButton>
+            <span className="text-xs text-slate-500" role="status">{draftSavedAt && !draftError ? `${language === 'cn' ? '已自动保存到此浏览器' : language === 'jp' ? 'ブラウザに保存済み' : 'Saved in this browser'} ${draftSavedAt}` : ''}</span>
             <button type="button" data-testid="diy-return-home" onClick={returnHome} className="diy-toolbar-button gap-2"><Home className="h-4 w-4" />{t.backHome}</button>
             <label className="flex items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-2 py-1.5 text-[10px] font-black text-slate-500">
               <span className="hidden sm:inline">{t.language}</span>
@@ -13595,6 +13778,7 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({
             <>
               <button onClick={() => setSelectedId(null)} className="mb-3 text-xs font-black text-blue-600 transition hover:text-blue-500">← {t.backToProject}</button>
               <h2 className="text-sm font-black uppercase tracking-widest text-slate-500">{t.properties}</h2>
+              {selected.originalCartItem && <details className="mt-3 rounded-xl bg-slate-50 p-3 text-xs"><summary>{language === 'cn' ? '原购物商品详情' : 'Original product details'} · {selected.originalCartItem.product.name[language]}</summary><div className="mt-2 space-y-1"><p>{[selected.originalCartItem.config?.variantId, selected.originalCartItem.config?.colorName, selected.originalCartItem.config?.remark].filter(Boolean).join(' · ')}</p><p>{[selected.originalCartItem.config?.length, selected.originalCartItem.config?.width, selected.originalCartItem.config?.height, selected.originalCartItem.config?.thickness].filter(Boolean).join(' × ')} mm · ×{selected.originalCartItem.quantity}</p>{(selected.originalCartItem.config?.lines || []).map((line: any, index: number) => <p key={index}>{line.name} ×{line.quantity}</p>)}</div></details>}
               {collidingProfileIds.has(selected.id) && (
                 <div className="mt-3 rounded-2xl border border-red-300 bg-red-50 px-3 py-2.5 text-[10px] font-black leading-relaxed text-red-700">
                   {t.interferenceWarning}

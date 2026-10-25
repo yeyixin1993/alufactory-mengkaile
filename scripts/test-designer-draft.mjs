@@ -19,3 +19,11 @@ assert.throws(() => api.readDesignerDraft(storage, key));
 storage.setItem(key, JSON.stringify({ items }));
 assert.throws(() => api.readDesignerDraft(storage, key), /Invalid/);
 console.log('PASS: local draft round-trip, account isolation, empty removal, quota and invalid-cache failures.');
+
+api.writeDesignerDraft(storage, key, items, { finishedFurniture: { productId: 'p8', parameters: { columns: 2 } }, provenance: { channel: 'parametric_template' } });
+const saved = JSON.parse(storage.getItem(key));
+assert.equal(saved.finishedFurniture.productId, 'p8');
+assert.equal(saved.finishedFurniture.parameters.columns, 2);
+assert.equal(saved.provenance.channel, 'parametric_template');
+assert.deepEqual(api.readDesignerDraft(storage, key), items);
+console.log('PASS: furniture quote and source metadata survive draft persistence.');

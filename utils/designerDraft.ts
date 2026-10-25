@@ -11,10 +11,10 @@ export const readDesignerDraft = <T>(storage: Pick<Storage, 'getItem'>, key: str
   return document.items;
 };
 
-export const writeDesignerDraft = <T>(storage: Pick<Storage, 'setItem' | 'removeItem'>, key: string, items: T[]) => {
+export const writeDesignerDraft = <T>(storage: Pick<Storage, 'setItem' | 'removeItem'>, key: string, items: T[], metadata: Record<string, unknown> = {}) => {
   if (!items.length) {
     storage.removeItem(key);
     return;
   }
-  storage.setItem(key, JSON.stringify({ format: 'mengkaile-diy-draft', schemaVersion: 1, savedAt: new Date().toISOString(), items }));
+  storage.setItem(key, JSON.stringify({ format: 'mengkaile-diy-draft', schemaVersion: 1, savedAt: new Date().toISOString(), ...metadata, items }));
 };

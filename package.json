@@ -53,7 +53,8 @@
     "test:profile-visible-faces": "vite build --target esnext --ssr scripts/verify-profile-visible-faces.ts --outDir .verify-profile-faces-dist --emptyOutDir && node .verify-profile-faces-dist/verify-profile-visible-faces.js",
     "test:ai-chat-3d-preview": "vite build --target esnext --ssr scripts/verify-ai-chat-3d-preview.ts --outDir .verify-ai-chat-3d-dist --emptyOutDir && node .verify-ai-chat-3d-dist/verify-ai-chat-3d-preview.js",
     "test:accessory-kits": "vite build --target esnext --ssr scripts/verify-accessory-kits.ts --outDir .verify-accessory-kits-dist --emptyOutDir && node .verify-accessory-kits-dist/verify-accessory-kits.js",
-    "test:wardrobe-door-clearance": "vite build --target esnext --ssr scripts/verify-wardrobe-door-clearance.ts --outDir .verify-wardrobe-door-clearance-dist --emptyOutDir && node .verify-wardrobe-door-clearance-dist/verify-wardrobe-door-clearance.js"
+    "test:wardrobe-door-clearance": "vite build --target esnext --ssr scripts/verify-wardrobe-door-clearance.ts --outDir .verify-wardrobe-door-clearance-dist --emptyOutDir && node .verify-wardrobe-door-clearance-dist/verify-wardrobe-door-clearance.js",
+    "test:designer-cart-restore": "vite build --ssr scripts/verify-designer-cart-restore.ts --outDir .verify-designer-cart-dist --emptyOutDir && node .verify-designer-cart-dist/verify-designer-cart-restore.js"
   },
   "dependencies": {
     "@fontsource-variable/noto-sans-jp": "5.3.0",
