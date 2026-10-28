@@ -1042,9 +1042,9 @@
       "imageKey": "screw_socket_cylinder",
       "price": {
         "natural": 0.5,
-        "colored": 0.5,
+        "colored": 1,
         "naturalBulk": 0.5,
-        "coloredBulk": 0.5
+        "coloredBulk": 1
       }
     },
     {
@@ -1061,9 +1061,9 @@
       "imageKey": "screw_button_socket",
       "price": {
         "natural": 0.5,
-        "colored": 0.5,
+        "colored": 1,
         "naturalBulk": 0.5,
-        "coloredBulk": 0.5
+        "coloredBulk": 1
       }
     },
     {
@@ -1080,9 +1080,9 @@
       "imageKey": "screw_flat_socket",
       "price": {
         "natural": 0.5,
-        "colored": 0.5,
+        "colored": 1,
         "naturalBulk": 0.5,
-        "coloredBulk": 0.5
+        "coloredBulk": 1
       }
     },
     {
@@ -1099,9 +1099,9 @@
       "imageKey": "screw_socket_cylinder",
       "price": {
         "natural": 0.75,
-        "colored": 0.75,
+        "colored": 1.25,
         "naturalBulk": 0.75,
-        "coloredBulk": 0.75
+        "coloredBulk": 1.25
       }
     },
     {
@@ -1118,9 +1118,9 @@
       "imageKey": "screw_button_socket",
       "price": {
         "natural": 0.75,
-        "colored": 0.75,
+        "colored": 1.25,
         "naturalBulk": 0.75,
-        "coloredBulk": 0.75
+        "coloredBulk": 1.25
       }
     }
   ],

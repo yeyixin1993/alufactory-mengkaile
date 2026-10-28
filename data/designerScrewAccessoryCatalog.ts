@@ -71,14 +71,15 @@ export const DESIGNER_SCREW_REFERENCE_SPECS: readonly ScrewSpecIdentity[] = DESI
   })
 ));
 
+// Colored screws add ¥0.50 per piece in both retail and bulk tiers.
 const buildPrices = (series: string): AccessoryDefinition['prices'] => {
   const unitPrice = resolveScrewUnitPriceForSeries(series);
   return {
     [series]: {
       natural: unitPrice,
-      colored: unitPrice,
+      colored: unitPrice + 0.5,
       naturalBulk: unitPrice,
-      coloredBulk: unitPrice,
+      coloredBulk: unitPrice + 0.5,
     },
   };
 };

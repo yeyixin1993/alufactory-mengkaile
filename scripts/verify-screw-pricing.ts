@@ -63,7 +63,8 @@ for (const definition of generatedDefinitions) {
   assert.ok(row, `${definition.id} 必须能在配件列表中取到一行`);
   const unitPrice = resolveScrewUnitPriceForSeries(definition.id.split('_')[1]);
   assert.equal(row.price.natural, unitPrice, `${definition.id} 的本色价应为 ¥${unitPrice}`);
-  assert.equal(row.price.colored, unitPrice, `${definition.id} 的彩色价应为 ¥${unitPrice}`);
+  assert.equal(row.price.colored, unitPrice + 0.5, `${definition.id} 的彩色价应为本色加 ¥0.50`);
+  assert.equal(row.price.coloredBulk, row.price.naturalBulk + 0.5, `${definition.id} 的彩色批量价应为本色批量价加 ¥0.50`);
   assert.equal(row.price.naturalBulk, unitPrice, `${definition.id} 的批量价应为 ¥${unitPrice}`);
   assert.ok(row.name.cn && row.name.en && row.name.jp, `${definition.id} 必须有中英日名称`);
 }
