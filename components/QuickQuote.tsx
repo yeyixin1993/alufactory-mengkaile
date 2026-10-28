@@ -1,5 +1,5 @@
 import { DraftNumberInput, NumericActionButton } from './DraftNumberInput';
-import { ENABLED_METAL_BOARD_THICKNESSES, PEGBOARD_PRICE_PER_SQM, ALUMINUM_PLATE_PRICE_PER_SQM, VIP_PLUS_PEGBOARD_PRICE_PER_SQM, VIP_PLUS_ALUMINUM_PLATE_PRICE_PER_SQM, MARINE_BOARD_SPEC_PRICE_PER_SQM, MARINE_BOARD_COLORED_SURCHARGE_PER_SQM, MARINE_BOARD_WEIGHT_PER_SQM, MIN_BOARD_CHARGE_AREA_SQM, MAX_PROFILE_LENGTH_MM, MAX_BOARD_WIDTH_MM, MAX_BOARD_HEIGHT_MM, MARINE_BOARD_MAX_WIDTH_MM, MARINE_BOARD_MAX_HEIGHT_MM } from '../utils/quickQuoteCatalog';
+import { ENABLED_METAL_BOARD_THICKNESSES, PEGBOARD_PRICE_PER_SQM, ALUMINUM_PLATE_PRICE_PER_SQM, VIP_PLUS_PEGBOARD_PRICE_PER_SQM, VIP_PLUS_ALUMINUM_PLATE_PRICE_PER_SQM, MARINE_BOARD_FULL_SHEET_PRICE, MARINE_BOARD_SPEC_PRICE_PER_SQM, MARINE_BOARD_COLORED_SURCHARGE_PER_SQM, MARINE_BOARD_WEIGHT_PER_SQM, MIN_BOARD_CHARGE_AREA_SQM, MAX_PROFILE_LENGTH_MM, MAX_BOARD_WIDTH_MM, MAX_BOARD_HEIGHT_MM, MARINE_BOARD_MAX_WIDTH_MM, MARINE_BOARD_MAX_HEIGHT_MM } from '../utils/quickQuoteCatalog';
 import { calculateFrameUnitPrice } from '../utils/framePricing';
 import React, { useMemo, useState } from 'react';
 import { Plus, Trash2 } from 'lucide-react';
@@ -68,6 +68,7 @@ interface BoardRow {
   thickness: number;
   colorId: string;
   marineSpecId?: MarineSpecId;
+  boardPurchaseMode?: 'custom' | 'full_sheet';
   width: number;
   height: number;
   quantity: number;
@@ -297,16 +298,19 @@ const QuickQuote: React.FC<{ language: Language; user?: User | null }> = ({ lang
     unitRateResolver?: (row: BoardRow) => number
   ) => {
     return rows.map((row) => {
-      const width = Math.min(maxWidthMm, Math.max(0, row.width));
-      const height = Math.min(maxHeightMm, Math.max(0, row.height));
+      const width = Math.max(0, row.width);
+      const height = Math.max(0, row.height);
       const qty = Math.max(0, row.quantity || 0);
       const areaSqm = (width * height) / 1_000_000;
       const chargedArea = areaSqm > 0 && areaSqm < MIN_BOARD_CHARGE_AREA_SQM ? MIN_BOARD_CHARGE_AREA_SQM : areaSqm;
       const unitRate = unitRateResolver ? unitRateResolver(row) : (priceMap[row.thickness] || 0);
-      const unitPrice = round1(chargedArea * unitRate);
+      const invalidSize = width > maxWidthMm || height > maxHeightMm || (Boolean(row.marineSpecId) && Math.min(width, height) > MARINE_BOARD_MAX_HEIGHT_MM);
+      const unitPrice = invalidSize ? 0 : row.boardPurchaseMode === 'full_sheet'
+        ? MARINE_BOARD_FULL_SHEET_PRICE[row.marineSpecId || 'marine_bbb_uv_film'][row.thickness]
+        : round1(chargedArea * unitRate);
       const subtotal = round1(unitPrice * qty);
       const minAreaApplied = areaSqm > 0 && areaSqm < MIN_BOARD_CHARGE_AREA_SQM;
-      return { row, areaSqm, chargedArea, unitRate, unitPrice, subtotal, minAreaApplied };
+      return { row, areaSqm, chargedArea, unitRate, unitPrice, subtotal, minAreaApplied, invalidSize };
     });
   };
 
@@ -320,7 +324,7 @@ const QuickQuote: React.FC<{ language: Language; user?: User | null }> = ({ lang
       marineBoardRows,
       {},
       MARINE_BOARD_MAX_WIDTH_MM,
-      MARINE_BOARD_MAX_HEIGHT_MM,
+      MARINE_BOARD_MAX_WIDTH_MM,
       (row) => {
         const specId: MarineSpecId = row.marineSpecId === 'marine_bbb_plain' ? 'marine_bbb_plain' : 'marine_bbb_uv_film';
         const baseRate = MARINE_BOARD_SPEC_PRICE_PER_SQM[specId]?.[row.thickness] || 0;
@@ -542,7 +546,7 @@ const QuickQuote: React.FC<{ language: Language; user?: User | null }> = ({ lang
           const colorName = (marineBoardColorOptions.find((c) => c.id === row.colorId) || marineBoardColorOptions[0]).name[language];
           return {
             id: row.id,
-            text: `${specName} · ${row.thickness}mm · ${colorName} · ${width}×${height}mm × ${qty}`,
+            text: `${row.boardPurchaseMode === 'full_sheet' ? (language === 'cn' ? '整张板 · ' : language === 'jp' ? '原板 · ' : 'Full sheet · ') : ''}${specName} · ${row.thickness}mm · ${colorName} · ${width}×${height}mm × ${qty}`,
           };
         })
         .filter((x): x is { id: string; text: string } => Boolean(x)),
@@ -675,6 +679,16 @@ const QuickQuote: React.FC<{ language: Language; user?: User | null }> = ({ lang
           const marineSpecId: MarineSpecId = row.marineSpecId === 'marine_bbb_plain' ? 'marine_bbb_plain' : 'marine_bbb_uv_film';
           return (
             <div key={row.id} className="bg-slate-50 border border-slate-200 rounded-2xl p-4 md:p-5 space-y-4">
+              {showMarineSpecSelector && <div>
+                <label className="block text-xs font-black text-slate-500 mb-1">{language === 'cn' ? '购买方式' : language === 'jp' ? '購入方法' : 'Purchase option'}</label>
+                <select value={row.boardPurchaseMode || 'custom'} onChange={e => updateBoardRows(setter, row.id, {
+                  boardPurchaseMode: e.target.value as 'custom' | 'full_sheet',
+                  ...(e.target.value === 'full_sheet' ? { width: 2440, height: 1220, colorId: 'natural', quantity: Math.max(1, row.quantity) } : {}),
+                })} className="w-full border border-slate-200 rounded-xl px-3 py-2.5 bg-white">
+                  <option value="custom">{language === 'cn' ? '定制尺寸（按平方米计价）' : language === 'jp' ? 'カスタムサイズ（㎡単価）' : 'Custom size (per m²)'}</option>
+                  <option value="full_sheet">{language === 'cn' ? 'BBB 整张板（2440 × 1220 mm，按张计价）' : language === 'jp' ? 'BBB 原板（2440 × 1220 mm、枚単価）' : 'BBB full sheet (2440 × 1220 mm, per sheet)'}</option>
+                </select>
+              </div>}
               <div className={showMarineSpecSelector ? 'grid grid-cols-2 gap-2 sm:grid-cols-4 sm:gap-3' : 'grid grid-cols-3 gap-2 sm:grid-cols-3 sm:gap-3'}>
                 <div>
                   <label className="block text-xs font-black text-slate-500 mb-1">{t.qq_thickness} (mm)</label>
@@ -712,8 +726,11 @@ const QuickQuote: React.FC<{ language: Language; user?: User | null }> = ({ lang
                     type="number"
                     min={1}
                     max={maxWidthMm}
+                    key={`width-${row.boardPurchaseMode}`}
+                    disabled={row.boardPurchaseMode === 'full_sheet'}
+                    publishInvalid
                     value={row.width}
-                    onChange={(e) => updateBoardRows(setter, row.id, { width: Math.min(maxWidthMm, Number(e.target.value) || 0) })}
+                    onChange={(e) => updateBoardRows(setter, row.id, { width: Number(e.target.value) || 0 })}
                     className="w-full border border-slate-200 rounded-xl px-3 py-2.5 bg-white"
                   />
                 </div>
@@ -723,8 +740,11 @@ const QuickQuote: React.FC<{ language: Language; user?: User | null }> = ({ lang
                     type="number"
                     min={1}
                     max={maxHeightMm}
+                    key={`height-${row.boardPurchaseMode}`}
+                    disabled={row.boardPurchaseMode === 'full_sheet'}
+                    publishInvalid
                     value={row.height}
-                    onChange={(e) => updateBoardRows(setter, row.id, { height: Math.min(maxHeightMm, Number(e.target.value) || 0) })}
+                    onChange={(e) => updateBoardRows(setter, row.id, { height: Number(e.target.value) || 0 })}
                     className="w-full border border-slate-200 rounded-xl px-3 py-2.5 bg-white"
                   />
                 </div>
@@ -735,6 +755,7 @@ const QuickQuote: React.FC<{ language: Language; user?: User | null }> = ({ lang
                   <div>
                     <label className="block text-xs font-black text-slate-500 mb-1">{t.qq_color}</label>
                     <select
+                      disabled={row.boardPurchaseMode === 'full_sheet'}
                       value={row.colorId}
                       onChange={(e) => updateBoardRows(setter, row.id, { colorId: e.target.value })}
                       className="w-full border border-slate-200 rounded-xl px-3 py-2.5 bg-white"
@@ -767,6 +788,7 @@ const QuickQuote: React.FC<{ language: Language; user?: User | null }> = ({ lang
                 </div>
               </div>
 
+              {calc.invalidSize && <div className="text-sm font-bold text-red-600">{language === 'cn' ? '尺寸超出板材范围，此项未计入总价，请修正尺寸。' : language === 'jp' ? 'サイズ超過。この項目は合計に含まれません。修正してください。' : 'Size exceeds sheet limits. This row is excluded from the total; correct its dimensions.'}</div>}
               <div className="text-sm text-slate-600 flex flex-wrap items-center gap-x-5 gap-y-1">
                 <span>
                   {t.qq_area}: {calc.areaSqm.toFixed(3)} {t.qq_sqm}
@@ -812,10 +834,10 @@ const QuickQuote: React.FC<{ language: Language; user?: User | null }> = ({ lang
   ];
   const marineBoardMaxSizeNote =
     language === 'cn'
-      ? '海洋板最大尺寸：宽2440mm，高1220mm（支持12/18mm）'
+      ? '海洋板最大尺寸：2440 × 1220 mm，可横竖放置（支持12/18mm）；整张板为原色 BBB。'
       : language === 'jp'
-        ? 'マリンボード最大サイズ: 幅2440mm / 高さ1220mm（12/18mm対応）'
-        : 'Marine board max size: width 2440mm, height 1220mm (12/18mm supported)';
+        ? 'マリンボード最大サイズ: 2440 × 1220 mm、縦横入替可能（12/18mm対応）。原板は原色BBB。'
+        : 'Marine board max size: 2440 × 1220 mm in either orientation (12/18mm). Full sheets are natural BBB.';
 
   return (
     <div data-numeric-scope className="max-w-7xl mx-auto px-4 sm:px-6 py-8 sm:py-12">
@@ -922,7 +944,7 @@ const QuickQuote: React.FC<{ language: Language; user?: User | null }> = ({ lang
                     <div>
                       <label className="block text-xs font-black text-slate-500 mb-1">{t.qq_color}</label>
                       <select
-                        value={row.colorId}
+                      value={row.colorId}
                         onChange={(e) => {
                           const nextColorId = e.target.value;
                           if (nextColorId !== 'natural') setHasChosenProfileColor(true);
@@ -1111,7 +1133,7 @@ const QuickQuote: React.FC<{ language: Language; user?: User | null }> = ({ lang
           18,
           true,
           MARINE_BOARD_MAX_WIDTH_MM,
-          MARINE_BOARD_MAX_HEIGHT_MM,
+          MARINE_BOARD_MAX_WIDTH_MM,
           marineBoardMaxSizeNote,
           true,
           marineBoardColorOptions

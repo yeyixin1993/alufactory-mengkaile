@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 
 /** Keep the user's text separate from the last usable numeric model value. */
 export function DraftNumberInput({ value, onChange, onBlur, onKeyDown, required = true,
-  step = 1, deferCommit = false, ...props }: React.InputHTMLAttributes<HTMLInputElement> & { deferCommit?: boolean }) {
+  step = 1, deferCommit = false, publishInvalid = false, ...props }: React.InputHTMLAttributes<HTMLInputElement> & { deferCommit?: boolean; publishInvalid?: boolean }) {
   const [draft, setDraft] = useState(String(value ?? ''));
   const [dirty, setDirty] = useState(false);
   const [editing, setEditing] = useState(false);
@@ -18,7 +18,7 @@ export function DraftNumberInput({ value, onChange, onBlur, onKeyDown, required 
   }, [value, editing]);
   const publish = (event: React.ChangeEvent<HTMLInputElement>) => {
     const element = event.currentTarget;
-    if ((!element.value && !required) || (element.value.trim() && element.validity.valid)) onChange?.(event);
+    if (publishInvalid || (!element.value && !required) || (element.value.trim() && element.validity.valid)) onChange?.(event);
   };
   return <input {...props} ref={input} type="number" step={step} required={required}
     value={draft} data-numeric-draft="true" data-numeric-dirty={dirty ? 'true' : undefined}

@@ -317,8 +317,9 @@ JSON 字段：model, color(目录id), length(整数mm), quantity(整数根数), 
 铝板、洞洞板、相框、铝框门包邮，不需要追问省份才能报价。
 非型材的缺少尺寸、厚度、数量及海洋板表面信息由后端统一追问，不要在clarifications重复添加这些问题。clarifications仅放矛盾或歧义，例如尺寸到底是cm还是mm。铝板、洞洞板、铝框门的颜色不影响估价，缺颜色仅在order阶段追问，绝不能说未指定颜色无法报价；相框颜色也不影响快速报价。海洋板颜色影响价格，必须保留其需求。
 快速报价全品类：每个items行必须用product区分 profile/aluminum_plate/pegboard/marine_board/frame/accessory，缺省profile仅用于型材。铝板、洞洞板、海洋板、画框和目录配件都是支持品类，不得设unsupported，也不能返回空items。客户仅说品类也要保留一行，未知参数null，让程序追问；不能把板材变成型材或丢弃混合清单。
-板材行：product,width,height,thickness（均整数mm）,quantity（张数）,color。宽高是两个边长，不能用型材length代替。铝板/洞洞板仅开放2/5mm，1/3/4mm暂不可下单，客户指定时须询问改为2还是5mm，不可默默替换。铝板/洞洞板厚2/5，最大2400×1200；海洋板厚12/18，最大2440×1220，另需marine_spec=marine_bbb_plain（BBB素板）或marine_bbb_uv_film（BBB两面UV清漆+覆膜），color=natural指原木本色，其他为目录颜色。未说厚度或表面不要猜，也不追问型材攻丝截面。单位cm/m先换算mm。
+板材行：product,width,height,thickness（均整数mm）,quantity（张数）,color。宽高是两个边长，不能用型材length代替。铝板/洞洞板仅开放2/5mm，1/3/4mm暂不可下单，客户指定时须询问改为2还是5mm，不可默默替换。铝板/洞洞板厚2/5，最大2400×1200；海洋板厚12/18，最大2440×1220，可横竖放置，另需marine_spec=marine_bbb_plain（BBB素板）或marine_bbb_uv_film（BBB两面UV清漆+覆膜），color=natural指原木本色，其他为目录颜色。未说厚度或表面不要猜，也不追问型材攻丝截面。单位cm/m先换算mm。
 相框输入通常用厘米，必须换算为整数毫米存入inner_width/inner_height，计价程序会按厘米计算。
+海洋板购买方式：board_purchase_mode=custom（定制裁切，沿用平方米价）或full_sheet（BBB整张板）。客户明确说整张/整板时用full_sheet，自动填width=2440,height=1220,color=natural，不再追问尺寸和原色；厚度、素板还是两面UV清漆+覆膜、数量缺失才追问。整张板18mm覆膜388元/张、素板339元/张；12mm覆膜258元/张、素板226元/张，所有会员同价。不要乘面积或再套定制平方米价。未说明购买方式且未给尺寸时询问定制还是整张；已给尺寸按定制，不因尺寸刚好2440×1220自动套整张价。客户明确整张又提出其他尺寸或彩色时保留矛盾并询问，不擅自改需求。咨询整张价格时可直接说明以上四档价格和尺寸，运费另算，不要求先提供完整下单参数。
 画框行：product=frame,frame_type=wood/aluminum/alu_wood,inner_width,inner_height（内尺寸mm）,quantity。配件行：product=accessory,accessory_key（目录key）,color=natural/colored,quantity；轴类另需length(mm)。不能猜相似配件key，型号或系列不明确时保留null并追问具体名称/编号/系列。只有客户明确要求才添加配件，不能自动加螺丝。涉及其他品类仍保留全部型材加工状态。只有唯一选项的颜色/加工不追问；海洋板表面类型和颜色影响价格，缺失必须问。
 目录：''' + json.dumps(compact, ensure_ascii=False)
     prompt += '''

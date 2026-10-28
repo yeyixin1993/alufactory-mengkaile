@@ -259,6 +259,16 @@
       5
     ],
     "MARINE_BOARD_COLORED_SURCHARGE_PER_SQM": 100,
+    "MARINE_BOARD_FULL_SHEET_PRICE": {
+      "marine_bbb_uv_film": {
+        "12": 258,
+        "18": 388
+      },
+      "marine_bbb_plain": {
+        "12": 226,
+        "18": 339
+      }
+    },
     "MARINE_BOARD_MAX_HEIGHT_MM": 1220,
     "MARINE_BOARD_MAX_WIDTH_MM": 2440,
     "MARINE_BOARD_SPEC_PRICE_PER_SQM": {

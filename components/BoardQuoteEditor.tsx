@@ -23,7 +23,7 @@ interface BoardQuoteEditorProps {
   saving?: boolean;
 }
 
-import { ENABLED_METAL_BOARD_THICKNESSES, PEGBOARD_PRICE_PER_SQM, ALUMINUM_PLATE_PRICE_PER_SQM, VIP_PLUS_PEGBOARD_PRICE_PER_SQM, VIP_PLUS_ALUMINUM_PLATE_PRICE_PER_SQM, MARINE_BOARD_SPEC_PRICE_PER_SQM, MARINE_BOARD_COLORED_SURCHARGE_PER_SQM, MIN_BOARD_CHARGE_AREA_SQM, MAX_BOARD_WIDTH_MM, MAX_BOARD_HEIGHT_MM, MARINE_BOARD_MAX_WIDTH_MM, MARINE_BOARD_MAX_HEIGHT_MM, MAX_DOOR_HEIGHT_MM, MAX_DOOR_WIDTH_MM, DOOR_HINGE_UNIT_PRICE } from '../data/boardPricing';
+import { ENABLED_METAL_BOARD_THICKNESSES, PEGBOARD_PRICE_PER_SQM, ALUMINUM_PLATE_PRICE_PER_SQM, VIP_PLUS_PEGBOARD_PRICE_PER_SQM, VIP_PLUS_ALUMINUM_PLATE_PRICE_PER_SQM, MARINE_BOARD_FULL_SHEET_PRICE, MARINE_BOARD_SPEC_PRICE_PER_SQM, MARINE_BOARD_COLORED_SURCHARGE_PER_SQM, MIN_BOARD_CHARGE_AREA_SQM, MAX_BOARD_WIDTH_MM, MAX_BOARD_HEIGHT_MM, MARINE_BOARD_MAX_WIDTH_MM, MARINE_BOARD_MAX_HEIGHT_MM, MAX_DOOR_HEIGHT_MM, MAX_DOOR_WIDTH_MM, DOOR_HINGE_UNIT_PRICE } from '../data/boardPricing';
 
 const getCurrency = (lang: Language) => (lang === 'cn' ? '￥' : '$');
 
@@ -189,10 +189,11 @@ const BoardQuoteEditor: React.FC<BoardQuoteEditorProps> = ({ language, product, 
   const [marineSpecId, setMarineSpecId] = useState<MarineSpecId>(
     initialCfg.marineSpecId === 'marine_bbb_plain' ? 'marine_bbb_plain' : 'marine_bbb_uv_film'
   );
+  const [fullSheet, setFullSheet] = useState(isMarineBoard && initialCfg.boardPurchaseMode === 'full_sheet');
   const normalizedInitialColorId = isMarineBoard && initialCfg.colorId === 'natural'
     ? 'wood_natural'
     : initialCfg.colorId;
-  const [colorId, setColorId] = useState<string>(normalizedInitialColorId || (isMarineBoard ? 'wood_natural' : 'natural'));
+  const [colorId, setColorId] = useState<string>((fullSheet ? 'wood_natural' : normalizedInitialColorId) || (isMarineBoard ? 'wood_natural' : 'natural'));
   const [swatchImgError, setSwatchImgError] = useState(false);
 
   const marineColorOptions = useMemo(() => MARINE_BOARD_COLORS.map((color) => (
@@ -212,10 +213,10 @@ const BoardQuoteEditor: React.FC<BoardQuoteEditorProps> = ({ language, product, 
   const defaultWidth = (isPegboard || isDoor) ? 500 : 0;
   const defaultHeight = (isPegboard || isDoor) ? 2000 : 0;
   const [width, setWidth] = useState<number>(isMarineBoard
-    ? Math.round(Number(initialCfg.width || defaultWidth))
+    ? fullSheet ? 2440 : Math.round(Number(initialCfg.width || defaultWidth))
     : initialCfg.width || defaultWidth);
   const [height, setHeight] = useState<number>(isMarineBoard
-    ? Math.round(Number(initialCfg.height || defaultHeight))
+    ? fullSheet ? 1220 : Math.round(Number(initialCfg.height || defaultHeight))
     : initialCfg.height || defaultHeight);
   const [quantity, setQuantity] = useState<number>(initialItem?.quantity || initialCfg.quantity || 1);
   const [openingSide, setOpeningSide] = useState<'left' | 'right'>(initialCfg.openingSide === 'right' ? 'right' : 'left');
@@ -225,7 +226,7 @@ const BoardQuoteEditor: React.FC<BoardQuoteEditorProps> = ({ language, product, 
     : isPegboard
       ? 2400
       : isMarineBoard
-        ? MARINE_BOARD_MAX_HEIGHT_MM
+        ? MARINE_BOARD_MAX_WIDTH_MM
         : MAX_BOARD_HEIGHT_MM;
   const minWidth = (isPegboard || isDoor) ? 101 : 1;
   const minHeight = isDoor ? 230 : ((isPegboard || isDoor) ? 101 : 1);
@@ -237,11 +238,12 @@ const BoardQuoteEditor: React.FC<BoardQuoteEditorProps> = ({ language, product, 
   const widthOutOfRange = rawWidth < minWidth || rawWidth > maxWidth;
   const heightOutOfRange = rawHeight < minHeight || rawHeight > maxHeight;
   const pegboardShapeInvalid = isPegboard && rawWidth > 0 && rawHeight > 0 && !(Math.min(rawWidth, rawHeight) <= 1200 && Math.max(rawWidth, rawHeight) <= 2400);
-  const hasRangeError = widthOutOfRange || heightOutOfRange || pegboardShapeInvalid;
+  const marineShapeInvalid = isMarineBoard && Math.min(rawWidth, rawHeight) > MARINE_BOARD_MAX_HEIGHT_MM;
+  const hasRangeError = marineShapeInvalid || widthOutOfRange || heightOutOfRange || pegboardShapeInvalid;
 
   const calc = useMemo(() => {
-    const rawW = Math.min(maxWidth, Math.max(0, Number(width) || 0));
-    const rawH = Math.min(maxHeight, Math.max(0, Number(height) || 0));
+    const rawW = Math.max(0, Number(width) || 0);
+    const rawH = Math.max(0, Number(height) || 0);
     const w = isMarineBoard ? Math.round(rawW) : rawW;
     const h = isMarineBoard ? Math.round(rawH) : rawH;
     const qty = Math.max(1, Number(quantity) || 1);
@@ -256,7 +258,9 @@ const BoardQuoteEditor: React.FC<BoardQuoteEditorProps> = ({ language, product, 
     const unitRate = isMarineBoard
       ? (marineBaseRate + marineColorSurcharge)
       : (priceMap[effectiveThickness] || 0);
-    const boardUnitPrice = Number((chargedArea * unitRate).toFixed(1));
+    const boardUnitPrice = fullSheet
+      ? MARINE_BOARD_FULL_SHEET_PRICE[marineSpecId][effectiveThickness]
+      : Number((chargedArea * unitRate).toFixed(1));
     const hingeCount = isDoor ? getDoorHingePositions(h).length : 0;
     const hingeFeePerPiece = isDoor ? hingeCount * DOOR_HINGE_UNIT_PRICE : 0;
     const unitPrice = Number((boardUnitPrice + hingeFeePerPiece).toFixed(1));
@@ -264,7 +268,7 @@ const BoardQuoteEditor: React.FC<BoardQuoteEditorProps> = ({ language, product, 
     const minAreaApplied = areaSqm > 0 && areaSqm < MIN_BOARD_CHARGE_AREA_SQM;
 
     return { w, h, qty, areaSqm, chargedArea, unitRate, boardUnitPrice, hingeCount, hingeFeePerPiece, unitPrice, subtotal, minAreaApplied };
-  }, [width, height, quantity, effectiveThickness, maxHeight, maxWidth, isDoor, isMarineBoard, marineSpecId, colorId, priceMap]);
+  }, [fullSheet, width, height, quantity, effectiveThickness, maxHeight, maxWidth, isDoor, isMarineBoard, marineSpecId, colorId, priceMap]);
 
   const hingePositions = useMemo(() => (isDoor ? getDoorHingePositions(calc.h) : []), [isDoor, calc.h]);
   const hingeGaps = useMemo(() => {
@@ -287,6 +291,7 @@ const BoardQuoteEditor: React.FC<BoardQuoteEditorProps> = ({ language, product, 
       pegHolePatternName: isPegboard
         ? (language === 'cn' ? '宜家孔（竖向长圆孔）' : language === 'jp' ? 'IKEA穴（縦長穴）' : 'IKEA holes (vertical slots)')
         : undefined,
+      boardPurchaseMode: isMarineBoard ? (fullSheet ? 'full_sheet' : 'custom') : undefined,
       marineSpecId: isMarineBoard ? marineSpecId : undefined,
       marineSpecName: isMarineBoard ? MARINE_SPECS[marineSpecId].name[language] : undefined,
       width: calc.w,
@@ -294,7 +299,7 @@ const BoardQuoteEditor: React.FC<BoardQuoteEditorProps> = ({ language, product, 
       unitPrice: calc.unitPrice,
       areaSqm: calc.areaSqm,
       chargedArea: calc.chargedArea,
-      unitRate: calc.unitRate,
+      unitRate: fullSheet ? undefined : calc.unitRate,
       minAreaApplied: calc.minAreaApplied,
       ...(isDoor
         ? {
@@ -361,6 +366,19 @@ const BoardQuoteEditor: React.FC<BoardQuoteEditorProps> = ({ language, product, 
     <div data-numeric-scope className="bg-white p-8 rounded-[3rem] border border-slate-100 shadow-xl space-y-6">
       <h3 className="text-2xl font-black text-slate-800">{t.configure}</h3>
 
+      {isMarineBoard && (
+        <div>
+          <label className="block text-xs font-black text-slate-400 mb-2">{language === 'cn' ? '购买方式' : language === 'jp' ? '購入方法' : 'Purchase option'}</label>
+          <select aria-label="购买方式" value={fullSheet ? 'full_sheet' : 'custom'} onChange={e => {
+            const full = e.target.value === 'full_sheet';
+            setFullSheet(full);
+            if (full) { setWidth(2440); setHeight(1220); setColorId('wood_natural'); setSwatchImgError(false); }
+          }} className="w-full border border-slate-200 rounded-xl px-4 py-3 bg-slate-50 font-black text-slate-700">
+            <option value="custom">{language === 'cn' ? '定制尺寸（按平方米计价）' : language === 'jp' ? 'カスタムサイズ（㎡単価）' : 'Custom size (per m²)'}</option>
+            <option value="full_sheet">{language === 'cn' ? 'BBB 整张板（2440 × 1220 mm，按张计价）' : language === 'jp' ? 'BBB 原板（2440 × 1220 mm、枚単価）' : 'BBB full sheet (2440 × 1220 mm, per sheet)'}</option>
+          </select>
+        </div>
+      )}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         <div>
           <label className="block text-xs font-black text-slate-400 uppercase mb-2">{t.qq_thickness || '厚度'}</label>
@@ -385,6 +403,9 @@ const BoardQuoteEditor: React.FC<BoardQuoteEditorProps> = ({ language, product, 
             min={minWidth}
             max={maxWidth}
             step={1}
+            key={`width-${fullSheet}`}
+            disabled={fullSheet}
+            publishInvalid
             value={width}
             onChange={(e) => {
               const value = Number(e.target.value) || 0;
@@ -401,6 +422,9 @@ const BoardQuoteEditor: React.FC<BoardQuoteEditorProps> = ({ language, product, 
             min={minHeight}
             max={maxHeight}
             step={1}
+            key={`height-${fullSheet}`}
+            disabled={fullSheet}
+            publishInvalid
             value={height}
             onChange={(e) => {
               const value = Number(e.target.value) || 0;
@@ -441,6 +465,7 @@ const BoardQuoteEditor: React.FC<BoardQuoteEditorProps> = ({ language, product, 
         <div>
           <label className="block text-xs font-black text-slate-400 uppercase mb-2">{t.qq_color || '颜色'}</label>
           <select
+            disabled={fullSheet}
             value={colorId}
             onChange={(e) => {
               setColorId(e.target.value);
@@ -466,6 +491,7 @@ const BoardQuoteEditor: React.FC<BoardQuoteEditorProps> = ({ language, product, 
         </div>
       </div>
 
+      {isMarineBoard && <p className="text-xs font-bold text-slate-500">{language === 'cn' ? '海洋板最大尺寸：2440 × 1220 mm，可横竖放置。整张板为原色 BBB，按张计价。' : language === 'jp' ? '最大2440 × 1220 mm、縦横入替可能。原板は原色BBB、枚単価。' : 'Maximum 2440 × 1220 mm in either orientation. Full sheets are natural BBB, priced per sheet.'}</p>}
       {hasRangeError && (
         <div className="text-xs font-bold text-red-600">
           {isPegboard

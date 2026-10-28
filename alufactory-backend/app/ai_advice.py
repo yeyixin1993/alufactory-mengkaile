@@ -8,6 +8,10 @@ def advice(message):
     text = message.strip()
     cards = []
     answers = []
+    if re.search(r'海洋板|BBB', text, re.I) and re.search(r'整张|整板', text) and re.search(r'多少钱|价格|什么价|怎么卖', text) and not re.search(r'下单|加入|改成|换成|要\s*\d|买\s*\d', text):
+        prices = CATALOG['quickQuote']['MARINE_BOARD_FULL_SHEET_PRICE']
+        uv, plain = prices['marine_bbb_uv_film'], prices['marine_bbb_plain']
+        answers.append(f"BBB整张海洋板为原色，尺寸2440×1220mm。18mm两面UV清漆+覆膜{uv['18']}元/张，素板{plain['18']}元/张；12mm两面UV清漆+覆膜{uv['12']}元/张，素板{plain['12']}元/张。按张计价，所有会员同价，运费另算。定制裁切按原平方米价计费。")
     if re.search(r'攻丝.*(深|默认|多长|长度)|tapp.*depth', text, re.I):
         answers.append('型材端面攻丝深度统一为20mm。两端攻丝指左右两个端面加工，不是型材切割长度；多孔端面还需确认攻哪些孔位。')
     if re.search(r'截面图|壁厚|断面图|cross.section|wall thickness', text, re.I):

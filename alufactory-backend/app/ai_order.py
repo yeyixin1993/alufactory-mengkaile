@@ -29,6 +29,7 @@ def apply_configuration(original, config, quantity):
         row.update(width=config.get('width'),height=config.get('height'),thickness=config.get('thickness'),color=config.get('colorId'))
         if kind=='marine_board':
             row['marine_spec']=config.get('marineSpecId')
+            row['board_purchase_mode']=config.get('boardPurchaseMode','custom')
             if row['color']=='wood_natural': row['color']='natural'
             choices={c['id'] for c in CATALOG['marineColors']}|{'natural'}
         else: choices={c['id'] for c in CATALOG['colors']}
@@ -62,7 +63,7 @@ def cart_configuration(row, membership):
         colors=CATALOG['marineColors'] if kind=='marine_board' else CATALOG['colors']
         cfg['colorName']=next((c['name']['cn'] for c in colors if c['id']==cfg['colorId']),cfg['colorId'])
         if kind=='marine_board':
-            cfg.update(marineSpecId=s['marine_spec'],marineSpecName='BBB素板' if s['marine_spec']=='marine_bbb_plain' else 'BBB两面UV清漆+覆膜')
+            cfg.update(boardPurchaseMode=s.get('board_purchase_mode','custom'),marineSpecId=s['marine_spec'],marineSpecName='BBB素板' if s['marine_spec']=='marine_bbb_plain' else 'BBB两面UV清漆+覆膜')
         if kind=='pegboard':cfg.update(pegHolePattern='ikea',pegHolePatternName='宜家孔（竖向长圆孔）')
         if kind=='cabinet_door':
             h=s['height'];n=priced['hinge_count']

@@ -11,6 +11,10 @@ def product_kind(row):
 def describe(row):
     kind = product_kind(row)
     name = KINDS.get(kind, str(kind))
+    if kind == 'marine_board':
+        mode = 'BBB整张板（按张计价）' if row.get('board_purchase_mode') == 'full_sheet' else 'BBB定制裁切（按平方米计价）'
+        finish = '两面UV清漆+覆膜' if row.get('marine_spec') == 'marine_bbb_uv_film' else '素板' if row.get('marine_spec') == 'marine_bbb_plain' else '表面待确认'
+        return f"{name} / {mode} / {finish} / {row.get('width') or '?'} × {row.get('height') or '?'} × {row.get('thickness') or '?'}mm × {row.get('quantity') or '?'}张"
     if kind == 'accessory': return f"{row.get('name') or name} × {row.get('quantity') or '?'}件"
     if kind == 'frame': return f"{name} / 内宽{row.get('inner_width') or '?'} × 内高{row.get('inner_height') or '?'}mm × {row.get('quantity') or '?'}个"
     return f"{name} / {row.get('width') or '?'} × {row.get('height') or '?'} × {row.get('thickness') or '?'}mm × {row.get('quantity') or '?'}张"
@@ -34,9 +38,22 @@ def quote_material(row, membership, catalog, rounded):
     if kind in ('aluminum_plate','pegboard','marine_board','cabinet_door'):
         marine = kind == 'marine_board'
         door = kind == 'cabinet_door'
+        full_sheet = marine and row.get('board_purchase_mode') == 'full_sheet'
+        if marine and row.get('board_purchase_mode') not in (None, 'custom', 'full_sheet'):
+            questions.append('海洋板请选择定制裁切或BBB整张板。')
+        if full_sheet:
+            if row.get('color') not in (None, 'natural', 'wood_natural'):
+                questions.append('BBB整张板为原色；彩色需求请改为定制裁切计价。')
+            if (row.get('width') is not None and row.get('width') not in (2440,1220)) or (row.get('height') is not None and row.get('height') not in (2440,1220)) or (row.get('width') is not None and row.get('height') is not None and row['width'] == row['height']):
+                questions.append('BBB整张板固定2440×1220mm；其他尺寸请改为定制裁切。')
+            row.update(width=2440,height=1220,color='natural')
+        elif marine and not row.get('width') and not row.get('height'):
+            questions.append('海洋板需要定制裁切，还是2440×1220mm的BBB整张板？')
         if door: row['thickness'] = 2
         width = integer('width','宽度mm',1,rules['MAX_DOOR_WIDTH_MM'] if door else (2440 if marine else 2400))
-        height = integer('height','高度mm',1,rules['MAX_DOOR_HEIGHT_MM'] if door else (1220 if marine else 2400 if kind == 'pegboard' else 1200))
+        height = integer('height','高度mm',1,rules['MAX_DOOR_HEIGHT_MM'] if door else (2440 if marine else 2400 if kind == 'pegboard' else 1200))
+        if marine and width and height and min(width, height) > 1220:
+            questions.append('海洋板短边不能超过1220mm，长边不能超过2440mm，可横竖放置。')
         if kind == 'pegboard' and width and height and min(width, height) > 1200:
             questions.append('洞洞板短边不能超过1200mm，长边不能超过2400mm。')
         thickness = row.get('thickness')
@@ -60,7 +77,7 @@ def quote_material(row, membership, catalog, rounded):
         if not questions:
             area = width*height/1e6
             charged = max(rules['MIN_BOARD_CHARGE_AREA_SQM'],area)
-            unit = rounded(charged*rate)
+            unit = rules['MARINE_BOARD_FULL_SHEET_PRICE'][spec_id][str(thickness)] if full_sheet else rounded(charged*rate)
             if door:
                 hinges = 2 if height <= 1500 else 3 if height <= 2000 else 4 if height <= 2500 else 5
                 unit = rounded(unit + hinges * rules['DOOR_HINGE_UNIT_PRICE'])

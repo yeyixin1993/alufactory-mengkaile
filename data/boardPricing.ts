@@ -20,3 +20,9 @@ export const DOOR_HINGE_UNIT_PRICE = 10;
 
 // Temporarily offered to all customer tiers, including VIP+.
 export const ENABLED_METAL_BOARD_THICKNESSES: readonly number[] = [2, 5];
+
+// Natural BBB full sheets, 2440 × 1220 mm; prices are per sheet, not per m².
+export const MARINE_BOARD_FULL_SHEET_PRICE: Record<'marine_bbb_uv_film' | 'marine_bbb_plain', Record<number, number>> = {
+  marine_bbb_uv_film: { 12: 258, 18: 388 },
+  marine_bbb_plain: { 12: 226, 18: 339 },
+};
