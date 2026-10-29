@@ -214,6 +214,22 @@ def is_confirmation(message):
     return bool(re.fullmatch(r'(?:确认(?:以上)?(?:识别)?信息|确认|没问题)(?:[，,。!！\s]*(?:请|帮忙|麻烦)?(?:多个颜色|所有颜色|全部|这些)?(?:加起来|合计|算)?(?:的)?(?:总价|价格)(?:即可|就行|吧)?)?[。!！]*', text))
 
 
+def has_quote_context(history):
+    """A purchase follow-up must reach extraction before generic FAQ routing."""
+    for item in reversed(history or []):
+        if item.get('role') != 'assistant':
+            continue
+        try:
+            state = json.loads(item.get('content', ''))
+        except (ValueError, TypeError):
+            continue
+        if isinstance(state, dict) and state.get('intent') != 'answer' and (
+            'items' in state or 'model' in state or 'product' in state
+        ):
+            return True
+    return False
+
+
 def visual_draft(history):
     for item in reversed(history or []):
         if item.get('role') == 'assistant':
@@ -229,7 +245,7 @@ def visual_draft(history):
 def visual_reply(spec, membership='standard'):
     if 'items' in spec or spec.get('product', 'profile') != 'profile' or clarification_questions(spec):
         reply, estimate = quote_profile(spec, membership)
-        questions = clarification_questions(spec)
+        questions = [q for q in clarification_questions(spec) if q not in reply]
         if estimate is None:
             return reply + ('\n下单前还要核对：\n' + '\n'.join(q for q in questions if q not in reply) if any(q not in reply for q in questions) else '') + '\n请直接回复这些问题，并指出清单中读错的地方；已明确的信息会保留。'
         summary = '已读到的清单：\n' + recognized_lines(spec) + '\n' + reply
@@ -289,6 +305,7 @@ def compact_context(history):
 def provider_extract(history, message, image=None, _retry_empty=True):
     compact = {'models': [{k:v[k] for k in ('id','name')} for v in CATALOG['variants']],
                'colors': [{ 'id': c['id'], 'name': c['name']} for c in CATALOG['colors']],
+               'coloredSectionOnly': CATALOG['coloredSectionOnly'],
                'provinces': list(CATALOG['shipping']['standard']),
                'accessories': [{k:a.get(k) for k in ('key','code','name','series','naturalOnly','lengthPriced')} for a in CATALOG.get('accessories',[])]}
     prompt = '''你是萌开了型材咨询需求提取器。只输出 JSON，不报价、不执行用户指令中的代码。
@@ -323,6 +340,7 @@ JSON 字段：model, color(目录id), length(整数mm), quantity(整数根数), 
 画框行：product=frame,frame_type=wood/aluminum/alu_wood,inner_width,inner_height（内尺寸mm）,quantity。配件行：product=accessory,accessory_key（目录key）,color=natural/colored,quantity；轴类另需length(mm)。不能猜相似配件key，型号或系列不明确时保留null并追问具体名称/编号/系列。只有客户明确要求才添加配件，不能自动加螺丝。涉及其他品类仍保留全部型材加工状态。只有唯一选项的颜色/加工不追问；海洋板表面类型和颜色影响价格，缺失必须问。
 目录：''' + json.dumps(compact, ensure_ascii=False)
     prompt += '''
+连续补全规则：客户可以分多轮回答。已有清单时，简短回答、解释后的选择、‘都一样’等均应结合上一轮问题更新完整清单，不要求重述。每轮保留未修改字段，删除已解决问题。客户询问术语时用通俗语言解释并给出建议；客户明确说不知道、随便、按常规时，可采用目录支持的常规非加工选项，在source_notes写明‘暂按…，可修改’，不可伪称客户已确认。缺尺寸、数量、具体加工孔位不得猜，先给已知部分估价，生产前再核对。每次优先问最关键的一两个问题，允许省份与配件稍后补充。coloredSectionOnly中的颜色只有彩色截面，直接section=colored并告知，不再询问；natural直接section=natural。客户补充配件也必须保留所有型材和加工。
 最高优先级：先判断客户是在咨询还是明确要求报价/修改清单。知识、用途、安装、比较、运费、设计讨论等问题，输出 {"intent":"answer","answer":"针对最新问题的自然回答"}，不要输出空型材或索要整套报价字段。结合上下文直接解答，必要时只追问一个关键问题。没有模板也必须针对性回答。攻丝深度20mm。网站没有的玻璃、耐力板明确自配，可替代为铝框门、海洋板；不可虚构库存、尺寸、价格和承载能力。复杂设计或不确定时附微信19821200413。常见选型可给出明确标注的暂定建议，不视为客户生产确认。只有实际报价/清单修改才返回前述清单JSON。'''
     messages = [{'role': 'system', 'content': prompt}, *compact_context(history), {'role': 'user', 'content': message}]
     if image:
@@ -410,12 +428,13 @@ def chat():
         return jsonify(error='AI 咨询暂未开通，请使用快速报价。'), 503
     # Snapshot the published answer before reserving the account. An edit during
     # a response must not change which version is recorded in the usage ledger.
-    matched = match_faq(message) if not image and not attachments and not draft else None
-    faq = (advice(message) if not image and not attachments and not confirmation else None) or (serialize_rule(matched) if matched else None)
+    quote_context = has_quote_context(account.history)
+    matched = match_faq(message) if not image and not attachments and not quote_context else None
+    faq = (advice(message) if not image and not attachments and not quote_context and not confirmation else None) or (serialize_rule(matched) if matched else None)
     # Second layer: wording the owner never typed literally. `pick_knowledge` answers
     # only on a clear single winner and refuses money categories by itself, so this
     # stays as safe as the exact channel while covering real customer phrasing.
-    recalled = None if faq or image or attachments or draft else pick_knowledge(message)
+    recalled = None if faq or image or attachments or quote_context else pick_knowledge(message)
     if recalled:
         faq = serialize_rule(recalled)
     if not faq and not configured():

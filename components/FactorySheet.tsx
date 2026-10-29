@@ -354,11 +354,11 @@ const FactorySheet: React.FC<FactorySheetProps> = ({ cart, user, language, order
       const rate = SHIPPING_RATES_AN[province] || { first: 50, next: 3 };
       return weightKg <= 15 ? rate.first : rate.first + Math.ceil(weightKg - 15) * rate.next;
     } else if (method === 'sf') {
-      const rate = SHIPPING_RATES_SF[province] || { first: 15, next: 5 };
+      const rate = SHIPPING_RATES_SF[province] || { first: 18, next: 5 };
       const rw = Math.max(1, Math.ceil(weightKg));
       return rate.first + (rw - 1) * rate.next + olFee;
     } else {
-      const rate = SHIPPING_RATES[province] || { first: 18, next: 5 };
+      const rate = SHIPPING_RATES[province] || { first: 12, next: 5 };
       const rw = Math.max(1, Math.ceil(weightKg));
       return rate.first + (rw - 1) * rate.next + olFee;
     }

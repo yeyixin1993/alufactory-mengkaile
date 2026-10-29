@@ -29,6 +29,7 @@ from openpyxl.worksheet.datavalidation import DataValidation
 ROOT = Path("/Users/eliye/mengkaile/alufactory-mengkaile")
 OUTPUT_XLSX = ROOT / "outputs/萌开了家居_运费价格表_普通快递-顺丰-安能.xlsx"
 CONSTANTS = ROOT / "constants.ts"
+APP_TSX = ROOT / "App.tsx"
 TITLE = "萌开了家居 运费价格表（普通快递·顺丰·安能）"
 EXPORT_DATE = "2026-10-25"
 ANNENG_FREE_KG = 15  # 安能首重包含的重量（≤15kg 一口价）
@@ -61,6 +62,21 @@ thin_box = Border(left=thin_side, right=thin_side, top=thin_side, bottom=thin_si
 MONEY = "¥#,##0.00"
 
 # ---------------------------------------------------------------- 读取费率
+def _fb(var_name: str) -> tuple:
+    """从 App.tsx 的 calcShippingForMethod 里现读某家「省份查不到时的兜底价」，避免与代码漂移。"""
+    app = APP_TSX.read_text(encoding="utf-8")
+    pattern = (
+        re.escape(f"{var_name}[province] || {{ first: ")
+        + r"([\d.]+)"
+        + re.escape(", next: ")
+        + r"([\d.]+)"
+    )
+    m = re.search(pattern, app)
+    if not m:
+        raise SystemExit(f"App.tsx 里找不到 {var_name} 的兜底价")
+    return float(m.group(1)), float(m.group(2))
+
+
 def read_rates():
     text = CONSTANTS.read_text(encoding="utf-8")
 
@@ -79,8 +95,12 @@ def read_rates():
     keys_std = [k for k, _, _ in std]
     if keys_std != [k for k, _, _ in sf] or keys_std != [k for k, _, _ in an]:
         raise SystemExit("三套费率的地区顺序不一致，请核对 constants.ts")
-    # App.tsx calcShippingForMethod 里省份查不到时的兜底值
-    fallback = {"standard": (18.0, 5.0), "sf": (15.0, 5.0), "anneng": (50.0, 3.0)}
+    # App.tsx calcShippingForMethod 里省份查不到时的兜底值（现读源码，避免与代码漂移）
+    fallback = {
+        "standard": _fb("SHIPPING_RATES"),
+        "sf": _fb("SHIPPING_RATES_SF"),
+        "anneng": _fb("SHIPPING_RATES_AN"),
+    }
     return std, sf, an, fallback
 
 
@@ -371,9 +391,9 @@ notes = [
     ("下单时实际收多少", "购物车会在三者里自动取最低价给客户；客户选「到付」时系统运费为 0，收货时自付。"),
     ("典型拐点", demo("浙江")),
     ("港澳台与境外", "不在本表 31 个地区内。走转运仓发货：运费按转运仓所在省份计算，内地到转运仓段由我方承担，转运仓到境外段由客户承担。"),
-    ("⚠ 需核对 1", f"安能山西为 ¥{_an['山西'][0]:.0f} 首重（¥{_an['山西'][1]} 续重），而周边陕西 ¥{_an['陕西'][0]:.0f}、河南 ¥{_an['河南'][0]:.0f}、河北 ¥{_an['河北'][0]:.0f}，山西明显异常，疑为录入笔误。"),
-    ("⚠ 需核对 2", f"江苏顺丰 ¥{_sf['江苏'][0]:.0f}/¥{_sf['江苏'][1]:.0f}，而同区域的上海、浙江、安徽都是 ¥18 起；山西顺丰 ¥{_sf['山西'][0]:.0f}/¥{_sf['山西'][1]:.0f}，同片陕西 ¥{_sf['陕西'][0]:.0f}/¥{_sf['陕西'][1]:.0f}，两处都偏高。"),
-    ("⚠ 需核对 3", f"省份在表里查不到时，系统兜底用「普通 ¥{FALLBACK['standard'][0]:.0f}/¥{FALLBACK['standard'][1]:.0f}、顺丰 ¥{FALLBACK['sf'][0]:.0f}/¥{FALLBACK['sf'][1]:.0f}、安能 ¥{FALLBACK['anneng'][0]:.0f}/¥{FALLBACK['anneng'][1]:.0f}」——顺丰兜底价低于绝大多数真实省份（普遍 ¥18 起），一旦出现未匹配省份会少收运费。"),
+    ("✅ 已修正（2026-10-29）", f"安能山西原录 ¥110，店主确认应为 ¥38（与福建、广东同为 38 档），已改 constants.ts；江苏顺丰由 ¥19/¥7 改为 ¥18/¥6（同上海、浙江）；本表已是修正后的价格。"),
+    ("⚠ 仍需核对 1", f"山西顺丰 ¥{_sf['山西'][0]:.0f}/¥{_sf['山西'][1]:.0f}，同片陕西 ¥{_sf['陕西'][0]:.0f}/¥{_sf['陕西'][1]:.0f}，偏高 1 元，至今未确认是否笔误。"),
+    ("✅ 兜底价已修正（2026-10-29）", f"省份在表里查不到时，系统兜底用「普通 ¥{FALLBACK['standard'][0]:.0f}/¥{FALLBACK['standard'][1]:.0f}、顺丰 ¥{FALLBACK['sf'][0]:.0f}/¥{FALLBACK['sf'][1]:.0f}、安能 ¥{FALLBACK['anneng'][0]:.0f}/¥{FALLBACK['anneng'][1]:.0f}」——顺丰兜底首重原为 ¥15、普通兜底首重原为 ¥18（均按店主 10-29 确认调整），现在不会再因未匹配省份而明显多收/少收运费。"),
 ]
 row = 3
 for label, text in notes:

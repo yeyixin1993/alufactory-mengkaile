@@ -35,7 +35,8 @@
 
 - 配件目录唯一来源 `data/accessoryCatalog.ts`（`CUSTOMER_ACCESSORY_ROWS` 过滤，`ACCESSORY_CODE_IMAGE_MAP` 归 catalog，**实物 JPG 绝不被 SVG 覆盖**）。
 - 设计器：连接配件两级选择；省份下拉预览到手价（`utils/designerLandedEstimate.ts`，**省份不进设计文件**）；配件行用实物照片（`designerAccessoryImages.ts`，只有 1/2/5/7L/7T/9.jpg）。导入件计价 `utils/designerComponentPricing.ts`、螺丝 `designerScrewPricing.ts`、链接表 `data/designerSourceAccessoryLinks.ts`。**¥952 落地基线**已冻结（凳子发浙江，安能 ¥33）。
-- **运费（三种方式，`constants.ts` + `App.tsx: calcShippingForMethod`）**：普通/顺丰 = 首重 + (ceil(kg)−1)×续重，**型材 >1500mm 每件 +¥20**；**安能 = ≤15kg 首重一口价，超过部分 ceil(kg−15)×续重，不收超长费**；到付 = 0。购物车自动取最低。费率表导出脚本 `outputs/.萌开了家居_快递运费价格表_普通快递与顺丰.ref/build.py`（成品 `outputs/萌开了家居_运费价格表_普通快递-顺丰-安能.xlsx`）。**待店主核对的疑点**：安能山西 ¥110（周边 33~38）、江苏顺丰 19/7、山西顺丰 19/6、省份兜底值偏低（顺丰 ¥15 vs 普遍 ¥18）。
+- **运费（三种方式，`constants.ts` + `App.tsx: calcShippingForMethod`）**：普通/顺丰 = 首重 + (ceil(kg)−1)×续重，**型材 >1500mm 每件 +¥20**；**安能 = ≤15kg 首重一口价，超过部分 ceil(kg−15)×续重，不收超长费**；到付 = 0。购物车自动取最低。费率表导出脚本 `outputs/.萌开了家居_快递运费价格表_普通快递与顺丰.ref/build.py`（成品 `outputs/萌开了家居_运费价格表_普通快递-顺丰-安能.xlsx`）。2026-10-29 店主确认已修：安能山西 110→38、江苏顺丰 19/7→18/6、**省份兜底 = 普通 12/5、顺丰 18/5**（兜底字面量每个快递 channel 都有 3 处：App.tsx:1100/1109/1114、QuickQuote.tsx:163-165、FactorySheet.tsx:354/357/361，改动必须三处同步）；价表脚本 `build.py` 的兜底值已改为现读 App.tsx，不再手抄。**仅剩山西顺丰 19/6 待确认**（陕西 18/5）。
+- **运费表成品更新在资料库云端（2026-10-29 用户指定）**：node `3wRrX7AQby1XA8HGKx8XXC` / https://www.workbuddy.cn/space/d/3wRrX7AQby1XA8HGKx8XXC ，改法 = 本地脚本重生成后用 `drive/upload_drive_file.py --node-id 3wRrX7AQby1XA8HGKx8XXC` 整体替换（保同一链接）。**不要在云端/本地 office 里直接手改单元格**（会把公式变成单格 array 形式）。
 - 制造门禁 `blocking` vs `advisories`（`decideDesignerReleaseGate` 纯函数，声明一变确认失效）；**几何容差 1 µm**；`toCartItems` 每个 kind 都要分支（漏一个线上崩）。型材按长度计价、加工费按件、20–100mm 短件 +¥5/根、板材 0.2m² 起、加工报价非 VIP+ 且 ≤100mm +¥5/根、长度上限 3000mm。库存 UTC、界面东八区。
 - **加工单价唯一出处 `utils/quickQuoteProfile.ts:10`**：攻丝 ¥1.5/端、通孔 ¥1、沉头孔 ¥1.8、螺纹孔 ¥1.8、45°斜切 ¥1/刀（店主 2026-10-21 确认螺纹孔是 1.8）。
 - **加工公差（店主确认）**：开孔正公差 +1~3 丝；光轴负公差 −3~5 丝（1 丝 = 0.01mm），外购轴的公差不替厂商保证。

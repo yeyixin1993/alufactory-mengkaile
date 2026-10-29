@@ -160,8 +160,8 @@ const calcShippingOptionsByProvince = (
 ): ShippingOption[] => {
   const overlengthFee = hasOverlength ? 20 : 0;
 
-  const standardRate = SHIPPING_RATES[province] || { first: 18, next: 5 };
-  const sfRate = SHIPPING_RATES_SF[province] || { first: 15, next: 5 };
+  const standardRate = SHIPPING_RATES[province] || { first: 12, next: 5 };
+  const sfRate = SHIPPING_RATES_SF[province] || { first: 18, next: 5 };
   const annengRate = SHIPPING_RATES_AN[province] || { first: 50, next: 3 };
 
   const roundedWeight = Math.max(1, Math.ceil(totalWeightKg));

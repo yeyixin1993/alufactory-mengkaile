@@ -45,10 +45,30 @@ def recognized_lines(spec):
         lines.append(line)
     return '\n'.join(lines)
 
+def apply_catalog_defaults(spec):
+    rows = spec.get('items') if isinstance(spec.get('items'), list) else [spec]
+    for row in rows:
+        if not isinstance(row, dict) or product_kind(row) != 'profile':
+            continue
+        row['color'] = normalize_profile_color(row.get('color'))
+        if row.get('color') in CATALOG['coloredSectionOnly']:
+            row['section'] = 'colored'
+        elif row.get('color') == 'natural':
+            row['section'] = 'natural'
+    # Only remove finish questions when every profile has a catalog-fixed finish.
+    profiles = [r for r in rows if isinstance(r, dict) and product_kind(r) == 'profile']
+    if profiles and all(r.get('color') in [*CATALOG['coloredSectionOnly'], 'natural'] for r in profiles):
+        spec['clarifications'] = [q for q in spec.get('clarifications', [])
+            if not (isinstance(q, dict) and (q.get('field') == 'section' or
+                re.search(r'截面.*本色.*彩色|截面.*彩色.*本色|切口.*本色.*彩色', q.get('question', ''))))]
+    return spec
+
+
 def normalize_extracted_spec(spec):
     """Keep annotation rows out of the BOM and preserve explicit variant semantics."""
     if product_kind(spec) == 'profile':
         spec['color'] = normalize_profile_color(spec.get('color'))
+    apply_catalog_defaults(spec)
     items = spec.get('items')
     if not isinstance(items, list): return spec
     if not items: spec['items'] = [dict((k,v) for k,v in spec.items() if k != 'items')]; items = spec['items']

@@ -36,6 +36,20 @@ class AIChatTest(unittest.TestCase):
     def chat(self, user='vip', index=1, token=''):
         return self.client.post('/api/ai/chat', headers=self.headers(user) if user else {}, json={'visitor_token': token, 'message': '2020粉色两根', 'request_id': f'00000000-0000-4000-8000-{index:012d}'})
 
+    @patch('app.routes.ai_chat.provider_extract', return_value=(json.dumps(SPEC), 0, {}))
+    def test_accessory_clarification_reaches_extraction(self, provider):
+        self.status()
+        account = db.session.get(AIAccount, 'u:vip')
+        account.history = [{'role': 'assistant', 'content': json.dumps({**SPEC, '_visual_pending': True})}]
+        db.session.commit()
+        message = 'A面，30mm处。三通的确是9号连接件，三通螺丝是9号配套螺丝，m6*20半圆头螺丝是对的。配件都要彩色'
+        response = self.client.post('/api/ai/chat', headers=self.headers(), json={
+            'message': message, 'request_id': '00000000-0000-4000-8000-000000000099'})
+        self.assertEqual(response.status_code, 200)
+        provider.assert_called_once()
+        self.assertEqual(provider.call_args.args[1], message)
+        self.assertNotEqual(response.json.get('rule_id'), 'sales-advice')
+
     def test_grant_and_upgrade_once(self):
         self.assertEqual(self.status().json['balance_cny'], 5)
         self.assertEqual(self.status().json['balance_cny'], 5)

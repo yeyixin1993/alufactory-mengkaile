@@ -1106,12 +1106,12 @@ const Cart: React.FC<{
       }
     } else if (method === 'sf') {
       // 顺丰: 首重1kg, 续重每kg
-      const rate = SHIPPING_RATES_SF[province] || { first: 15, next: 5 };
+      const rate = SHIPPING_RATES_SF[province] || { first: 18, next: 5 };
       const roundedWeight = Math.max(1, Math.ceil(totalWeightKg));
       return { fee: rate.first + (roundedWeight - 1) * rate.next + overlength, overlength };
     } else {
       // 普通快递: 首重1kg, 续重每kg
-      const rate = SHIPPING_RATES[province] || { first: 18, next: 5 };
+      const rate = SHIPPING_RATES[province] || { first: 12, next: 5 };
       const roundedWeight = Math.max(1, Math.ceil(totalWeightKg));
       return { fee: rate.first + (roundedWeight - 1) * rate.next + overlength, overlength };
     }

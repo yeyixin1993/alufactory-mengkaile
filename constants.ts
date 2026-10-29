@@ -1266,7 +1266,7 @@ export const SHIPPING_RATES_SF: Record<
   江西: { first: 18, next: 5 },
   天津: { first: 18, next: 5 },
   安徽: { first: 18, next: 5 },
-  江苏: { first: 19, next: 7 },
+  江苏: { first: 18, next: 6 },
   上海: { first: 18, next: 6 },
   浙江: { first: 18, next: 6 },
 };
@@ -1294,7 +1294,7 @@ export const SHIPPING_RATES_AN: Record<
   福建: { first: 38, next: 1.4 },
   广东: { first: 38, next: 1.5 },
   山东: { first: 30, next: 1 },
-  山西: { first: 110, next: 1.5 },
+  山西: { first: 38, next: 1.5 },
   陕西: { first: 38, next: 1.5 },
   北京: { first: 35, next: 1.4 },
   河北: { first: 33, next: 1.1 },

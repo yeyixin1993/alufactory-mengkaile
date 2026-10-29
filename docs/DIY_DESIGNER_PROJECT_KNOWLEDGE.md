@@ -786,3 +786,7 @@ Save separate conversations in the server database, with request membership and 
 2026-10-28 同步快速报价和AI：快速报价逐行选择定制/整张，整张自动填尺寸、原色，复用统一单张价。AI使用board_purchase_mode=custom/full_sheet，明确整张时补齐尺寸和原色，仅追问缺失的厚度、表面和数量；咨询价格直接答四档价格。后端校验尺寸、颜色冲突，按实际面积计算重量及运费，配置确认和购物车往返保留购买方式。定制尺寸允许旋转，不能静默截断尺寸或自动套整张价。
 
 2026-10-28 10号新增结构螺丝彩色价修正：M6×30圆柱头、M6×20半圆头、M6×8沉头（2020）本色0.50元、彩色1.00元；M8×45圆柱头、M8×20半圆头（3030）本色0.75元、彩色1.25元。生成目录的结构螺丝统一彩色比对应本色每颗加0.50元，零售和批量档均适用，内部系列兜底行同步；本色价格与其他已手工定价目录行保持不变。快速报价、配件购物车、画册及AI目录使用同一价格源。
+
+### AI progressive clarification (2026-10-29)
+
+Maintain the complete current BOM across incremental replies and explanatory questions. Remove resolved questions and prioritize one or two useful questions per turn. Catalog-only finishes are persisted in the specification and stated rather than requested (including purple colored sections). When customers explicitly delegate a routine non-machining choice, offer a catalog-supported provisional choice with a visible note and allow correction. Never fabricate dimensions, quantities or machining coordinates; quote known portions and defer production details to review. Shipping and optional accessories can be supplied later.
