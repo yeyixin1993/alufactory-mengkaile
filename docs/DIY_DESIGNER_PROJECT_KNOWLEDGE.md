@@ -790,3 +790,7 @@ Save separate conversations in the server database, with request membership and 
 ### AI progressive clarification (2026-10-29)
 
 Maintain the complete current BOM across incremental replies and explanatory questions. Remove resolved questions and prioritize one or two useful questions per turn. Catalog-only finishes are persisted in the specification and stated rather than requested (including purple colored sections). When customers explicitly delegate a routine non-machining choice, offer a catalog-supported provisional choice with a visible note and allow correction. Never fabricate dimensions, quantities or machining coordinates; quote known portions and defer production details to review. Shipping and optional accessories can be supplied later.
+
+
+### 2026-10-31 — 衣柜小尺寸与零中间层板
+衣柜三种框架的长、宽/深、高输入及生成下限统一为100mm，上限仍3000mm。中间层板层数允许0，不包含顶板和底板；0时每列只生成顶底两块板。界面统一称“中间层板层数”。层数随高度的上限公式保留，但最低可为0；列数规则不变。

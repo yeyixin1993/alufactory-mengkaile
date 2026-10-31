@@ -155,3 +155,16 @@ for (const frame of ['2040_2020', '2047_2020', '3030'] as const) {
   }
 }
 console.log('Wardrobe sealed variants, outward faces, machining and connection checks passed.');
+
+for (const frame of ['2040_2020', '2047_2020', '3030'] as const) {
+  for (const [length, depth, height] of [[100, 100, 100], [300, 170, 800]]) {
+    const payload = buildWardrobeTemplate(length, depth, height, 0, 1, frame);
+    assert.equal(payload.summary.lengthMm, length);
+    assert.equal(payload.summary.widthMm, depth);
+    assert.equal(payload.summary.heightMm, height);
+    assert.equal(payload.summary.storageLayers, 0);
+    assert.equal(payload.items.filter(item => item.kind === 'marine_board').length, 2);
+    assert.equal(payload.items.filter(item => item.kind === 'profile').length, getWardrobeProfileCount(1, 0, frame));
+  }
+}
+console.log('100mm minimum dimensions and zero intermediate shelves passed for every wardrobe frame.');

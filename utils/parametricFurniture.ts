@@ -165,15 +165,15 @@ export const getShelfSupportUnitPrice = (lengthMm: number, finish: ProfileFinish
 );
 
 export const getWardrobeStorageLayerLimit = (heightInput: number) => {
-  const heightMm = clampInteger(heightInput, 500, MAX_FURNITURE_PROFILE_MM);
-  return Math.max(1, Math.min(
+  const heightMm = clampInteger(heightInput, 100, MAX_FURNITURE_PROFILE_MM);
+  return Math.max(0, Math.min(
     WARDROBE_MAX_STORAGE_LAYERS,
     Math.floor((heightMm - 40) / WARDROBE_MIN_STORAGE_CLEARANCE_MM) - 1,
   ));
 };
 
 export const getWardrobeColumnLimit = (lengthInput: number, frame: WardrobeFrameOption = '2040_2020') => {
-  const lengthMm = clampInteger(lengthInput, 400, MAX_FURNITURE_PROFILE_MM);
+  const lengthMm = clampInteger(lengthInput, 100, MAX_FURNITURE_PROFILE_MM);
   return Math.max(1, Math.min(
     WARDROBE_MAX_COLUMNS,
     Math.floor((lengthMm - (frame === '3030' ? 30 : 20)) / (frame === '3030' ? 120 : WARDROBE_MIN_COLUMN_PITCH_MM)),
@@ -182,7 +182,7 @@ export const getWardrobeColumnLimit = (lengthInput: number, frame: WardrobeFrame
 
 export const getWardrobeProfileCount = (columnsInput: number, storageLayersInput: number, frame: WardrobeFrameOption = '2040_2020') => {
   const columns = clampInteger(columnsInput, 1, WARDROBE_MAX_COLUMNS);
-  const storageLayers = Math.max(1, Math.round(Number(storageLayersInput) || 1));
+  const storageLayers = Math.max(0, Math.round(Number(storageLayersInput) || 0));
   const baseProfileCount = 4 * columns + 8;
   const storageProfilesPerLayer = 3 * columns + 1;
   return frame === '3030'
@@ -541,10 +541,10 @@ const buildWardrobeFrameTemplate = (
   frame: WardrobeFrameOption = '2040_2020',
   frontSetbackMm = 0,
 ): ParametricTemplatePayload => {
-  const lengthMm = clampInteger(lengthInput, 400, MAX_FURNITURE_PROFILE_MM);
-  const widthMm = clampInteger(widthInput, 300, MAX_FURNITURE_PROFILE_MM);
-  const heightMm = clampInteger(heightInput, 500, MAX_FURNITURE_PROFILE_MM);
-  const storageLayers = clampInteger(storageLayersInput, 1, getWardrobeStorageLayerLimit(heightMm));
+  const lengthMm = clampInteger(lengthInput, 100, MAX_FURNITURE_PROFILE_MM);
+  const widthMm = clampInteger(widthInput, 100, MAX_FURNITURE_PROFILE_MM);
+  const heightMm = clampInteger(heightInput, 100, MAX_FURNITURE_PROFILE_MM);
+  const storageLayers = clampInteger(storageLayersInput, 0, getWardrobeStorageLayerLimit(heightMm));
   const columns = clampInteger(columnsInput, 1, getWardrobeColumnLimit(lengthMm, frame));
   const is2047 = frame === '2047_2020';
   if (frame === '3030') return build3030Wardrobe(lengthMm, widthMm, heightMm, storageLayers, columns, frontSetbackMm);

@@ -43,7 +43,7 @@ const COPY = {
     depthLabel: '柜深',
     wardrobeTitle: '参数化衣柜框架', wardrobeHint: '可选择N列，系统沿正面总长平均分配每列宽度；每列每个收纳层生成完整四边层框和一块内嵌12mm UV层板，相邻列共享中间深度横杆。任一型材最长不超过3000mm，进入设计器后会自动启用柜门。',
     length: '长 (mm)', width: '宽/深 (mm)', height: '高 (mm)',
-    wardrobeLayers: '收纳层数', wardrobeColumnWidth: '平均列宽', wardrobeGenerated: '实际型材数量',
+    wardrobeLayers: '中间层板层数', wardrobeColumnWidth: '平均列宽', wardrobeGenerated: '实际型材数量',
     profileSummary: '型材配置', machiningSummary: '加工配置',
     calligraphyProfiles: '全部2020；最底和最顶各有一层与横梁同高的框架深度梁且不装层板托；中间每层每道分隔线共用一根420mm承托梁并安装层板托；顶部为12mm海洋板，超过2440mm时在型材分隔线上自动分成两片。',
     calligraphyMachining: '5层柜共有底框+5层篮筐承托+顶框共7层深度梁；孔位从底端130mm起按130mm递增，最后一孔距立柱顶端65mm；原框架型材两端攻丝并默认配螺丝；每层每列背面另加同高2020横梁，两端使用1号角码，不打孔攻丝。',
@@ -63,7 +63,7 @@ const COPY = {
     depthLabel: 'Depth',
     wardrobeTitle: 'Parametric wardrobe frame', wardrobeHint: 'Choose N columns and the system divides the front length evenly. Every storage level in every column receives a complete four-sided frame and an inset 12mm UV shelf board, with adjacent columns sharing the middle depth rail. No profile may exceed 3000 mm. Cabinet doors are enabled automatically in the designer.',
     length: 'Length (mm)', width: 'Width/depth (mm)', height: 'Height (mm)',
-    wardrobeLayers: 'Storage levels', wardrobeColumnWidth: 'Average column width', wardrobeGenerated: 'Total profiles',
+    wardrobeLayers: 'Intermediate shelf levels', wardrobeColumnWidth: 'Average column width', wardrobeGenerated: 'Total profiles',
     profileSummary: 'Profile configuration', machiningSummary: 'Machining',
     calligraphyProfiles: 'All 2020. Frame-only depth rails sit level with the bottom and top cross rails and receive no shelf supports. Every intermediate basket level has one shared 420 mm support rail per divider. The 12 mm marine-board top is split on a supported profile divider when the cabinet exceeds 2440 mm.',
     calligraphyMachining: 'A five-layer cabinet has seven depth levels. Upright holes start 130 mm from the bottom, repeat every 130 mm, and the final hole is 65 mm from the upright top. Original frame profiles are tapped at both ends with screws prefilled. Each intermediate level has one rear 2020 rail per bay, joined to posts by No.1 brackets at both ends without drilling or tapping.',
@@ -83,7 +83,7 @@ const COPY = {
     depthLabel: '奥行',
     wardrobeTitle: 'パラメトリックワードローブ枠', wardrobeHint: 'N列を選ぶと正面全長を均等に分割します。各列の各収納段に完全な四辺棚枠と12mm UV棚板を内蔵し、隣接列は中央の奥行材を共有します。形材は最長3000mmで、デザイナーでは扉機能が自動で有効になります。',
     length: '長さ (mm)', width: '幅／奥行 (mm)', height: '高さ (mm)',
-    wardrobeLayers: '収納段数', wardrobeColumnWidth: '平均列幅', wardrobeGenerated: '形材の合計本数',
+    wardrobeLayers: '中間棚板の段数', wardrobeColumnWidth: '平均列幅', wardrobeGenerated: '形材の合計本数',
     profileSummary: 'プロファイル構成', machiningSummary: '加工構成',
     calligraphyProfiles: '全て2020。最下部と最上部は横材と同じ高さの枠用奥行材で棚受けなし。中間の各かご段は仕切り線ごとに420mm棚受け材を1本共有。12mmマリンボード天板は2440mmを超える場合、形材仕切り上で2枚に分割します。',
     calligraphyMachining: '5段棚は下枠＋かご5段＋上枠の計7段。縦柱の穴は下端130mmから130mm間隔で、最後の穴から上端までは65mm。既存枠材は両端タップし、ねじを初期配置。各中間段・各列の背面に同じ高さの2020横材を追加し、両端を1号ブラケットで柱に接続します。追加横材は穴あけ・タップ不要です。',
@@ -185,7 +185,7 @@ const StandardFurnitureConfigurator: React.FC<{
         machining: { cn: '顶部横梁压立柱，按2047两侧端孔27mm中心距连接；顶部深度梁孔距端面17mm。中间层默认齐平，仅安装大弯柜门后前横梁内退27mm，以1号角码接立柱内侧槽；层板缩短27mm，层板托同步调整，避让大弯柜门。顶底框和后横梁不动，底端中央孔攻M8安装底部配件。', en: 'Top rails cap the posts, matching the 27mm outer-bore spacing; top depth-rail holes are 17mm from each end. Intermediate front rails are flush by default and recess 27mm only after inset doors are installed onto the inner post grooves using No.1 brackets; boards shorten 27mm and supports follow for inset doors. Top/bottom frames and rear rails stay unchanged.', jp: '上枠は柱端に重ね、端孔の27mmピッチに合わせます。上部奥行材の穴位置は端面から17mm。中間前横材は標準で面一。インセット扉を取り付けた場合のみ27mm後退し、柱の内側溝に1号ブラケットで接続。棚板と棚受けも調整し、インセット扉の空間を確保します。上下枠と後横材は変更しません。' }[language],
       }
       : {
-        profiles: { cn: '全3030框架，复用3.0展示架的柜体结构，保留衣柜等分列数与收纳层数。中间层默认齐平，仅安装大弯柜门后前横梁内退30mm，以5号隐藏角码连接深度梁，为大弯门预留空间；中间层板前缘同步后退30mm。18mm海洋板全部内嵌，每板8只18mm专用层板托（暂定¥1.7/只），不配置抽屉。按实际材料和加工计价。', en: 'All-3030 cabinet frame shared with the 3.0 rack, with wardrobe bays and storage levels. Intermediate front rails and boards are flush by default and recess 30mm only after inset doors are installed, with No.5 hidden brackets joining the depth rails. All 18mm marine boards are inset, with eight dedicated supports each (provisional ¥1.7 each). No drawers. Priced by actual materials and machining.', jp: '3.0展示棚と共通の3030キャビネット構造を使用し、衣柜の均等列・収納段数を維持。中間段は標準で面一。インセット扉を取り付けた場合のみ前横材と棚板を30mm後退し、5号隠しブラケットで奥行材に接続。18mmマリンボードはすべて内嵌し、専用棚受けを8個ずつ配置（暫定¥1.7/個）。引き出しは含まず、実際の材料・加工で計算します。' }[language],
+        profiles: { cn: '全3030框架，复用3.0展示架的柜体结构，保留衣柜等分列数与中间层板层数。中间层默认齐平，仅安装大弯柜门后前横梁内退30mm，以5号隐藏角码连接深度梁，为大弯门预留空间；中间层板前缘同步后退30mm。18mm海洋板全部内嵌，每板8只18mm专用层板托（暂定¥1.7/只），不配置抽屉。按实际材料和加工计价。', en: 'All-3030 cabinet frame shared with the 3.0 rack, with wardrobe bays and storage levels. Intermediate front rails and boards are flush by default and recess 30mm only after inset doors are installed, with No.5 hidden brackets joining the depth rails. All 18mm marine boards are inset, with eight dedicated supports each (provisional ¥1.7 each). No drawers. Priced by actual materials and machining.', jp: '3.0展示棚と共通の3030キャビネット構造を使用し、衣柜の均等列・収納段数を維持。中間段は標準で面一。インセット扉を取り付けた場合のみ前横材と棚板を30mm後退し、5号隠しブラケットで奥行材に接続。18mmマリンボードはすべて内嵌し、専用棚受けを8個ずつ配置（暫定¥1.7/個）。引き出しは含まず、実際の材料・加工で計算します。' }[language],
         machining: { cn: '顶底框不打孔，用立面1号角码连接，避开内嵌板；中间层按层高打孔攻丝。沿用展示架的连接规则：同一节点优先打孔攻丝，螺丝路径冲突处使用角码，避免两颗螺丝相撞。', en: 'Top and bottom frames use vertical-plane No.1 brackets without drilling, leaving inset boards clear; intermediate holes follow shelf heights. Drill-and-tap joints use corner brackets where screw paths would collide, following the rack connection rules.', jp: '上下枠は穴加工せず、縦面の1号ブラケットで接続。中間段は棚高さに合わせて穴あけ・タップ加工。同一節点でねじが干渉する接続には展示棚と同じブラケットを使用します。' }[language],
       };
 
@@ -217,7 +217,7 @@ const StandardFurnitureConfigurator: React.FC<{
         </span>
         <div>
           <h3 className="text-2xl font-black text-slate-900">{isCalligraphy ? copy.calligraphyTitle : copy.wardrobeTitle}</h3>
-          <p className="mt-2 text-sm font-medium leading-relaxed text-slate-500">{isCalligraphy ? copy.calligraphyHint : (wardrobeFrame === '3030' ? ({ cn: '选择柜体尺寸、等分列数和中间收纳层数，生成可编辑的3030衣柜。层板为18mm海洋板。', en: 'Choose cabinet dimensions, equal bays and intermediate storage levels to generate an editable 3030 wardrobe with 18mm marine boards.', jp: '寸法・均等列・中間収納段数を選んで、18mmマリンボード付きの編集可能な3030衣柜を生成します。' }[language]) : copy.wardrobeHint)}</p>
+          <p className="mt-2 text-sm font-medium leading-relaxed text-slate-500">{isCalligraphy ? copy.calligraphyHint : (wardrobeFrame === '3030' ? ({ cn: '选择柜体尺寸、等分列数和中间层板层数，生成可编辑的3030衣柜。层板为18mm海洋板。', en: 'Choose cabinet dimensions, equal bays and intermediate storage levels to generate an editable 3030 wardrobe with 18mm marine boards.', jp: '寸法・均等列・中間収納段数を選んで、18mmマリンボード付きの編集可能な3030衣柜を生成します。' }[language]) : copy.wardrobeHint)}</p>
         </div>
       </div>
 
@@ -256,6 +256,7 @@ const StandardFurnitureConfigurator: React.FC<{
               <NumericInput label={copy.totalHeight} value={targetHeight} min={235} max={CALLIGRAPHY_MAX_HEIGHT_MM} onChange={setTargetHeight} />
             </div>
           )}
+          <p className="text-xs text-slate-500">{language === 'cn' ? '中间层板层数不含顶板和底板；设为0时只保留顶、底两层。' : language === 'jp' ? '天板・底板を含みません。0段では天板と底板のみです。' : 'Excludes the top and bottom boards. Set to 0 for top and bottom only.'}</p>
           <div className="grid grid-cols-2 gap-3 rounded-2xl border border-blue-100 bg-blue-50/70 p-4 sm:grid-cols-4">
             <div><div className="text-[10px] font-black uppercase text-blue-400">{copy.generatedSize}</div><div className="mt-1 font-black text-blue-950">{calligraphyDimensions.lengthMm} × {calligraphyDimensions.depthMm} × {calligraphyDimensions.heightMm}mm</div></div>
             <div><div className="text-[10px] font-black uppercase text-blue-400">{copy.depthLabel}</div><div className="mt-1 font-black text-blue-950">{calligraphyDimensions.depthMm}mm / 内{calligraphyDepthMm}mm</div></div>
@@ -294,12 +295,13 @@ const StandardFurnitureConfigurator: React.FC<{
             </select>
           </label>
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-5">
-          <NumericInput label={copy.length} value={wardrobeLength} min={400} max={MAX_FURNITURE_PROFILE_MM} onChange={setWardrobeLength} />
-          <NumericInput label={copy.width} value={wardrobeWidth} min={300} max={MAX_FURNITURE_PROFILE_MM} onChange={setWardrobeWidth} />
-          <NumericInput label={copy.height} value={wardrobeHeight} min={500} max={MAX_FURNITURE_PROFILE_MM} onChange={setWardrobeHeight} />
+          <NumericInput label={copy.length} value={wardrobeLength} min={100} max={MAX_FURNITURE_PROFILE_MM} onChange={setWardrobeLength} />
+          <NumericInput label={copy.width} value={wardrobeWidth} min={100} max={MAX_FURNITURE_PROFILE_MM} onChange={setWardrobeWidth} />
+          <NumericInput label={copy.height} value={wardrobeHeight} min={100} max={MAX_FURNITURE_PROFILE_MM} onChange={setWardrobeHeight} />
           <NumericInput label={copy.columns} value={effectiveWardrobeColumns} min={1} max={wardrobeColumnLimit} onChange={setWardrobeColumns} />
-          <NumericInput label={copy.wardrobeLayers} value={effectiveWardrobeLayers} min={1} max={wardrobeLayerLimit} onChange={setWardrobeLayers} />
+          <NumericInput label={copy.wardrobeLayers} value={effectiveWardrobeLayers} min={0} max={wardrobeLayerLimit} onChange={setWardrobeLayers} />
           </div>
+          <p className="text-xs text-slate-500">{language === 'cn' ? '中间层板层数不含顶板和底板；设为0时只保留顶、底两层。' : language === 'jp' ? '天板・底板を含みません。0段では天板と底板のみです。' : 'Excludes the top and bottom boards. Set to 0 for top and bottom only.'}</p>
           <div className="grid grid-cols-2 gap-3 rounded-2xl border border-blue-100 bg-blue-50/70 p-4 sm:grid-cols-4">
             <div><div className="text-[10px] font-black uppercase text-blue-400">{copy.columns}</div><div className="mt-1 font-black text-blue-950">{effectiveWardrobeColumns}</div></div>
             <div><div className="text-[10px] font-black uppercase text-blue-400">{copy.wardrobeColumnWidth}</div><div className="mt-1 font-black text-blue-950">{wardrobeColumnWidthMm}mm</div></div>
