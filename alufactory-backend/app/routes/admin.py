@@ -376,7 +376,7 @@ def get_all_orders():
             pdf_dir = os.path.join(current_app.instance_path, 'order_pdfs')
             pdf_path = os.path.join(pdf_dir, f"{order.id}.pdf")
             pdf_no_price_path = os.path.join(pdf_dir, f"{order.id}_no_price.pdf")
-            pdf_available = os.path.exists(pdf_path) or bool(profile and profile.pdf_base64)
+            pdf_available = os.path.exists(pdf_path)
             pdf_no_price_available = os.path.exists(pdf_no_price_path)
 
             order_dict['user'] = {
@@ -441,33 +441,7 @@ def get_order_pdf(order_id):
     if no_price_requested:
         return jsonify({'error': 'No-price PDF not found for this order'}), 404
 
-    profile = Profile.query.filter_by(user_id=order.user_id).first()
-    if not profile:
-        return jsonify({'error': 'PDF not found'}), 404
-
-    pdf_base64_value = profile.pdf_no_price_base64 if no_price_requested else profile.pdf_base64
-    if not pdf_base64_value:
-        return jsonify({'error': 'PDF not found'}), 404
-
-    try:
-        pdf_bytes = base64.b64decode(pdf_base64_value)
-    except Exception:
-        return jsonify({'error': 'Invalid PDF data'}), 500
-
-    base_filename = build_order_pdf_filename(order)
-    default_no_price_filename = base_filename[:-4] + '_no_price.pdf' if base_filename.lower().endswith('.pdf') else f"{base_filename}_no_price.pdf"
-    filename = (
-        (profile.pdf_no_price_filename or default_no_price_filename)
-        if no_price_requested
-        else (profile.pdf_filename or base_filename)
-    )
-    return Response(
-        pdf_bytes,
-        mimetype='application/pdf',
-        headers={
-            'Content-Disposition': f'inline; filename="{filename}"'
-        }
-    )
+    return jsonify({'error': 'PDF not found for this order'}), 404
 
 
 @admin_bp.route('/carts', methods=['GET'])

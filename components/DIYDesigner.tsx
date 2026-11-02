@@ -12454,10 +12454,15 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({
           if (!preflight.valid) throw new Error(preflight.issues.map(issue => issue.message).join('\n'));
           importedItems = normalizeDesignItems(expandedItems);
         } else if (Array.isArray(parsed?.order_json?.items)) {
-          importedItems = normalizeDesignItems(mapSystemOrderProfileItemsToDesignerItems(
-            parsed.order_json.items,
-            (index, variantId) => createItem('profile', index, variantId),
-          ));
+          const rows = parsed.order_json.items.map((row: any, index: number) => ({
+            id: `order-import-${index}`,
+            product: INITIAL_PRODUCTS.find(product => product.id === row.product_id)
+              || { id: row.product_id, name: row.product_name, type: row.product_type },
+            quantity: row.quantity,
+            config: row.config || {},
+            totalPrice: row.total_price,
+          } as CartItem));
+          importedItems = normalizeDesignItems(restoreCartDesign(rows).items);
         }
         if (!importedItems.length) throw new Error(t.jsonImportUnsupported);
         const appliedItems = await applyImportedDesign(

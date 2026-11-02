@@ -404,33 +404,7 @@ def get_order_pdf(order_id):
         return jsonify({'error': 'No-price PDF not found for this order'}), 404
 
     # Try database
-    profile = Profile.query.filter_by(user_id=order.user_id).first()
-    if not profile:
-        return jsonify({'error': 'PDF not found'}), 404
-
-    pdf_base64_value = profile.pdf_no_price_base64 if no_price_requested else profile.pdf_base64
-    if not pdf_base64_value:
-        return jsonify({'error': 'PDF not found'}), 404
-
-    try:
-        pdf_bytes = base64.b64decode(pdf_base64_value)
-    except Exception:
-        return jsonify({'error': 'Invalid PDF data'}), 500
-
-    base_filename = build_order_pdf_filename(order)
-    default_no_price_filename = base_filename[:-4] + '_no_price.pdf' if base_filename.lower().endswith('.pdf') else f"{base_filename}_no_price.pdf"
-    filename = (
-        (profile.pdf_no_price_filename or default_no_price_filename)
-        if no_price_requested
-        else (profile.pdf_filename or base_filename)
-    )
-    return Response(
-        pdf_bytes,
-        mimetype='application/pdf',
-        headers={
-            'Content-Disposition': f'inline; filename="{filename}"'
-        }
-    )
+    return jsonify({'error': 'PDF not found for this order'}), 404
 
 
 @order_bp.route('/stats', methods=['GET'])
