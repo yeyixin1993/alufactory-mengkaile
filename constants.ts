@@ -1460,10 +1460,10 @@ export const INITIAL_PRODUCTS: Product[] = [
     id: "p8",
     type: ProductType.WARDROBE,
     category: "finished_furniture",
-    name: { en: "Wardrobe", cn: "衣柜", jp: "ワードローブ" },
+    name: { en: "Wardrobe", cn: "八百库", jp: "ワードローブ" },
     description: {
       en: "Custom wardrobe solutions.",
-      cn: "支持定制的衣柜方案。",
+      cn: "支持定制的八百库方案。",
       jp: "カスタムワードローブソリューション。",
     },
     basePrice: 0,

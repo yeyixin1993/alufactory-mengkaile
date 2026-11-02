@@ -168,3 +168,33 @@ for (const frame of ['2040_2020', '2047_2020', '3030'] as const) {
   }
 }
 console.log('100mm minimum dimensions and zero intermediate shelves passed for every wardrobe frame.');
+
+for (const layers of [0, 2]) {
+  const full = buildWardrobeTemplate(1200, 600, 1500, layers, 2, '2020', 'caster', 'sealed');
+  const old = buildWardrobeTemplate(1200, 600, 1500, layers, 2, '2040_2020');
+  const profiles = full.items.filter(i => i.kind === 'profile');
+  assert(profiles.every(i => i.variantId === '2020'));
+  assert.equal(full.summary.baseOption, 'none');
+  assert.equal(full.summary.edgeOption, 'open');
+  assert.equal(full.summary.verticalProfile, '2020');
+  assert(!full.items.some(i => i.kind === 'caster' || i.kind === 'foot'));
+  assert.equal(profiles.reduce((n,i) => n + (i.holes?.length || 0),0), old.items.reduce((n,i) => n + (i.holes?.length || 0),0) - 12);
+  assert.equal(full.items.filter(i => i.kind === 'marine_board').length, (layers + 2) * 2);
+  const completed = completeParametricFurnitureTemplate(full);
+  assert(completed.check.valid);
+  assert(completed.items.filter(i => i.kind === 'connector').every(i => i.lockedPosition));
+}
+assert.equal(buildWardrobeTemplate(1200,600,1600,0,1,'2020').summary.heightMm,1600);
+console.log('All-2020 geometry, fewer drilling operations, no sealed/base options and advisory height passed.');
+
+const swapped = buildWardrobeTemplate(1200,600,1500,0,1,'2020');
+const rails = swapped.items.filter(i => i.kind === 'profile' && i.rotation.every(v => v === 0));
+assert.equal(rails.length,4);
+for (const rail of rails) {
+  const vertical = rail.holes!.filter(h => h.side === 'A' || h.side === 'C');
+  const lateral = rail.holes!.filter(h => h.side === 'B' || h.side === 'D');
+  assert.equal(vertical.length,2); assert.equal(lateral.length,2);
+  assert(vertical.every(h => h.type === 'through'));
+  assert(lateral.every(h => h.type === 'countersunk' && h.side === (rail.position[2] > 0 ? 'B' : 'D') && !h.fastenerDirection && !h.fastenerLengthMm && !h.fastenerHead));
+}
+console.log('All-2020 vertical through holes and outward-entry lateral countersunk holes passed.');

@@ -5,7 +5,7 @@ import type { UnifiedPartReference } from '../data/stoolPartReference';
 import type { WheelGrade } from './designerComponentPricing';
 import type { DrillHole, ProfileFinish, ProfileSide } from '../types';
 
-export type WardrobeFrameOption = '2040_2020' | '2047_2020' | '3030';
+export type WardrobeFrameOption = '2020' | '2040_2020' | '2047_2020' | '3030';
 
 export type ParametricFurnitureSource = 'calligraphy_cabinet' | 'wardrobe' | 'display_rack_3_0' | 'parametric_stool';
 
@@ -546,6 +546,7 @@ const buildWardrobeFrameTemplate = (
   const heightMm = clampInteger(heightInput, 100, MAX_FURNITURE_PROFILE_MM);
   const storageLayers = clampInteger(storageLayersInput, 0, getWardrobeStorageLayerLimit(heightMm));
   const columns = clampInteger(columnsInput, 1, getWardrobeColumnLimit(lengthMm, frame));
+  const is2020 = frame === '2020';
   const is2047 = frame === '2047_2020';
   if (frame === '3030') return build3030Wardrobe(lengthMm, widthMm, heightMm, storageLayers, columns, frontSetbackMm);
   const id = createIdFactory(`wardrobe-${columns}col`);
@@ -555,7 +556,7 @@ const buildWardrobeFrameTemplate = (
   const halfWidth = widthMm / 2;
   const bottomY = 10;
   const topY = heightMm - 10;
-  const frontPostZ = halfWidth - (is2047 ? 23.5 : 20);
+  const frontPostZ = halfWidth - (is2020 ? 10 : is2047 ? 23.5 : 20);
   const backPostZ = -frontPostZ;
   const frontRailZ = halfWidth - 10;
   const backRailZ = -frontRailZ;
@@ -570,7 +571,7 @@ const buildWardrobeFrameTemplate = (
   const boundaryHolePositions = boundaryXs.map((x) => Number((x + halfLength).toFixed(3)));
   const verticalLength = heightMm - (is2047 ? 20 : 40);
   const depthRailLength = widthMm - 40;
-  const storageDepthRailLength = widthMm - (is2047 ? 94 : 80);
+  const storageDepthRailLength = widthMm - (is2020 ? 40 : is2047 ? 94 : 80);
   const storageLayerYs = Array.from(
     { length: storageLayers },
     (_, layerIndex) => 20 + ((layerIndex + 1) * (heightMm - 40)) / (storageLayers + 1),
@@ -595,7 +596,7 @@ const buildWardrobeFrameTemplate = (
       position: [0, y, z],
       rotation: is2047 ? [faceIndex === 0 ? 90 : -90, 0, 0] : [0, 0, 0],
       holes: [
-        ...createHoles(id, boundaryHolePositions, is2047 ? (faceIndex === 0 ? 'D' : 'B') : verticalEntrySide),
+        ...createHoles(id, boundaryHolePositions, is2047 ? (faceIndex === 0 ? 'D' : 'B') : verticalEntrySide, { type: is2020 ? 'through' : 'countersunk' }),
         ...(is2047 ? [] : createHoles(
           id,
           boundaryHolePositions,
@@ -603,8 +604,8 @@ const buildWardrobeFrameTemplate = (
           // the joint and travels outward from the marked face into the
           // perpendicular depth rail's tapped end, opposite to an ordinary
           // face-entry through screw.
-          faceIndex === 0 ? (is2047 ? 'C' : 'D') : 'B',
-          {
+          is2020 ? (faceIndex === 0 ? 'B' : 'D') : (faceIndex === 0 ? 'D' : 'B'),
+          is2020 ? { type: 'countersunk' } : {
             type: 'through',
             threadSize: 'M6',
             fastenerHead: 'flat_socket',
@@ -622,7 +623,7 @@ const buildWardrobeFrameTemplate = (
       length: depthRailLength,
       position: [x, y, 0],
       rotation: [0, 90, 0],
-      holes: createHoles(id, [is2047 ? 17 : 10, depthRailLength - (is2047 ? 17 : 10)], verticalEntrySide),
+      holes: is2020 ? [] : createHoles(id, [is2047 ? 17 : 10, depthRailLength - (is2047 ? 17 : 10)], verticalEntrySide),
       tappingLeft: true,
       tappingRight: true,
       remark: `衣柜${levelIndex === 0 ? '底部' : '顶部'}第${boundaryIndex + 1}/${columns + 1}道边界深度梁2020；横压前后2040并以沉头螺丝连接，端部攻丝接收相邻2020的扁头M6×8，两端攻丝`,
@@ -641,7 +642,7 @@ const buildWardrobeFrameTemplate = (
   // view and its 40 mm face runs along the cabinet side/depth direction.
   boundaryXs.forEach((x, boundaryIndex) => [frontPostZ, backPostZ].forEach((z, zIndex) => {
     const post = createProfile(id, {
-      variantId: is2047 ? '2047' : '2040',
+      variantId: is2020 ? '2020' : is2047 ? '2047' : '2040',
       length: verticalLength,
       position: [x, is2047 ? verticalLength / 2 : heightMm / 2, z],
       rotation: [0, is2047 && zIndex === 1 ? -90 : 90, 90],
@@ -895,6 +896,15 @@ const buildWardrobeFrameTemplate = (
   const shelfBoardCount = (storageLayers + 2) * columns;
   const boardShelfSupportCount = shelfBoardCount * 8;
 
+  if (is2020) {
+    items.forEach(item => {
+      item.remark = (item.remark || '').replaceAll('2040', '2020').replace('40面朝侧面', '20面朝侧面');
+      if (item.kind === 'profile' && item.rotation[1] === 90 && item.rotation[2] === 0 && item.tappingLeft)
+        item.remark = '八百库顶底深度梁2020；两端攻M6，接收前后横梁侧向沉头连接螺丝；不向立柱重复打孔';
+      if (item.kind === 'profile' && item.rotation.every(value => value === 0) && item.holes?.length)
+        item.remark = '八百库顶底前后横梁2020；上下通孔连接立柱端面攻丝；侧向沉头孔从柜体外侧朝深度梁端部攻丝连接，两端攻丝';
+    });
+  }
   if (is2047) {
     items.forEach((item) => {
 
@@ -934,7 +944,7 @@ const buildWardrobeFrameTemplate = (
       shelfBoardCount,
       boardShelfSupportCount,
       horizontalProfile: '2020',
-      verticalProfile: is2047 ? '2047' : '2040',
+      verticalProfile: is2020 ? '2020' : is2047 ? '2047' : '2040',
       frontHorizontalProfile: is2047 ? '2020-N1' : '2020',
       backHorizontalProfile: is2047 ? '2020-N1' : '2020',
     },
@@ -1035,8 +1045,8 @@ const buildWardrobeTemplateLayout = (
   edge: WardrobeEdgeOption = frame === '2047_2020' ? 'sealed' : 'open',
   inset = false,
 ): ParametricTemplatePayload => {
-  const sealed = frame === '2047_2020' || edge === 'sealed';
-  const frontSetbackMm = inset ? (frame === '3030' ? 30 : frame === '2047_2020' ? 27 : 20) : 0;
+  const sealed = frame !== '2020' && (frame === '2047_2020' || edge === 'sealed');
+  const frontSetbackMm = inset && frame !== '2020' ? (frame === '3030' ? 30 : frame === '2047_2020' ? 27 : 20) : 0;
   const payload = buildWardrobeFrameTemplate(length, depth, height, layers, columns, frame, frontSetbackMm);
   if (sealed && frame !== '2047_2020') {
     payload.items.forEach(item => {
@@ -1067,9 +1077,9 @@ const buildWardrobeTemplateLayout = (
     edgeOption: sealed ? 'sealed' : 'open',
     frontHorizontalProfile: frame === '3030' ? (sealed ? '3030-N1' : '3030') : (sealed ? '2020-N1' : '2020'),
     backHorizontalProfile: frame === '3030' ? (sealed ? '3030-N1' : '3030') : (sealed ? '2020-N1' : '2020'),
-    verticalProfile: frame === '3030' ? (sealed ? '3030-N1' : '3030') : frame === '2047_2020' ? '2047' : (sealed ? '2040-N1-20' : '2040'),
+    verticalProfile: frame === '2020' ? '2020' : frame === '3030' ? (sealed ? '3030-N1' : '3030') : frame === '2047_2020' ? '2047' : (sealed ? '2040-N1-20' : '2040'),
   });
-  const option = frame === '2040_2020' ? 'none' : base;
+  const option = frame === '2020' || frame === '2040_2020' ? 'none' : base;
   const posts = payload.items.filter(item => item.kind === 'profile' && item.rotation[2] === 90);
   const maxX = Math.max(...posts.map(item => Math.abs(item.position[0])));
   const targets = option === 'none' ? [] : posts.filter(item => option === 'foot' || Math.abs(Math.abs(item.position[0]) - maxX) < 0.01);

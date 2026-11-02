@@ -41,7 +41,7 @@ const COPY = {
     openingShortHint: '篓子竖着放，420mm进深，柜深460mm', openingLongHint: '篓子横着放，300mm进深，柜深340mm',
     openingNote: '切换开口方向会同时改变列宽和柜体深度：长边开口每格更宽、柜体更浅，同样的最大长度下可容纳的列数更少。',
     depthLabel: '柜深',
-    wardrobeTitle: '参数化衣柜框架', wardrobeHint: '可选择N列，系统沿正面总长平均分配每列宽度；每列每个收纳层生成完整四边层框和一块内嵌12mm UV层板，相邻列共享中间深度横杆。任一型材最长不超过3000mm，进入设计器后会自动启用柜门。',
+    wardrobeTitle: '参数化八百库框架', wardrobeHint: '可选择N列，系统沿正面总长平均分配每列宽度；每列每个收纳层生成完整四边层框和一块内嵌12mm UV层板，相邻列共享中间深度横杆。任一型材最长不超过3000mm，进入设计器后会自动启用柜门。',
     length: '长 (mm)', width: '宽/深 (mm)', height: '高 (mm)',
     wardrobeLayers: '中间层板层数', wardrobeColumnWidth: '平均列宽', wardrobeGenerated: '实际型材数量',
     profileSummary: '型材配置', machiningSummary: '加工配置',
@@ -145,8 +145,8 @@ const StandardFurnitureConfigurator: React.FC<{
   const [wardrobeFrame, setWardrobeFrame] = useState<WardrobeFrameOption>(initialAdvice?.wheels ? '2047_2020' : '2040_2020');
   const [wardrobeBases, setWardrobeBases] = useState<Record<string, WardrobeBaseOption>>({ '2047_2020': 'caster', '3030': 'none' });
   const [wardrobeEdges, setWardrobeEdges] = useState<Record<string, WardrobeEdgeOption>>({ '2040_2020': 'open', '3030': 'open' });
-  const wardrobeEdge = wardrobeFrame === '2047_2020' ? 'sealed' : wardrobeEdges[wardrobeFrame];
-  const wardrobeBase = wardrobeFrame === '2040_2020' ? 'none' : wardrobeBases[wardrobeFrame];
+  const wardrobeEdge = wardrobeFrame === '2020' ? 'open' : wardrobeFrame === '2047_2020' ? 'sealed' : wardrobeEdges[wardrobeFrame];
+  const wardrobeBase = wardrobeFrame === '2020' || wardrobeFrame === '2040_2020' ? 'none' : wardrobeBases[wardrobeFrame];
   const [openingSide, setOpeningSide] = useState<CalligraphyOpeningSide>('short');
   const wardrobeLayerLimit = getWardrobeStorageLayerLimit(wardrobeHeight);
   const effectiveWardrobeLayers = Math.min(wardrobeLayers, wardrobeLayerLimit);
@@ -177,7 +177,9 @@ const StandardFurnitureConfigurator: React.FC<{
     `${calligraphyDepthMm}$1mm`,
   );
 
-  const wardrobeDetails = wardrobeFrame === '2040_2020'
+  const wardrobeDetails = wardrobeFrame === '2020'
+    ? { profiles: '全2020立柱和横梁，12mm内嵌层板；不提供封边、轮子或杯脚。', machining: '在2040+2020基础上改为2020立柱。顶底前后横梁上下通孔连接立柱端面攻丝，侧向沉头孔从柜体外侧连接深度梁端面攻丝；取消深度梁向立柱的重复孔位。中间层板框沿用1号角码，可调节层高。' }
+    : wardrobeFrame === '2040_2020'
     ? { profiles: copy.wardrobeProfiles, machining: wardrobeEdge === 'sealed' ? { cn: '中间层默认齐平，仅安装大弯柜门后前横梁内退20mm，使用1号角码接立柱内侧槽；12mm内嵌层板同步缩短20mm，层板托随板调整，预留大弯柜门空间。顶底框和后横梁保持原位。', en: 'Intermediate front rails are flush by default and recess 20mm only after inset doors are installed, with No.1 brackets on the inner post grooves. Inset 12mm boards shorten by 20mm and their supports follow. Top/bottom frames and rear rails stay unchanged for inset-door clearance.', jp: '中間前横材は標準で面一。インセット扉を取り付けた場合のみ20mm後退し、柱の内側溝に1号ブラケットで接続。12mm棚板と棚受けも調整し、インセット扉の空間を確保します。上下枠と後横材は変更しません。' }[language] : copy.wardrobeMachining }
     : wardrobeFrame === '2047_2020'
       ? {
@@ -185,7 +187,7 @@ const StandardFurnitureConfigurator: React.FC<{
         machining: { cn: '顶部横梁压立柱，按2047两侧端孔27mm中心距连接；顶部深度梁孔距端面17mm。中间层默认齐平，仅安装大弯柜门后前横梁内退27mm，以1号角码接立柱内侧槽；层板缩短27mm，层板托同步调整，避让大弯柜门。顶底框和后横梁不动，底端中央孔攻M8安装底部配件。', en: 'Top rails cap the posts, matching the 27mm outer-bore spacing; top depth-rail holes are 17mm from each end. Intermediate front rails are flush by default and recess 27mm only after inset doors are installed onto the inner post grooves using No.1 brackets; boards shorten 27mm and supports follow for inset doors. Top/bottom frames and rear rails stay unchanged.', jp: '上枠は柱端に重ね、端孔の27mmピッチに合わせます。上部奥行材の穴位置は端面から17mm。中間前横材は標準で面一。インセット扉を取り付けた場合のみ27mm後退し、柱の内側溝に1号ブラケットで接続。棚板と棚受けも調整し、インセット扉の空間を確保します。上下枠と後横材は変更しません。' }[language],
       }
       : {
-        profiles: { cn: '全3030框架，复用3.0展示架的柜体结构，保留衣柜等分列数与中间层板层数。中间层默认齐平，仅安装大弯柜门后前横梁内退30mm，以5号隐藏角码连接深度梁，为大弯门预留空间；中间层板前缘同步后退30mm。18mm海洋板全部内嵌，每板8只18mm专用层板托（暂定¥1.7/只），不配置抽屉。按实际材料和加工计价。', en: 'All-3030 cabinet frame shared with the 3.0 rack, with wardrobe bays and storage levels. Intermediate front rails and boards are flush by default and recess 30mm only after inset doors are installed, with No.5 hidden brackets joining the depth rails. All 18mm marine boards are inset, with eight dedicated supports each (provisional ¥1.7 each). No drawers. Priced by actual materials and machining.', jp: '3.0展示棚と共通の3030キャビネット構造を使用し、衣柜の均等列・収納段数を維持。中間段は標準で面一。インセット扉を取り付けた場合のみ前横材と棚板を30mm後退し、5号隠しブラケットで奥行材に接続。18mmマリンボードはすべて内嵌し、専用棚受けを8個ずつ配置（暫定¥1.7/個）。引き出しは含まず、実際の材料・加工で計算します。' }[language],
+        profiles: { cn: '全3030框架，复用3.0展示架的柜体结构，保留八百库等分列数与中间层板层数。中间层默认齐平，仅安装大弯柜门后前横梁内退30mm，以5号隐藏角码连接深度梁，为大弯门预留空间；中间层板前缘同步后退30mm。18mm海洋板全部内嵌，每板8只18mm专用层板托（暂定¥1.7/只），不配置抽屉。按实际材料和加工计价。', en: 'All-3030 cabinet frame shared with the 3.0 rack, with wardrobe bays and storage levels. Intermediate front rails and boards are flush by default and recess 30mm only after inset doors are installed, with No.5 hidden brackets joining the depth rails. All 18mm marine boards are inset, with eight dedicated supports each (provisional ¥1.7 each). No drawers. Priced by actual materials and machining.', jp: '3.0展示棚と共通の3030キャビネット構造を使用し、八百库の均等列・収納段数を維持。中間段は標準で面一。インセット扉を取り付けた場合のみ前横材と棚板を30mm後退し、5号隠しブラケットで奥行材に接続。18mmマリンボードはすべて内嵌し、専用棚受けを8個ずつ配置（暫定¥1.7/個）。引き出しは含まず、実際の材料・加工で計算します。' }[language],
         machining: { cn: '顶底框不打孔，用立面1号角码连接，避开内嵌板；中间层按层高打孔攻丝。沿用展示架的连接规则：同一节点优先打孔攻丝，螺丝路径冲突处使用角码，避免两颗螺丝相撞。', en: 'Top and bottom frames use vertical-plane No.1 brackets without drilling, leaving inset boards clear; intermediate holes follow shelf heights. Drill-and-tap joints use corner brackets where screw paths would collide, following the rack connection rules.', jp: '上下枠は穴加工せず、縦面の1号ブラケットで接続。中間段は棚高さに合わせて穴あけ・タップ加工。同一節点でねじが干渉する接続には展示棚と同じブラケットを使用します。' }[language],
       };
 
@@ -217,7 +219,7 @@ const StandardFurnitureConfigurator: React.FC<{
         </span>
         <div>
           <h3 className="text-2xl font-black text-slate-900">{isCalligraphy ? copy.calligraphyTitle : copy.wardrobeTitle}</h3>
-          <p className="mt-2 text-sm font-medium leading-relaxed text-slate-500">{isCalligraphy ? copy.calligraphyHint : (wardrobeFrame === '3030' ? ({ cn: '选择柜体尺寸、等分列数和中间层板层数，生成可编辑的3030衣柜。层板为18mm海洋板。', en: 'Choose cabinet dimensions, equal bays and intermediate storage levels to generate an editable 3030 wardrobe with 18mm marine boards.', jp: '寸法・均等列・中間収納段数を選んで、18mmマリンボード付きの編集可能な3030衣柜を生成します。' }[language]) : copy.wardrobeHint)}</p>
+          <p className="mt-2 text-sm font-medium leading-relaxed text-slate-500">{isCalligraphy ? copy.calligraphyHint : (wardrobeFrame === '3030' ? ({ cn: '选择柜体尺寸、等分列数和中间层板层数，生成可编辑的3030八百库。层板为18mm海洋板。', en: 'Choose cabinet dimensions, equal bays and intermediate storage levels to generate an editable 3030 wardrobe with 18mm marine boards.', jp: '寸法・均等列・中間収納段数を選んで、18mmマリンボード付きの編集可能な3030八百库を生成します。' }[language]) : copy.wardrobeHint)}</p>
         </div>
       </div>
 
@@ -270,11 +272,14 @@ const StandardFurnitureConfigurator: React.FC<{
           <label className="block">
             <span className="mb-2 block text-xs font-black text-slate-500">{language === 'cn' ? '框架方案' : language === 'jp' ? 'フレーム構成' : 'Frame option'}</span>
             <select data-testid="wardrobe-frame-option" value={wardrobeFrame} onChange={(event) => setWardrobeFrame(event.target.value as WardrobeFrameOption)} className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 font-black text-slate-800">
+              <option value="2020">全2020 · 12mm层板 · 建议高度≤1500mm</option>
               <option value="2040_2020">2040 + 2020 · {language === 'cn' ? '12mm层板' : language === 'jp' ? '12mm棚板' : '12mm shelves'}</option>
               <option value="2047_2020">2047 + 2020 · {language === 'cn' ? '前后封边 / 12mm层板' : language === 'jp' ? '前後溝なし / 12mm棚板' : 'Sealed front & rear / 12mm shelves'}</option>
               <option value="3030">3030 · {language === 'cn' ? '18mm层板' : language === 'jp' ? '18mm棚板' : '18mm shelves'}</option>
             </select>
           </label>
+          {wardrobeFrame === '2020' && <div role="alert" className="rounded-2xl border-2 border-red-500 bg-red-50 p-4 text-base font-black text-red-800">全2020方案强烈建议高度不超过1500mm。{wardrobeHeight > 1500 ? '当前高度已超过建议值，建议改用2040+2020或其他加强方案。' : '较高柜体建议选择2040+2020或其他加强方案。'}</div>}
+          {wardrobeFrame !== '2020' && <>
           <label className="block">
             <span className="mb-2 block text-xs font-black text-slate-500">{language === 'cn' ? '前后封边' : language === 'jp' ? '前後の溝なし面' : 'Front/rear sealed faces'}</span>
             <select data-testid="wardrobe-edge-option" value={wardrobeEdge} disabled={wardrobeFrame === '2047_2020'} onChange={event => setWardrobeEdges(previous => ({ ...previous, [wardrobeFrame]: event.target.value as WardrobeEdgeOption }))} className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 font-black text-slate-800 disabled:cursor-not-allowed disabled:opacity-60">
@@ -294,6 +299,7 @@ const StandardFurnitureConfigurator: React.FC<{
               <option value="none">{language === 'cn' ? '不选' : language === 'jp' ? 'なし' : 'None'}</option>
             </select>
           </label>
+          </>}
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-5">
           <NumericInput label={copy.length} value={wardrobeLength} min={100} max={MAX_FURNITURE_PROFILE_MM} onChange={setWardrobeLength} />
           <NumericInput label={copy.width} value={wardrobeWidth} min={100} max={MAX_FURNITURE_PROFILE_MM} onChange={setWardrobeWidth} />
