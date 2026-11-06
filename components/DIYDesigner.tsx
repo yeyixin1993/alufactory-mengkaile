@@ -1348,15 +1348,12 @@ export const inspectDesignerManufacturingPrecheck = (items: DIYSceneItem[]): Des
   const sourceItems = items.filter(hasImportedSourceMesh);
   if (sourceItems.length) {
     scopes.push('source_mesh_draft');
-    // A source part the catalogue cannot identify has no purchasing identity and
-    // no price, so nobody can quote or make it — that is a real failure. A part
-    // the catalogue *can* name is a purchasing decision already taken, so only
-    // its machining and installation stay outstanding.
+    // Missing catalog identity/pricing requires acknowledgement, not an order hold.
     const unidentified = sourceItems.filter((item) => getImportedComponentPrice(item).status !== 'confirmed');
     if (unidentified.length) {
-      blocking.push(`${unidentified.length}个源模型部件未关联编号配件、无法定价：${unidentified
+      advisories.push(`${unidentified.length}个源模型部件未关联编号配件、价格待确认：${unidentified
         .slice(0, 3).map((item) => item.name || item.id).join('、')}${unidentified.length > 3 ? ' 等' : ''}；`
-        + '请先在设计器里确认它对应目录中的哪一号配件。');
+        + '这些部件暂按 ¥0 计入购物车和订单，生产 PDF 保留部件信息；请确认知悉价格待核实后继续。');
     }
     advisories.push(SOURCE_MESH_REVIEW_NOTE);
   }

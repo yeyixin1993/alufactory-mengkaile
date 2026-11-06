@@ -103,7 +103,7 @@ const brokenDocument = buildDesignDocument(broken, 'cn', provenance, null, { man
 assert.equal(brokenDocument.productionRelease.status, 'blocked');
 assert.equal('production' in brokenDocument, false);
 
-// An unidentified source part is a computed failure too: nobody can buy or make
+// An unidentified source part requires explicit acceptance of pending pricing:
 // a part with no purchasing identity. The extra part is added *beside* the
 // stool's own parts — reclassifying one of the sixteen brackets would also
 // remove it from the support review and muddle two unrelated failures into one.
@@ -121,11 +121,13 @@ const unidentified = [...fitted, {
   },
 } as never];
 const unidentifiedRelease = inspectDesignerManufacturingPrecheck(unidentified);
-assert.equal(unidentifiedRelease.valid, false);
-assert.equal(unidentifiedRelease.blocking.length, 1, unidentifiedRelease.blocking.join(' | '));
-assert.ok(unidentifiedRelease.blocking[0].includes('未关联编号配件'), unidentifiedRelease.blocking[0]);
-assert.ok(unidentifiedRelease.blocking[0].includes('未识别源配件'), 'The unidentifiable part is named in the message');
-assert.deepEqual(decideDesignerReleaseGate(unidentifiedRelease, acknowledgement), { action: 'blocked' });
+assert.equal(unidentifiedRelease.valid, true);
+assert.equal(unidentifiedRelease.blocking.length, 0);
+assert.ok(unidentifiedRelease.advisories.some(note => note.includes('¥0') && note.includes('未识别源配件')));
+assert.deepEqual(decideDesignerReleaseGate(unidentifiedRelease, acknowledgement), { action: 'acknowledge' });
+const pendingAcceptance = { advisories: unidentifiedRelease.advisories, acknowledgedAt: new Date().toISOString() };
+assert.equal(decideDesignerReleaseGate(unidentifiedRelease, pendingAcceptance).action, 'proceed');
+
 
 // --- 6. the fasteners the cart charges are the ones the factory sheet lists ---
 const fasteners = materializeStoolSupportFasteners(fitted);

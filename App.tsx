@@ -2627,11 +2627,11 @@ const App: React.FC = () => {
           <div className="max-w-7xl mx-auto px-2 sm:px-6 min-h-[72px] sm:h-24 flex items-center gap-2 sm:gap-6">
             <Link to="/" className="flex min-w-0 shrink items-center gap-2 sm:gap-5 group">
               <div className="w-9 h-9 sm:w-14 sm:h-14 shrink-0 bg-slate-900 rounded-xl sm:rounded-[1.25rem] flex items-center justify-center text-white font-black text-xl sm:text-3xl shadow-2xl shadow-slate-900/20 group-hover:scale-105 group-hover:bg-blue-600 transition-all duration-500">M</div>
-              <div className="flex min-w-0 items-center gap-2">
+              <div className="flex min-w-0 flex-col items-start gap-1 lg:flex-row lg:items-center lg:gap-2">
                 <span className="block max-w-[82px] font-black text-[10px] leading-tight sm:max-w-none sm:text-2xl sm:leading-normal tracking-tight">{t.title}</span>
                 {user && (
                   <span
-                    className={`hidden lg:inline-flex items-center px-2.5 py-1 rounded-full text-[10px] sm:text-xs font-black tracking-wider border shadow-sm ${
+                    className={`inline-flex shrink-0 whitespace-nowrap items-center px-1.5 py-0.5 lg:px-2.5 lg:py-1 rounded-full text-[10px] sm:text-xs font-black tracking-wider border shadow-sm ${
                       userMembership === 'vip_plus'
                         ? 'bg-gradient-to-r from-amber-400 to-yellow-300 text-amber-900 border-amber-300'
                         : userMembership === 'vip'

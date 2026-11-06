@@ -38,7 +38,7 @@ for (const frame of ['2040_2020', '2047_2020', '3030'] as const) {
       const posts = profiles.filter((item) => item.variantId === '2047');
       assert.equal(casters.length, 4);
       assert(casters.every((item) => item.accessoryThreadSize === 'M8'));
-      assert(posts.every((item) => item.position[1] - item.length! / 2 === 62));
+      assert(posts.every((item) => item.position[1] - item.length! / 2 === 80));
       assert.equal(profiles.filter((item) => item.variantId === '2020-N1').length, 2 + 2 * (layers + 1) * columns);
       for (const item of profiles.filter((item) => item.variantId === '2020-N1' || (item.variantId === '2047' && item.position[2] > 0))) {
         const normal = new Vector3(0, 1, 0).applyEuler(new Euler(...item.rotation.map((value) => value * Math.PI / 180) as [number, number, number]));
@@ -69,7 +69,21 @@ for (const frame of ['2040_2020', '2047_2020', '3030'] as const) {
 console.log('Wardrobe frame, material, pricing isolation and 2047 section checks passed.');
 
 const approved = JSON.parse(readFileSync('scripts/fixtures/wardrobe-2047-approved.json', 'utf8'));
-const generated = buildWardrobeTemplate(1580, 450, 880, 1, 1, '2047_2020');
+const generated = buildWardrobeTemplate(1580, 450, 960, 1, 1, '2047_2020');
+// Legacy fixture has an 880mm cabinet lifted 62mm; compare the same cabinet at the new 80mm lift.
+approved.items.filter((item: any) => item.kind !== 'caster').forEach((item: any) => { item.position[1] += 18; });
+for (const frame of ['2047_2020', '3030'] as const) {
+  const baseline = buildWardrobeTemplate(1200, 600, 2200, 2, 1, frame, 'none');
+  const postLength = (payload: typeof baseline) => payload.items.find(item => item.kind === 'profile' && item.rotation[2] === 90)!.length!;
+  for (const base of ['none', 'caster', 'foot'] as const) {
+    const result = buildWardrobeTemplate(1200, 600, 2200, 2, 1, frame, base);
+    const deduction = base === 'caster' ? 80 : base === 'foot' ? 100 : 0;
+    assert.equal(postLength(result), postLength(baseline) - deduction);
+    assert.equal(result.summary.heightMm, 2200);
+    assert.equal(result.summary.cabinetHeightMm, 2200 - deduction);
+    console.log(frame, base, 'post', postLength(result), 'overall', result.summary.heightMm);
+  }
+}
 const project = (item: any) => Object.fromEntries(['kind', 'variantId', 'position', 'rotation', 'length', 'width', 'height', 'thickness', 'holes'].flatMap(key => {
   const value = key === 'holes' && item.kind === 'profile' ? (item.holes || []).map(({ side, type, positionMm }: any) => ({ side, type, positionMm })) : item[key];
   return value === undefined ? [] : [[key, value]];
@@ -93,7 +107,7 @@ for (const frame of ['2040_2020', '2047_2020', '3030'] as const) {
     const maxX = Math.max(...posts.map(item => Math.abs(item.position[0])));
     assert(accessories.every(item => item.accessoryThreadSize === 'M8' && item.position[1] === 0));
     if (expected === 'caster') assert(accessories.every(item => Math.abs(item.position[0]) === maxX));
-    if (frame !== '2040_2020') assert(posts.every(item => item.position[1] - item.length! / 2 === (expected === 'caster' ? 62 : expected === 'foot' ? 25 : 0)));
+    if (frame !== '2040_2020') assert(posts.every(item => item.position[1] - item.length! / 2 === (expected === 'caster' ? 80 : expected === 'foot' ? 100 : 0)));
     const completed = completeParametricFurnitureTemplate(payload);
     assert(completed.check.valid, completed.check.issues.join('; '));
     assert(completed.items.filter(item => item.kind === 'caster' || item.kind === 'foot').every(item => calculatePrice(item) > 0));
@@ -158,7 +172,7 @@ console.log('Wardrobe sealed variants, outward faces, machining and connection c
 
 for (const frame of ['2040_2020', '2047_2020', '3030'] as const) {
   for (const [length, depth, height] of [[100, 100, 100], [300, 170, 800]]) {
-    const payload = buildWardrobeTemplate(length, depth, height, 0, 1, frame);
+    const payload = buildWardrobeTemplate(length, depth, height, 0, 1, frame, 'none');
     assert.equal(payload.summary.lengthMm, length);
     assert.equal(payload.summary.widthMm, depth);
     assert.equal(payload.summary.heightMm, height);
