@@ -30,6 +30,22 @@ class FAQTest(unittest.TestCase):
         self.env = patch.dict('os.environ', {'AI_PROVIDER': 'qwen', 'DASHSCOPE_API_KEY':'', 'AI_QWEN_BASE_URL':''})
         self.env.start()
 
+    def test_owner_standard_replies(self):
+        for question in ['你好', 'Hello', 'hello!', 'HI']:
+            self.assertEqual(match_faq(question).id, 'greeting')
+        for question in ['铝型材发货时间', '多久发货']:
+            self.assertIn('19821200413', match_faq(question).answer)
+            self.assertIn('3–5天', match_faq(question).answer)
+        rule = db.session.get(AIFaqRule, 'draft-leadtime')
+        rule.answer = '发货时间为 3–5 个工作日。'
+        db.session.commit()
+        seed_faq_rules()
+        self.assertIn('19821200413', rule.answer)
+        rule.answer = '自定义交期'
+        db.session.commit()
+        seed_faq_rules()
+        self.assertEqual(rule.answer, '自定义交期')
+
     def test_quota_policy_refresh_preserves_custom_answers(self):
         from app.ai_faq import LEGACY_QUOTA_ANSWER
         rule = db.session.get(AIFaqRule, 'quota-vip')
@@ -59,20 +75,20 @@ class FAQTest(unittest.TestCase):
         return self.client.post('/api/ai/chat', headers=self.headers(uid), json={'message':text, 'request_id':f'00000000-0000-4000-8000-{index:012d}'})
 
     def test_seed_and_exact_matching(self):
-        self.assertEqual(AIFaqRule.query.count(),36)
-        self.assertEqual(AIFaqRule.query.filter_by(enabled=True).count(),36)
+        self.assertEqual(AIFaqRule.query.count(),37)
+        self.assertEqual(AIFaqRule.query.filter_by(enabled=True).count(),37)
         self.assertEqual(match_faq('  两端攻丝是什么意思？ ').id,'machining-tapping')
         self.assertEqual(match_faq('什么叫两端攻丝').id,'machining-tapping')
         self.assertIsNone(match_faq('不要两端攻丝是什么意思'))
         self.assertIsNone(match_faq('两端攻丝是什么意思，另外我要100根'))
         self.assertEqual(match_faq('  截面本色/彩色是什么意思？ ').id,'color-section-meaning')
         self.assertEqual(match_faq('截面本色是什么意思').id,'color-section-meaning')
-        self.assertIn('3–5 个工作日', match_faq('多久发货').answer)
+        self.assertIn('3–5天', match_faq('多久发货').answer)
         self.assertNotEqual(normalize_question('1.5mm'), normalize_question('15mm'))
         self.assertNotEqual(normalize_question('两端攻丝是什么意思，另外我要100根'), normalize_question('两端攻丝是什么意思'))
         response = self.client.get('/api/ai/admin/faq', headers={**self.headers(), 'Content-Type':'application/json'})
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(len(response.json['rules']), 36)
+        self.assertEqual(len(response.json['rules']), 37)
 
     def test_home_suggestion_chips_have_verified_answers(self):
         # The three chips under the home-page composer must be exact FAQ hits.

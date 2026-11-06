@@ -48,6 +48,13 @@ def seed_faq_rules():
     for entry in SEED_RULES:
         existing = db.session.get(AIFaqRule, entry['id'])
         if existing is not None:
+            # Upgrade the shipped lead-time reply while preserving administrator edits.
+            if entry['id'] == 'draft-leadtime' and existing.answer == '发货时间为 3–5 个工作日。':
+                AIFaqRule.query.filter_by(id=existing.id, version=existing.version, answer=existing.answer).update(
+                    {**entry, 'version': existing.version + 1, 'updated_by': 'seed-policy-2026-11-06'}, synchronize_session=False)
+                db.session.commit()
+                db.session.expire_all()
+                continue
             # Refresh the exact former quota answer without overwriting custom admin text.
             if entry['id'] == 'quota-vip' and existing.answer == LEGACY_QUOTA_ANSWER:
                 AIFaqRule.query.filter_by(id=existing.id, version=existing.version, answer=LEGACY_QUOTA_ANSWER).update(
