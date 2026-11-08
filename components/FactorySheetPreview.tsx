@@ -1,3 +1,4 @@
+import { encodeDesignerSnapshot } from '../utils/designerCartSnapshot';
 
 import { CartItem, User, Language, Address } from '../types';
 import { TRANSLATIONS } from '../constants';
@@ -20,7 +21,7 @@ interface FactorySheetPreviewProps {
 
 /**
  * Opens the factory sheet preview in a new browser window.
- * Stores necessary data in sessionStorage, then navigates to /#/preview.
+ * Stores compressed production data in localStorage, then navigates to /#/preview.
  */
 const openFactorySheetPreview = (props: Omit<FactorySheetPreviewProps, 'onClose' | 'onDownload'>) => {
   const payload = {
@@ -36,7 +37,19 @@ const openFactorySheetPreview = (props: Omit<FactorySheetPreviewProps, 'onClose'
     labelFee: props.labelFee,
     overlengthFee: props.overlengthFee,
   };
-  localStorage.setItem('__factorySheetPreviewData', JSON.stringify(payload));
+  // Reopening the editor needs mesh snapshots; the production sheet does not.
+  // Strip only that metadata, retaining all manufacturing and nested furniture rows.
+  const productionPayload = JSON.parse(JSON.stringify(payload, (key, value) =>
+    key === 'designerSnapshot' ? undefined : value));
+  try {
+    localStorage.setItem('__factorySheetPreviewData', JSON.stringify({
+      format: 'compressed-preview-v1', data: encodeDesignerSnapshot(productionPayload),
+    }));
+  } catch (error) {
+    console.error('Unable to save production preview', error);
+    alert('浏览器存储空间不足，无法打开生产单预览。购物车数据仍保留，请从购物车直接下载 PDF。');
+    return;
+  }
 
   // Open in a new window/tab
   const url = `${window.location.origin}${window.location.pathname}#/preview`;

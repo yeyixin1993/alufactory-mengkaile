@@ -1,3 +1,4 @@
+import { decodeDesignerSnapshot } from '../utils/designerCartSnapshot';
 import React, { useRef, useState } from 'react';
 import { CartItem, User, Language, Address } from '../types';
 import { TRANSLATIONS } from '../constants';
@@ -33,8 +34,8 @@ const readPreviewData = (): PreviewData | null => {
   try {
     const raw = localStorage.getItem('__factorySheetPreviewData');
     if (!raw) return null;
-    localStorage.removeItem('__factorySheetPreviewData');
-    return JSON.parse(raw) as PreviewData;
+    const parsed = JSON.parse(raw);
+    return (parsed.format === 'compressed-preview-v1' ? decodeDesignerSnapshot(parsed.data) : parsed) as PreviewData;
   } catch {
     return null;
   }

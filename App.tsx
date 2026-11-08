@@ -1,3 +1,4 @@
+import { readCachedArray, writeCachedArray, removeCachedArray, acceptCachedArray } from './utils/cartCache';
 import { scaleAccessoryKitConfig } from './utils/accessoryKit';
 import { DraftNumberInput, NumericActionButton } from './components/DraftNumberInput';
 import { frameTypeName } from './utils/framePricing';
@@ -146,28 +147,7 @@ const getCacheKey = (prefix: string, userId?: string | null) => {
   return `${prefix}:${scope}`;
 };
 
-const readCachedArray = <T,>(key: string): T[] => {
-  if (typeof window === 'undefined') return [];
-  const raw = localStorage.getItem(key);
-  if (!raw) return [];
-  try {
-    const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? parsed : [];
-  } catch (error) {
-    console.warn(`Failed to parse cache key: ${key}`, error);
-    return [];
-  }
-};
 
-const writeCachedArray = <T,>(key: string, value: T[]) => {
-  if (typeof window === 'undefined') return;
-  localStorage.setItem(key, JSON.stringify(value));
-};
-
-const removeCachedArray = (key: string) => {
-  if (typeof window === 'undefined') return;
-  localStorage.removeItem(key);
-};
 
 const LanguageSwitcher: React.FC<{ current: Language, onChange: (l: Language) => void }> = ({ current, onChange }) => (
   <select 
@@ -636,7 +616,7 @@ const Catalog: React.FC<{ language: Language }> = ({ language }) => {
         {INITIAL_PRODUCTS.map(product => (
           <div key={product.id} id={product.id === 'p2' ? 'profile-products' : undefined} className="scroll-mt-28 bg-white rounded-[2.5rem] overflow-hidden shadow-xl border border-slate-100 hover:shadow-2xl transition-all duration-300 group">
             <div className="h-64 overflow-hidden relative">
-              <img src={product.imageUrl} alt={product.name[language]} loading="lazy" decoding="async" className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-1000" />
+              <img src={product.imageUrl || undefined} alt={product.name[language]} loading="lazy" decoding="async" className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-1000" />
               <div className="absolute inset-0 bg-gradient-to-t from-black/40 via-transparent to-transparent" />
               <div className="absolute top-6 left-6 bg-white/95 backdrop-blur px-3 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest text-slate-800 shadow-xl">{product.type}</div>
             </div>
@@ -1247,6 +1227,10 @@ const Cart: React.FC<{
       });
       const pdfBase64 = await exportToPDF(printRef.current, filename, { returnBase64 });
       return { pdfBase64, filename };
+    } catch (error) {
+      if (returnBase64) throw error; // Checkout owns its error message and must stop submission.
+      console.error('PDF export failed', error);
+      alert('PDF 导出失败，购物车数据仍保留。请重试或分批导出。' + (error instanceof Error ? '\n' + error.message : ''));
     } finally {
       if (!returnBase64) setIsExporting(false);
     }
@@ -1423,7 +1407,7 @@ const Cart: React.FC<{
             <div className="flex gap-2">
               <NumericActionButton onClick={() => openFactorySheetPreview({ cart, user, language, showPrice: true, address: selectedAddress || undefined, shippingMethod: SHIPPING_METHOD_NAMES[activeCourier][language], shippingFee, include304Screws, includeLabelService, labelFee, overlengthFee })} className="flex items-center gap-2 text-slate-700 font-bold px-5 py-3 rounded-2xl border border-slate-200 hover:bg-slate-50 transition-all text-sm"><Eye className="w-4 h-4"/> {t.preview}</NumericActionButton>
               {user?.role === 'admin' && (
-                <NumericActionButton onClick={() => handleGeneratePDF(false)} className="flex items-center gap-2 text-orange-600 font-bold px-5 py-3 rounded-2xl border border-orange-100 bg-orange-50 hover:bg-orange-100 transition-all text-sm"><FileDown className="w-4 h-4"/> {t.downloadNoPrice}</NumericActionButton>
+                <NumericActionButton disabled={isExporting} onClick={() => handleGeneratePDF(false)} className="flex items-center gap-2 text-orange-600 font-bold px-5 py-3 rounded-2xl border border-orange-100 bg-orange-50 hover:bg-orange-100 transition-all text-sm"><FileDown className="w-4 h-4"/> {t.downloadNoPrice}</NumericActionButton>
               )}
             </div>
           </div>
@@ -1585,7 +1569,7 @@ const Cart: React.FC<{
                                 <div className="text-xs font-black text-slate-700 mb-2">{language === 'cn' ? '色板图' : language === 'jp' ? 'カラースウォッチ' : 'Color Swatch'}</div>
                                 <div className="w-36 h-24 rounded-xl border border-slate-200 bg-white overflow-hidden relative">
                                   <img
-                                    src={accessorySwatchSrc}
+                                    src={accessorySwatchSrc || undefined}
                                     alt={String(selectedAccessoryColorName || cfg?.colorId || 'swatch')}
                                     className="w-full h-full object-contain"
                                     onError={(e) => {
@@ -1639,7 +1623,7 @@ const Cart: React.FC<{
                                         <div key={`acc-sel-${imageKey || code}-${idx}`} className="rounded-2xl border border-slate-300 bg-slate-50 p-3">
                                           <div className="h-20 rounded-xl bg-white border border-slate-200 relative overflow-hidden">
                                             <img
-                                              src={imgSrc}
+                                              src={imgSrc || undefined}
                                               alt={lineName}
                                               className="w-full h-full object-contain"
                                               onError={(e) => {
@@ -1700,7 +1684,7 @@ const Cart: React.FC<{
                             <div className="text-xs font-black text-slate-700 mb-2">{language === 'cn' ? '色板图' : language === 'jp' ? 'カラースウォッチ' : 'Color Swatch'}</div>
                             <div className="w-36 h-24 rounded-xl border border-slate-200 bg-white overflow-hidden relative">
                               <img
-                                src={swatchSrc}
+                                src={swatchSrc || undefined}
                                 alt={String(cfg?.colorName || cfg?.colorId || 'swatch')}
                                 className="w-full h-full object-contain"
                                 onError={(e) => {
@@ -2280,7 +2264,7 @@ const ProductDetail: React.FC<{
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-12">
         <div className="lg:col-span-1">
            <div className="bg-white p-8 rounded-[3rem] shadow-2xl border border-slate-100 overflow-hidden sticky top-24">
-             <img src={product.imageUrl} alt={product.name[language]} className="w-full h-56 object-cover rounded-3xl mb-8 shadow-md" />
+             <img src={product.imageUrl || undefined} alt={product.name[language]} className="w-full h-56 object-cover rounded-3xl mb-8 shadow-md" />
              <h2 className="text-3xl font-black text-slate-900 mb-4">{product.name[language]}</h2>
              <p className="text-slate-500 text-sm leading-relaxed mb-8">{product.description[language]}</p>
              <div className="flex items-center gap-2 text-blue-600 font-black text-xs uppercase bg-blue-50 px-3 py-1.5 rounded-full w-fit">
@@ -2361,6 +2345,12 @@ const App: React.FC = () => {
   const [showWeChatBrowserNotice, setShowWeChatBrowserNotice] = useState(() => (
     typeof navigator !== 'undefined' && /MicroMessenger/i.test(navigator.userAgent)
   ));
+  const [cacheUnavailable, setCacheUnavailable] = useState(false);
+  useEffect(() => {
+    const warn = () => setCacheUnavailable(true);
+    window.addEventListener('cart-cache-unavailable', warn);
+    return () => window.removeEventListener('cart-cache-unavailable', warn);
+  }, []);
   const [cart, setCart] = useState<CartItem[]>(() => readCachedArray<CartItem>(getCacheKey(CART_CACHE_PREFIX)));
   const [draftProfiles, setDraftProfiles] = useState<CartItem[]>(() => readCachedArray<CartItem>(getCacheKey(DRAFT_CACHE_PREFIX)));
   const [user, setUser] = useState<User | null>(null);
@@ -2377,7 +2367,7 @@ const App: React.FC = () => {
     const syncTabCart = (event: StorageEvent) => {
       if (event.key !== getCacheKey(CART_CACHE_PREFIX, user?.id)) return;
       try {
-        const next = event.newValue ? JSON.parse(event.newValue) : [];
+        const next = acceptCachedArray<CartItem>(event.key!, event.newValue);
         if (!Array.isArray(next)) return;
         skipNextCartPersistRef.current = true;
         skipNextServerSyncRef.current = true;
@@ -2596,6 +2586,7 @@ const App: React.FC = () => {
     <HashRouter>
       <RouteHashSync onChange={setCurrentHash} />
       <div className={`min-h-screen font-sans text-slate-900 selection:bg-blue-100 selection:text-blue-900 ${isPreviewRoute || isDesignerRoute || isAIChatRoute ? '' : 'bg-slate-50 pb-20'}`}>
+        {cacheUnavailable && <div role="alert" className="fixed bottom-4 left-4 right-4 z-[10001] rounded-xl bg-amber-100 p-4 text-amber-950 shadow-lg">浏览器存储空间不足，购物车仍可继续使用，但刷新或关闭页面可能丢失本次更改。请先保存设计或完成订单。<button className="ml-4 underline" onClick={() => setCacheUnavailable(false)}>知道了</button></div>}
         {showWeChatBrowserNotice && (
           <div className="fixed inset-0 z-[10000] flex items-start justify-center bg-slate-950/65 px-4 pt-16 backdrop-blur-sm" role="dialog" aria-modal="true" aria-labelledby="wechat-browser-title">
             <div className="relative w-full max-w-md rounded-[2rem] border border-amber-200 bg-white p-6 shadow-2xl">

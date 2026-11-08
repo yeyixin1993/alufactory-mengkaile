@@ -1,0 +1,18 @@
+import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import { writeCachedArray, readCachedArray, decodeCachedArray, acceptCachedArray, removeCachedArray } from '../utils/cartCache';
+import { encodeDesignerSnapshot } from '../utils/designerCartSnapshot';
+const data = process.argv[2] ? JSON.parse(readFileSync(process.argv[2], 'utf8')) : {items: Array.from({length:300}, (_,id)=>({id,kind:'profile',length:2200}))};
+const snapshot = encodeDesignerSnapshot(data);
+const rows = Array.from({length:100},(_,id)=>({id,config:{designerSnapshot:snapshot},quantity:1}));
+const storage = new Map<string,string>(); let fail=false, warned=false;
+Object.assign(globalThis,{localStorage:{getItem:(k:string)=>storage.get(k)??null,setItem:(k:string,v:string)=>{if(fail)throw new Error('QuotaExceededError');storage.set(k,v)},removeItem:(k:string)=>storage.delete(k)},window:{dispatchEvent:()=>{warned=true}}});
+writeCachedArray('cart',rows);
+assert.deepEqual(decodeCachedArray(storage.get('cart')!), rows);
+assert(storage.get('cart')!.length < JSON.stringify(rows).length / 10);
+console.log('Supplied design, 100 cart rows:', JSON.stringify(rows).length,'=>',storage.get('cart')!.length,'characters');
+assert.deepEqual(decodeCachedArray(JSON.stringify(rows.slice(0,1))),rows.slice(0,1));
+fail=true; writeCachedArray('cart',rows.slice(0,2)); assert(warned); assert.equal(readCachedArray('cart').length,2);
+acceptCachedArray('cart',storage.get('cart')!); assert.equal(readCachedArray('cart').length,100);
+removeCachedArray('cart'); assert.deepEqual(readCachedArray('cart'),[]);
+console.log('Round trip, legacy cache, quota failure, cross-tab sync and clearing passed');

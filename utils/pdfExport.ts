@@ -83,7 +83,13 @@ const findExportBlocks = (element: HTMLElement): HTMLElement[] => {
 
 type Html2Canvas = typeof import('html2canvas')['default'];
 
-const captureBlock = async (element: HTMLElement, html2canvas: Html2Canvas) => html2canvas(element, {
+const captureBlock = async (element: HTMLElement, html2canvas: Html2Canvas) => {
+  const rect = element.getBoundingClientRect();
+  // Refuse an unsafe allocation before the browser can exhaust its canvas memory.
+  if (rect.width * rect.height * 4 > 16_000_000 || rect.height * 2 > 32767) {
+    throw new Error('单个生产单区块过大，请分批导出 PDF。购物车数据仍保留。');
+  }
+  return html2canvas(element, {
   // Use an integer raster scale. Fractional scaling can place CJK fallback
   // glyph baselines on half pixels in html2canvas, which makes text inside
   // flex/overflow containers look lowered or clips part of a glyph in the
@@ -97,7 +103,8 @@ const captureBlock = async (element: HTMLElement, html2canvas: Html2Canvas) => h
   scrollX: 0,
   scrollY: -window.scrollY,
   windowWidth: Math.max(document.documentElement.clientWidth, element.scrollWidth),
-});
+  });
+};
 
 const getProtectedRanges = (element: HTMLElement, canvas: HTMLCanvasElement) => {
   const rootRect = element.getBoundingClientRect();
@@ -205,6 +212,7 @@ export const exportElementToPdf = async (
 
     for (const block of blocks) {
       const canvas = await captureBlock(block, html2canvas);
+      try {
       if (canvas.width <= 0 || canvas.height <= 0) continue;
       hasVisibleContent = hasVisibleContent || canvasHasVisibleContent(canvas);
 
@@ -232,12 +240,22 @@ export const exportElementToPdf = async (
         const pageCanvas = sliceCanvas(canvas, sourceY, endY);
         const pageHeightMm = pageCanvas.height * mmPerPixel;
         lastSliceHeightMm = pageHeightMm;
-        pdf.addImage(pageCanvas, 'JPEG', marginMm, marginMm, contentWidthMm, pageHeightMm, undefined, 'FAST');
+        try {
+          pdf.addImage(pageCanvas, 'JPEG', marginMm, marginMm, contentWidthMm, pageHeightMm, undefined, 'FAST');
+        } finally {
+          pageCanvas.width = 0;
+          pageCanvas.height = 0;
+        }
         pageHasContent = true;
         sourceY = endY;
         if (sourceY < canvas.height) addPage();
       }
       currentY = marginMm + lastSliceHeightMm + blockGapMm;
+      } finally {
+        canvas.width = 0;
+        canvas.height = 0;
+      }
+      await nextFrame();
     }
 
     if (!pageHasContent || !hasVisibleContent) throw new Error('PDF export produced no visible content.');

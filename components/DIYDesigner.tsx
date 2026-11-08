@@ -1930,6 +1930,7 @@ export const buildImportedComponentCartItem = (
     catalogItemId: linkedAccessory?.defId,
     importedSourcePart: !linkedAccessory,
     priceBasis: importedPrice.basis,
+    priceStatus: importedPrice.status,
     diyPosition: item.position,
     diyRotation: item.rotation,
     remark: item.remark?.trim() || undefined,

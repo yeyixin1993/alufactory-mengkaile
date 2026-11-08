@@ -824,11 +824,16 @@ const FactorySheet: React.FC<FactorySheetProps> = ({ cart, user, language, order
                         ? (selectedAccessoryColorName || (language === 'cn' ? '彩色' : language === 'jp' ? 'カラー' : 'Colored'))
                         : (cfg?.colorMode || '-');
                     const totalQty = Number(cfg?.totalQuantity || 0);
+                    const pendingSource = cfg?.priceStatus === 'pending'
+                      || (cfg?.importedSourcePart && selectedLines.length > 0 && selectedLines.every((line: any) => Number(line.subtotal || 0) === 0));
                     const showAccessorySwatch = rawColorMode === 'colored' && !!cfg?.colorId;
                     const accessorySwatchSrc = showAccessorySwatch ? getProfileColorPhotoSrc(String(cfg.colorId)) : '';
 
                     return (
                       <>
+                        {pendingSource && <p className="text-xs font-bold text-amber-800">
+                          {language === 'cn' ? '未识别/未定价部件：保留在生产清单中，暂按 ¥0 计价，规格及价格待核实。' : language === 'jp' ? '未確認部品：製造明細に記載し、暫定価格は ¥0。仕様・価格は要確認。' : 'Unidentified/unpriced parts are included at ¥0 pending specification and price confirmation.'}
+                        </p>}
                         <div className="bg-slate-50 p-4 rounded-xl border border-slate-100">
                           <h4 className="text-xs font-black text-slate-400 uppercase tracking-widest border-b border-slate-200 pb-2 mb-3">{t.specs}</h4>
                           <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-xs">
@@ -851,7 +856,7 @@ const FactorySheet: React.FC<FactorySheetProps> = ({ cart, user, language, order
                                 <div className="border border-slate-200 rounded-xl bg-white p-3 flex gap-3 items-center">
                                   <div className="w-20 h-16 rounded-lg border border-slate-200 bg-slate-50 overflow-hidden relative shrink-0">
                                     <img
-                                      src={accessorySwatchSrc}
+                                      src={accessorySwatchSrc || undefined}
                                       alt={String(selectedAccessoryColorName || cfg?.colorId || 'swatch')}
                                       className="w-full h-full object-contain"
                                       onError={(e) => {
@@ -881,7 +886,7 @@ const FactorySheet: React.FC<FactorySheetProps> = ({ cart, user, language, order
                                   <div key={`acc-line-${imageKey || code}-${lineIdx}`} className="border border-slate-200 rounded-xl bg-white p-3 flex gap-3 items-center">
                                     <div className="w-20 h-16 rounded-lg border border-slate-200 bg-slate-50 overflow-hidden relative shrink-0">
                                       <img
-                                        src={imgSrc}
+                                        src={imgSrc || undefined}
                                         alt={lineName}
                                         className="w-full h-full object-contain"
                                         onError={(e) => {
@@ -953,7 +958,7 @@ const FactorySheet: React.FC<FactorySheetProps> = ({ cart, user, language, order
                         <div className="mt-3">
                           <div className="w-36 h-24 rounded-lg border border-slate-200 bg-white overflow-hidden relative">
                             <img
-                              src={swatchSrc}
+                              src={swatchSrc || undefined}
                               alt={String(cfg?.colorName || cfg?.colorId || 'swatch')}
                               className="w-full h-full object-contain"
                               onError={(e) => {
