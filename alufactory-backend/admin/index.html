@@ -1487,6 +1487,7 @@
                 }
                 
                 const data = await response.json();
+                ordersCache = {}; // Retain only the requested page.
                 const tbody = document.getElementById('ordersTableBody');
                 tbody.innerHTML = '';
                 const duplicateNotice = document.getElementById('duplicateOrderNotice');
@@ -1848,11 +1849,20 @@
 
         let activeOrderJsonDownload = null;
 
-        function showOrderJson(orderId) {
+        async function showOrderJson(orderId) {
             const order = ordersCache[orderId];
             if (!order) {
                 alert('订单数据尚未加载，请刷新后重试。');
                 return;
+            }
+            if (!order.order_json) {
+                try {
+                    const response = await fetch(`${API_BASE}/admin/orders/${encodeURIComponent(orderId)}/json`, {
+                        headers: { 'Authorization': `Bearer ${authToken}` }
+                    });
+                    if (!response.ok) throw new Error('订单 JSON 加载失败');
+                    Object.assign(order, await response.json());
+                } catch (error) { alert(error.message); return; }
             }
             const duplicateWarning = document.getElementById('orderJsonDuplicateWarning');
             if (order.is_duplicate) {

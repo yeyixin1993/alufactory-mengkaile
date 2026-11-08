@@ -84,6 +84,17 @@ class OrderDeletionAndDuplicateTest(unittest.TestCase):
 
         admin_orders = self.client.get('/api/admin/orders', headers=self.headers)
         self.assertEqual(admin_orders.status_code, 200, admin_orders.get_json())
+        rows = admin_orders.get_json()['orders']
+        self.assertTrue(all('order_json' not in row and row['items'] == [] for row in rows))
+        page_one = self.client.get('/api/admin/orders?per_page=1&page=1', headers=self.headers).get_json()
+        page_two = self.client.get('/api/admin/orders?per_page=1&page=2', headers=self.headers).get_json()
+        self.assertEqual(len(page_one['orders']), 1)
+        self.assertEqual(page_one['total'], 2)
+        self.assertNotEqual(page_one['orders'][0]['id'], page_two['orders'][0]['id'])
+        detail = self.client.get(f"/api/admin/orders/{first_order['id']}/json", headers=self.headers)
+        self.assertEqual(detail.status_code, 200)
+        self.assertTrue(detail.get_json()['order_json']['items'])
+        self.assertEqual(self.client.get(f"/api/admin/orders/{first_order['id']}/json").status_code, 401)
         duplicate_rows = [entry for entry in admin_orders.get_json()['orders'] if entry['is_duplicate']]
         self.assertEqual(len(duplicate_rows), 2)
         self.assertTrue(all(entry['duplicate_count'] == 2 for entry in duplicate_rows))

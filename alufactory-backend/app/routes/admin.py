@@ -1,3 +1,4 @@
+from sqlalchemy.orm import defer
 from flask import Blueprint, request, jsonify, Response, current_app, send_file
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from datetime import datetime
@@ -337,41 +338,32 @@ def delete_user(user_id):
 def get_all_orders():
     """Get all orders (admin only)"""
     try:
-        page = request.args.get('page', 1, type=int)
-        per_page = request.args.get('per_page', 50, type=int)
+        page = max(1, request.args.get('page', 1, type=int))
+        per_page = min(100, max(1, request.args.get('per_page', 20, type=int)))
         status = request.args.get('status')
         
-        query = Order.query
+        query = Order.query.options(defer(Order.order_json))
         if status:
             query = query.filter_by(status=status)
         
-        orders_paginated = query.order_by(Order.created_at.desc()).paginate(page=page, per_page=per_page)
+        orders_paginated = query.order_by(Order.created_at.desc(), Order.id.desc()).paginate(page=page, per_page=per_page, error_out=False)
         
-        # Ensure legacy rows have the same stored JSON/fingerprint as new orders.
-        snapshot_changed = False
-        for order in orders_paginated.items:
-            if not order.order_json or not order.duplicate_fingerprint:
-                refresh_order_json(order)
-                snapshot_changed = True
-        if snapshot_changed:
-            db.session.commit()
-
         fingerprints = {
             order.duplicate_fingerprint for order in orders_paginated.items
             if order.duplicate_fingerprint
         }
         duplicate_groups = {}
         if fingerprints:
-            matching_orders = Order.query.filter(Order.duplicate_fingerprint.in_(fingerprints)).all()
+            matching_orders = db.session.query(Order.id, Order.order_number, Order.user_id, Order.duplicate_fingerprint).filter(Order.duplicate_fingerprint.in_(fingerprints)).all()
             for matching_order in matching_orders:
                 key = (str(matching_order.user_id), matching_order.duplicate_fingerprint)
                 duplicate_groups.setdefault(key, []).append(matching_order)
 
+        users = {user.id: user for user in User.query.filter(User.id.in_({order.user_id for order in orders_paginated.items})).all()}
         orders_data = []
         for order in orders_paginated.items:
-            order_dict = order.to_dict(include_order_json=True)
-            user = User.query.get(order.user_id)
-            profile = Profile.query.filter_by(user_id=order.user_id).first()
+            order_dict = order.to_dict(summary_only=True)
+            user = users.get(order.user_id)
 
             pdf_dir = os.path.join(current_app.instance_path, 'order_pdfs')
             pdf_path = os.path.join(pdf_dir, f"{order.id}.pdf")
@@ -415,6 +407,16 @@ def get_all_orders():
         import traceback
         current_app.logger.error(f'Orders error: {traceback.format_exc()}')
         return jsonify({'error': f'Failed to load orders: {str(e)}'}), 500
+
+
+@admin_bp.route('/orders/<order_id>/json', methods=['GET'])
+@admin_required
+def get_order_json(order_id):
+    order = db.get_or_404(Order, order_id)
+    if not order.order_json or not order.duplicate_fingerprint:
+        refresh_order_json(order)
+        db.session.commit()
+    return jsonify({'order_json': order.order_json, 'duplicate_fingerprint': order.duplicate_fingerprint})
 
 
 @admin_bp.route('/orders/<order_id>/pdf', methods=['GET'])
