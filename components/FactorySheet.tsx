@@ -6,6 +6,7 @@ import { TRANSLATIONS, PROFILE_COLORS, getMarineBoardOrderColorName, getProfileC
 import type { ShippingMethod } from '../constants';
 import ProfileVisualizer from './ProfileVisualizer';
 import { describeHolePassage, getHolePhysicalGrooveIndex } from '../utils/profileMachining';
+import { getProfileModelLabel } from '../utils/profileModelLabel';
 import { calculateScrewPlan } from '../utils/screwCalculator';
 import {
   getProfileManufacturingGroupKey,
@@ -39,6 +40,74 @@ interface FactorySheetProps {
 }
 
 const getCurrency = (lang: Language) => lang === 'cn' ? '￥' : '$';
+
+/** Profiles that only accept end tapping (no drilling) as their processing state. */
+const TAP_ONLY_VARIANTS = new Set(['2040', '3060', '3060-N1-60', '2040-N1-20', '2040-N1-40', '2047', '2060', '20100', '4080']);
+
+/**
+ * A profile with no drilling, no miter cut and (unless the section supports it)
+ * no end tapping is "cut to length" only: the factory only needs its length and
+ * quantity, which the PROFILES SUMMARY table already lists. Such rows are left
+ * out of the numbered part cards so the sheet does not print a card per length.
+ */
+const isCutOnlyProfileItem = (item: CartItem) => {
+  if (item.product.type !== ProductType.PROFILE) return false;
+  const config = (item.config || {}) as ProfileConfig;
+  const hasTap = !!(config.tapping?.left?.some(Boolean) || config.tapping?.right?.some(Boolean));
+  const hasDrill = Array.isArray(config.holes) && config.holes.length > 0;
+  const hasMiter = !!(config.miterCut?.left?.enabled || config.miterCut?.right?.enabled);
+  if (hasDrill || hasMiter) return false;
+  if (hasTap && TAP_ONLY_VARIANTS.has(String(config.variantId))) return false;
+  return true;
+};
+
+/**
+ * Fixed-size badge (card number, drilling face letter) whose glyph is drawn as
+ * SVG text instead of regular text.
+ *
+ * Why: the "image PDF" fallback still rasterises this sheet with html2canvas.
+ * That rasteriser positions text inside small fixed-size boxes wrongly — the
+ * baseline lands on the box's bottom edge, so the digit/letter sits low and gets
+ * clipped. It does this regardless of whether the box centres with flex,
+ * grid, table-cell, absolute positioning or line-height (all verified), and
+ * regardless of the font. An inline <svg> is serialised to an image and painted
+ * by the browser itself, so the glyph stays exactly centred in both the live
+ * preview, the printed PDF and the image PDF.
+ */
+const SheetBadge: React.FC<{
+  size: number;
+  label: string;
+  tone: 'light' | 'dark';
+  fontSize?: number;
+}> = ({ size, label, tone, fontSize }) => {
+  const light = tone === 'light';
+  return (
+    <span
+      className={`shrink-0 block rounded-lg ${light ? 'bg-white' : 'bg-slate-900'}`}
+      style={{ width: size, height: size }}
+    >
+      <svg
+        width={size}
+        height={size}
+        viewBox={`0 0 ${size} ${size}`}
+        role="img"
+        aria-label={label}
+        style={{ display: 'block' }}
+      >
+        <text
+          x={size / 2}
+          y={size / 2}
+          textAnchor="middle"
+          dominantBaseline="central"
+          fontSize={fontSize ?? Math.round(size * 0.625)}
+          fontWeight={900}
+          fontFamily="Arial, Helvetica, sans-serif"
+          fill={light ? '#0f172a' : '#ffffff'}
+        >{label}</text>
+      </svg>
+    </span>
+  );
+};
 
 const pickFirstNonEmpty = (...values: any[]): string => {
   for (const value of values) {
@@ -111,7 +180,7 @@ const FactorySheet: React.FC<FactorySheetProps> = ({ cart, user, language, order
       const cfg = item.config as ProfileConfig;
 
       const length = `${cfg.length}`;
-      const model = `${cfg.variantId}`;
+      const model = getProfileModelLabel(cfg.variantId, language);
       const colorDef = PROFILE_COLORS.find(c => c.id === cfg.colorId);
       const colorName = colorDef?.name[language] || '';
 
@@ -222,9 +291,17 @@ const FactorySheet: React.FC<FactorySheetProps> = ({ cart, user, language, order
     () => displayCart.filter((item) => !isDiyScrewAccessory(item)),
     [displayCart],
   );
+  // Card numbering must follow what is actually printed, so the cut-only
+  // profiles are removed before the list is numbered.
+  const cardDisplayCart = React.useMemo(
+    () => nonScrewDisplayCart.filter((item) => !isCutOnlyProfileItem(item)),
+    [nonScrewDisplayCart],
+  );
 
   const profileMetersSummary = React.useMemo(() => {
-    const meterMap = new Map<string, number>();
+    // Keyed by the raw catalog id so the per-screw lookups below keep working;
+    // the printed label is resolved separately and may be Chinese spelled out.
+    const meterMap = new Map<string, { modelId: string; modelLabel: string; millFinish: string; meters: number }>();
 
     productionCart.forEach((item) => {
       if (item.product.type !== ProductType.PROFILE) return;
@@ -243,14 +320,21 @@ const FactorySheet: React.FC<FactorySheetProps> = ({ cart, user, language, order
             : cfg.finish === 'electrophoretic'
               ? t.finishElectrophoretic
               : cfg.finish || '-';
-      const key = `${cfg.variantId || '-'} · ${colorName} · ${finishLabel}`;
+      const modelId = String(cfg.variantId || '-');
+      const key = `${modelId} · ${colorName} · ${finishLabel}`;
 
-      const prev = meterMap.get(key) || 0;
-      meterMap.set(key, prev + (lengthMm * qty) / 1000);
+      const prev = meterMap.get(key);
+      const meters = (prev?.meters || 0) + (lengthMm * qty) / 1000;
+      meterMap.set(key, {
+        modelId,
+        modelLabel: getProfileModelLabel(cfg.variantId, language),
+        millFinish: `${colorName} · ${finishLabel}`,
+        meters,
+      });
     });
 
     return Array.from(meterMap.entries())
-      .map(([name, meters]) => ({ name, meters }))
+      .map(([key, row]) => ({ key, name: `${row.modelLabel} · ${row.millFinish}`, modelId: row.modelId, meters: row.meters }))
       .sort((a, b) => b.meters - a.meters);
   }, [productionCart, language, t.finishOxidized, t.finishPowder, t.finishElectrophoretic]);
 
@@ -407,7 +491,7 @@ const FactorySheet: React.FC<FactorySheetProps> = ({ cart, user, language, order
   //const finalTotal = baseTotal + shippingFee;
 
   return (
-    <div id={id} className="bg-white p-10 font-sans antialiased leading-normal text-slate-900 w-[210mm] mx-auto shadow-none box-border border border-slate-100 flex flex-col gap-6">
+    <div id={id} className="factory-sheet bg-white p-10 font-sans antialiased leading-normal text-slate-900 w-[210mm] mx-auto shadow-none box-border border border-slate-100 flex flex-col gap-6">
       {/* Header */}
       <div data-pdf-block className="border-b-4 border-slate-900 pb-6 flex justify-between items-end">
         <div className="flex-1">
@@ -447,11 +531,11 @@ const FactorySheet: React.FC<FactorySheetProps> = ({ cart, user, language, order
           <div className="text-xs font-black text-slate-500 uppercase tracking-widest mb-2">{t.qq_profileMetersByModelColor || '型材米数汇总'}</div>
           <ul className="space-y-1.5 text-xs text-slate-700">
             {profileMetersSummary.map((row) => (
-              <li key={row.name} className="flex items-start justify-between gap-3 leading-5">
+              <li key={row.key} className="flex items-start justify-between gap-3 leading-5">
                 <span className="min-w-0 break-words">
                   {row.name}
                   {(() => {
-                    const model = String(row.name || '').split('·')[0].trim();
+                    const model = row.modelId;
                     const diyScrews = diyScrewByModel.get(model);
                     if (diyScrews && (diyScrews.socketCylinder > 0 || diyScrews.buttonSocket > 0 || diyScrews.flatSocket > 0)) {
                       return (
@@ -583,9 +667,10 @@ const FactorySheet: React.FC<FactorySheetProps> = ({ cart, user, language, order
                   const colorName = PROFILE_COLORS.find((color) => color.id === row.colorId)?.name?.[language]
                     || row.colorName
                     || '-';
+                  const modelLabel = getProfileModelLabel(row.profileModel, language);
                   const profileSpec = row.profileModel === row.profileSize
-                    ? row.profileModel
-                    : `${row.profileModel} / ${row.profileSize}`;
+                    ? modelLabel
+                    : `${modelLabel} / ${row.profileSize}`;
                   return (
                     <tr key={`${row.profileModel}-${row.profileSize}-${row.screwHead}-${row.screwThreadSize}-${row.screwLengthMm}-${rowIndex}`}>
                       <td className="border border-slate-100 p-2 font-black">{profileSpec}</td>
@@ -605,7 +690,13 @@ const FactorySheet: React.FC<FactorySheetProps> = ({ cart, user, language, order
 
       {/* Items */}
       <div className="space-y-10">
-        {nonScrewDisplayCart.map((item, idx) => {
+        {/*
+          Cut-only profiles are folded into the PROFILES SUMMARY table above and
+          removed from `cardDisplayCart`, so the printed card number is the
+          rendered position — using the raw index left gaps (4, 5, 6…) and made
+          the factory think cards 1–3 were missing.
+        */}
+        {cardDisplayCart.map((item, idx) => {
            const isProfile = item.product.type === ProductType.PROFILE;
             const isAccessory = item.product.type === ProductType.ACCESSORY;
            const isStorefrontSku = item.product.type === ProductType.STOREFRONT_SKU;
@@ -638,22 +729,17 @@ const FactorySheet: React.FC<FactorySheetProps> = ({ cart, user, language, order
                 profileCfg.finish === 'electrophoretic' ? t.finishElectrophoretic : profileCfg.finish)
              : '';
 
-           // Early per-item processing detection: if raw (no drilling/tapping/miter), skip rendering this PROFILE item
-           const itemHasTap = isProfile && !!(profileCfg.tapping?.left?.some(Boolean) || profileCfg.tapping?.right?.some(Boolean));
-           const itemHasDrill = isProfile && Array.isArray(profileCfg.holes) && profileCfg.holes.length > 0;
-           const itemHasMiter = isProfile && !!(profileCfg.miterCut?.left?.enabled || profileCfg.miterCut?.right?.enabled);
-           let itemProcessingState: 'raw' | 'tap' | 'drill' | 'miter' = 'raw';
-           if (itemHasDrill) itemProcessingState = 'drill';
-           else if (itemHasMiter) itemProcessingState = 'miter';
-           else if (itemHasTap && ['2040', '3060', '3060-N1-60', '2040-N1-20', '2040-N1-40', '2047', '2060', '20100', '4080'].includes(String(profileCfg.variantId))) itemProcessingState = 'tap';
-
-           if (isProfile && itemProcessingState === 'raw') return null;
-
+           // Cut-only profiles never reach this point (see cardDisplayCart).
            return (
            <div key={idx} data-pdf-block className="break-inside-avoid border-2 border-slate-900 rounded-xl overflow-hidden bg-white shadow-sm">
              <div className="bg-slate-900 text-white px-5 py-3 flex justify-between items-center">
                 <div className="flex items-center gap-3">
-                   <span className="bg-white text-slate-900 w-8 h-8 flex items-center justify-center rounded-lg font-black text-xl">{idx + 1}</span>
+                   <SheetBadge
+                     size={32}
+                     tone="light"
+                     label={String(idx + 1)}
+                     fontSize={String(idx + 1).length > 1 ? 17 : 20}
+                   />
                    <span className="font-black text-xl tracking-tight">{item.product.name[language]}</span>
                 </div>
                 <div className="flex items-center gap-6">
@@ -662,14 +748,14 @@ const FactorySheet: React.FC<FactorySheetProps> = ({ cart, user, language, order
                 </div>
              </div>
              
-             <div className="p-6">
+             <div className="p-6 factory-card-body">
                {isProfile ? (
-                 <div className="space-y-8">
+                 <div className="space-y-8 factory-card-stack">
                     {/* Specs Information */}
                     <div className="bg-slate-50 p-4 rounded-xl border border-slate-100">
                        <h4 className="text-xs font-black text-slate-400 uppercase tracking-widest border-b border-slate-200 pb-2 mb-3">{t.specs}</h4>
                        <div className="grid grid-cols-4 gap-4 text-xs">
-                          <div className="flex flex-col"><span className="text-slate-400 mb-1">{t.model}</span><span className="font-black">{profileCfg.variantId}</span></div>
+                          <div className="flex flex-col"><span className="text-slate-400 mb-1">{t.model}</span><span className="font-black">{getProfileModelLabel(profileCfg.variantId, language)}</span></div>
                           <div className="flex flex-col"><span className="text-slate-400 mb-1">{t.length}</span><span className="font-black">{profileCfg.length}mm</span></div>
                           <div className="flex flex-col"><span className="text-slate-400 mb-1">{t.color}</span><span className="font-black">{colorDef?.name[language]}</span></div>
                           <div className="flex flex-col"><span className="text-slate-400 mb-1">{t.finish}</span><span className="font-black">{finishLabel}</span></div>
@@ -729,9 +815,12 @@ const FactorySheet: React.FC<FactorySheetProps> = ({ cart, user, language, order
                           <div className="grid grid-cols-1 gap-4">
                             {sidesToShow.map(side => (
                               <div key={side} className="flex gap-4 items-center">
-                                <div className="w-10 h-10 bg-slate-900 text-white rounded-lg flex items-center justify-center font-black text-xl">{side}</div>
+                                {/* Same reason as the header number badge: the letter is
+                                    drawn as SVG text so the image-PDF export keeps it
+                                    centered inside the square. */}
+                                <SheetBadge size={40} tone="dark" label={side} fontSize={20} />
                                 <div className="flex-1 bg-slate-50 border border-slate-200 rounded-xl p-3 overflow-visible">
-                                  <ProfileVisualizer config={profileCfg} selectedSide={side} onSideChange={() => {}} interactive={false} tapLabel={t.tapAction} showSideSelector={false} />
+                                  <ProfileVisualizer config={profileCfg} selectedSide={side} onSideChange={() => {}} interactive={false} tapLabel={t.tapAction} showSideSelector={false} modelLabel={getProfileModelLabel(profileCfg.variantId, language)} />
                                 </div>
                               </div>
                             ))}
@@ -815,7 +904,7 @@ const FactorySheet: React.FC<FactorySheetProps> = ({ cart, user, language, order
                   {(() => {
                     const lines = Array.isArray(cfg?.lines) ? cfg.lines : [];
                     const selectedLines = lines.filter((line: any) => Number(line?.quantity || 0) > 0);
-                    const fitModel = cfg?.profileSize || cfg?.size || cfg?.variantId || '-';
+                    const fitModel = getProfileModelLabel(cfg?.profileSize || cfg?.size || cfg?.variantId, language);
                     const rawColorMode = String(cfg?.colorMode || '').toLowerCase();
                     const selectedAccessoryColorName = cfg?.colorName || (cfg?.colorId ? PROFILE_COLORS.find(c => c.id === cfg.colorId)?.name?.[language] : '');
                     const colorModeText = rawColorMode === 'natural'

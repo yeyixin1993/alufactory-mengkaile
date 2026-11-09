@@ -22,6 +22,8 @@ interface ProfileVisualizerProps {
   tapLabel: string; // New prop for localized label
   showSideSelector?: boolean;
   previewHoleId?: string;
+  // Optional factory-facing name (e.g. "2040 N1-20封"); editor/quote views keep the catalog name.
+  modelLabel?: string;
 }
 
 /**
@@ -122,7 +124,8 @@ const ProfileVisualizer: React.FC<ProfileVisualizerProps> = ({
   previewHoleId,
   interactive = false,
   tapLabel,
-  showSideSelector = true
+  showSideSelector = true,
+  modelLabel
 }) => {
   const { length, variantId, holes, tapping } = config;
   const selectedVariant = PROFILE_VARIANTS.find(v => v.id === variantId) || PROFILE_VARIANTS[0];
@@ -287,7 +290,7 @@ const ProfileVisualizer: React.FC<ProfileVisualizerProps> = ({
           )}
 
           <div className="absolute inset-0 flex items-center justify-center pointer-events-none opacity-10 overflow-hidden">
-             <span className="text-2xl font-black text-slate-500 whitespace-nowrap">{selectedVariant.name}</span>
+             <span className="text-2xl font-black text-slate-500 whitespace-nowrap">{modelLabel || selectedVariant.name}</span>
           </div>
 
           {/* Holes */}

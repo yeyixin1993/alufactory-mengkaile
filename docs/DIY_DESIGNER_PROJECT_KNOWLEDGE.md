@@ -810,3 +810,17 @@ Maintain the complete current BOM across incremental replies and explanatory que
 2026-11-06：购物车本地缓存对重复 designerSnapshot 建共享表后整体压缩，读取时恢复每行完整快照，兼容旧 JSON 数组并同步跨标签页更新。存储超限不得导致白屏：保留当前内存购物车，明确提醒刷新/关闭可能丢失未保存更改；不删减生产数据或清除其他本地设计。
 
 2026-11-06：生产单预览和生产PDF必须包含未识别/未定价部件，数量不丢失，暂按¥0并标注待核实；不能以无目录、无图片、零金额为由过滤。相同部件可合并数量，不同规格保持独立。
+
+2026-11-09：生产单/生产PDF 上的型材型号按 Quick Quote 的显示名打印，不印原始目录 id。车间只看中文，`2020-N4-RD` → `2020 N4 圆形`、`-SQ` → `方形`、`-OPP` → `对边`；N1/N2/N1-60 等代号保持字母不变（仅把连字符写成目录名的空格形式）。en/jp 单据分别打印 Round/Square/Opposite 与 丸形/角形/対辺。内部逻辑（分组、螺丝配发、孔位物理槽、价格）继续用原始 variantId，显示层单独解析。
+
+2026-11-09：生产单的「下载 PDF」改为浏览器打印（window.print）+ `@page A4` 打印样式，不再默认走 html2canvas 位图。理由：位图 PDF 文字不可选、放大发虚，且截图瞬间样式未稳时会出现编号方块塌陷、表格撑破卡片（客户 2026-11-09 遇到的坏单即此竞态）。实现要点：① 打印样式由 `FactorySheetPreviewPage` 内联注入（不写进 index.css），否则会污染画册页自己的 210×297 满版打印契约；② `@page { size:A4; margin:8mm 0 }`，左右留白仍由 FactorySheet 的 p-10 承担，续页卡片不会被打印机裁切区吃掉，内容宽度保持 210mm 不变以免卡片被撑高；③ `.factory-sheet` 打印时强制块级布局并用 margin 复刻 flex gap-6（Chrome 对 flex 分页不稳定，`break-inside:avoid` 会被忽略）；④ `[data-pdf-block]/tr/img/svg` 均 `break-inside:avoid`，长表格 `thead` 重复；⑤ 卡片正文打印时上下 padding 与内部 stack 间距各收 8px/16px，避免「一张卡片刚好多出几十像素 → 只溢出一行表格到孤页」；⑥ 手机/微信浏览器没有「另存为 PDF」，保留「图片版 PDF」按钮作兜底。文件名：打印前把 `document.title` 临时改成单据号（Chrome/Edge 的「另存为 PDF」用它预填文件名）。
+
+2026-11-09（补）：生产单的「编号方块」与「孔面字母方块」改为内联 SVG 文字居中。原因：图片版 PDF 走 html2canvas，它对「固定尺寸小方块里的文字」垂直居中失效——基线会落在方块底边，数字/字母压到底部并被裁切；实测 flex 居中、line-height、table-cell、grid、absolute inset 五种写法全部失效，与字体无关（Arial / PingFang / 站点 Noto 均如此），而把字形放进内联 `<svg><text dominant-baseline="central" text-anchor="middle">` 后由浏览器自行栅格化即完全居中。同一函数 `SheetBadge({size,label,tone,fontSize})` 复用于卡片编号（32px/白底深字）与孔面字母（40px/深底白字），保留 `shrink-0` 防止挤压塌陷。断言：canvas 2× 下编号方块 64×64、字形上下留白 17/18px、左右 24/27px；字母方块 80×80、四边留白均 26px。
+
+2026-11-09（补）：生产单卡片编号按「实际打印出来的卡片」连续编号。只切料、无打孔/斜切（且断面不支持端面攻丝）的型材本来就不出卡片，只在 PROFILES SUMMARY 汇总长度与数量；此前编号取数组下标，遇到这类行会跳号（示例工作台那单直接从「4」开始，工厂会以为丢了 1–3）。现在先过滤出 `cardDisplayCart` 再映射，判断逻辑收敛到模块级 `isCutOnlyProfileItem` / `TAP_ONLY_VARIANTS`，不再在内联处重复一份。
+
+2026-11-09（补）：封边型材在生产单上补一个「封」字——`2040 N1-20封`、`2040 N1-40封`、`3060 N1-60封`（店主 2026-11-09 口述：「车间看得懂才有用」，三个型号全部要加）。规则放在 `utils/profileModelLabel.ts` 的 `SEALED_FACE_IDS` 集合里，只影响单据显示，目录名/Quick Quote/设计器仍用原名；en 单据打印 `Sealed`、jp 打印「封」。示意图中间的水印型号原本直接读 `PROFILE_VARIANTS.name`，会漏掉标记，因此给 `ProfileVisualizer` 加了可选 `modelLabel` prop，只有 FactorySheet 传，编辑器/报价视图行为不变。新增回归 `npm run test:profile-model-label`（25 个目录型号全量覆盖 + 封字 cn/en/jp + 未知 id 原样打印）。
+
+### AI product replies (2026-11-09)
+
+End caps are 4mm thick. All profiles are sandblasted by default, including natural silver. Model price enquiries should immediately list per-metre natural silver, colored with natural section, and colored with colored section prices from the catalog; identify the price tier and exclude machining/shipping. Do not request color, length or quantity before answering a unit-price question.

@@ -4,10 +4,20 @@ from app.ai_quote import CATALOG, quote_single
 
 CONTACT = '复杂设计或需要进一步确认，可以加微信 19821200413，发送图片一起沟通。'
 
-def advice(message):
+def advice(message, membership="standard"):
     text = message.strip()
     cards = []
     answers = []
+    if re.search(r'端盖.*(厚|尺寸)|端盖多厚', text):
+        answers.append('端盖厚度为4mm。')
+    if re.search(r'喷砂', text):
+        answers.append('所有型材默认都是喷砂的，包括银白色型材。')
+    if re.search(r'多少钱|价格|什么价|怎么卖|单价', text) and not re.search(r'下单|加入|改成|换成|配件|端盖|螺丝', text):
+        models = [v for v in CATALOG['variants'] if re.search(r'(?<![A-Za-z0-9])' + re.escape(v['id']) + r'(?![A-Za-z0-9-])', text, re.I)]
+        for model in models:
+            discount = {'vip': 2, 'vip_plus': 4}.get(membership, 0)
+            prices = [max(0, model['price'][finish] - discount) for finish in ('oxidized', 'electrophoretic', 'powder')]
+            answers.append(f"{model['id']} 每米价格：银白色¥{prices[0]:g}，彩色截面本色¥{prices[1]:g}，彩色截面彩色¥{prices[2]:g}。以上为当前会员价格，不含加工和运费；部分颜色仅提供彩色截面。")
     if re.search(r'海洋板|BBB', text, re.I) and re.search(r'整张|整板', text) and re.search(r'多少钱|价格|什么价|怎么卖', text) and not re.search(r'下单|加入|改成|换成|要\s*\d|买\s*\d', text):
         prices = CATALOG['quickQuote']['MARINE_BOARD_FULL_SHEET_PRICE']
         uv, plain = prices['marine_bbb_uv_film'], prices['marine_bbb_plain']

@@ -303,7 +303,7 @@ def compact_context(history):
 
 
 def provider_extract(history, message, image=None, _retry_empty=True):
-    compact = {'models': [{k:v[k] for k in ('id','name')} for v in CATALOG['variants']],
+    compact = {'models': [{k:v[k] for k in ('id','name','price')} for v in CATALOG['variants']],
                'colors': [{ 'id': c['id'], 'name': c['name']} for c in CATALOG['colors']],
                'coloredSectionOnly': CATALOG['coloredSectionOnly'],
                'provinces': list(CATALOG['shipping']['standard']),
@@ -340,6 +340,7 @@ JSON 字段：model, color(目录id), length(整数mm), quantity(整数根数), 
 画框行：product=frame,frame_type=wood/aluminum/alu_wood,inner_width,inner_height（内尺寸mm）,quantity。配件行：product=accessory,accessory_key（目录key）,color=natural/colored,quantity；轴类另需length(mm)。不能猜相似配件key，型号或系列不明确时保留null并追问具体名称/编号/系列。只有客户明确要求才添加配件，不能自动加螺丝。涉及其他品类仍保留全部型材加工状态。只有唯一选项的颜色/加工不追问；海洋板表面类型和颜色影响价格，缺失必须问。
 目录：''' + json.dumps(compact, ensure_ascii=False)
     prompt += '''
+产品话术：端盖厚度4mm。所有型材默认喷砂，包括银白色。询问某型号多少钱或多少钱一米时，直接列出目录price中oxidized银白色、electrophoretic彩色截面本色、powder彩色截面彩色三档每米标准价，标明标准价、不含加工运费，不要求先选择颜色或提供长度数量。不得编造目录外价格。
 连续补全规则：客户可以分多轮回答。已有清单时，简短回答、解释后的选择、‘都一样’等均应结合上一轮问题更新完整清单，不要求重述。每轮保留未修改字段，删除已解决问题。客户询问术语时用通俗语言解释并给出建议；客户明确说不知道、随便、按常规时，可采用目录支持的常规非加工选项，在source_notes写明‘暂按…，可修改’，不可伪称客户已确认。缺尺寸、数量、具体加工孔位不得猜，先给已知部分估价，生产前再核对。每次优先问最关键的一两个问题，允许省份与配件稍后补充。coloredSectionOnly中的颜色只有彩色截面，直接section=colored并告知，不再询问；natural直接section=natural。客户补充配件也必须保留所有型材和加工。
 最高优先级：先判断客户是在咨询还是明确要求报价/修改清单。知识、用途、安装、比较、运费、设计讨论等问题，输出 {"intent":"answer","answer":"针对最新问题的自然回答"}，不要输出空型材或索要整套报价字段。结合上下文直接解答，必要时只追问一个关键问题。没有模板也必须针对性回答。攻丝深度20mm。网站没有的玻璃、耐力板明确自配，可替代为铝框门、海洋板；不可虚构库存、尺寸、价格和承载能力。复杂设计或不确定时附微信19821200413。常见选型可给出明确标注的暂定建议，不视为客户生产确认。只有实际报价/清单修改才返回前述清单JSON。'''
     messages = [{'role': 'system', 'content': prompt}, *compact_context(history), {'role': 'user', 'content': message}]
@@ -430,7 +431,7 @@ def chat():
     # a response must not change which version is recorded in the usage ledger.
     quote_context = has_quote_context(account.history)
     matched = match_faq(message) if not image and not attachments and not quote_context else None
-    faq = (advice(message) if not image and not attachments and not quote_context and not confirmation else None) or (serialize_rule(matched) if matched else None)
+    faq = (advice(message, membership) if not image and not attachments and not quote_context and not confirmation else None) or (serialize_rule(matched) if matched else None)
     # Second layer: wording the owner never typed literally. `pick_knowledge` answers
     # only on a clear single winner and refuses money categories by itself, so this
     # stays as safe as the exact channel while covering real customer phrasing.

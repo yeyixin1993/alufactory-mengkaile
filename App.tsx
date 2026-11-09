@@ -958,6 +958,9 @@ const Cart: React.FC<{
   // showPreview state no longer needed — preview opens in new window
   const [isExporting, setIsExporting] = useState(false);
   const [pdfIncludePrice, setPdfIncludePrice] = useState(true);
+  // The archived order PDF must carry the real order number, not a placeholder:
+  // this ref is rendered into the offscreen sheet right before capture.
+  const [pdfOrderRef, setPdfOrderRef] = useState('PREVIEW');
   const [isSavingCart, setIsSavingCart] = useState(false);
   const [saveCartStatus, setSaveCartStatus] = useState<'idle' | 'saved' | 'error'>('idle');
   
@@ -1213,16 +1216,19 @@ const Cart: React.FC<{
     }
   };
 
-  const handleGeneratePDF = async (includePrice: boolean = true, returnBase64: boolean = false) => {
+  const handleGeneratePDF = async (includePrice: boolean = true, returnBase64: boolean = false, orderRefOverride?: string) => {
     if (!returnBase64) setIsExporting(true);
     try {
+      const resolvedOrderRef = orderRefOverride
+        || Math.random().toString(36).substr(2, 6).toUpperCase();
       setPdfIncludePrice(includePrice);
+      setPdfOrderRef(resolvedOrderRef);
       await new Promise(r => setTimeout(r, 600));
       const filename = buildOrderPdfFilename({
         createdAt: new Date(),
         userName: selectedAddress?.recipient_name || user?.name || user?.id,
         amount: finalTotal,
-        orderRef: 'PREVIEW',
+        orderRef: resolvedOrderRef,
         withPrice: includePrice,
       });
       const pdfBase64 = await exportToPDF(printRef.current, filename, { returnBase64 });
@@ -1272,8 +1278,9 @@ const Cart: React.FC<{
       };
       
       const createdOrder = await ApiService.createOrder(newOrder);
-      const withPricePdf = await handleGeneratePDF(true, true);
-      const noPricePdf = await handleGeneratePDF(false, true);
+      const orderRefForPdf = createdOrder?.orderNumber || createdOrder?.id;
+      const withPricePdf = await handleGeneratePDF(true, true, orderRefForPdf);
+      const noPricePdf = await handleGeneratePDF(false, true, orderRefForPdf);
       if (createdOrder?.id) {
         if (withPricePdf?.pdfBase64) {
           await ApiService.uploadOrderPdf(createdOrder.id, withPricePdf.pdfBase64, withPricePdf.filename, 'with_price');
@@ -1355,7 +1362,7 @@ const Cart: React.FC<{
             cart={cart} 
             user={user} 
             language={language} 
-            orderRef="PREVIEW" 
+            orderRef={pdfOrderRef} 
             dateStr={formatEast8Date(new Date())} 
             showPrice={pdfIncludePrice}
             address={selectedAddress || undefined}

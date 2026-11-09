@@ -12,6 +12,7 @@
     "test:design-source-chain": "vite build --ssr scripts/verify-design-source-chain.ts --outDir .verify-source-dist --emptyOutDir && node .verify-source-dist/verify-design-source-chain.js",
     "test:finished-furniture-cart": "vite build --ssr scripts/verify-finished-furniture-cart.ts --outDir .verify-furniture-cart-dist --emptyOutDir && node .verify-furniture-cart-dist/verify-finished-furniture-cart.js",
     "test:backend-source-attribution": "python scripts/verify_backend_source_attribution.py",
+    "test:profile-model-label": "vite build --ssr scripts/verify-profile-model-label.ts --outDir .verify-label-dist --emptyOutDir && node .verify-label-dist/verify-profile-model-label.js",
     "build": "vite build",
     "package:dist": "npm run build && node scripts/package-dist.mjs",
     "package:handoff": "pwsh -NoProfile -File scripts/package-official-handoff.ps1",
