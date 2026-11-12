@@ -530,7 +530,7 @@ const SAMPLE_ITEMS: StorefrontItem[] = [
   },
 ];
 
-export const STOREFRONT_SECTIONS: StorefrontSection[] = [
+const ALL_STOREFRONT_SECTIONS: StorefrontSection[] = [
   {
     id: 'pegboard-accessories',
     title: { cn: '洞洞板配件', en: 'Pegboard Accessories', jp: 'ペグボード用アクセサリー' },
@@ -571,6 +571,13 @@ export const STOREFRONT_SECTIONS: StorefrontSection[] = [
     items: SAMPLE_ITEMS,
   },
 ];
+
+// Temporarily unpublished pending owner review of products and prices.
+// Keep the source catalog intact; all public listings and direct lookups use this filter.
+const HIDDEN_STOREFRONT_SECTIONS = new Set<StorefrontSectionId>(['finished-furniture', 'samples']);
+export const STOREFRONT_SECTIONS = ALL_STOREFRONT_SECTIONS.filter(
+  section => !HIDDEN_STOREFRONT_SECTIONS.has(section.id),
+);
 
 export const STOREFRONT_ITEMS: StorefrontItem[] = STOREFRONT_SECTIONS.flatMap(section => section.items);
 

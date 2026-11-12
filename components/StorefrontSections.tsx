@@ -257,11 +257,11 @@ export const StorefrontSectionCards: React.FC<{ language: Language }> = ({ langu
           {language === 'cn' ? '新增板块' : language === 'jp' ? '新セクション' : 'New sections'}
         </div>
         <h2 className="mt-1 text-2xl font-black tracking-tight text-slate-900">
-          {language === 'cn' ? '配件、成品与样品' : language === 'jp' ? '部品・完成品・サンプル' : 'Accessories, finished goods & samples'}
+          {language === 'cn' ? '洞洞板配件' : language === 'jp' ? '有孔ボード部品' : 'Pegboard accessories'}
         </h2>
       </div>
       <div className="hidden text-xs font-bold text-slate-400 sm:block">
-        {language === 'cn' ? '三块原来只在网店卖的东西，现在网站能直接下单' : language === 'jp' ? '店舗のみだった3カテゴリをサイトでも購入可能に' : 'Three categories that used to be shop-only, now orderable on the site'}
+        {language === 'cn' ? '选购适配的洞洞板配件' : language === 'jp' ? '対応する有孔ボード部品を選ぶ' : 'Choose accessories for your pegboard'}
       </div>
     </div>
     <div className="grid grid-cols-1 gap-5 md:grid-cols-3">
@@ -327,7 +327,7 @@ export const StorefrontSectionPage: React.FC<{
   const [added, setAdded] = useState<string | null>(null);
 
   if (!section) {
-    return <div className="p-24 text-center text-lg font-black text-slate-400">Section Not Found</div>;
+    return <div className="p-24 text-center text-lg font-black text-slate-400">{language === 'cn' ? '此板块暂未开放' : language === 'jp' ? 'このカテゴリは現在非公開です' : 'This section is currently unavailable'}</div>;
   }
   const accent = ACCENT[section.accent];
 

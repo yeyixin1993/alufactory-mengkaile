@@ -8,6 +8,15 @@ from pathlib import Path
 
 CATALOG = json.loads(Path(__file__).with_name('ai_catalog.json').read_text())
 
+# Shared by deterministic quotes and concise machining-price answers.
+PROFILE_MACHINING_RATES = {
+    'through_hole_count': 1,
+    'countersunk_count': 1.8,
+    'threaded_hole_count': 1.8,
+    'miter45_count': 1,
+    'end_tapping': 1.5,
+}
+
 def normalize_profile_color(color):
     # `silver` is the existing catalog ID for explicit bright silver, not a synonym.
     return {'银色': 'natural', '本色': 'natural', '原色': 'natural',
@@ -165,12 +174,12 @@ def quote_single(spec, membership):
     finish = 'oxidized' if spec['color'] == 'natural' else ('powder' if spec['section'] == 'colored' else 'electrophoretic')
     rate = max(0, variants[spec['model']]['price'][finish] - {'vip': 2, 'vip_plus': 4}.get(membership, 0))
     processing = 0
-    for field, rate_per_hole in [('through_hole_count',1),('countersunk_count',1.8),('threaded_hole_count',1.8),('miter45_count',1)]:
+    for field, rate_per_hole in [(field, PROFILE_MACHINING_RATES[field]) for field in ('through_hole_count', 'countersunk_count', 'threaded_hole_count', 'miter45_count')]:
         n = spec.get(field, 0)
         if type(n) is not int or not 0 <= n <= 100:
             return '请明确每根型材的打孔类别与数量（0–100）。', None
         processing += n * rate_per_hole
-    tapping = (sum(sum(selections[end]) for end in ('left','right')) if selections else {'none': 0, 'left': 1, 'right': 1, 'both': 2}[spec['tapping']]) * 1.5
+    tapping = (sum(sum(selections[end]) for end in ('left','right')) if selections else {'none': 0, 'left': 1, 'right': 1, 'both': 2}[spec['tapping']]) * PROFILE_MACHINING_RATES['end_tapping']
     unit = rounded(rate * spec['length'] / 1000 + tapping + processing + (5 if membership != 'vip_plus' and spec['length'] <= 100 else 0))
     subtotal = rounded(unit * spec['quantity'])
     weight = CATALOG['weights'].get(spec['model'], 0.6) * spec['length'] / 1000 * spec['quantity']

@@ -1,11 +1,22 @@
 """Sales questions are not incomplete purchase orders. Only trusted UI actions leave here."""
 import re
-from app.ai_quote import CATALOG, quote_single
+from app.ai_quote import CATALOG, quote_single, PROFILE_MACHINING_RATES
 
 CONTACT = '复杂设计或需要进一步确认，可以加微信 19821200413，发送图片一起沟通。'
 
 def advice(message, membership="standard"):
     text = message.strip()
+    # Unit-rate questions are complete questions, not incomplete orders.
+    if (re.search(r'加工|打孔|通孔|沉头孔|螺纹孔|攻丝|斜切|斜割', text)
+            and re.search(r'价格|多少钱|单价|收费|费用|加工费|怎么收|怎么计费', text)
+            and not re.search(r'下单|加入购物车|总价|总共|合计|一共|\d+\s*(?:根|米|mm|毫米)', text, re.I)):
+        rates = PROFILE_MACHINING_RATES
+        return {'id': 'machining-unit-prices', 'version': 1, 'guidance': [], 'answer':
+            f"型材加工单价：\n通孔：{rates['through_hole_count']:g}元/个\n"
+            f"沉头孔：{rates['countersunk_count']:g}元/个\n"
+            f"螺纹孔：{rates['threaded_hole_count']:g}元/个\n"
+            f"端面攻丝：{rates['end_tapping']:g}元/孔\n"
+            f"45°斜切：{rates['miter45_count']:g}元/端"}
     cards = []
     answers = []
     if re.search(r'端盖.*(厚|尺寸)|端盖多厚', text):
