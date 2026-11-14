@@ -1,3 +1,5 @@
+import { useDeleteConfirmation } from './components/useDeleteConfirmation';
+import { prepareCartAdditions, reconcileCartItems, restoreCartSnapshot, finishCartHydration, preserveCartEntryMetadata } from './utils/cartState';
 import { readCachedArray, writeCachedArray, removeCachedArray, acceptCachedArray } from './utils/cartCache';
 import { scaleAccessoryKitConfig } from './utils/accessoryKit';
 import { DraftNumberInput, NumericActionButton } from './components/DraftNumberInput';
@@ -58,63 +60,6 @@ const COLOR_SWATCH_IMAGE_URLS = [
 ];
 
 const getCurrency = (lang: Language) => lang === 'cn' ? '￥' : '$';
-
-const stableSerialize = (value: unknown): string => {
-  if (value === null || value === undefined) return String(value);
-  if (Array.isArray(value)) {
-    return `[${value.map((item) => stableSerialize(item)).join(',')}]`;
-  }
-  if (typeof value === 'object') {
-    const record = value as Record<string, unknown>;
-    const keys = Object.keys(record).sort();
-    return `{${keys.map((key) => `${JSON.stringify(key)}:${stableSerialize(record[key])}`).join(',')}}`;
-  }
-  return JSON.stringify(value);
-};
-
-const getCartItemFingerprint = (item: CartItem) => {
-  return `${item.product.id}::${stableSerialize(item.config ?? {})}`;
-};
-
-const mergeCartItems = (currentCart: CartItem[], newItems: CartItem[]): CartItem[] => {
-  const nextCart = [...currentCart];
-  newItems.forEach(newItem => {
-    const existingIndex = nextCart.findIndex(item => 
-      getCartItemFingerprint(item) === getCartItemFingerprint(newItem)
-    );
-
-    if (existingIndex !== -1) {
-      const existingItem = nextCart[existingIndex];
-      const newQty = existingItem.quantity + newItem.quantity;
-      const unitPrice = existingItem.totalPrice / existingItem.quantity;
-      nextCart[existingIndex] = {
-        ...existingItem,
-        quantity: newQty,
-        config: scaleAccessoryKitConfig(existingItem.config, newQty / existingItem.quantity),
-        totalPrice: Number((unitPrice * newQty).toFixed(2))
-      };
-    } else {
-      nextCart.push({ ...newItem });
-    }
-  });
-  return nextCart;
-};
-
-const reconcileCartItems = (localItems: CartItem[], remoteItems: CartItem[]): CartItem[] => {
-  const byFingerprint = new Map<string, CartItem>();
-
-  // Keep local-only entries first (for offline/unsynced drafts already moved to cart).
-  localItems.forEach((item) => {
-    byFingerprint.set(getCartItemFingerprint(item), { ...item });
-  });
-
-  // Server snapshot is authoritative for duplicates.
-  remoteItems.forEach((item) => {
-    byFingerprint.set(getCartItemFingerprint(item), { ...item });
-  });
-
-  return Array.from(byFingerprint.values());
-};
 
 const CART_CACHE_PREFIX = 'mengkaile_cart_cache_v1';
 const DRAFT_CACHE_PREFIX = 'mengkaile_profile_draft_cache_v1';
@@ -976,6 +921,7 @@ const Cart: React.FC<{
   );
   const [isEditingAddress, setIsEditingAddress] = useState<Address | null | 'new'>(null);
   const [selectedCourier, setSelectedCourier] = useState<ShippingMethod | 'auto'>('auto');
+  const { confirm: confirmDeletion, dialog: deletionDialog } = useDeleteConfirmation(language);
   const [deletingAddressId, setDeletingAddressId] = useState<string | null>(null);
   const [addressDeleteError, setAddressDeleteError] = useState('');
   const [include304Screws, setInclude304Screws] = useState(false);
@@ -999,7 +945,7 @@ const Cart: React.FC<{
       : language === 'jp'
         ? `配送先「${address.recipient_name} · ${address.phone}」を削除しますか？作成済み注文の住所は変更されません。`
         : `Delete shipping address “${address.recipient_name} · ${address.phone}”? Existing orders will keep their address.`;
-    if (!window.confirm(prompt)) return;
+    if (!await confirmDeletion(prompt)) return;
     setDeletingAddressId(address.id);
     setAddressDeleteError('');
     try {
@@ -1196,7 +1142,9 @@ const Cart: React.FC<{
         await ApiService.createOrder(pendingOrder);
       }
 
-      await ApiService.syncCart(cart);
+      // The saved pending order now owns these items. Persist the same empty
+      // cart that the UI displays so a refresh cannot bring them back.
+      await ApiService.syncCart([]);
 
       setSaveCartStatus('saved');
       onSaveCartSuccess();
@@ -1378,6 +1326,7 @@ const Cart: React.FC<{
         </div>
       </div>
 
+      {deletionDialog}
       {/* Preview now opens in a new window via openFactorySheetPreview */}
       
       {isEditingAddress && (
@@ -1457,6 +1406,12 @@ const Cart: React.FC<{
                   <div className="flex justify-between items-start">
                     <div className="flex-1">
                       <h4 className="font-black text-slate-800 text-2xl mb-1">{item.product.name[language]}</h4>
+                      <div className="mb-2 text-xs text-slate-500" data-testid="cart-added-at">
+                        {language === 'cn' ? '加入时间（北京时间）' : language === 'jp' ? '追加日時（UTC+8）' : 'Added (UTC+8)'}：
+                        {item.config?.cartAddedAt && Number.isFinite(Date.parse(item.config.cartAddedAt))
+                          ? <time dateTime={item.config.cartAddedAt}>{formatEast8DateTime(item.config.cartAddedAt)}</time>
+                          : (language === 'cn' ? '历史条目，时间未记录' : language === 'jp' ? '過去の項目・日時未記録' : 'Legacy item, time not recorded')}
+                      </div>
                       {designSource && (
                         <div className="mb-2 inline-flex max-w-full items-center gap-1.5 rounded-full border border-emerald-100 bg-emerald-50 px-2.5 py-1 text-[10px] font-black text-emerald-700">
                           <span>{language === 'cn' ? '来源' : language === 'jp' ? '出所' : 'Source'}:</span>
@@ -1480,7 +1435,17 @@ const Cart: React.FC<{
                       <div className="flex gap-2 justify-end">
                         <button onClick={() => navigate('/diy-designer', { state: { designerCartRows: item.config?.designerProjectId ? cart.filter(row => row.config?.designerProjectId === item.config.designerProjectId) : [item] } })} className="bg-indigo-50 text-indigo-700 px-4 py-2 rounded-xl text-xs font-black">{language === 'cn' ? '在设计器里查看' : language === 'jp' ? 'デザイナーで開く' : 'Open in designer'}</button>
                         <button onClick={() => navigate(`/product/${item.product.id}`, { state: { editItem: item, returnCartSearch: location.search } })} className="bg-blue-50 text-blue-600 px-4 py-2 rounded-xl text-xs font-black hover:bg-blue-600 hover:text-white transition-all flex items-center gap-2"><Pencil className="w-4 h-4"/>{t.edit}</button>
-                        <button onClick={() => setCart(cart.filter(x => x.id !== item.id))} className="bg-red-50 text-red-500 px-4 py-2 rounded-xl text-xs font-black hover:bg-red-600 hover:text-white transition-all flex items-center gap-2"><Trash2 className="w-4 h-4"/>{t.remove}</button>
+                        <button onClick={async () => {
+                          const name = item.product.name[language];
+                          const addedAt = item.config?.cartAddedAt;
+                          const time = addedAt && Number.isFinite(Date.parse(addedAt)) ? `\n${formatEast8DateTime(addedAt)} (UTC+8)` : '';
+                          const message = language === 'cn'
+                            ? `确定从购物车移除「${name}」× ${item.quantity} 吗？${time}\n取消可保留此商品。`
+                            : language === 'jp'
+                              ? `「${name}」× ${item.quantity} をカートから削除しますか？${time}\nキャンセルすると商品は残ります。`
+                              : `Remove “${name}” × ${item.quantity} from your cart?${time}\nCancel to keep this item.`;
+                          if (await confirmDeletion(message)) setCart(previous => previous.filter(x => x.id !== item.id));
+                        }} className="bg-red-50 text-red-500 px-4 py-2 rounded-xl text-xs font-black hover:bg-red-600 hover:text-white transition-all flex items-center gap-2"><Trash2 className="w-4 h-4"/>{t.remove}</button>
                       </div>
                     </div>
                   </div>
@@ -2370,17 +2335,30 @@ const App: React.FC = () => {
   const t = TRANSLATIONS[language];
   const userMembership = normalizeMembershipLevel(user?.membershipLevel);
   const userStatusLabel = userMembership === 'vip_plus' ? 'VIP+' : userMembership === 'vip' ? 'VIP' : 'standard';
-  const lastCacheScopeRef = useRef<string | null>(null);
   const skipNextCartPersistRef = useRef(false);
-  const skipNextDraftPersistRef = useRef(false);
+  const cartDirtyRef = useRef(false);
+  const cartRevisionRef = useRef(0);
+  const [cartHydrationFailed, setCartHydrationFailed] = useState(false);
+  const [cartRetry, setCartRetry] = useState(0);
+  const [loadedCartScope, setLoadedCartScope] = useState<string | null>(null);
+  const [readyCartScope, setReadyCartScope] = useState<string | null>(null);
+  const activeCartScopeRef = useRef<string | null>(null);
+  activeCartScopeRef.current = user?.id || null;
   const skipNextServerSyncRef = useRef(false);
 
   useEffect(() => {
     const syncTabCart = (event: StorageEvent) => {
+      const pendingKey = `${getCacheKey(CART_CACHE_PREFIX, user?.id)}:pending`;
+      if (event.key === pendingKey) {
+        try { acceptCachedArray<boolean>(pendingKey, event.newValue); } catch { /* Invalid cache. */ }
+        return;
+      }
       if (event.key !== getCacheKey(CART_CACHE_PREFIX, user?.id)) return;
       try {
         const next = acceptCachedArray<CartItem>(event.key!, event.newValue);
         if (!Array.isArray(next)) return;
+        cartRevisionRef.current += 1;
+        cartDirtyRef.current = false;
         skipNextCartPersistRef.current = true;
         skipNextServerSyncRef.current = true;
         setCart(next);
@@ -2412,95 +2390,99 @@ const App: React.FC = () => {
   useEffect(() => {
     let cancelled = false;
     const scopeUserId = user?.id || null;
-    const previousScope = lastCacheScopeRef.current;
-
-    if (scopeUserId === previousScope) return;
-
     const hydrateForScope = async () => {
-      skipNextCartPersistRef.current = true;
-      skipNextDraftPersistRef.current = true;
-
+      setReadyCartScope(null);
+      setCartHydrationFailed(false);
       if (scopeUserId) {
         const guestCartKey = getCacheKey(CART_CACHE_PREFIX, null);
         const userCartKey = getCacheKey(CART_CACHE_PREFIX, scopeUserId);
         const guestDraftKey = getCacheKey(DRAFT_CACHE_PREFIX, null);
         const userDraftKey = getCacheKey(DRAFT_CACHE_PREFIX, scopeUserId);
-
-        const mergedLocalCart = mergeCartItems(
-          readCachedArray<CartItem>(userCartKey),
-          readCachedArray<CartItem>(guestCartKey)
+        const pendingKey = `${userCartKey}:pending`;
+        const hadPendingEdits = readCachedArray<boolean>(pendingKey)[0] === true;
+        cartDirtyRef.current = hadPendingEdits;
+        const recoveryKey = `${userCartKey}:hydration`;
+        const recovery = readCachedArray<{ local: CartItem[]; guest: CartItem[]; baseline: CartItem[]; pending: boolean }>(recoveryKey)[0];
+        const localCart = readCachedArray<CartItem>(userCartKey);
+        const guestCart = readCachedArray<CartItem>(guestCartKey);
+        // These are saved snapshots of the same cart, not fresh purchase actions.
+        const mergedLocalCart = reconcileCartItems(
+          localCart, guestCart,
         );
-        const mergedDrafts = [
-          ...readCachedArray<CartItem>(userDraftKey),
-          ...readCachedArray<CartItem>(guestDraftKey),
-        ];
-
+        const mergedDrafts = reconcileCartItems(
+          readCachedArray<CartItem>(userDraftKey), readCachedArray<CartItem>(guestDraftKey),
+        );
+        const plan = recovery || { local: localCart, guest: guestCart, baseline: mergedLocalCart, pending: hadPendingEdits };
+        writeCachedArray(recoveryKey, [plan]);
         writeCachedArray(userCartKey, mergedLocalCart);
-        writeCachedArray(userDraftKey, mergedDrafts);
         removeCachedArray(guestCartKey);
+        writeCachedArray(userDraftKey, mergedDrafts);
         removeCachedArray(guestDraftKey);
-
-        if (!cancelled) {
-          setCart(mergedLocalCart);
-          setDraftProfiles(mergedDrafts);
-        }
-
+        setCart(mergedLocalCart);
+        setDraftProfiles(mergedDrafts);
+        setLoadedCartScope(scopeUserId);
         try {
           const remoteCart = await ApiService.getCart();
-          if (cancelled) return;
-
-          const mergedWithRemote = reconcileCartItems(mergedLocalCart, remoteCart.items || []);
-
-          skipNextCartPersistRef.current = true;
-          setCart(mergedWithRemote);
-          writeCachedArray(userCartKey, mergedWithRemote);
-
-          await ApiService.syncCart(mergedWithRemote);
+          if (cancelled || activeCartScopeRef.current !== scopeUserId) return;
+          const restored = restoreCartSnapshot(plan.local, plan.guest, remoteCart.items, plan.pending);
+          cartDirtyRef.current = true;
+          setCart(current => finishCartHydration(plan.baseline, current, restored));
+          removeCachedArray(guestCartKey);
+          setReadyCartScope(scopeUserId);
         } catch (error) {
-          console.warn('Cart server hydration/sync skipped:', error);
+          // Preserve local changes, but never overwrite an unread server cart.
+          if (cancelled || activeCartScopeRef.current !== scopeUserId) return;
+          setCartHydrationFailed(true);
+          console.warn('Cart server hydration skipped; local cart retained:', error);
         }
       } else {
-        if (cancelled) return;
+        cartDirtyRef.current = false;
         setCart(readCachedArray<CartItem>(getCacheKey(CART_CACHE_PREFIX, null)));
         setDraftProfiles(readCachedArray<CartItem>(getCacheKey(DRAFT_CACHE_PREFIX, null)));
+        setLoadedCartScope(null);
       }
     };
 
     hydrateForScope();
 
-    lastCacheScopeRef.current = scopeUserId;
-
     return () => {
       cancelled = true;
     };
-  }, [user?.id]);
+  }, [user?.id, cartRetry]);
 
   useEffect(() => {
+    if (loadedCartScope !== (user?.id || null)) return;
     if (skipNextCartPersistRef.current) {
       skipNextCartPersistRef.current = false;
       return;
     }
     writeCachedArray(getCacheKey(CART_CACHE_PREFIX, user?.id), cart);
-  }, [cart, user?.id]);
+    if (user?.id && cartDirtyRef.current) writeCachedArray(`${getCacheKey(CART_CACHE_PREFIX, user.id)}:pending`, [true]);
+    if (user?.id && readyCartScope === user.id) removeCachedArray(`${getCacheKey(CART_CACHE_PREFIX, user.id)}:hydration`);
+  }, [cart, user?.id, loadedCartScope, readyCartScope]);
 
   useEffect(() => {
-    if (skipNextDraftPersistRef.current) {
-      skipNextDraftPersistRef.current = false;
-      return;
-    }
+    if (loadedCartScope !== (user?.id || null)) return;
     writeCachedArray(getCacheKey(DRAFT_CACHE_PREFIX, user?.id), draftProfiles);
-  }, [draftProfiles, user?.id]);
+  }, [draftProfiles, user?.id, loadedCartScope]);
 
   useEffect(() => {
-    if (!user?.id) return;
+    if (!user?.id || readyCartScope !== user.id) return;
 
     if (skipNextServerSyncRef.current) {
       skipNextServerSyncRef.current = false;
       return;
     }
 
+    const syncingScope = user.id;
+    const syncingRevision = cartRevisionRef.current;
     const syncTimer = window.setTimeout(() => {
-      ApiService.syncCart(cart).catch((error) => {
+      ApiService.syncCart(cart).then(() => {
+        if (activeCartScopeRef.current === syncingScope && cartRevisionRef.current === syncingRevision) {
+          cartDirtyRef.current = false;
+          writeCachedArray(`${getCacheKey(CART_CACHE_PREFIX, syncingScope)}:pending`, []);
+        }
+      }).catch((error) => {
         console.warn('Background cart sync failed:', error);
       });
     }, 700);
@@ -2508,7 +2490,7 @@ const App: React.FC = () => {
     return () => {
       window.clearTimeout(syncTimer);
     };
-  }, [cart, user?.id]);
+  }, [cart, user?.id, readyCartScope]);
 
   useEffect(() => {
     let mounted = true;
@@ -2554,8 +2536,28 @@ const App: React.FC = () => {
     };
   }, []);
 
+  const updateCart: React.Dispatch<React.SetStateAction<CartItem[]>> = (value) => {
+    cartDirtyRef.current = true;
+    cartRevisionRef.current += 1;
+    setCart(value);
+  };
+
+  const addCartItems = (items: CartItem[], mode: 'append' | 'replace' = 'append') => {
+    const added = prepareCartAdditions(items);
+    updateCart(previous => mode === 'replace' ? added : [...previous, ...added]);
+  };
+
+  const addConfirmedAIItems = (items: CartItem[], mode: 'append' | 'replace' = 'append') => {
+    // Replaying one confirmed AI response must remain idempotent, including
+    // after server sync. Ordinary explicit purchases still get separate rows.
+    const added = prepareCartAdditions(items).map((item, index) => ({
+      ...item, id: items[index].id, config: { ...item.config, cartEntryId: items[index].id },
+    }));
+    updateCart(previous => mode === 'replace' ? added : [...previous, ...added.filter(item => !previous.some(existing => existing.id === item.id))]);
+  };
+
   const onEditOrder = (o: Order) => {
-    setCart(mergeCartItems([], o.items));
+    updateCart(prepareCartAdditions(o.items));
     // Navigate with the order's address info so the cart pre-selects the correct address
     window.location.hash = `/cart?addressId=${encodeURIComponent(o.addressId || o.address?.id || '')}&editOrderId=${encodeURIComponent(o.id)}`;
   };
@@ -2566,6 +2568,9 @@ const App: React.FC = () => {
 
   const onSaveCartSuccess = () => {
     skipNextServerSyncRef.current = true;
+    cartRevisionRef.current += 1;
+    cartDirtyRef.current = false;
+    writeCachedArray(`${getCacheKey(CART_CACHE_PREFIX, user?.id)}:pending`, []);
     setCart([]);
     writeCachedArray(getCacheKey(CART_CACHE_PREFIX, user?.id), []);
   };
@@ -2598,6 +2603,7 @@ const App: React.FC = () => {
     <HashRouter>
       <RouteHashSync onChange={setCurrentHash} />
       <div className={`min-h-screen font-sans text-slate-900 selection:bg-blue-100 selection:text-blue-900 ${isPreviewRoute || isDesignerRoute || isAIChatRoute ? '' : 'bg-slate-50 pb-20'}`}>
+        {cartHydrationFailed && <div role="alert" className="bg-amber-50 p-3 text-sm text-amber-900">云端购物车暂时未能读取，当前修改保存在本机，尚未同步。<button className="ml-3 underline" onClick={() => setCartRetry(value => value + 1)}>重试同步</button></div>}
         {cacheUnavailable && <div role="alert" className="fixed bottom-4 left-4 right-4 z-[10001] rounded-xl bg-amber-100 p-4 text-amber-950 shadow-lg">浏览器存储空间不足，购物车仍可继续使用，但刷新或关闭页面可能丢失本次更改。请先保存设计或完成订单。<button className="ml-4 underline" onClick={() => setCacheUnavailable(false)}>知道了</button></div>}
         {showWeChatBrowserNotice && (
           <div className="fixed inset-0 z-[10000] flex items-start justify-center bg-slate-950/65 px-4 pt-16 backdrop-blur-sm" role="dialog" aria-modal="true" aria-labelledby="wechat-browser-title">
@@ -2679,7 +2685,7 @@ const App: React.FC = () => {
           </div>
         </nav>}
 
-        {!isPreviewRoute && !isDesignerRoute && <AIChatBar language={language} onLanguageChange={setLanguage} key={user?.id || 'guest'} user={user} cart={cart} onAddToCart={(items, mode) => setCart(previous => mode === 'replace' ? mergeCartItems([], items) : mergeCartItems(previous, items.filter(item => !previous.some(existing => existing.id === item.id))))} />}
+        {!isPreviewRoute && !isDesignerRoute && <AIChatBar language={language} onLanguageChange={setLanguage} key={user?.id || 'guest'} user={user} cart={cart} onAddToCart={addConfirmedAIItems} />}
         <Routes>
           <Route path="/ai-chat" element={null} />
           <Route path="/" element={<div id="product-catalog" className="scroll-mt-28"><Catalog language={language} /></div>} />
@@ -2691,7 +2697,7 @@ const App: React.FC = () => {
                 onLanguageChange={setLanguage}
                 user={user}
                 cartItemCount={cart.length}
-                onAddBatchToCart={(items, mode) => setCart(mergeCartItems(mode === 'replace' ? [] : cart, items))}
+                onAddBatchToCart={addCartItems}
               />
             </React.Suspense>
           )} />
@@ -2703,9 +2709,9 @@ const App: React.FC = () => {
           <Route path="/login" element={<Auth language={language} onLogin={(u) => { setUser(u); }} />} />
           <Route path="/history" element={user ? <UserProfile user={user} language={language} setUser={setUser} onEditOrder={onEditOrder} onGoToPayment={onGoToPayment} /> : <div className="p-40 text-center flex flex-col items-center"><UserIcon className="w-20 h-20 text-slate-100 mb-6"/><p className="font-black text-slate-300 text-2xl">Please login to view your orders</p></div>} />
           <Route path="/section/a-pillar-milling" element={<APillarMillingPage language={language} />} />
-          <Route path="/section/:sectionId" element={<StorefrontSectionPage language={language} onAddToCart={(item) => setCart(mergeCartItems(cart, [item]))} />} />
-          <Route path="/product/:id" element={<ProductDetail language={language} user={user} onAddToCart={(item) => setCart(mergeCartItems(cart, [item]))} onAddBatchToCart={(items) => setCart(mergeCartItems(cart, items))} onUpdateCartItem={(item) => setCart(cart.map(x => x.id === item.id ? item : x))} draftProfiles={draftProfiles} setDraftProfiles={setDraftProfiles} />} />
-          <Route path="/cart" element={<Cart cart={cart} language={language} setCart={setCart} user={user} updateUser={setUser} onSaveCartSuccess={onSaveCartSuccess} />} />
+          <Route path="/section/:sectionId" element={<StorefrontSectionPage language={language} onAddToCart={(item) => addCartItems([item])} />} />
+          <Route path="/product/:id" element={<ProductDetail language={language} user={user} onAddToCart={(item) => addCartItems([item])} onAddBatchToCart={addCartItems} onUpdateCartItem={(item) => updateCart(previous => previous.map(x => x.id === item.id ? preserveCartEntryMetadata(x, item) : x))} draftProfiles={draftProfiles} setDraftProfiles={setDraftProfiles} />} />
+          <Route path="/cart" element={<Cart cart={cart} language={language} setCart={updateCart} user={user} updateUser={setUser} onSaveCartSuccess={onSaveCartSuccess} />} />
           <Route path="/payment/:orderId" element={<PaymentPage language={language} user={user} />} />
           <Route path="/preview" element={(
             <React.Suspense fallback={<div className="min-h-screen flex items-center justify-center bg-slate-100 text-slate-400 font-black">Loading…</div>}>

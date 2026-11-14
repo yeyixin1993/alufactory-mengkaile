@@ -838,3 +838,9 @@ Maintain the complete current BOM across incremental replies and explanatory que
 ### AI product replies (2026-11-09)
 
 End caps are 4mm thick. All profiles are sandblasted by default, including natural silver. Model price enquiries should immediately list per-metre natural silver, colored with natural section, and colored with colored section prices from the catalog; identify the price tier and exclude machining/shipping. Do not request color, length or quantity before answering a unit-price question.
+
+### 2026-11-15 — 购物车加入批次与恢复
+每次主动加购保留独立条目、稳定批次ID和加入时间（北京时间），编辑不改变原加入时间；历史条目没有记录时明确显示时间未记录。刷新、登录迁移和服务器快照恢复不得累加数量；读取失败不得当作空购物车覆盖云端，恢复期间的修改与删除必须保留。AI同一确认清单重复提交保持防重。生产单/PDF仍按制造规格合并数量，加入时间和批次ID不影响合并或订单重复提交识别。已产生的历史数量不能自动减半，因为无法区别真实购买数量。
+
+2026-11-15：购物车逐条移除必须先弹确认窗，列出商品名称、数量及已有的加入时间；取消保留商品，确认后仅删除选中批次。
+购物车商品删除与购物车收货地址删除统一使用站内确认弹窗，替代浏览器原生 confirm；标题、取消及确认删除按钮跟随中文/英文/日文，默认聚焦取消，Escape 取消。

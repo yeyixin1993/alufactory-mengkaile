@@ -80,6 +80,9 @@ class ApiServiceClass {
   private hasLoggedApiBase = false;
   private payloadSecurity = new PayloadSecurity(() => this.getApiBaseUrl());
   private hasLoggedEncryptionFallback = false;
+  // A cart PUT replaces the complete snapshot. Never let an older, slower
+  // request finish after a newer one and restore deleted quantities/items.
+  private cartSyncQueue: Promise<unknown> = Promise.resolve();
 
   private shouldEncryptPayload(method: string, endpoint: string): boolean {
     const normalizedMethod = method.toUpperCase();
@@ -117,6 +120,7 @@ class ApiServiceClass {
 
   private async request(method: string, endpoint: string, data?: any) {
     const API_BASE_URL = this.getApiBaseUrl();
+    const requestToken = this.authToken;
     const originalData = data;
     let requestData = data;
     let encryptedAttempted = false;
@@ -144,10 +148,10 @@ class ApiServiceClass {
       },
     };
 
-    if (this.authToken) {
+    if (requestToken) {
       options.headers = {
         ...options.headers,
-        Authorization: `Bearer ${this.authToken}`,
+        Authorization: `Bearer ${requestToken}`,
       };
     }
 
@@ -184,7 +188,8 @@ class ApiServiceClass {
     }
 
     if (!response.ok) {
-      if (response.status === 401) {
+      if (response.status === 401 && requestToken && this.authToken === requestToken
+          && localStorage.getItem('authToken') === requestToken) {
         // Token expired
         localStorage.removeItem('authToken');
         this.authToken = null;
@@ -398,7 +403,7 @@ class ApiServiceClass {
     const productNameJP = productMeta?.name?.jp || productName;
 
     return {
-      id: String(item?.id || `${productId}_${Math.random().toString(36).slice(2, 8)}`),
+      id: String(item?.config?.cartEntryId || item?.id || `${productId}_${Math.random().toString(36).slice(2, 8)}`),
       product: {
         id: productId,
         type: productType as ProductType,
@@ -414,17 +419,25 @@ class ApiServiceClass {
   }
 
   async getCart() {
-    try {
-      const data = await this.request('GET', '/cart');
-      return {
-        items: (data.items || []).map((item: any) => this.mapServerCartItem(item)),
-      };
-    } catch (e) {
-      return { items: [] };
+    const token = this.authToken;
+    await this.cartSyncQueue;
+    this.assertCartSession(token);
+    const data = await this.request('GET', '/cart');
+    this.assertCartSession(token);
+    if (!Array.isArray(data.items)) throw new Error('Invalid cart response');
+    return {
+      items: data.items.map((item: any) => this.mapServerCartItem(item)),
+    };
+  }
+
+  private assertCartSession(token: string | null) {
+    if (!token || this.authToken !== token || localStorage.getItem('authToken') !== token) {
+      throw new Error('Cart session changed; pending synchronization cancelled');
     }
   }
 
   async syncCart(items: CartItem[]) {
+    const token = this.authToken;
     const payload = {
       items: (items || []).map((item) => {
         const quantity = Math.max(1, Number(item.quantity) || 1);
@@ -445,10 +458,19 @@ class ApiServiceClass {
       }),
     };
 
-    const data = await this.request('PUT', '/cart/sync', payload);
-    return {
-      items: (data?.cart?.items || data?.items || []).map((item: any) => this.mapServerCartItem(item)),
-    };
+    // Freeze config too: callers may edit rows while this write waits in line.
+    const snapshot = JSON.parse(JSON.stringify(payload));
+    const result = this.cartSyncQueue.then(async () => {
+      this.assertCartSession(token);
+      const data = await this.request('PUT', '/cart/sync', snapshot);
+      this.assertCartSession(token);
+      return {
+        items: (data?.cart?.items || data?.items || []).map((item: any) => this.mapServerCartItem(item)),
+      };
+    });
+    // Keep failures visible to the caller without poisoning later retries.
+    this.cartSyncQueue = result.catch(() => undefined);
+    return result;
   }
 
   async addToCart(product: any, quantity: number, config: any) {

@@ -99,3 +99,23 @@ def test_provenance_is_preserved_but_ignored_by_duplicate_fingerprint():
     }
     assert fingerprint_order_json(first) == fingerprint_order_json(second)
     assert first['items'][0]['config']['designSource']['documentId'] == 'export-a'
+
+
+def test_cart_addition_metadata_does_not_split_duplicate_fingerprint():
+    from copy import deepcopy
+    first = {'items': [{'product_id': 'p2', 'quantity': 2, 'config': {
+        'variantId': '2020', 'length': 800,
+        'cartEntryId': 'first-addition', 'cartAddedAt': '2026-11-14T10:00:00.000Z',
+    }}]}
+    second = deepcopy(first)
+    second['items'][0]['config'].update({
+        'cartEntryId': 'second-addition', 'cartAddedAt': '2026-11-14T11:00:00.000Z',
+    })
+    assert fingerprint_order_json(first) == fingerprint_order_json(second)
+    assert first['items'][0]['config']['cartEntryId'] == 'first-addition'
+    assert second['items'][0]['config']['cartAddedAt'] == '2026-11-14T11:00:00.000Z'
+    second['items'][0]['config']['length'] = 801
+    assert fingerprint_order_json(first) != fingerprint_order_json(second)
+    second['items'][0]['config']['length'] = 800
+    second['items'][0]['quantity'] = 3
+    assert fingerprint_order_json(first) != fingerprint_order_json(second)

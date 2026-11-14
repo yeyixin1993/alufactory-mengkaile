@@ -166,71 +166,74 @@ def clear_cart():
 @cart_bp.route('/sync', methods=['PUT'])
 @jwt_required()
 def sync_cart():
-    """Replace user cart with provided items (for cross-device cart sync)."""
+    """Atomically replace a user's cart, never add another copy of a snapshot."""
     current_user_id = get_jwt_identity()
     data = request.get_json() or {}
+    if not isinstance(data, dict):
+        return jsonify({'error': 'Request must be an object'}), 400
     items = data.get('items', [])
 
     if not isinstance(items, list):
         return jsonify({'error': 'items must be an array'}), 400
 
+    # Validate and normalize the complete snapshot before any delete/insert.
+    # An invalid later line must not leave a partially replaced transaction.
+    normalized_items = []
+    for idx, item in enumerate(items):
+        if not isinstance(item, dict):
+            return jsonify({'error': f'Invalid item at index {idx}'}), 400
+
+        product_id = str(item.get('product_id') or '').strip()
+        product_name = str(item.get('product_name') or product_id).strip()
+        product_type = str(item.get('product_type') or 'PROFILE').strip()
+        if not product_id:
+            return jsonify({'error': f'Missing product_id at index {idx}'}), 400
+        try:
+            quantity = max(1, int(item.get('quantity', 1) or 1))
+        except (TypeError, ValueError, OverflowError):
+            return jsonify({'error': f'Invalid quantity at index {idx}'}), 400
+
+        try:
+            unit_price = float(item.get('unit_price', 0))
+        except (TypeError, ValueError):
+            unit_price = 0.0
+        config = item.get('config')
+        if unit_price <= 0 and isinstance(config, dict):
+            try:
+                unit_price = float(config.get('unitPrice', 0))
+            except (TypeError, ValueError):
+                unit_price = 0.0
+        if unit_price < 0:
+            unit_price = 0.0
+        normalized_items.append({
+            'product_id': product_id,
+            'product_name': product_name,
+            'product_type': product_type,
+            'quantity': quantity,
+            'unit_price': unit_price,
+            'total_price': round(unit_price * quantity, 4),
+            'config': config,
+        })
+
     try:
-        cart = Cart.query.filter_by(user_id=current_user_id).first()
+        # MySQL/PostgreSQL serialize concurrent syncs for the same account.
+        # Lock the parent first so the first cart creation is protected too.
+        # SQLite ignores FOR UPDATE and already serializes database writers.
+        owner = db.session.query(User.id).filter_by(id=current_user_id).with_for_update().first()
+        if owner is None:
+            return jsonify({'error': 'User not found'}), 404
+        cart = Cart.query.filter_by(user_id=current_user_id).with_for_update().first()
         if not cart:
             cart = Cart(user_id=current_user_id)
             db.session.add(cart)
             db.session.flush()
 
-        # Replace current cart items with client snapshot.
-        CartItem.query.filter_by(cart_id=cart.id).delete()
-
-        for idx, item in enumerate(items):
-            if not isinstance(item, dict):
-                return jsonify({'error': f'Invalid item at index {idx}'}), 400
-
-            product_id = str(item.get('product_id') or '').strip()
-            product_name = str(item.get('product_name') or product_id).strip()
-            product_type = str(item.get('product_type') or 'PROFILE').strip()
-
-            if not product_id:
-                return jsonify({'error': f'Missing product_id at index {idx}'}), 400
-
-            quantity = max(1, int(item.get('quantity', 1) or 1))
-
-            unit_price = item.get('unit_price', 0)
-            try:
-                unit_price = float(unit_price)
-            except (TypeError, ValueError):
-                unit_price = 0.0
-
-            # Fallback to config.unitPrice if provided
-            config = item.get('config')
-            if unit_price <= 0 and isinstance(config, dict):
-                try:
-                    unit_price = float(config.get('unitPrice', 0))
-                except (TypeError, ValueError):
-                    unit_price = 0.0
-
-            if unit_price < 0:
-                unit_price = 0.0
-
-            total_price = round(unit_price * quantity, 4)
-
-            cart_item = CartItem(
-                cart_id=cart.id,
-                product_id=product_id,
-                product_name=product_name,
-                product_type=product_type,
-                quantity=quantity,
-                unit_price=unit_price,
-                total_price=total_price,
-                config=config
-            )
-            db.session.add(cart_item)
+        CartItem.query.filter_by(cart_id=cart.id).delete(synchronize_session=False)
+        for item in normalized_items:
+            db.session.add(CartItem(cart_id=cart.id, **item))
 
         cart.updated_at = datetime.utcnow()
         db.session.commit()
-
         return jsonify({
             'message': 'Cart synced',
             'cart': cart.to_dict()

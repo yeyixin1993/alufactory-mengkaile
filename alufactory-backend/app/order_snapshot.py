@@ -63,6 +63,10 @@ def fingerprint_order_json(order_json):
         config = item.get('config') if isinstance(item, dict) else None
         if isinstance(config, dict):
             config.pop('designSource', None)
+            config.pop('cartEntryId', None)
+            config.pop('cartAddedAt', None)
+    if isinstance(fingerprint_payload, dict) and isinstance(fingerprint_payload.get('items'), list):
+        fingerprint_payload['items'].sort(key=lambda item: json.dumps(item, ensure_ascii=False, sort_keys=True, separators=(',', ':')))
     canonical = json.dumps(fingerprint_payload, ensure_ascii=False, sort_keys=True, separators=(',', ':'))
     return hashlib.sha256(canonical.encode('utf-8')).hexdigest()
 
