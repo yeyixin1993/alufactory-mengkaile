@@ -1,4 +1,5 @@
 import type { WardrobeDoorClearance } from './wardrobeDoorClearance';
+import { describeAPillarMilling, normalizeAPillarMillingConfig, type APillarMillingConfig } from '../data/aPillarMilling';
 import { strFromU8, unzipSync } from 'fflate';
 
 type WorkbookCell = string | number | null | undefined;
@@ -24,6 +25,7 @@ export interface ProductionWorkbookData {
     heightMm?: number;
     thicknessMm?: number;
     finish?: string;
+    aPillarMilling?: APillarMillingConfig;
     shelfSupportType?: string;
     fixedReferenceId?: string;
     shaftDiameterMm?: number;
@@ -265,6 +267,7 @@ export const buildProductionXlsx = (production: ProductionWorkbookData) => {
     ['核心规则', 'physicalGrooveIndex（P1/P2…）是3D、客户图和工厂图的唯一物理槽位基准。'],
     ['2040示例', 'B面第一槽 = 物理P1 = D面第二槽；B面第二槽 = 物理P2 = D面第一槽。'],
     ['生产核对', '加工前同时核对入口面/槽、出口面/槽、物理槽ID及距左右端尺寸。'],
+    ['A柱铣型', 'A柱长孔为独立加工，不计入钻孔或配螺丝数量。按规格、加工面、25mm孔距及首末孔中心核对，两端只保留完整孔。'],
   ];
   const partRows = production.parts.map((part) => [
     part.line, part.id, part.type, part.model, part.accessoryProfileSize ?? '', part.lengthMm ?? '', part.widthMm ?? '', part.heightMm ?? '',
@@ -280,6 +283,8 @@ export const buildProductionXlsx = (production: ProductionWorkbookData) => {
     part.doorPairSide === 'right' ? '右扇' : part.doorPairSide === 'left' ? '左扇' : '',
     part.openingSide === 'right' ? '右开' : part.openingSide === 'left' ? '左开' : '', part.remark,
     part.installationKit === false ? '否' : '是', (part.installationKitLines || []).map(line => `${line.name} ×${line.quantity}`).join('；'), part.wardrobeDoorClearance ? JSON.stringify(part.wardrobeDoorClearance) : '', part.wardrobeFrontSetbackMm ?? '',
+    part.aPillarMilling?.specId ?? '', part.aPillarMilling?.face ?? '',
+    describeAPillarMilling(part.model, part.lengthMm || 0, part.aPillarMilling, 'cn'),
   ]);
   const holeRows = production.holes.map((hole) => [
     hole.partLine, hole.partId ?? '', hole.model, hole.holeLine, hole.holeId ?? '', hole.jointKey ?? '', hole.entryFace, hole.entryGroove, hole.exitFace, hole.exitGroove,
@@ -297,9 +302,9 @@ export const buildProductionXlsx = (production: ProductionWorkbookData) => {
     {
       name: '零件明细',
       title: '萌开了 3D DIY 零件明细',
-      headers: ['序号', '零件ID', '类型', '型号', '适配型材规格', '长度mm', '宽度mm', '高度mm', '厚度mm', '截面/表面档位', '层板托类型', '固定库ID', '轴径mm', '配件单价', '颜色', '颜色ID', '数量', '洞洞板孔型', '位置XYZ(mm)', '旋转XYZ(°)', '左端攻丝孔数', '右端攻丝孔数', '螺丝头型', '关联型材ID', '关联孔ID', '自动生成', '位置锁定', '连接型材ID', '连接关系ID', '配件螺纹规格', '带刹车', '端盖端面', '端盖自动攻丝', '柜门材料', '柜门覆盖方式', '柜门形式', '对开门扇位', '柜门开向', '备注', '配套安装件', '安装件配发明细', '柜门自动退让', '前横梁内退mm'],
+      headers: ['序号', '零件ID', '类型', '型号', '适配型材规格', '长度mm', '宽度mm', '高度mm', '厚度mm', '截面/表面档位', '层板托类型', '固定库ID', '轴径mm', '配件单价', '颜色', '颜色ID', '数量', '洞洞板孔型', '位置XYZ(mm)', '旋转XYZ(°)', '左端攻丝孔数', '右端攻丝孔数', '螺丝头型', '关联型材ID', '关联孔ID', '自动生成', '位置锁定', '连接型材ID', '连接关系ID', '配件螺纹规格', '带刹车', '端盖端面', '端盖自动攻丝', '柜门材料', '柜门覆盖方式', '柜门形式', '对开门扇位', '柜门开向', '备注', '配套安装件', '安装件配发明细', '柜门自动退让', '前横梁内退mm', 'A柱规格ID', 'A柱加工面', 'A柱加工说明'],
       rows: partRows,
-      widths: [8, 25, 14, 14, 16, 12, 12, 12, 12, 18, 16, 26, 11, 12, 15, 14, 9, 14, 20, 20, 15, 15, 14, 25, 25, 12, 12, 38, 38, 16, 12, 12, 16, 14, 16, 12, 12, 12, 38],
+      widths: [8, 25, 14, 14, 16, 12, 12, 12, 12, 18, 16, 26, 11, 12, 15, 14, 9, 14, 20, 20, 15, 15, 14, 25, 25, 12, 12, 38, 38, 16, 12, 12, 16, 14, 16, 12, 12, 12, 38, 14, 34, 38, 16, 20, 14, 90],
     },
     {
       name: '打孔明细',
@@ -443,6 +448,16 @@ const vectorValues = (value: string) => {
   return values.length === 3 ? values : [0, 0, 0];
 };
 
+const parseAPillarMilling = (record: Record<string, string>): APillarMillingConfig | undefined => {
+  const specId = record['A柱规格ID'];
+  const face = record['A柱加工面'];
+  if (!specId && !face) return undefined;
+  const config = normalizeAPillarMillingConfig(record['型号'], { specId, face });
+  // Never silently change a factory's selected face or drop unsupported machining.
+  if (!config || config.face !== face) throw new Error(`Invalid A-pillar milling specification for ${record['型号']}: ${specId}/${face}`);
+  return config;
+};
+
 export const parseProductionXlsx = (content: ArrayBuffer): ProductionWorkbookData => {
   const files = unzipSync(new Uint8Array(content));
   const sharedStrings = sharedStringValues(files);
@@ -478,6 +493,7 @@ export const parseProductionXlsx = (content: ArrayBuffer): ProductionWorkbookDat
       heightMm: optionalNumber(record['高度mm']),
       thicknessMm: optionalNumber(record['厚度mm']),
       finish: record['截面/表面档位'] || undefined,
+      aPillarMilling: parseAPillarMilling(record),
       shelfSupportType: record['层板托类型'] || undefined,
       fixedReferenceId: record['固定库ID'] || undefined,
       shaftDiameterMm: optionalNumber(record['轴径mm']),

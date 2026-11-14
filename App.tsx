@@ -49,6 +49,8 @@ import {
   buildStorefrontProduct,
 } from './components/StorefrontSections';
 import { findStorefrontItem } from './data/storefrontSections';
+import { APillarMillingCard, APillarMillingPage } from './components/APillarMillingSection';
+import { describeAPillarMilling } from './data/aPillarMilling';
 
 const COLOR_SWATCH_IMAGE_URLS = [
   ...PROFILE_COLORS.map((color) => `/images/color_${color.id}.png`),
@@ -614,40 +616,40 @@ const Catalog: React.FC<{ language: Language }> = ({ language }) => {
       {/*<h2 className="text-5xl font-black text-slate-900 mb-12 tracking-tight">{t.catalog}</h2>*/}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
         {INITIAL_PRODUCTS.map(product => (
-          <div key={product.id} id={product.id === 'p2' ? 'profile-products' : undefined} className="scroll-mt-28 bg-white rounded-[2.5rem] overflow-hidden shadow-xl border border-slate-100 hover:shadow-2xl transition-all duration-300 group">
-            <div className="h-64 overflow-hidden relative">
+          <div key={product.id} id={product.id === 'p2' ? 'profile-products' : undefined} className="scroll-mt-28 flex flex-col bg-white rounded-[2.5rem] overflow-hidden shadow-xl border border-slate-100 hover:shadow-2xl transition-all duration-300 group">
+            <div className="h-64 shrink-0 overflow-hidden relative">
               <img src={product.imageUrl || undefined} alt={product.name[language]} loading="lazy" decoding="async" className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-1000" />
               <div className="absolute inset-0 bg-gradient-to-t from-black/40 via-transparent to-transparent" />
               <div className="absolute top-6 left-6 bg-white/95 backdrop-blur px-3 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest text-slate-800 shadow-xl">{product.type}</div>
             </div>
-            <div className="p-8">
+            <div className="p-8 flex flex-1 flex-col">
               <h3 className="text-2xl font-black text-slate-900 mb-3">{product.name[language]}</h3>
               <p className="text-slate-500 text-sm mb-10 line-clamp-2 leading-relaxed">{product.description[language]}</p>
-              <Link to={`/product/${product.id}`} className="w-full bg-slate-900 text-white py-5 rounded-3xl font-black flex items-center justify-center gap-3 hover:bg-blue-600 transition-all shadow-xl shadow-slate-900/20 group-hover:-translate-y-1">
+              <Link to={`/product/${product.id}`} className="mt-auto w-full bg-slate-900 text-white py-5 rounded-3xl font-black flex items-center justify-center gap-3 hover:bg-blue-600 transition-all shadow-xl shadow-slate-900/20 group-hover:-translate-y-1">
                 {t.addToCart} <ChevronRight className="w-5 h-5" />
               </Link>
             </div>
           </div>
         ))}
 
-        <div className="bg-white rounded-[2.5rem] overflow-hidden shadow-xl border border-slate-100 hover:shadow-2xl transition-all duration-300 group">
-          <div className="h-64 overflow-hidden relative">
+        <div className="flex flex-col bg-white rounded-[2.5rem] overflow-hidden shadow-xl border border-slate-100 hover:shadow-2xl transition-all duration-300 group">
+          <div className="h-64 shrink-0 overflow-hidden relative">
             <img src={accessoryProduct.imageUrl} alt={accessoryProduct.name[language]} loading="lazy" decoding="async" className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-1000" />
             <div className="absolute inset-0 bg-gradient-to-t from-black/40 via-transparent to-transparent" />
             <div className="absolute top-6 left-6 bg-white/95 backdrop-blur px-3 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest text-slate-800 shadow-xl">ACCESSORY</div>
           </div>
-          <div className="p-8">
+          <div className="p-8 flex flex-1 flex-col">
             <h3 className="text-2xl font-black text-slate-900 mb-3">{accessoryProduct.name[language]}</h3>
             <p className="text-slate-500 text-sm mb-10 line-clamp-2 leading-relaxed">{accessoryProduct.description[language]}</p>
-            <Link to={`/product/${accessoryProduct.id}`} className="w-full bg-slate-900 text-white py-5 rounded-3xl font-black flex items-center justify-center gap-3 hover:bg-blue-600 transition-all shadow-xl shadow-slate-900/20 group-hover:-translate-y-1">
+            <Link to={`/product/${accessoryProduct.id}`} className="mt-auto w-full bg-slate-900 text-white py-5 rounded-3xl font-black flex items-center justify-center gap-3 hover:bg-blue-600 transition-all shadow-xl shadow-slate-900/20 group-hover:-translate-y-1">
               {t.addToCart} <ChevronRight className="w-5 h-5" />
             </Link>
           </div>
         </div>
+        <APillarMillingCard language={language} />
+        <StorefrontSectionCards language={language} />
       </div>
 
-      {/* 新增三块板块：洞洞板配件 / 成品家具 / 样品购买 */}
-      <StorefrontSectionCards language={language} />
 
       {/* 快速报价（首页最底部） */}
       <Link to="/quick-quote" className="mt-12 group flex flex-col items-center justify-between gap-4 rounded-[2rem] border-2 border-dashed border-blue-200 ai-soft-surface px-6 py-8 text-center text-blue-700 shadow-lg shadow-blue-600/5 transition-all hover:-translate-y-1 hover:border-blue-400 hover:bg-blue-50 sm:flex-row sm:text-left">
@@ -1507,8 +1509,11 @@ const Cart: React.FC<{
                         {profileConfig.miterCut?.right?.enabled && <span className="text-[10px] font-black px-3 py-1 bg-amber-100 rounded-full text-amber-700 uppercase">R-45°({profileConfig.miterCut.right.side || 'AC'})</span>}
                       </div>
                       <div className="h-28 w-full max-w-lg bg-slate-50/50 rounded-[2rem] p-4">
-                        <ProfileVisualizer config={item.config} selectedSide="A" onSideChange={() => {}} interactive={false} tapLabel={t.tapAction} showSideSelector={false} />
+                        <ProfileVisualizer config={item.config} selectedSide={profileConfig.aPillarMilling?.face || 'A'} onSideChange={() => {}} interactive={false} tapLabel={t.tapAction} showSideSelector={false} />
                       </div>
+                      {profileConfig.aPillarMilling && <p className="mt-3 rounded-xl border border-blue-100 bg-blue-50 px-3 py-2 text-xs font-bold text-blue-800">
+                        {describeAPillarMilling(profileConfig.variantId || '2020', profileConfig.length, profileConfig.aPillarMilling, language)}
+                      </p>}
                       {!!profileConfig?.remark && (
                         <div className="mt-3 text-xs font-bold text-slate-700 bg-slate-50 border border-slate-200 rounded-xl px-3 py-2">
                           备注：{profileConfig.remark}
@@ -2697,6 +2702,7 @@ const App: React.FC = () => {
           )} />
           <Route path="/login" element={<Auth language={language} onLogin={(u) => { setUser(u); }} />} />
           <Route path="/history" element={user ? <UserProfile user={user} language={language} setUser={setUser} onEditOrder={onEditOrder} onGoToPayment={onGoToPayment} /> : <div className="p-40 text-center flex flex-col items-center"><UserIcon className="w-20 h-20 text-slate-100 mb-6"/><p className="font-black text-slate-300 text-2xl">Please login to view your orders</p></div>} />
+          <Route path="/section/a-pillar-milling" element={<APillarMillingPage language={language} />} />
           <Route path="/section/:sectionId" element={<StorefrontSectionPage language={language} onAddToCart={(item) => setCart(mergeCartItems(cart, [item]))} />} />
           <Route path="/product/:id" element={<ProductDetail language={language} user={user} onAddToCart={(item) => setCart(mergeCartItems(cart, [item]))} onAddBatchToCart={(items) => setCart(mergeCartItems(cart, items))} onUpdateCartItem={(item) => setCart(cart.map(x => x.id === item.id ? item : x))} draftProfiles={draftProfiles} setDraftProfiles={setDraftProfiles} />} />
           <Route path="/cart" element={<Cart cart={cart} language={language} setCart={setCart} user={user} updateUser={setUser} onSaveCartSuccess={onSaveCartSuccess} />} />

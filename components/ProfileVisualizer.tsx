@@ -1,6 +1,7 @@
 import React from 'react';
 import { DrillHole, ProfileConfig, ProfileSide, TappingConfig, MiterCutConfig } from '../types';
 import { PROFILE_VARIANTS } from '../constants';
+import { getAPillarMillingLayout } from '../data/aPillarMilling';
 import {
   getHoleDisplayGrooveIndex,
   getProfileGrooveCount,
@@ -153,6 +154,8 @@ const ProfileVisualizer: React.FC<ProfileVisualizerProps> = ({
   };
 
   const visibleHoles = getVisibleHoles(selectedSide);
+  const milling = getAPillarMillingLayout(selectedVariant.id, length, config.aPillarMilling);
+  const faceWidthMm = Number(selectedVariant.id.slice(isWideFace ? 2 : 0, isWideFace ? 4 : 2));
 
   // Helper to render tap indicator
   const renderTapIndicator = (side: 'left' | 'right', index: number, topPct: string) => {
@@ -292,6 +295,33 @@ const ProfileVisualizer: React.FC<ProfileVisualizerProps> = ({
           <div className="absolute inset-0 flex items-center justify-center pointer-events-none opacity-10 overflow-hidden">
              <span className="text-2xl font-black text-slate-500 whitespace-nowrap">{modelLabel || selectedVariant.name}</span>
           </div>
+
+          {/* A-pillar slots cut only the selected face, separate from screw holes. */}
+          {milling?.face === selectedSide && length > 0 && (
+            <svg
+              data-testid="profile-a-pillar-pattern"
+              data-face={milling.face}
+              className="pointer-events-none absolute inset-0 h-full w-full"
+              viewBox={`0 0 ${length} ${faceWidthMm}`}
+              preserveAspectRatio="none"
+              aria-label={`A柱 ${milling.spec.name.cn} ${milling.face}面`}
+            >
+              {milling.centersMm.flatMap(center => milling.columnOffsetsMm.map(offset => (
+                <rect
+                  key={`${center}:${offset}`}
+                  data-testid="profile-a-pillar-slot"
+                  data-center-mm={center}
+                  data-column-offset-mm={offset}
+                  x={center - milling.heightMm / 2}
+                  y={faceWidthMm / 2 + offset - milling.widthMm / 2}
+                  width={milling.heightMm}
+                  height={milling.widthMm}
+                  rx={0.75}
+                  fill="#334155"
+                />
+              )))}
+            </svg>
+          )}
 
           {/* Holes */}
           {visibleHoles.map(hole => {

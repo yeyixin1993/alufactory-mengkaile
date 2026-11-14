@@ -329,6 +329,9 @@ export const getProfileManufacturingGroupKey = (item: CartItem) => {
     colorId: config.colorId || '',
     unitPrice: Number(config.unitPrice ?? (Number(item.totalPrice || 0) / Math.max(1, Number(item.quantity || 0)))),
     labelService: Boolean(config.labelService),
+    aPillarMilling: config.aPillarMilling
+      ? { specId: config.aPillarMilling.specId, face: config.aPillarMilling.face }
+      : null,
     machining: getRotationallyCanonicalMachiningKey({
       variantId: config.variantId,
       holes: config.holes,

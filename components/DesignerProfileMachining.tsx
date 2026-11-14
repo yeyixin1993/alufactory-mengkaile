@@ -1,14 +1,16 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { DraftNumberInput, NumericActionButton } from './DraftNumberInput';
 import ProfileVisualizer from './ProfileVisualizer';
 import { DrillHole, HoleType, Language, ProfileSide, ThreadSize } from '../types';
 import { describeHolePassage, displayGrooveToPhysical, getHoleDisplayGrooveIndex, getProfileGrooveCount, grooveOrdinal } from '../utils/profileMachining';
+import type { APillarMillingConfig } from '../data/aPillarMilling';
 
 interface Props {
   variantId: string;
   length: number;
   colorId: string;
   holes: DrillHole[];
+  aPillarMilling?: APillarMillingConfig;
   language: Language;
   tapping: { left: boolean[]; right: boolean[] };
   onChange: (holes: DrillHole[]) => void;
@@ -17,9 +19,9 @@ interface Props {
 }
 
 /** P2's actual machining diagram, backed by the designer's ordinary undoable hole data. */
-const DesignerProfileMachining: React.FC<Props> = ({ variantId, length, colorId, holes, language, tapping, onChange, onDrill3D, onToggleTapping }) => {
+const DesignerProfileMachining: React.FC<Props> = ({ variantId, length, colorId, holes, aPillarMilling, language, tapping, onChange, onDrill3D, onToggleTapping }) => {
   const tr = (cn: string, en: string, jp: string) => language === 'cn' ? cn : language === 'jp' ? jp : en;
-  const [side, setSide] = useState<ProfileSide>('A');
+  const [side, setSide] = useState<ProfileSide>(aPillarMilling?.face || 'A');
   const [position, setPosition] = useState(Math.min(100, Math.round(length / 2)));
   const [groove, setGroove] = useState(0);
   const [type, setType] = useState<HoleType>('through');
@@ -28,6 +30,9 @@ const DesignerProfileMachining: React.FC<Props> = ({ variantId, length, colorId,
   const [draftVisible, setDraftVisible] = useState(false);
   const [error, setError] = useState('');
   const [inputRevision, setInputRevision] = useState(0);
+  useEffect(() => {
+    if (aPillarMilling?.face) { setSide(aPillarMilling.face); setGroove(0); }
+  }, [aPillarMilling?.face]);
   const existing = holes.find(hole => hole.id === editingId);
   const count = Math.max(1, getProfileGrooveCount(variantId, side));
   const displayGroove = Math.min(groove, count - 1);
@@ -65,7 +70,7 @@ const DesignerProfileMachining: React.FC<Props> = ({ variantId, length, colorId,
     </div>
     <p className="text-xs text-blue-800">{tr('选面 → 点击图中槽位 → 输入距端尺寸 → 确认。点击已有孔可编辑。', 'Choose a face → click a slot → enter end distance → confirm. Click an existing hole to edit.', '面を選択 → 溝をクリック → 端からの距離を入力 → 確定。既存の穴はクリックで編集。')}</p>
     <div className="rounded-xl border border-blue-100 bg-white p-2">
-      <ProfileVisualizer config={{ variantId, length, colorId, tapping, holes: draftVisible && valid ? [...holes.filter(hole => hole.id !== editingId), draft] : holes }}
+      <ProfileVisualizer config={{ variantId, length, colorId, tapping, aPillarMilling, holes: draftVisible && valid ? [...holes.filter(hole => hole.id !== editingId), draft] : holes }}
         selectedSide={side} onSideChange={next => { setSide(next); setGroove(0); }} interactive tapLabel={tr('攻丝', 'Tap', 'タップ')}
         onTapToggle={end => onToggleTapping(end)}
         previewHoleId={draftVisible ? draft.id : undefined}

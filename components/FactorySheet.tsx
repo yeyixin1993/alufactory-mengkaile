@@ -21,6 +21,7 @@ import { expandFinishedFurnitureCartItems } from '../utils/finishedFurnitureCart
 // it used to hold had already drifted: it asked for `/images/accessory/3.jpg`
 // while the catalog still fell back to the whole 1–10 chart.
 import { ACCESSORY_CODE_IMAGE_MAP } from '../data/accessoryCatalog';
+import { describeAPillarMilling, getAPillarMillingLayout } from '../data/aPillarMilling';
 
 interface FactorySheetProps {
   cart: CartItem[];
@@ -56,7 +57,7 @@ const isCutOnlyProfileItem = (item: CartItem) => {
   const hasTap = !!(config.tapping?.left?.some(Boolean) || config.tapping?.right?.some(Boolean));
   const hasDrill = Array.isArray(config.holes) && config.holes.length > 0;
   const hasMiter = !!(config.miterCut?.left?.enabled || config.miterCut?.right?.enabled);
-  if (hasDrill || hasMiter) return false;
+  if (hasDrill || hasMiter || config.aPillarMilling) return false;
   if (hasTap && TAP_ONLY_VARIANTS.has(String(config.variantId))) return false;
   return true;
 };
@@ -168,7 +169,7 @@ const FactorySheet: React.FC<FactorySheetProps> = ({ cart, user, language, order
   const t = TRANSLATIONS[language];
   const currency = getCurrency(language);
   const productionCart = React.useMemo(() => expandFinishedFurnitureCartItems(cart).map(item => withIncludedAccessoryPacking(item, language)), [cart, language]);
- 
+
 // Summarize profiles for a sheet: length, model, color, finish, tap, quantity, remarks
   const profileSummary = React.useMemo(() => {
     type Row = { length: string; model: string; color: string; section: string; tap: string; quantity: number; remark: string; key: string; miter: string };
@@ -204,7 +205,7 @@ const FactorySheet: React.FC<FactorySheetProps> = ({ cart, user, language, order
       // 3. Determine unique Processing State
       // 'tap' takes precedence (usually implies holes + tapping), 'drill' is just holes, 'raw' is nothing.
       let processingState = 'raw';
-      
+
       if (hasDrill) {
         processingState = 'drill';
       } else if (hasTap) {
@@ -235,7 +236,8 @@ const FactorySheet: React.FC<FactorySheetProps> = ({ cart, user, language, order
 
       // 6. Create Remark
       const hasMiter = hasMiterLeft || hasMiterRight;
-      const needsProcessingRemark = processingState === 'drill' || hasMiter;
+      const millingSummary = describeAPillarMilling(cfg.variantId || '', cfg.length, cfg.aPillarMilling, language);
+      const needsProcessingRemark = processingState === 'drill' || hasMiter || Boolean(cfg.aPillarMilling);
       let remark = '无额外加工';
       if (needsProcessingRemark && customRemark) {
         remark = `加工如下图；${customRemark}`;
@@ -244,6 +246,7 @@ const FactorySheet: React.FC<FactorySheetProps> = ({ cart, user, language, order
       } else if (customRemark) {
         remark = customRemark;
       }
+      if (millingSummary) remark = `${millingSummary}；${remark}`;
 
       const leftTapCount = Array.isArray(cfg.tapping?.left) ? cfg.tapping.left.filter(Boolean).length : 0;
       const rightTapCount = Array.isArray(cfg.tapping?.right) ? cfg.tapping.right.filter(Boolean).length : 0;
@@ -254,7 +257,7 @@ const FactorySheet: React.FC<FactorySheetProps> = ({ cart, user, language, order
           : rightTapCount > 0
             ? `右端攻丝（${rightTapCount}孔）`
             : '无';
-      
+
       // Miter cut label for map key (kept simple)
       let miterLabel = '';
       if (hasMiterLeft && hasMiterRight) miterLabel = '两端斜切45°';
@@ -721,11 +724,11 @@ const FactorySheet: React.FC<FactorySheetProps> = ({ cart, user, language, order
                : [],
            } as ProfileConfig;
            const colorDef = isProfile ? PROFILE_COLORS.find(c => c.id === profileCfg.colorId) : null;
-           
+
            // Correctly translate finish to Chinese terms as requested
            const finishLabel = isProfile
-             ? (profileCfg.finish === 'oxidized' ? t.finishOxidized : 
-                profileCfg.finish === 'powder' ? t.finishPowder : 
+             ? (profileCfg.finish === 'oxidized' ? t.finishOxidized :
+                profileCfg.finish === 'powder' ? t.finishPowder :
                 profileCfg.finish === 'electrophoretic' ? t.finishElectrophoretic : profileCfg.finish)
              : '';
 
@@ -747,7 +750,7 @@ const FactorySheet: React.FC<FactorySheetProps> = ({ cart, user, language, order
                   {showComponentPrice && <div className="font-black text-xl">{currency}{item.totalPrice.toFixed(1)}</div>}
                 </div>
              </div>
-             
+
              <div className="p-6 factory-card-body">
                {isProfile ? (
                  <div className="space-y-8 factory-card-stack">
@@ -760,6 +763,11 @@ const FactorySheet: React.FC<FactorySheetProps> = ({ cart, user, language, order
                           <div className="flex flex-col"><span className="text-slate-400 mb-1">{t.color}</span><span className="font-black">{colorDef?.name[language]}</span></div>
                           <div className="flex flex-col"><span className="text-slate-400 mb-1">{t.finish}</span><span className="font-black">{finishLabel}</span></div>
                        </div>
+                       {profileCfg.aPillarMilling && (
+                         <p className="mt-3 text-xs font-bold leading-relaxed text-blue-800" data-testid="factory-a-pillar-summary">
+                           {describeAPillarMilling(profileCfg.variantId || '', profileCfg.length, profileCfg.aPillarMilling, language)}
+                         </p>
+                       )}
                     </div>
 
                     {/* All-Sides Visualization */}
@@ -802,10 +810,12 @@ const FactorySheet: React.FC<FactorySheetProps> = ({ cart, user, language, order
                       if (itemHasDrill && itemHasMiterInner) {
                         sidesToShow = ['A', 'B', 'C', 'D'];
                       }
+                      const milling = getAPillarMillingLayout(profileCfg.variantId || '', profileCfg.length, profileCfg.aPillarMilling);
+                      if (milling) sidesToShow = (['A', 'B', 'C', 'D'] as ProfileSide[]).filter(side => side === milling.face || sidesToShow.includes(side));
 
                       if (sidesToShow.length === 0) return null;
 
-                      const previewLabel = itemProcessingState2 === 'drill' ? `${t.preview} (All Sides)` : 
+                      const previewLabel = milling ? `${t.preview} (${sidesToShow.join(' / ')})` : itemProcessingState2 === 'drill' ? `${t.preview} (All Sides)` :
                                            itemProcessingState2 === 'miter' ? `${t.preview} (${t.miterCutLabel || '45° Cut'})` :
                                            `${t.preview} (Side B)`;
 

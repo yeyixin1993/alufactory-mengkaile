@@ -248,72 +248,25 @@ const PurchasePanel: React.FC<{
   );
 };
 
-/** 首页三张板块入口卡 */
-export const StorefrontSectionCards: React.FC<{ language: Language }> = ({ language }) => (
-  <div className="mt-14">
-    <div className="mb-5 flex items-end justify-between gap-4">
-      <div>
-        <div className="text-[10px] font-black uppercase tracking-[0.28em] text-slate-400">
-          {language === 'cn' ? '新增板块' : language === 'jp' ? '新セクション' : 'New sections'}
-        </div>
-        <h2 className="mt-1 text-2xl font-black tracking-tight text-slate-900">
-          {language === 'cn' ? '洞洞板配件' : language === 'jp' ? '有孔ボード部品' : 'Pegboard accessories'}
-        </h2>
+/** Homepage entries share the product catalog grid and card style. */
+export const StorefrontSectionCards: React.FC<{ language: Language }> = ({ language }) => <>
+  {STOREFRONT_SECTIONS.map(section => (
+    <div key={section.id} className="flex flex-col bg-white rounded-[2.5rem] overflow-hidden shadow-xl border border-slate-100 hover:shadow-2xl transition-all duration-300 group">
+      <div className="h-64 shrink-0 overflow-hidden relative bg-slate-100">
+        {section.coverImage ? <img src={section.coverImage} alt={section.title[language]} loading="lazy" decoding="async" className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-1000" /> : <Package className="absolute inset-0 m-auto h-12 w-12 text-slate-300" />}
+        <div className="absolute inset-0 bg-gradient-to-t from-black/40 via-transparent to-transparent" />
+        <div className="absolute top-6 left-6 bg-white/95 backdrop-blur px-3 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest text-slate-800 shadow-xl">{section.id === 'pegboard-accessories' ? 'PEGBOARD ACCESSORIES' : section.eyebrow[language]}</div>
       </div>
-      <div className="hidden text-xs font-bold text-slate-400 sm:block">
-        {language === 'cn' ? '选购适配的洞洞板配件' : language === 'jp' ? '対応する有孔ボード部品を選ぶ' : 'Choose accessories for your pegboard'}
+      <div className="p-8 flex flex-1 flex-col">
+        <h3 className="text-2xl font-black text-slate-900 mb-3">{section.title[language]}</h3>
+        <p className="text-slate-500 text-sm mb-10 line-clamp-2 leading-relaxed">{section.description[language]}</p>
+        <Link to={`/section/${section.id}`} className="mt-auto w-full bg-slate-900 text-white py-5 rounded-3xl font-black flex items-center justify-center gap-3 hover:bg-blue-600 transition-all shadow-xl shadow-slate-900/20 group-hover:-translate-y-1">
+          {language === 'cn' ? '进入选购' : language === 'jp' ? '商品を選ぶ' : 'Shop now'} <ChevronRight className="w-5 h-5" />
+        </Link>
       </div>
     </div>
-    <div className="grid grid-cols-1 gap-5 md:grid-cols-3">
-      {STOREFRONT_SECTIONS.map(section => {
-        const accent = ACCENT[section.accent];
-        const fromPrice = section.items
-          .map(item => (item.purchase === 'cart' ? Number(item.price ?? 0) : Number(item.priceFrom ?? 0)))
-          .filter(value => Number.isFinite(value) && value > 0);
-        const minPrice = fromPrice.length ? Math.min(...fromPrice) : null;
-        return (
-          <Link
-            key={section.id}
-            to={`/section/${section.id}`}
-            className="group relative overflow-hidden rounded-[2rem] border border-slate-100 bg-white shadow-xl transition-all hover:-translate-y-1 hover:shadow-2xl"
-          >
-            {section.coverImage ? (
-              <div className="h-36 overflow-hidden">
-                <img src={section.coverImage} alt={section.title[language]} loading="lazy" className="h-full w-full object-cover transition-transform duration-700 group-hover:scale-105" />
-              </div>
-            ) : (
-              <div className={`relative h-36 overflow-hidden bg-gradient-to-br ${accent.bar}`}>
-                <div className={`absolute -right-10 -top-12 h-40 w-40 rounded-full ${accent.glow} blur-3xl`} />
-                <div className="relative flex h-full items-center px-6 text-white">
-                  <div>
-                    <div className="text-[10px] font-black uppercase tracking-[0.24em] text-white/60">{section.eyebrow[language]}</div>
-                    <div className="mt-1 text-xl font-black">{section.title[language]}</div>
-                  </div>
-                </div>
-              </div>
-            )}
-            <div className="p-5">
-              <div className="flex items-center justify-between gap-2">
-                <h3 className="text-lg font-black text-slate-900">{section.title[language]}</h3>
-                <span className={`rounded-full ${accent.chip} px-2.5 py-0.5 text-[10px] font-black text-white`}>{section.items.length}</span>
-              </div>
-              <p className="mt-2 line-clamp-2 text-xs font-medium leading-relaxed text-slate-500">{section.description[language]}</p>
-              <div className="mt-4 flex items-center justify-between">
-                <span className="text-xs font-black text-slate-400">
-                  {minPrice != null ? `${language === 'cn' ? '低至' : language === 'jp' ? '最安' : 'from'} ¥${minPrice}` : (language === 'cn' ? '按配置报价' : language === 'jp' ? '見積' : 'Quoted')}
-                </span>
-                <span className="inline-flex items-center gap-1 text-xs font-black text-slate-900 group-hover:text-blue-600">
-                  {language === 'cn' ? '查看全部' : language === 'jp' ? 'すべて見る' : 'View all'}
-                  <ChevronRight className="h-4 w-4" />
-                </span>
-              </div>
-            </div>
-          </Link>
-        );
-      })}
-    </div>
-  </div>
-);
+  ))}
+</>;
 
 /** 板块详情页：/section/:sectionId */
 export const StorefrontSectionPage: React.FC<{
@@ -323,6 +276,7 @@ export const StorefrontSectionPage: React.FC<{
 }> = ({ sectionId, language, onAddToCart }) => {
   const params = useParams<{ sectionId?: string }>();
   const resolvedId = sectionId || params.sectionId;
+  React.useEffect(() => { window.scrollTo(0, 0); }, [resolvedId]);
   const section = useMemo(() => findStorefrontSection(resolvedId), [resolvedId]);
   const [added, setAdded] = useState<string | null>(null);
 

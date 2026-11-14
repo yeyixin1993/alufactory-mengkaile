@@ -77,6 +77,9 @@ import {
   getMarineBoardOrderColorName,
 } from '../constants';
 import DesignerProfileMachining from './DesignerProfileMachining';
+import APillarMillingControl from './APillarMillingControl';
+import { describeAPillarMilling, getAPillarMillingLayout, getAPillarMillingSpec, normalizeAPillarMillingConfig, readAPillarMillingConfig, type APillarMillingConfig } from '../data/aPillarMilling';
+import { applyAPillarMillingGeometry } from '../utils/aPillarGeometry';
 import {
   CartItem,
   DesignSourceInfo,
@@ -200,6 +203,7 @@ interface DIYSceneItem extends StoolSceneItem {
   height?: number;
   thickness?: number;
   holes?: DrillHole[];
+  aPillarMilling?: APillarMillingConfig;
   tappingLeft?: boolean;
   tappingRight?: boolean;
   finish?: ProfileFinish;
@@ -1568,6 +1572,10 @@ export const normalizeDesignItems = (source: DIYSceneItem[]): DIYSceneItem[] => 
     // dimensions so legacy No.9 records (including the former 30×30×20
     // default) cannot render a rectangular body for a cubic series part.
     ...(connectionDimensions || {}),
+    ...(item.kind === 'profile' ? {
+      aPillarMilling: normalizeAPillarMillingConfig(item.variantId || '2020', item.aPillarMilling),
+      ...(item.aPillarMilling ? { finish: item.colorId === 'natural' ? 'oxidized' as const : 'powder' as const } : {}),
+    } : {}),
     ...(item.kind === 'caster' ? {
       accessoryThreadSize: item.accessoryThreadSize || 'M8',
       hasBrake: Boolean(item.hasBrake),
@@ -1637,6 +1645,7 @@ export const buildProductionData = (items: DIYSceneItem[], language: Language) =
     type: item.catalogPreviewOnly ? 'imported_component' as const : item.kind,
     originalCartItem: item.originalCartItem,
     model: item.variantId || item.name,
+    aPillarMilling: item.aPillarMilling,
     lengthMm: item.catalogPreviewOnly ? undefined : item.length,
     widthMm: item.catalogPreviewOnly ? undefined : item.width,
     heightMm: item.catalogPreviewOnly ? undefined : item.height,
@@ -2088,6 +2097,7 @@ const mapSystemOrderProfileItemsToDesignerItems = (
     colorId: typeof config.colorId === 'string' && config.colorId.trim() ? config.colorId : base.colorId,
     finish,
     holes,
+    aPillarMilling: readAPillarMillingConfig(variantId, config.aPillarMilling),
     tappingLeft: hasTappingEnabled(config?.tapping?.left),
     tappingRight: hasTappingEnabled(config?.tapping?.right),
     remark: typeof config.remark === 'string' ? config.remark : (base.remark || ''),
@@ -2097,6 +2107,7 @@ const mapSystemOrderProfileItemsToDesignerItems = (
 const scenePurchaseSpec = (item: DIYSceneItem) => JSON.stringify([
   item.kind, item.variantId, item.length, item.width, item.height, item.thickness,
   item.colorId, item.finish, item.holes, item.tappingLeft, item.tappingRight,
+  item.aPillarMilling,
   item.doorMaterial, item.doorOverlay, item.openingSide, item.remark,
 ]);
 export const originalCartRowForSceneItem = (item: DIYSceneItem): CartItem | null => {
@@ -2588,7 +2599,7 @@ const workbookColorId = (part: ProductionWorkbookData['parts'][number], kind: DI
     || (kind === 'marine_board' || (kind === 'cabinet_door' && part.doorMaterial === 'marine') ? 'wood_natural' : 'natural');
 };
 
-const itemsFromProductionWorkbook = (production: ProductionWorkbookData): DIYSceneItem[] => production.parts.flatMap((part, index) => {
+export const itemsFromProductionWorkbook = (production: ProductionWorkbookData): DIYSceneItem[] => production.parts.flatMap((part, index) => {
   if (!IMPORTABLE_ITEM_KINDS.includes(part.type as DIYItemKind)) return [];
   const kind = part.type as DIYItemKind;
   const requestedSeries = ACCESSORY_PROFILE_SIZES.includes(part.accessoryProfileSize as DIYAccessoryProfileSize)
@@ -2656,6 +2667,7 @@ const itemsFromProductionWorkbook = (production: ProductionWorkbookData): DIYSce
       : part.attachmentKey?.includes(':DOUBLE:right') ? 'right' : part.attachmentKey?.includes(':DOUBLE:left') ? 'left' : undefined,
     openingSide: part.openingSide === 'right' || part.openingSide === 'left' ? part.openingSide : base.openingSide,
     length: part.lengthMm ?? base.length,
+    aPillarMilling: readAPillarMillingConfig(variantId || '2020', part.aPillarMilling),
     width: part.widthMm ?? base.width,
     height: part.heightMm ?? base.height,
     thickness: part.thicknessMm ?? base.thickness,
@@ -2857,9 +2869,9 @@ const makeMaterial = (
   });
 };
 
-const addEdges = (mesh: THREE.Mesh, color = '#475569', opacity = 0.55) => {
+const addEdges = (mesh: THREE.Mesh, color = '#475569', opacity = 0.55, outlineGeometry?: THREE.BufferGeometry) => {
   const edges = new THREE.LineSegments(
-    new THREE.EdgesGeometry(mesh.geometry),
+    outlineGeometry || new THREE.EdgesGeometry(mesh.geometry),
     new THREE.LineBasicMaterial({ color, transparent: true, opacity }),
   );
   mesh.add(edges);
@@ -5653,6 +5665,9 @@ const createRoundedN4SectionShape = (
   return shape;
 };
 
+// Selection/color changes rebuild scene objects; keep a bounded copy of the
+// expensive machining geometry independent of disposable scene meshes.
+const aPillarGeometryCache = new Map<string, THREE.BufferGeometry>();
 const createProfileObject = (
   item: DIYSceneItem,
   selected: boolean,
@@ -5696,7 +5711,7 @@ const createProfileObject = (
     shape.holes.push(bore);
   }));
 
-  const geometry = new THREE.ExtrudeGeometry(shape, {
+  let geometry: THREE.BufferGeometry = new THREE.ExtrudeGeometry(shape, {
     depth: length,
     bevelEnabled: true,
     bevelSegments: 1,
@@ -5711,6 +5726,32 @@ const createProfileObject = (
   }
   geometry.rotateY(Math.PI / 2);
   geometry.translate(-length / 2, 0, 0);
+  const millingLayout = getAPillarMillingLayout(item.variantId || '2020', item.length || 1000, item.aPillarMilling);
+  // Preserve the extrusion's physical outline. The independently clipped
+  // milling facets have T-junctions that EdgesGeometry mistakes for visible
+  // seams; the real aperture walls already supply the slot's depth/shading.
+  const profileOutline = millingLayout ? new THREE.EdgesGeometry(geometry) : undefined;
+  if (millingLayout) {
+    const cacheKey = JSON.stringify([item.variantId, item.length, millingLayout.spec.id, millingLayout.face]);
+    const cached = aPillarGeometryCache.get(cacheKey);
+    const milled = cached?.clone() || applyAPillarMillingGeometry(geometry, {
+      face: millingLayout.face, lengthMm: item.length || 1000,
+      sectionWidthMm: sectionWidth, sectionHeightMm: sectionHeight,
+      centersMm: millingLayout.centersMm, columnOffsetsMm: millingLayout.columnOffsetsMm,
+      slotWidthMm: millingLayout.widthMm, slotLengthMm: millingLayout.heightMm,
+      cutDepthMm: (millingLayout.face === 'A' || millingLayout.face === 'C' ? sectionHeight : sectionWidth) / 2,
+      sceneScale: SCENE_SCALE,
+    });
+    if (!cached && milled !== geometry && milled.getAttribute('position').count <= 600_000) {
+      while (aPillarGeometryCache.size && [...aPillarGeometryCache.values()].reduce((sum, entry) => sum + entry.getAttribute('position').count, milled.getAttribute('position').count) > 600_000) {
+        const oldest = aPillarGeometryCache.keys().next().value!;
+        aPillarGeometryCache.get(oldest)!.dispose();
+        aPillarGeometryCache.delete(oldest);
+      }
+      aPillarGeometryCache.set(cacheKey, milled.clone());
+    }
+    if (milled !== geometry) { geometry.dispose(); geometry = milled; }
+  }
   geometry.computeVertexNormals();
 
   const body = new THREE.Mesh(
@@ -5724,6 +5765,7 @@ const createProfileObject = (
     body,
     item.colorId === 'black' ? '#64748b' : '#6b7280',
     transparentProfile ? 0.22 : 0.55,
+    profileOutline,
   );
   group.add(body);
 
@@ -10923,6 +10965,7 @@ const projectProfileSpecKey = (item: DIYSceneItem) => JSON.stringify({
   variantId: item.variantId || '',
   length: Number(item.length || 0),
   colorId: item.colorId || '',
+  aPillarMilling: item.aPillarMilling,
   machining: getRotationallyCanonicalMachiningKey({
     variantId: item.variantId,
     holes: item.holes,
@@ -10979,7 +11022,7 @@ const getProfileMachiningSummary = (item: DIYSceneItem, language: Language) => {
       : item.tappingRight
         ? t.rightEndTapping
         : '';
-  return [...holeSummary, tappingSummary].filter(Boolean).join(' · ');
+  return [...holeSummary, tappingSummary, describeAPillarMilling(item.variantId || '2020', item.length || 1000, item.aPillarMilling, language)].filter(Boolean).join(' · ');
 };
 
 const profileFinishForColor = (colorId: string) => (colorId === 'natural' ? 'oxidized' : 'powder');
@@ -11019,11 +11062,12 @@ export const calculatePrice = (item: DIYSceneItem, user?: User | null) => {
     const membership = normalizeMembershipLevel(user?.membershipLevel);
     const discount = membership === 'vip_plus' ? 4 : membership === 'vip' ? 2 : 0;
     const material = ((item.length || 1000) / 1000) * Math.max(0, variant.price[profileFinishForColor(item.colorId)] - discount);
+    const milling = ((item.length || 1000) / 1000) * (getAPillarMillingSpec(item.variantId || '2020', item.aPillarMilling?.specId)?.feePerMeter || 0);
     const holes = (item.holes || []).reduce((sum, hole) => sum + (hole.type === 'through' ? 1 : 1.8), 0);
     const tapPortCount = getProfileTapPortCount(item.variantId);
     const tapping = (sceneTappingPorts(item, 'left').filter(Boolean).length + sceneTappingPorts(item, 'right').filter(Boolean).length) * 1.5;
     const danger = membership !== 'vip_plus' && (item.length || 0) > 20 && (item.length || 0) <= 100 ? 5 : 0;
-    return Number(((material + holes + tapping + danger) * quantity).toFixed(1));
+    return Number(((material + milling + holes + tapping + danger) * quantity).toFixed(1));
   }
   if (item.kind === 'plate' || item.kind === 'pegboard' || item.kind === 'marine_board') {
     const area = Math.max(MIN_BOARD_AREA, ((item.width || 0) * (item.height || 0)) / 1_000_000);
@@ -11466,6 +11510,8 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({
       const hasRightCap = items.some((item) => item.kind === 'end_cap' && item.attachedProfileIds?.[0] === selected.id && item.attachedEnd === 'right');
       candidate = {
         ...candidate,
+        aPillarMilling: normalizeAPillarMillingConfig(candidate.variantId || '2020', candidate.aPillarMilling),
+        ...(candidate.aPillarMilling ? { finish: profileFinishForColor(candidate.colorId) as ProfileFinish } : {}),
         tappingLeft: hasLeftCap ? true : candidate.tappingLeft,
         tappingRight: hasRightCap ? true : candidate.tappingRight,
       };
@@ -12451,6 +12497,11 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({
           const preflight = inspectDesignerImportItems(expandedItems);
           if (!preflight.valid) throw new Error(preflight.issues.map(issue => issue.message).join('\n'));
           importedItems = normalizeDesignItems(expandedItems);
+        } else if (Array.isArray(parsed?.production?.parts) && Array.isArray(parsed?.production?.holes)) {
+          const restored = itemsFromProductionWorkbook(parsed.production);
+          const preflight = inspectDesignerImportItems(restored);
+          if (!preflight.valid) throw new Error(preflight.issues.map(issue => issue.message).join('\n'));
+          importedItems = normalizeDesignItems(restored);
         } else if (Array.isArray(parsed?.order_json?.items)) {
           const rows = parsed.order_json.items.map((row: any, index: number) => ({
             id: `order-import-${index}`,
@@ -12613,6 +12664,7 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({
           finish: profileFinishForColor(item.colorId),
           colorId: item.colorId,
           holes: item.holes || [],
+          aPillarMilling: item.aPillarMilling,
           tapping: {
             left: sceneTappingPorts(item, 'left'),
             right: sceneTappingPorts(item, 'right'),
@@ -14284,10 +14336,15 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({
 
               {selected.kind === 'profile' && (
                 <div className="rounded-2xl border border-blue-100 bg-blue-50/60 p-4">
+                  <div className="mb-4">
+                    <APillarMillingControl model={selected.variantId || '2020'} length={selected.length || 1000}
+                      value={selected.aPillarMilling} language={language} onChange={aPillarMilling => updateSelected({ aPillarMilling })} />
+                  </div>
                   <DesignerProfileMachining
                     key={`${selected.id}:${selected.variantId}:${selected.length}`}
                     variantId={selected.variantId || '2020'} length={selected.length || 1000}
                     colorId={selected.colorId} holes={selected.holes || []} language={language}
+                    aPillarMilling={selected.aPillarMilling}
                     tapping={{ left: Array(selectedTapPortCount).fill(!!selected.tappingLeft), right: Array(selectedTapPortCount).fill(!!selected.tappingRight) }}
                     onChange={holes => updateSelected({ holes })} onDrill3D={openDrillSetup}
                     onToggleTapping={end => updateSelected(end === 'left'
@@ -14787,4 +14844,5 @@ export const createChatProfilePreview = (config: import('../types').ProfileConfi
   id: 'ai-profile-preview', kind: 'profile', name: config.variantId || '2020', position: [0, 0, 0], rotation: [0, 0, 0],
   colorId: config.colorId || 'natural', quantity: 1, variantId: config.variantId, length: config.length,
   holes: config.holes, tappingLeft: config.tapping.left.some(Boolean), tappingRight: config.tapping.right.some(Boolean), finish: config.finish,
+  aPillarMilling: config.aPillarMilling,
 }, false, transparentProfile, true, 1, false, new Set());

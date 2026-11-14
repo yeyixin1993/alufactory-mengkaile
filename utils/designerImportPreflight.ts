@@ -7,6 +7,7 @@ import {
   type ImportedSourceMesh,
 } from './importedSourceMesh';
 import { hasImportedConnectionDraft, inspectImportedConnectionDraft } from './importedConnectionDraft';
+import { getAPillarMillingFaces, getAPillarMillingSpec } from '../data/aPillarMilling';
 
 /**
  * Read-only structural validation at the editable-model import boundary.
@@ -200,6 +201,24 @@ export const inspectDesignerImportItems = (value: unknown): DesignerImportPrefli
             }
           }
         });
+      }
+    }
+
+    if (item.aPillarMilling !== undefined) {
+      const milling = item.aPillarMilling;
+      if (item.kind !== 'profile') {
+        addIssue('a_pillar_kind_invalid', 'aPillarMilling', 'A柱铣型只能用于型材，不能应用于板材或配件。');
+      }
+      if (!isRecord(milling)) {
+        addIssue('a_pillar_invalid', 'aPillarMilling', 'A柱铣型必须包含规格和加工面的对象；不加工时请省略该字段。');
+      } else {
+        const model = typeof item.variantId === 'string' ? item.variantId : '';
+        if (typeof milling.specId !== 'string' || !getAPillarMillingSpec(model, milling.specId)) {
+          addIssue('a_pillar_spec_invalid', 'aPillarMilling.specId', 'A柱铣型规格不适用于该型材；不会静默删除或替换加工。');
+        }
+        if (!getAPillarMillingFaces(model).some(face => face === milling.face)) {
+          addIssue('a_pillar_face_invalid', 'aPillarMilling.face', 'A柱加工面缺失或不适用于该型材；不会自动改为其他加工面。');
+        }
       }
     }
 

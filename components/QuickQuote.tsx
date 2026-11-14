@@ -1,7 +1,8 @@
 import { DraftNumberInput, NumericActionButton } from './DraftNumberInput';
 import { ENABLED_METAL_BOARD_THICKNESSES, PEGBOARD_PRICE_PER_SQM, ALUMINUM_PLATE_PRICE_PER_SQM, VIP_PLUS_PEGBOARD_PRICE_PER_SQM, VIP_PLUS_ALUMINUM_PLATE_PRICE_PER_SQM, MARINE_BOARD_FULL_SHEET_PRICE, MARINE_BOARD_SPEC_PRICE_PER_SQM, MARINE_BOARD_COLORED_SURCHARGE_PER_SQM, MARINE_BOARD_WEIGHT_PER_SQM, MIN_BOARD_CHARGE_AREA_SQM, MAX_PROFILE_LENGTH_MM, MAX_BOARD_WIDTH_MM, MAX_BOARD_HEIGHT_MM, MARINE_BOARD_MAX_WIDTH_MM, MARINE_BOARD_MAX_HEIGHT_MM } from '../utils/quickQuoteCatalog';
 import { calculateFrameUnitPrice } from '../utils/framePricing';
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { Plus, Trash2 } from 'lucide-react';
 import { Language, User } from '../types';
 import {
@@ -29,7 +30,8 @@ import {
   summarizeAccessoryQuote,
 } from '../utils/accessoryQuote';
 import { normalizeMembershipLevel } from '../utils/membership';
-import { calculateQuickProfileRow } from '../utils/quickQuoteProfile';
+import { calculateQuickProfileRow, normalizeQuickProfileRow } from '../utils/quickQuoteProfile';
+import { getAPillarMillingSpec, getAPillarMillingSpecs, normalizeAPillarMilling, type APillarMillingOption } from '../data/aPillarMilling';
 import QuickQuoteProfileDetails from './QuickQuoteProfileDetails';
 import ProfileSectionGuide from './ProfileSectionGuide';
 
@@ -55,6 +57,7 @@ interface ProfileRow {
   length: number;
   colorId: string;
   section: ProfileSection;
+  aPillarMilling: APillarMillingOption;
   tappingCount: number;
   throughHoleCount: number;
   countersunkHoleCount: number;
@@ -122,6 +125,7 @@ const createProfileRow = (): ProfileRow => ({
   length: 0,
   colorId: 'natural',
   section: 'natural',
+  aPillarMilling: 'none',
   tappingCount: 0,
   throughHoleCount: 0,
   countersunkHoleCount: 0,
@@ -203,8 +207,15 @@ const calcShippingOptionsByProvince = (
 };
 
 const QuickQuote: React.FC<{ language: Language; user?: User | null }> = ({ language, user }) => {
+  useEffect(() => { window.scrollTo(0, 0); }, []);
+  const [searchParams] = useSearchParams();
   const t = TRANSLATIONS[language];
   const currency = getCurrency(language);
+  const millingText = {
+    cn: { title: 'A柱铣型', none: '不加工A柱', fee: 'A柱铣型加工费', perMeter: '元/米', finish: 'A柱铣型支持本色、彩色（截面彩色）；彩色的截面本色暂不提供。', formula: '报价 =（型材每米单价 + A柱加工每米单价）× 长度（米）× 数量；其他加工另计。' },
+    en: { title: 'A-pillar milling', none: 'No A-pillar milling', fee: 'A-pillar milling fee', perMeter: `${currency}/m`, finish: 'Available in natural aluminum or color with colored cut ends. Natural cut ends are unavailable for colored milled profiles.', formula: 'Quote = (profile price/m + milling fee/m) × length (m) × quantity. Other machining is added separately.' },
+    jp: { title: 'Aピラー切削', none: 'Aピラー加工なし', fee: 'Aピラー切削加工費', perMeter: `${currency}/m`, finish: 'アルミ本色、またはカラー（断面もカラー）に対応。カラー材の本色断面は現在選択できません。', formula: '見積 =（形材のメートル単価 + Aピラー加工のメートル単価）× 長さ（m）× 数量。その他の加工は別途加算。' },
+  }[language];
   const membershipLevel = normalizeMembershipLevel(user?.membershipLevel);
   const isVipPlus = membershipLevel === 'vip_plus';
   const profileDiscountPerMeter = membershipLevel === 'vip_plus'
@@ -222,7 +233,13 @@ const QuickQuote: React.FC<{ language: Language; user?: User | null }> = ({ lang
   const [selectedProduct, setSelectedProduct] = useState<QuickQuoteProduct>('profile');
   const [shippingSelection, setShippingSelection] = useState<ShippingSelection>('auto');
 
-  const [profileRows, setProfileRows] = useState<ProfileRow[]>([createProfileRow()]);
+  const [profileRows, setProfileRows] = useState<ProfileRow[]>(() => {
+    const row = createProfileRow();
+    const model = searchParams.get('profile');
+    if (model && PROFILE_VARIANTS.some(variant => variant.id === model)) row.model = model;
+    row.aPillarMilling = normalizeAPillarMilling(row.model, searchParams.get('aPillarMilling'));
+    return [normalizeQuickProfileRow(row)];
+  });
   const [hasChosenProfileColor, setHasChosenProfileColor] = useState(false);
   const [aluPlateRows, setAluPlateRows] = useState<BoardRow[]>([createBoardRow(2)]);
   const [pegboardRows, setPegboardRows] = useState<BoardRow[]>([createBoardRow(2)]);
@@ -426,7 +443,8 @@ const QuickQuote: React.FC<{ language: Language; user?: User | null }> = ({ lang
       const lengthMm = Math.max(0, row.length || 0);
       if (qty <= 0 || lengthMm <= 0) return;
       const colorName = (PROFILE_COLORS.find((c) => c.id === row.colorId) || PROFILE_COLORS[0]).name[language];
-      const key = `${row.model} · ${colorName}`;
+      const milling = getAPillarMillingSpec(row.model, row.aPillarMilling);
+      const key = `${row.model} · ${colorName}${milling ? ` · ${millingText.title} ${milling.name[language]}` : ''}`;
       const prev = profileMetersMap.get(key) || 0;
       profileMetersMap.set(key, prev + (lengthMm * qty) / 1000);
     });
@@ -460,6 +478,8 @@ const QuickQuote: React.FC<{ language: Language; user?: User | null }> = ({ lang
         const lengthMm = safeNonNegative(row.length || 0);
         if (qty <= 0 || lengthMm <= 0) return null;
         const colorName = (PROFILE_COLORS.find((c) => c.id === row.colorId) || PROFILE_COLORS[0]).name[language];
+        const milling = getAPillarMillingSpec(row.model, row.aPillarMilling);
+        const millingDetail = milling ? ` · ${millingText.title} ${milling.name[language]}（${milling.dimensions[language]}） +${milling.feePerMeter} ${millingText.perMeter}` : '';
         const countParts = [
           { label: t.qq_tappingCount, value: safeNonNegative(row.tappingCount) },
           { label: t.qq_throughHoleCount, value: safeNonNegative(row.throughHoleCount) },
@@ -472,7 +492,7 @@ const QuickQuote: React.FC<{ language: Language; user?: User | null }> = ({ lang
           .join(' · ');
         return {
           id: row.id,
-          text: `${row.model} · ${colorName} · ${row.section === 'natural' ? t.qq_sectionNatural : t.qq_sectionColored} · ${lengthMm}mm × ${qty}${countParts ? ` · ${countParts}` : ''}`,
+          text: `${row.model} · ${colorName} · ${row.section === 'natural' ? t.qq_sectionNatural : t.qq_sectionColored} · ${lengthMm}mm × ${qty}${millingDetail}${countParts ? ` · ${countParts}` : ''}`,
         };
       })
       .filter((x): x is { id: string; text: string } => Boolean(x));
@@ -646,7 +666,7 @@ const QuickQuote: React.FC<{ language: Language; user?: User | null }> = ({ lang
   ]);
 
   const updateProfileRow = (id: string, patch: Partial<ProfileRow>) => {
-    setProfileRows((prev) => prev.map((r) => (r.id === id ? { ...r, ...patch } : r)));
+    setProfileRows((prev) => prev.map((r) => (r.id === id ? normalizeQuickProfileRow({ ...r, ...patch }) : r)));
   };
 
   const updateBoardRows = (setter: React.Dispatch<React.SetStateAction<BoardRow[]>>, id: string, patch: Partial<BoardRow>) => {
@@ -910,6 +930,8 @@ const QuickQuote: React.FC<{ language: Language; user?: User | null }> = ({ lang
               const color = PROFILE_COLORS.find((c) => c.id === row.colorId) || PROFILE_COLORS[0];
               const shouldShowDangerFee = !isVipPlus && row.length > 0 && row.length <= PROFILE_DANGER_FEE_THRESHOLD_MM;
               const colorOnlyColoredSection = COLOR_ONLY_COLORED_SECTION_IDS.includes(row.colorId as any);
+              const millingSpecs = getAPillarMillingSpecs(row.model);
+              const milling = getAPillarMillingSpec(row.model, row.aPillarMilling);
               return (
                 <div key={row.id} className="bg-slate-50 border border-slate-200 rounded-2xl p-4 md:p-5 space-y-4">
                   <div className="grid grid-cols-2 gap-2 sm:gap-3">
@@ -939,6 +961,26 @@ const QuickQuote: React.FC<{ language: Language; user?: User | null }> = ({ lang
                       />
                     </div>
                   </div>
+
+                  {millingSpecs.length > 0 && (
+                    <div className="rounded-xl border border-blue-100 bg-blue-50/70 p-3 space-y-2">
+                      <label htmlFor={`a-pillar-${row.id}`} className="block text-xs font-black text-blue-800">{millingText.title}</label>
+                      <select
+                        id={`a-pillar-${row.id}`}
+                        value={row.aPillarMilling}
+                        onChange={(e) => updateProfileRow(row.id, { aPillarMilling: normalizeAPillarMilling(row.model, e.target.value) })}
+                        className="w-full border border-blue-200 rounded-xl px-3 py-2.5 bg-white text-sm"
+                      >
+                        <option value="none">{millingText.none}</option>
+                        {millingSpecs.map(spec => (
+                          <option key={spec.id} value={spec.id}>
+                            {spec.name[language]} · {spec.dimensions[language]} · +{spec.feePerMeter} {millingText.perMeter}
+                          </option>
+                        ))}
+                      </select>
+                      <p className="text-xs leading-relaxed text-slate-600">{millingText.formula}</p>
+                    </div>
+                  )}
 
                   <div className="grid grid-cols-2 gap-2 sm:gap-3">
                     <div>
@@ -974,7 +1016,9 @@ const QuickQuote: React.FC<{ language: Language; user?: User | null }> = ({ lang
                           <option value="natural">{t.qq_sectionNatural}</option>
                         ) : (
                           <>
-                            {!colorOnlyColoredSection && <option value="natural">{t.qq_sectionNatural}</option>}
+                            {milling ? (
+                              <option value="natural" disabled className="text-slate-400">{t.qq_sectionNatural}</option>
+                            ) : !colorOnlyColoredSection && <option value="natural">{t.qq_sectionNatural}</option>}
                             <option value="colored">{t.qq_sectionColored}</option>
                           </>
                         )}
@@ -982,7 +1026,8 @@ const QuickQuote: React.FC<{ language: Language; user?: User | null }> = ({ lang
                     </div>
                   </div>
 
-                  {colorOnlyColoredSection && (
+                  {milling && <div className="text-xs font-bold text-slate-500">{millingText.finish}</div>}
+                  {!milling && colorOnlyColoredSection && (
                     <div className="text-xs font-bold text-slate-500">{t.qq_coloredSectionOnly}</div>
                   )}
 
@@ -1076,6 +1121,12 @@ const QuickQuote: React.FC<{ language: Language; user?: User | null }> = ({ lang
 
                   <div className="text-xs font-bold text-slate-500">{t.qq_profileMaxLengthNote}</div>
 
+                  {milling && (
+                    <div className="text-xs font-bold text-blue-700">
+                      {millingText.fee}: {milling.feePerMeter} {millingText.perMeter} × {row.length / 1000} {t.qq_meter} × {row.quantity} = {currency}{calc.aPillarMillingFee.toFixed(1)}
+                    </div>
+                  )}
+
                   {shouldShowDangerFee && (
                     <div className="text-xs font-bold text-amber-700">⚠ {t.dangerFeeSurcharge}</div>
                   )}
@@ -1094,6 +1145,7 @@ const QuickQuote: React.FC<{ language: Language; user?: User | null }> = ({ lang
                       model: first.model,
                       colorId: first.colorId,
                       section: first.section,
+                      aPillarMilling: first.aPillarMilling,
                       quantity: 1,
                     },
                   ];

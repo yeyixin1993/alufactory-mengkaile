@@ -11,6 +11,8 @@ import { displayGrooveToPhysical, getProfileGrooveCount, getProfileTapPortCount 
 import { Plus, Trash2, List, ShoppingCart, Pencil, X, Hammer, Settings2, Copy } from 'lucide-react';
 import ProfileVisualizer from './ProfileVisualizer';
 import ProfileSectionGuide from './ProfileSectionGuide';
+import APillarMillingControl from './APillarMillingControl';
+import { getAPillarMillingSpec, getAPillarMillingSpecs, normalizeAPillarMillingConfig, type APillarMillingConfig } from '../data/aPillarMilling';
 import { ApiService } from '../services/apiService';
 import { SHOW_STOREFRONT_INVENTORY } from '../utils/storefrontFeatures';
 
@@ -84,8 +86,10 @@ const ProfileEditor: React.FC<ProfileEditorProps> = ({ onSaveConfiguration, onCa
   const [miterCut, setMiterCut] = useState<MiterCutConfig>(initialConfig?.miterCut || { left: { enabled: false, direction: 'up', side: 'AC' }, right: { enabled: false, direction: 'up', side: 'AC' } });
   const [showMiterCut, setShowMiterCut] = useState<boolean>(!!(initialConfig?.miterCut?.left?.enabled || initialConfig?.miterCut?.right?.enabled));
   const [remark, setRemark] = useState<string>(String(initialConfig?.remark || ''));
+  const [aPillarMilling, setAPillar] = useState<APillarMillingConfig | undefined>(() =>
+    normalizeAPillarMillingConfig(initialConfig?.variantId || '2020', initialConfig?.aPillarMilling));
   
-  const [selectedSide, setSelectedSide] = useState<ProfileSide>('A');
+  const [selectedSide, setSelectedSide] = useState<ProfileSide>(aPillarMilling?.face || 'A');
   const [newHolePos, setNewHolePos] = useState<string>('');
   const [newHoleType, setNewHoleType] = useState<HoleType>('through');
   const [threadSize, setThreadSize] = useState<ThreadSize>('M3');
@@ -102,7 +106,12 @@ const ProfileEditor: React.FC<ProfileEditorProps> = ({ onSaveConfiguration, onCa
   const selectedVariant = PROFILE_VARIANTS.find(v => v.id === variantId) || PROFILE_VARIANTS[0];
   const selectedColor = PROFILE_COLORS.find(c => c.id === colorId) || PROFILE_COLORS[0];
   const selectedColorPhotoSrc = getProfileColorPhotoSrc(colorId);
-  const colorOnlyColoredSection = COLOR_ONLY_COLORED_SECTION_IDS.includes(colorId as any);
+  const effectiveAPillar = normalizeAPillarMillingConfig(variantId, aPillarMilling);
+  const colorOnlyColoredSection = Boolean(effectiveAPillar) || COLOR_ONLY_COLORED_SECTION_IDS.includes(colorId as any);
+  const effectiveFinish = colorOnlyColoredSection && finish === 'electrophoretic' ? 'powder' : finish;
+  useEffect(() => {
+    if (effectiveAPillar?.face) setSelectedSide(effectiveAPillar.face);
+  }, [effectiveAPillar?.face]);
   const isTooShort = length <= MIN_PROFILE_LENGTH_MM;
   const isDangerous = membershipLevel !== 'vip_plus' && length > MIN_PROFILE_LENGTH_MM && length <= DANGER_FEE_THRESHOLD_MM;
   const isTooLong = length > MAX_PROFILE_LENGTH_MM;
@@ -119,6 +128,7 @@ const ProfileEditor: React.FC<ProfileEditorProps> = ({ onSaveConfiguration, onCa
 
   useEffect(() => {
     setTapping((current) => normalizeTappingForVariant(variantId, current));
+    setAPillar((current) => normalizeAPillarMillingConfig(variantId, current));
   }, [variantId]);
 
   useEffect(() => {
@@ -159,9 +169,10 @@ const ProfileEditor: React.FC<ProfileEditorProps> = ({ onSaveConfiguration, onCa
   }, [colorOnlyColoredSection, finish]);
 
   const calculateItemUnitPrice = (len: number, currentHoles: DrillHole[], currentTapping: TappingConfig, currentMiterCut?: MiterCutConfig) => {
-    const basePricePerMeter = selectedVariant.price[finish];
+    const basePricePerMeter = selectedVariant.price[effectiveFinish];
     const effectivePricePerMeter = Math.max(0, basePricePerMeter - profileDiscountPerMeter);
     const materialPrice = (len / 1000) * effectivePricePerMeter;
+    const aPillarFee = (len / 1000) * (getAPillarMillingSpec(variantId, effectiveAPillar?.specId)?.feePerMeter || 0);
     let holeFee = currentHoles.reduce(
       (acc, h) => acc + ((h.type === 'countersunk' || h.type === 'threaded') ? PRICE_HOLE_COUNTERSUNK : PRICE_HOLE_THROUGH),
       0
@@ -174,7 +185,7 @@ const ProfileEditor: React.FC<ProfileEditorProps> = ({ onSaveConfiguration, onCa
     }
     // Danger fee for short profiles (20mm < length <= 100mm)
     const dangerFee = (membershipLevel !== 'vip_plus' && len > MIN_PROFILE_LENGTH_MM && len <= DANGER_FEE_THRESHOLD_MM) ? DANGER_FEE_PER_PIECE : 0;
-    return parseFloat((materialPrice + holeFee + tappingFee + miterFee + dangerFee).toFixed(1));
+    return parseFloat((materialPrice + aPillarFee + holeFee + tappingFee + miterFee + dangerFee).toFixed(1));
   };
 
   const addHole = () => {
@@ -259,13 +270,16 @@ const ProfileEditor: React.FC<ProfileEditorProps> = ({ onSaveConfiguration, onCa
     const effectiveMiterCut = showMiterCut ? miterCut : defaultMiterCut;
     const unitPrice = calculateItemUnitPrice(length, sortedHoles, tapping, effectiveMiterCut);
     
+    // Rebuild the edited manufacturing config: carrying the old designerSnapshot
+    // would reopen the pre-edit design and silently overwrite the updated row.
     const config: ProfileConfig = {
       length,
       tapping: JSON.parse(JSON.stringify(tapping)),
       holes: sortedHoles,
       variantId,
-      finish,
+      finish: effectiveFinish,
       colorId,
+      aPillarMilling: effectiveAPillar ? { ...effectiveAPillar } : undefined,
       unitPrice,
       miterCut: JSON.parse(JSON.stringify(effectiveMiterCut)),
       remark: remark.trim(),
@@ -285,10 +299,11 @@ const ProfileEditor: React.FC<ProfileEditorProps> = ({ onSaveConfiguration, onCa
       setTapping(normalizeTappingForVariant(variantId));
       setMiterCut({ ...defaultMiterCut });
       setShowMiterCut(false);
+      setAPillar(undefined);
     } else {
       const existingIdx = draftProfiles.findIndex(item => {
         const c = item.config as ProfileConfig;
-        return c.length === config.length && c.variantId === config.variantId && c.finish === config.finish && c.colorId === config.colorId && JSON.stringify(c.tapping) === JSON.stringify(config.tapping) && JSON.stringify(c.holes) === JSON.stringify(config.holes) && JSON.stringify(c.miterCut) === JSON.stringify(config.miterCut);
+        return c.length === config.length && c.variantId === config.variantId && c.finish === config.finish && c.colorId === config.colorId && JSON.stringify(c.tapping) === JSON.stringify(config.tapping) && JSON.stringify(c.holes) === JSON.stringify(config.holes) && JSON.stringify(c.miterCut) === JSON.stringify(config.miterCut) && JSON.stringify(c.aPillarMilling) === JSON.stringify(config.aPillarMilling);
       });
 
       if (existingIdx > -1) {
@@ -303,6 +318,7 @@ const ProfileEditor: React.FC<ProfileEditorProps> = ({ onSaveConfiguration, onCa
       setTapping(normalizeTappingForVariant(variantId));
       setMiterCut({ ...defaultMiterCut });
       setShowMiterCut(false);
+      setAPillar(undefined);
       setRemark('');
       setRemark('');
     }
@@ -361,13 +377,19 @@ const ProfileEditor: React.FC<ProfileEditorProps> = ({ onSaveConfiguration, onCa
           </div>
           <div>
             <div className="flex items-center justify-between text-xs font-black text-slate-400 uppercase mb-2"><span>{t.finish}</span><ProfileSectionGuide language={language} compact showPalette={!hasChosenColor}/></div>
-            <select value={finish} onChange={(e) => setFinish(e.target.value as ProfileFinish)} className="w-full border border-slate-200 rounded-xl px-4 py-3 outline-none bg-slate-50 font-black text-slate-700">
+            <select value={effectiveFinish} onChange={(e) => setFinish(e.target.value as ProfileFinish)} className="w-full border border-slate-200 rounded-xl px-4 py-3 outline-none bg-slate-50 font-black text-slate-700">
               <option value="oxidized">{t.finishOxidized}</option>
-              {!colorOnlyColoredSection && <option value="electrophoretic">{t.finishElectrophoretic}</option>}
+              <option value="electrophoretic" disabled={colorOnlyColoredSection} className={colorOnlyColoredSection ? 'text-slate-400' : ''}>{t.finishElectrophoretic}</option>
               <option value="powder">{t.finishPowder}</option>
             </select>
           </div>
         </div>
+
+        {getAPillarMillingSpecs(variantId).length > 0 && (
+          <div className="mb-8">
+            <APillarMillingControl model={variantId} length={length} value={effectiveAPillar} language={language} onChange={setAPillar} />
+          </div>
+        )}
 
         {SHOW_STOREFRONT_INVENTORY && inventoryLoaded && inventoryMeters !== null && (
           <div
@@ -668,7 +690,7 @@ const ProfileEditor: React.FC<ProfileEditorProps> = ({ onSaveConfiguration, onCa
              <div className="text-lg font-black text-blue-600">{currency}{currentUnitPrice.toFixed(1)} / pc</div>
           </div>
           <div className="bg-slate-50 p-4 rounded-3xl border border-slate-100">
-            <ProfileVisualizer config={{ length, variantId, holes, tapping, finish, colorId, miterCut }} selectedSide={selectedSide} onSideChange={setSelectedSide} interactive={true} tapLabel={t.tapAction} onTapToggle={(s, i) => setTapping(prev => { const n = [...prev[s]]; while (n.length <= i) n.push(false); n[i] = !n[i]; return {...prev, [s]: n}; })} onHoleClick={(id) => setHoles(holes.filter(h => h.id !== id))} onBarClick={(e, l, r) => { const mm = Math.round(((e.clientX - r.left) / r.width) * l); if (grooveCount >= 2) { const relY = (e.clientY - r.top) / r.height; setSelectedGrooveIndex(Math.min(Math.floor(relY * grooveCount), grooveCount - 1)); } if (mm >= 0 && mm < l) setNewHolePos(mm.toString()); }} />
+            <ProfileVisualizer config={{ length, variantId, holes, tapping, finish: effectiveFinish, colorId, miterCut, aPillarMilling: effectiveAPillar }} selectedSide={selectedSide} onSideChange={setSelectedSide} interactive={true} tapLabel={t.tapAction} onTapToggle={(s, i) => setTapping(prev => { const n = [...prev[s]]; while (n.length <= i) n.push(false); n[i] = !n[i]; return {...prev, [s]: n}; })} onHoleClick={(id) => setHoles(holes.filter(h => h.id !== id))} onBarClick={(e, l, r) => { const mm = Math.round(((e.clientX - r.left) / r.width) * l); if (grooveCount >= 2) { const relY = (e.clientY - r.top) / r.height; setSelectedGrooveIndex(Math.min(Math.floor(relY * grooveCount), grooveCount - 1)); } if (mm >= 0 && mm < l) setNewHolePos(mm.toString()); }} />
           </div>
         </div>
 
@@ -724,6 +746,7 @@ const ProfileEditor: React.FC<ProfileEditorProps> = ({ onSaveConfiguration, onCa
                         <td className="px-4">
                           <div className="flex flex-wrap gap-1">
                             <span className="text-[10px] font-black px-2 py-0.5 bg-blue-100 text-blue-700 rounded-full">{item.config.holes.length}H</span>
+                            {item.config.aPillarMilling && <span className="text-[10px] font-black px-2 py-0.5 bg-cyan-100 text-cyan-800 rounded-full">A柱 · {getAPillarMillingSpec(item.config.variantId, item.config.aPillarMilling.specId)?.name[language]} · {item.config.aPillarMilling.face}</span>}
                             {item.config.tapping.left.some((b:boolean)=>b) && <span className="text-[10px] font-black px-2 py-0.5 bg-red-100 text-red-600 rounded-full">L-TAP</span>}
                             {item.config.tapping.right.some((b:boolean)=>b) && <span className="text-[10px] font-black px-2 py-0.5 bg-red-100 text-red-600 rounded-full">R-TAP</span>}
                             {item.config.miterCut?.left?.enabled && <span className="text-[10px] font-black px-2 py-0.5 bg-amber-100 text-amber-700 rounded-full">L-45°({item.config.miterCut.left.side || 'AC'})</span>}
@@ -737,7 +760,7 @@ const ProfileEditor: React.FC<ProfileEditorProps> = ({ onSaveConfiguration, onCa
                         <td className="px-4 text-right">
                           <div className="flex gap-1 justify-end opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
                             <button onClick={() => duplicateDraftItem(item)} title={t.copy} className="p-2 text-slate-400 hover:text-emerald-600 hover:bg-white rounded-xl transition-all"><Copy className="w-4 h-4"/></button>
-                            <button onClick={() => { setEditingId(item.id); setVariantId(item.config.variantId); setLength(item.config.length); setHoles(roundHolePositionsToWholeMm(item.config.holes)); setTapping(normalizeTappingForVariant(item.config.variantId, item.config.tapping)); setFinish(item.config.finish); setColorId(item.config.colorId); setRemark(item.config.remark || ''); const mc = item.config.miterCut || { left: { enabled: false, direction: 'up', side: 'AC' }, right: { enabled: false, direction: 'up', side: 'AC' } }; setMiterCut(mc); setShowMiterCut(!!(mc.left?.enabled || mc.right?.enabled)); }} className="p-2 text-slate-400 hover:text-blue-600 hover:bg-white rounded-xl transition-all"><Pencil className="w-4 h-4"/></button>
+                            <button onClick={() => { setEditingId(item.id); setVariantId(item.config.variantId); setLength(item.config.length); setHoles(roundHolePositionsToWholeMm(item.config.holes)); setTapping(normalizeTappingForVariant(item.config.variantId, item.config.tapping)); setFinish(item.config.finish); setColorId(item.config.colorId); setAPillar(normalizeAPillarMillingConfig(item.config.variantId, item.config.aPillarMilling)); setRemark(item.config.remark || ''); const mc = item.config.miterCut || { left: { enabled: false, direction: 'up', side: 'AC' }, right: { enabled: false, direction: 'up', side: 'AC' } }; setMiterCut(mc); setShowMiterCut(!!(mc.left?.enabled || mc.right?.enabled)); }} className="p-2 text-slate-400 hover:text-blue-600 hover:bg-white rounded-xl transition-all"><Pencil className="w-4 h-4"/></button>
                             <button onClick={() => setDraftProfiles(draftProfiles.filter(x => x.id !== item.id))} className="p-2 text-slate-400 hover:text-red-500 hover:bg-white rounded-xl transition-all"><Trash2 className="w-4 h-4"/></button>
                           </div>
                         </td>

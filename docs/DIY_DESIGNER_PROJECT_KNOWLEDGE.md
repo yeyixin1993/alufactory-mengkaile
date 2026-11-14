@@ -162,6 +162,20 @@ These correspond to the common module-aligned connection states seen in MayCAD/J
 
 ## 10. Drilling and tapping semantics
 
+### A 柱铣型一体化定制（2026-11-12，业主确认）
+
+- 首页在铝型材配件之后增加同款商品入口卡；点击进入 `/section/a-pillar-milling` 才展开三种规格及加工费介绍（2026-11-13 修订）。洞洞板配件入口也并入同一商品网格，统一图片高度、圆角、标题及“进入选购”按钮，去掉“新增板块”字样。三种规格保留产品图片占位，等待实拍图；不替换现有型材 JPG。规格数据与快速报价共用 `data/aPillarMilling.ts`，后续图片填入对应规格的 `imageUrl`。
+- 仅 `2040`、`2040-N1-20`、`2040-N1-40`、`3030-N1`（3030N1）、`3030-N2`（3030N2）、`2047` 支持。2040 三型号支持窄面单排、加宽单排；2047 支持窄面单排和窄面双排；3030-N1 / N2 三种都支持。2026-11-13 业主更正参考图第一支为 **2047 窄双排**，并确认“加宽双排”为原加宽单排的笔误；此决定替代之前“2047 仅窄单”的限制。普通 3030 及其他型号不自动纳入。
+- 窄面单排：3 × 14mm，额外 **13 元/米**；窄面双排：3 × 14mm、间隔 5mm，额外 **16 元/米**；加宽单排：8 × 14mm，额外 **23 元/米**。这是每米加工单价，不是每根固定加工费。
+- 报价公式为 **（现有型材每米单价 + A 柱铣型每米单价）× 长度（米）× 数量**。型材继续按现有会员价，A 柱费率不另减会员优惠；既有其他加工、短料危险费及运费规则保持适用。数值沿用快速报价每根四舍五入到一位小数再乘数量的规则。
+- 详情页明确加工费不含材料，可作为来料加工或仅核算额外铣型成本的参考：加工每米单价 × 总长度（米）。例如普通价 2040 本色 27 元/米、彩色截面彩色 38 元/米，窄单合计 40 / 51 元/米，加宽单排合计 50 / 61 元/米。
+- 选中 A 柱铣型后仅允许本色或彩色截面彩色；彩色的“截面本色”保留但灰显禁用，并自动切换为截面彩色。本色保持本色。切换型号须清除不适配的铣型规格，恢复普通型材的截面可用性。默认不铣型，不改变普通报价。
+- 2026-11-13 业主确认纵向孔中心距 **25mm**，孔间净距 **11mm**，两端不足完整孔则不加工。未指定首孔端距，采用整毫米孔中心的居中阵列，两端剩余量最多相差 1mm；长度改变后重排完整孔，横向双列净距 5mm、中心偏移 ±4mm。
+- 设计器和 P2 共用 A 柱规格/开槽面选择，`aPillarMilling: { specId, face }` 独立于普通 `holes`，不触发钻孔收费或自动配螺丝。默认普通2040/2047取宽面B中央桥，2040-N1-20、3030-N1/N2取封闭A面，2040-N1-40取封闭D面；允许切换相应封面或宽面，二维图与工厂数据沿用A/B/C/D。保存JSON、购物车、订单配置、生产JSON/Excel均保留规格和面，生产单显示25mm孔距、总孔数与首末中心位置；不同规格/面不能错误合并。导入不支持的规格/面应报错，不得偷偷换面或删除加工。
+- 3D在现有型材截面上减去圆角矩形孔体并补齐内壁，保留背面和孔间实体，不以贴片代替开槽。现有截面尚非完整内部壁厚CAD，因此显示铣槽深度采用至截面中线的可视化近似，**不能用该渲染深度替代工厂工艺参数**；孔宽高、间距、数量、加工面才是本次确认的制造信息。
+- 首页规格入口预选快速报价型号与规格；AI下单未新增自然语言识别该工艺。回归运行 `npm run test:a-pillar-milling`、`npm run test:a-pillar-designer`、`npm run test:a-pillar-geometry` 和 `node scripts/test-a-pillar-profile-editor.mjs`。
+- 选择或更改 A 柱开槽面后，二维图自动切换到该面；仍可手动查看其他面。3D只绘制原型材实体轮廓，避免开槽网格分片产生多余的三角线。工厂单保留独立加工卡及开槽面图，不能把铣型归入“无额外加工”。
+
 ### 10.1 Hole placement workflow
 
 1. The selected profile's machining card appears immediately after model/length, before color and transforms. Its primary workflow reuses P2's `ProfileVisualizer`: select a face, click the diagram to stage a blue hole, enter a whole-mm distance from either end, and confirm. One face state controls the diagram and saved hole. Drafts never enter manufacturing data until confirmed; Cancel discards the preview. Existing holes can be edited from the diagram or list (including position/type/thread/face/slot), or deleted, through the ordinary undoable designer commit. Opening a hole from its exit view restores its actual entry face, preserving countersink direction and physical groove identity. Start/end distances are linked; both retain at least 5mm clearance. Selecting another profile/model/length resets the editing draft. (2026-10-19)

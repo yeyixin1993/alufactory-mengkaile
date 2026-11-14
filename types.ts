@@ -1,4 +1,4 @@
-
+import type { APillarMillingConfig } from './data/aPillarMilling';
 export type Language = 'en' | 'cn' | 'jp';
 
 export enum ProductType {
@@ -130,6 +130,7 @@ export interface ProfileConfig {
   colorId?: string;
   unitPrice?: number;
   miterCut?: MiterCutConfig;
+  aPillarMilling?: APillarMillingConfig;
   remark?: string;
   labelService?: boolean;
 }

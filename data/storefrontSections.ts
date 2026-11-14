@@ -536,9 +536,9 @@ const ALL_STOREFRONT_SECTIONS: StorefrontSection[] = [
     title: { cn: '洞洞板配件', en: 'Pegboard Accessories', jp: 'ペグボード用アクセサリー' },
     eyebrow: { cn: 'Pegboard Ecosystem', en: 'Pegboard Ecosystem', jp: 'ペグボードエコシステム' },
     description: {
-      cn: '挂杆、挂钩、托盘、自锁件 —— 板子买了配不上件，是最容易丢的复购。',
-      en: 'Rods, hooks, trays and self-locking parts — the repeat purchase a bare pegboard always loses.',
-      jp: 'ロッド・フック・トレー・セルフロック金具。ボード単体では失われるリピート需要。',
+      cn: '挂杆、挂钩、托盘与自锁件，按使用需求选购适配的洞洞板配件。',
+      en: 'Rods, hooks, trays and self-locking fittings for your pegboard setup.',
+      jp: 'ロッド・フック・トレー・セルフロック金具。用途に合うペグボード部品を選べます。',
     },
     coverImage: '/images/accessories/pegboard-01.jpg',
     accent: 'emerald',
