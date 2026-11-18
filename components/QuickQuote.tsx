@@ -417,7 +417,7 @@ const QuickQuote: React.FC<{ language: Language; user?: User | null }> = ({ lang
   const frameCalculated = useMemo(() => {
     return frameRows.map((row) => {
       const qty = Math.max(0, row.quantity || 0);
-      const unitPrice = calculateFrameUnitPrice(row.innerWidth * 10, row.innerHeight * 10);
+      const unitPrice = row.innerWidth >= 15 && row.innerHeight >= 15 ? calculateFrameUnitPrice(row.innerWidth * 10, row.innerHeight * 10) : 0;
       const subtotal = round1(unitPrice * qty);
       return { row, unitPrice, subtotal };
     });
@@ -530,7 +530,7 @@ const QuickQuote: React.FC<{ language: Language; user?: User | null }> = ({ lang
         const qty = Math.max(0, row.quantity || 0);
         const w = Math.max(0, row.innerWidth || 0);
         const h = Math.max(0, row.innerHeight || 0);
-        if (qty <= 0 || (w + h) <= 0) return null;
+        if (qty <= 0 || w < 15 || h < 15) return null;
         const frameTypeLabel =
           row.frameType === 'wood' ? t.qq_woodFrame : row.frameType === 'aluminum' ? t.qq_aluFrame : t.qq_aluWoodFrame;
         return {
@@ -1212,6 +1212,7 @@ const QuickQuote: React.FC<{ language: Language; user?: User | null }> = ({ lang
 
         {selectedProduct === 'frame' && (
           <div className="space-y-4">
+            <p className="text-sm text-red-600">{language === 'cn' ? '相框宽、高均须至少15cm；不足15cm无法制作，不计入报价。' : language === 'jp' ? '幅と高さは15cm以上必要です。未満は見積対象外です。' : 'Both dimensions must be at least 15cm. Smaller frames cannot be made and are excluded from the quote.'}</p>
             {frameRows.map((row, index) => {
               const calc = frameCalculated[index];
               return (
@@ -1233,7 +1234,8 @@ const QuickQuote: React.FC<{ language: Language; user?: User | null }> = ({ lang
                       <label className="block text-xs font-black text-slate-500 mb-1">{t.qq_innerWidth}</label>
                       <DraftNumberInput
                         type="number"
-                        min={1}
+                        min={15}
+                        publishInvalid
                         value={row.innerWidth}
                         onChange={(e) => updateFrameRow(row.id, { innerWidth: Number(e.target.value) || 0 })}
                         className="w-full border border-slate-200 rounded-xl px-3 py-2.5 bg-white"
@@ -1243,7 +1245,8 @@ const QuickQuote: React.FC<{ language: Language; user?: User | null }> = ({ lang
                       <label className="block text-xs font-black text-slate-500 mb-1">{t.qq_innerHeight}</label>
                       <DraftNumberInput
                         type="number"
-                        min={1}
+                        min={15}
+                        publishInvalid
                         value={row.innerHeight}
                         onChange={(e) => updateFrameRow(row.id, { innerHeight: Number(e.target.value) || 0 })}
                         className="w-full border border-slate-200 rounded-xl px-3 py-2.5 bg-white"

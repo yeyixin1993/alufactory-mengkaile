@@ -84,8 +84,8 @@ def quote_material(row, membership, catalog, rounded):
                 extra['hinge_count'] = hinges
             extra.update({'area_sqm':area,'charged_area_sqm':charged,'min_area_applied':area<charged})
     elif kind == 'frame':
-        width = integer('inner_width','相框内宽mm')
-        height = integer('inner_height','相框内高mm')
+        width = integer('inner_width','相框宽度mm（至少150mm/15cm）',150)
+        height = integer('inner_height','相框高度mm（至少150mm/15cm）',150)
         if row.get('frame_type') not in ('wood','aluminum','alu_wood'):
             questions.append('画框要木框、铝框还是铝木框？')
         if not questions: unit = rounded((width+height)/10)  # QuickQuote frameCalculated formula.

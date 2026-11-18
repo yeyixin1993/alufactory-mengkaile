@@ -23,7 +23,7 @@ def apply_configuration(original, config, quantity):
             miter45_count=sum(miter[e]['enabled'] for e in ('left','right')) if miter else 0,machining_confirmed=True,remark=str(config.get('remark') or '')[:1000])
         for field,kind_name in [('through_hole_count','through'),('countersunk_count','countersunk'),('threaded_hole_count','threaded')]: row[field]=sum(h.get('type')==kind_name for h in holes)
     elif kind == 'frame':
-        row.update(frame_type=config.get('frameType'),inner_width=config.get('innerWidth'),inner_height=config.get('innerHeight'),color=config.get('colorId'))
+        row.update(frame_type=config.get('frameType'),inner_width=config.get('width', config.get('innerWidth')),inner_height=config.get('height', config.get('innerHeight')),dimension_basis='outer' if config.get('dimensionBasis') == 'outer' else 'inner',color=config.get('colorId'))
         if row['color'] not in {c['id'] for c in CATALOG['colors']}: raise ValueError('请选择相框颜色。')
     else:
         row.update(width=config.get('width'),height=config.get('height'),thickness=config.get('thickness'),color=config.get('colorId'))
@@ -57,7 +57,7 @@ def cart_configuration(row, membership):
         r=review['items'][0]
         cfg={'variantId':s['model'],'colorId':s['color'],'length':s['length'],'finish':'oxidized' if s['color']=='natural' else 'powder' if s.get('section')=='colored' else 'electrophoretic','holes':r['holes'],'tapping':s.get('tapping_ports'),'miterCut':r['miter_cut'],'remark':s.get('remark',''),'unitPrice':priced['unit_price']}
     elif kind=='frame':
-        cfg={'frameType':s['frame_type'],'innerWidth':s['inner_width'],'innerHeight':s['inner_height'],'width':s['inner_width'],'height':s['inner_height'],'colorId':s['color'],'unitPrice':priced['unit_price']}
+        cfg={'dimensionBasis':s.get('dimension_basis', 'inner'),'frameType':s['frame_type'],'innerWidth':s['inner_width'],'innerHeight':s['inner_height'],'width':s['inner_width'],'height':s['inner_height'],'colorId':s['color'],'unitPrice':priced['unit_price']}
     else:
         cfg={'width':s['width'],'height':s['height'],'thickness':s['thickness'],'colorId':'wood_natural' if kind=='marine_board' and s['color']=='natural' else s['color'],'unitPrice':priced['unit_price'],'areaSqm':priced['area_sqm'],'chargedArea':priced['charged_area_sqm'],'minAreaApplied':priced['min_area_applied']}
         colors=CATALOG['marineColors'] if kind=='marine_board' else CATALOG['colors']

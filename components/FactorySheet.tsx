@@ -1,3 +1,4 @@
+import { frameTypeName } from '../utils/framePricing';
 import { withIncludedAccessoryPacking } from '../utils/accessoryKit';
 
 import React from 'react';
@@ -1016,9 +1017,15 @@ const FactorySheet: React.FC<FactorySheetProps> = ({ cart, user, language, order
                   <div className="bg-slate-50 p-4 rounded-xl border border-slate-100">
                     <h4 className="text-xs font-black text-slate-400 uppercase tracking-widest border-b border-slate-200 pb-2 mb-3">{t.specs}</h4>
                     <div className="grid grid-cols-2 md:grid-cols-3 gap-3 text-xs">
+                      {item.product.type === ProductType.FRAME ? <>
+                        <div>{language === 'cn' ? '相框类型' : language === 'jp' ? '額縁の種類' : 'Frame type'}: <strong>{frameTypeName(cfg.frameType || '', language) || (language === 'cn' ? '未记录，待确认' : 'Not recorded')}</strong></div>
+                        <div>{cfg.dimensionBasis === 'outer' ? (language === 'cn' ? '外宽（外径）' : 'Outer width') : (language === 'cn' ? '内宽（内径）' : 'Inner width')}: <strong>{cfg.width ?? cfg.innerWidth ?? '-'}mm</strong></div>
+                        <div>{cfg.dimensionBasis === 'outer' ? (language === 'cn' ? '外高（外径）' : 'Outer height') : (language === 'cn' ? '内高（内径）' : 'Inner height')}: <strong>{cfg.height ?? cfg.innerHeight ?? '-'}mm</strong></div>
+                      </> : <>
                       <div><span className="text-slate-400">{language === 'cn' ? '厚度' : language === 'jp' ? '厚さ' : 'Thickness'}:</span> <span className="font-black">{cfg.thickness ?? '-'}mm</span></div>
                       <div><span className="text-slate-400">{language === 'cn' ? '宽' : language === 'jp' ? '幅' : 'Width'}:</span> <span className="font-black">{cfg.width ?? '-'}mm</span></div>
                       <div><span className="text-slate-400">{language === 'cn' ? '高' : language === 'jp' ? '高さ' : 'Height'}:</span> <span className="font-black">{cfg.height ?? '-'}mm</span></div>
+                      </>}
                       <div><span className="text-slate-400">{language === 'cn' ? '颜色' : language === 'jp' ? '色' : 'Color'}:</span> <span className="font-black">{resolveBoardColorLabel(cfg, language, item.product.type)}</span></div>
                       {cfg.cabinetDoor && (
                         <>

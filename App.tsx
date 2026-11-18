@@ -1678,6 +1678,7 @@ const Cart: React.FC<{
                         ) : null;
                       })()}
                       <div className="grid grid-cols-2 md:grid-cols-3 gap-2 text-xs font-bold">
+                        {item.product.type === ProductType.FRAME && <span className="col-span-2 text-blue-700">{(item.config as any)?.dimensionBasis === 'outer' ? (language === 'cn' ? '以下宽高为外径尺寸' : language === 'jp' ? '以下は外寸です' : 'Width and height are outer dimensions') : (language === 'cn' ? '以下宽高为内径尺寸' : language === 'jp' ? '以下は内寸です' : 'Width and height are inner dimensions')}</span>}
                         <span className="px-3 py-1.5 rounded-xl bg-slate-100 text-slate-700">{item.product.type === ProductType.FRAME ? frameTypeName((item.config as any)?.frameType, language) : <>{language === 'cn' ? '厚度' : language === 'jp' ? '厚さ' : 'Thickness'}: {(item.config as any)?.thickness ?? '-'}mm</>}</span>
                         <span className="px-3 py-1.5 rounded-xl bg-slate-100 text-slate-700">{language === 'cn' ? '宽' : language === 'jp' ? '幅' : 'Width'}: {(item.config as any)?.width ?? '-'}mm</span>
                         <span className="px-3 py-1.5 rounded-xl bg-slate-100 text-slate-700">{language === 'cn' ? '高' : language === 'jp' ? '高さ' : 'Height'}: {(item.config as any)?.height ?? '-'}mm</span>
