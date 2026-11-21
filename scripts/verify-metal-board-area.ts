@@ -1,0 +1,11 @@
+import assert from 'node:assert/strict';
+import { repriceMetalBoards } from '../utils/metalBoardPricing';
+import { ProductType } from '../types';
+const row = (id:string, quantity=1, colorId='natural', type=ProductType.PEGBOARD):any => ({id,product:{id:'p1',type},quantity,totalPrice:216*quantity,config:{width:80,height:80,thickness:2,colorId,unitRate:1080}});
+assert.equal(repriceMetalBoards([row('a',2)])[0].totalPrice,216);
+assert.equal(repriceMetalBoards([row('a'),row('b')]).reduce((s,r)=>s+r.totalPrice,0),216);
+assert.equal(repriceMetalBoards([row('a'),row('b',1,'black')]).reduce((s,r)=>s+r.totalPrice,0),432);
+assert.equal(repriceMetalBoards([row('a',2,'natural',ProductType.MARINE_BOARD)])[0].totalPrice,432);
+const large=row('large',2);large.config.width=500;large.config.height=500;
+assert.equal(repriceMetalBoards([large])[0].totalPrice,540);
+console.log('Metal board cumulative area checks passed');

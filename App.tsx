@@ -1,3 +1,4 @@
+import { repriceMetalBoards } from './utils/metalBoardPricing';
 import { useDeleteConfirmation } from './components/useDeleteConfirmation';
 import { prepareCartAdditions, reconcileCartItems, restoreCartSnapshot, finishCartHydration, preserveCartEntryMetadata } from './utils/cartState';
 import { readCachedArray, writeCachedArray, removeCachedArray, acceptCachedArray } from './utils/cartCache';
@@ -2540,7 +2541,7 @@ const App: React.FC = () => {
   const updateCart: React.Dispatch<React.SetStateAction<CartItem[]>> = (value) => {
     cartDirtyRef.current = true;
     cartRevisionRef.current += 1;
-    setCart(value);
+    setCart(previous => repriceMetalBoards(typeof value === 'function' ? value(previous) : value));
   };
 
   const addCartItems = (items: CartItem[], mode: 'append' | 'replace' = 'append') => {

@@ -76,13 +76,13 @@ def quote_material(row, membership, catalog, rounded):
             if not questions: rate = rules[key][str(thickness)]
         if not questions:
             area = width*height/1e6
-            charged = max(rules['MIN_BOARD_CHARGE_AREA_SQM'],area)
+            charged = max(rules['MIN_BOARD_CHARGE_AREA_SQM'],area) if marine or door else max(rules['MIN_BOARD_CHARGE_AREA_SQM'], area*qty)/qty
             unit = rules['MARINE_BOARD_FULL_SHEET_PRICE'][spec_id][str(thickness)] if full_sheet else rounded(charged*rate)
             if door:
                 hinges = 2 if height <= 1500 else 3 if height <= 2000 else 4 if height <= 2500 else 5
                 unit = rounded(unit + hinges * rules['DOOR_HINGE_UNIT_PRICE'])
                 extra['hinge_count'] = hinges
-            extra.update({'area_sqm':area,'charged_area_sqm':charged,'min_area_applied':area<charged})
+            extra.update({'unit_rate':rate,'area_sqm':area,'charged_area_sqm':charged,'min_area_applied':area<charged})
     elif kind == 'frame':
         width = integer('inner_width','相框宽度mm（至少150mm/15cm）',150)
         height = integer('inner_height','相框高度mm（至少150mm/15cm）',150)

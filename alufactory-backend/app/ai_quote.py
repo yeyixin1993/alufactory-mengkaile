@@ -246,6 +246,21 @@ def quote_profile(spec, membership):
         else:
             result['source_index'] = index
             rows.append(result)
+    metal_groups = {}
+    for row in rows:
+        material = row['spec']
+        kind = product_kind(material)
+        if kind in ('aluminum_plate', 'pegboard'):
+            key = (kind, material['thickness'], material.get('color'))
+            metal_groups.setdefault(key, []).append(row)
+    for group in metal_groups.values():
+        area = sum(r['area_sqm'] * r['spec']['quantity'] for r in group)
+        factor = max(0.2, area) / area
+        for r in group:
+            r['charged_area_sqm'] = r['area_sqm'] * factor
+            r['min_area_applied'] = area < 0.2
+            r['subtotal'] = rounded(r['charged_area_sqm'] * r['unit_rate'] * r['spec']['quantity'])
+            r['unit_price'] = r['subtotal'] / r['spec']['quantity']
     questions = list(dict.fromkeys(questions))
     if not rows:
         if not spec.get('province') and any(product_kind(r) not in ('aluminum_plate','pegboard','frame','cabinet_door') for r in items): questions.append('发哪个省或直辖市？可稍后补充。')

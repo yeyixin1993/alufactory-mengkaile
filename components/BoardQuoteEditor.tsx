@@ -248,7 +248,8 @@ const BoardQuoteEditor: React.FC<BoardQuoteEditorProps> = ({ language, product, 
     const h = isMarineBoard ? Math.round(rawH) : rawH;
     const qty = Math.max(1, Number(quantity) || 1);
     const areaSqm = (w * h) / 1_000_000;
-    const chargedArea = areaSqm > 0 && areaSqm < MIN_BOARD_CHARGE_AREA_SQM ? MIN_BOARD_CHARGE_AREA_SQM : areaSqm;
+    const basisArea = isMarineBoard || isDoor ? areaSqm : areaSqm * qty;
+    const chargedArea = basisArea > 0 ? Math.max(MIN_BOARD_CHARGE_AREA_SQM, basisArea) / (isMarineBoard || isDoor ? 1 : qty) : 0;
     const marineBaseRate = isMarineBoard
       ? (MARINE_BOARD_SPEC_PRICE_PER_SQM[marineSpecId]?.[effectiveThickness] || 0)
       : 0;
@@ -265,7 +266,7 @@ const BoardQuoteEditor: React.FC<BoardQuoteEditorProps> = ({ language, product, 
     const hingeFeePerPiece = isDoor ? hingeCount * DOOR_HINGE_UNIT_PRICE : 0;
     const unitPrice = Number((boardUnitPrice + hingeFeePerPiece).toFixed(1));
     const subtotal = Number((unitPrice * qty).toFixed(1));
-    const minAreaApplied = areaSqm > 0 && areaSqm < MIN_BOARD_CHARGE_AREA_SQM;
+    const minAreaApplied = basisArea > 0 && basisArea < MIN_BOARD_CHARGE_AREA_SQM;
 
     return { w, h, qty, areaSqm, chargedArea, unitRate, boardUnitPrice, hingeCount, hingeFeePerPiece, unitPrice, subtotal, minAreaApplied };
   }, [fullSheet, width, height, quantity, effectiveThickness, maxHeight, maxWidth, isDoor, isMarineBoard, marineSpecId, colorId, priceMap]);
@@ -666,7 +667,7 @@ const BoardQuoteEditor: React.FC<BoardQuoteEditorProps> = ({ language, product, 
           <span>{currency}{calc.subtotal.toFixed(1)}</span>
         </div>
         {calc.minAreaApplied && (
-          <div className="text-xs font-bold text-orange-600">{t.qq_minAreaWarning || '单张面积不足0.2㎡，按0.2㎡计算'}</div>
+          <div className="text-xs font-bold text-orange-600">{isMarineBoard ? t.qq_minAreaWarning : (language === 'cn' ? '同品类、同厚度、同颜色累计不足0.2㎡，按0.2㎡计费；购物车合并计算。' : 'Matching material, thickness and color share a 0.2m² minimum in the cart.')}</div>
         )}
         {isDoor && <div className="text-xs font-bold text-slate-600">{ui.doorNote}</div>}
         {isDoor && <div className="text-xs font-bold text-slate-600">{ui.doorSizeLimit}</div>}

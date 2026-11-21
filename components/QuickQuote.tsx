@@ -319,7 +319,8 @@ const QuickQuote: React.FC<{ language: Language; user?: User | null }> = ({ lang
       const height = Math.max(0, row.height);
       const qty = Math.max(0, row.quantity || 0);
       const areaSqm = (width * height) / 1_000_000;
-      const chargedArea = areaSqm > 0 && areaSqm < MIN_BOARD_CHARGE_AREA_SQM ? MIN_BOARD_CHARGE_AREA_SQM : areaSqm;
+      const groupArea = unitRateResolver ? areaSqm : rows.filter(other => other.thickness === row.thickness && other.colorId === row.colorId && other.width > 0 && other.height > 0 && other.width <= maxWidthMm && other.height <= maxHeightMm).reduce((sum, other) => sum + other.width * other.height * Math.max(0, other.quantity) / 1e6, 0);
+      const chargedArea = groupArea > 0 ? areaSqm * Math.max(0.2, groupArea) / groupArea : 0;
       const unitRate = unitRateResolver ? unitRateResolver(row) : (priceMap[row.thickness] || 0);
       const invalidSize = width > maxWidthMm || height > maxHeightMm || (Boolean(row.marineSpecId) && Math.min(width, height) > MARINE_BOARD_MAX_HEIGHT_MM);
       const unitPrice = invalidSize ? 0 : row.boardPurchaseMode === 'full_sheet'
@@ -826,7 +827,7 @@ const QuickQuote: React.FC<{ language: Language; user?: User | null }> = ({ lang
                 )}
               </div>
               <div className="text-xs font-bold text-slate-500">{maxSizeNote || t.qq_boardMaxSizeNote}</div>
-              {calc.minAreaApplied && <div className="text-xs font-bold text-amber-600">⚠ {t.qq_minAreaWarning}</div>}
+              {calc.minAreaApplied && <div className="text-xs font-bold text-amber-600">⚠ {row.marineSpecId ? t.qq_minAreaWarning : (language === 'cn' ? '同品类、同厚度、同颜色累计最低计费0.2㎡' : 'Matching material/thickness/color: minimum total area 0.2m²')}</div>}
             </div>
           );
         })}

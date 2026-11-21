@@ -59,7 +59,7 @@ def cart_configuration(row, membership):
     elif kind=='frame':
         cfg={'dimensionBasis':s.get('dimension_basis', 'inner'),'frameType':s['frame_type'],'innerWidth':s['inner_width'],'innerHeight':s['inner_height'],'width':s['inner_width'],'height':s['inner_height'],'colorId':s['color'],'unitPrice':priced['unit_price']}
     else:
-        cfg={'width':s['width'],'height':s['height'],'thickness':s['thickness'],'colorId':'wood_natural' if kind=='marine_board' and s['color']=='natural' else s['color'],'unitPrice':priced['unit_price'],'areaSqm':priced['area_sqm'],'chargedArea':priced['charged_area_sqm'],'minAreaApplied':priced['min_area_applied']}
+        cfg={'width':s['width'],'height':s['height'],'thickness':s['thickness'],'colorId':'wood_natural' if kind=='marine_board' and s['color']=='natural' else s['color'],'unitPrice':priced['unit_price'],'areaSqm':priced['area_sqm'],'unitRate':priced.get('unit_rate'),'chargedArea':priced['charged_area_sqm'],'minAreaApplied':priced['min_area_applied']}
         colors=CATALOG['marineColors'] if kind=='marine_board' else CATALOG['colors']
         cfg['colorName']=next((c['name']['cn'] for c in colors if c['id']==cfg['colorId']),cfg['colorId'])
         if kind=='marine_board':
