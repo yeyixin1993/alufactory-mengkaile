@@ -6,6 +6,11 @@ CONTACT = '复杂设计或需要进一步确认，可以加微信 19821200413，
 
 def advice(message, membership="standard"):
     text = message.strip()
+    # Recognize the storefront product before generic cabinet/profile advice.
+    if re.search(r'舒法特|书法特|書法特|舒发特|trofast', text, re.I):
+        return {'id': 'trofast-cabinet', 'version': 1,
+                'answer': '有的，网站有「宜家舒法特柜子」专区，是适配宜家舒法特（TROFAST）收纳筐的柜子。点击下方入口即可调整尺寸和配置，查看报价及三维方案。您也可以告诉我需要的长、宽、高和收纳筐布局。',
+                'guidance': [{'kind': 'calligraphy_cabinet'}]}
     # Unit-rate questions are complete questions, not incomplete orders.
     if (re.search(r'加工|打孔|通孔|沉头孔|螺纹孔|攻丝|斜切|斜割', text)
             and re.search(r'价格|多少钱|单价|收费|费用|加工费|怎么收|怎么计费', text)

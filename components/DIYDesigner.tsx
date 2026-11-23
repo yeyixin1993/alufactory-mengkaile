@@ -12606,15 +12606,19 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({
   const confirmMaycadProfileMappings = () => {
     if (!maycadProfileReviewPrompt) return;
     const confirmedVariantByItemId = new Map<string, string>();
+    const ignoredIds = new Set<string>();
     maycadProfileReviewPrompt.entries.forEach((entry) => {
-      entry.itemIds.forEach((itemId) => confirmedVariantByItemId.set(itemId, entry.variantId));
+      entry.itemIds.forEach((itemId) => {
+        if (entry.variantId === '__ignore__') ignoredIds.add(itemId);
+        else confirmedVariantByItemId.set(itemId, entry.variantId);
+      });
     });
-    const confirmedItems = items.map((item) => {
+    const confirmedItems = items.filter(item => !ignoredIds.has(item.id)).map((item) => {
       const variantId = confirmedVariantByItemId.get(item.id);
       return variantId ? { ...item, variantId, name: variantId } : item;
     });
     commit(confirmedItems, null);
-    const profileIds = maycadProfileReviewPrompt.profileIds;
+    const profileIds = maycadProfileReviewPrompt.profileIds.filter(id => !ignoredIds.has(id));
     setMaycadProfileReviewPrompt(null);
     setMaycadReview((current) => current ? {
       ...current,
@@ -14735,6 +14739,7 @@ const DIYDesigner: React.FC<DIYDesignerProps> = ({
                       } : current)}
                       className="diy-select"
                     >
+                      <option value="__ignore__">{language === 'cn' ? '以上都不是，忽略此项（不导入）' : language === 'jp' ? '該当なし・この項目を無視（インポートしない）' : 'None of the above — skip this item'}</option>
                       {PROFILE_VARIANTS.map((variant) => <option key={variant.id} value={variant.id}>{variant.name}</option>)}
                     </select>
                   </label>
