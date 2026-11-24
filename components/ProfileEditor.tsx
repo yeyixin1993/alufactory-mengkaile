@@ -1,3 +1,4 @@
+import { PROFILE_MACHINING_RATES, DANGER_FEE_THRESHOLD_MM, DANGER_FEE_PER_PIECE } from '../data/profilePricing';
 import { DraftNumberInput, NumericActionButton } from './DraftNumberInput';
 import {aiText} from '../utils/aiLocale';
 
@@ -33,13 +34,11 @@ interface ProfileEditorProps {
 
 const getCurrency = (lang: Language) => lang === 'cn' ? '￥' : '$';
 
-const PRICE_HOLE_THROUGH = 1.0;
-const PRICE_HOLE_COUNTERSUNK = 1.8;
-const PRICE_TAPPING_PER_END = 1.5;
-const PRICE_MITER_CUT = 1.0;
+const PRICE_HOLE_THROUGH = PROFILE_MACHINING_RATES.through_hole_count;
+const PRICE_HOLE_COUNTERSUNK = PROFILE_MACHINING_RATES.countersunk_count;
+const PRICE_TAPPING_PER_END = PROFILE_MACHINING_RATES.end_tapping;
+const PRICE_MITER_CUT = PROFILE_MACHINING_RATES.miter45_count;
 const MIN_PROFILE_LENGTH_MM = 20;
-const DANGER_FEE_THRESHOLD_MM = 100;
-const DANGER_FEE_PER_PIECE = 5;
 const MAX_PROFILE_LENGTH_MM = 3000;
 const PROFILE_VIP_DISCOUNT_PER_METER = 2;
 const PROFILE_VIP_PLUS_DISCOUNT_PER_METER = 4;
@@ -174,7 +173,7 @@ const ProfileEditor: React.FC<ProfileEditorProps> = ({ onSaveConfiguration, onCa
     const materialPrice = (len / 1000) * effectivePricePerMeter;
     const aPillarFee = (len / 1000) * (getAPillarMillingSpec(variantId, effectiveAPillar?.specId)?.feePerMeter || 0);
     let holeFee = currentHoles.reduce(
-      (acc, h) => acc + ((h.type === 'countersunk' || h.type === 'threaded') ? PRICE_HOLE_COUNTERSUNK : PRICE_HOLE_THROUGH),
+      (acc, h) => acc + (h.type === 'threaded' ? PROFILE_MACHINING_RATES.threaded_hole_count : h.type === 'countersunk' ? PRICE_HOLE_COUNTERSUNK : PRICE_HOLE_THROUGH),
       0
     );
     let tappingFee = (currentTapping.left.filter(Boolean).length + currentTapping.right.filter(Boolean).length) * PRICE_TAPPING_PER_END;
@@ -690,7 +689,7 @@ const ProfileEditor: React.FC<ProfileEditorProps> = ({ onSaveConfiguration, onCa
              <div className="text-lg font-black text-blue-600">{currency}{currentUnitPrice.toFixed(1)} / pc</div>
           </div>
           <div className="bg-slate-50 p-4 rounded-3xl border border-slate-100">
-            <ProfileVisualizer config={{ length, variantId, holes, tapping, finish: effectiveFinish, colorId, miterCut, aPillarMilling: effectiveAPillar }} selectedSide={selectedSide} onSideChange={setSelectedSide} interactive={true} tapLabel={t.tapAction} onTapToggle={(s, i) => setTapping(prev => { const n = [...prev[s]]; while (n.length <= i) n.push(false); n[i] = !n[i]; return {...prev, [s]: n}; })} onHoleClick={(id) => setHoles(holes.filter(h => h.id !== id))} onBarClick={(e, l, r) => { const mm = Math.round(((e.clientX - r.left) / r.width) * l); if (grooveCount >= 2) { const relY = (e.clientY - r.top) / r.height; setSelectedGrooveIndex(Math.min(Math.floor(relY * grooveCount), grooveCount - 1)); } if (mm >= 0 && mm < l) setNewHolePos(mm.toString()); }} />
+            <ProfileVisualizer language={language} config={{ length, variantId, holes, tapping, finish: effectiveFinish, colorId, miterCut, aPillarMilling: effectiveAPillar }} selectedSide={selectedSide} onSideChange={setSelectedSide} interactive={true} tapLabel={t.tapAction} onTapToggle={(s, i) => setTapping(prev => { const n = [...prev[s]]; while (n.length <= i) n.push(false); n[i] = !n[i]; return {...prev, [s]: n}; })} onHoleClick={(id) => setHoles(holes.filter(h => h.id !== id))} onBarClick={(e, l, r) => { const mm = Math.round(((e.clientX - r.left) / r.width) * l); if (grooveCount >= 2) { const relY = (e.clientY - r.top) / r.height; setSelectedGrooveIndex(Math.min(Math.floor(relY * grooveCount), grooveCount - 1)); } if (mm >= 0 && mm < l) setNewHolePos(mm.toString()); }} />
           </div>
         </div>
 

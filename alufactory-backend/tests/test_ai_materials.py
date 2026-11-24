@@ -17,14 +17,26 @@ class MaterialQuoteTests(unittest.TestCase):
         self.assertIn('12/18',reply); self.assertIn('BBB',reply); self.assertIn('颜色',reply)
 
     def test_board_prices_minimum_area_memberships_free_shipping(self):
-        for product,standard,plus in [('aluminum_plate',280,168),('pegboard',432,208)]:
+        for product,standard,plus in [('aluminum_plate',140,84),('pegboard',216,104)]:
             for membership,expected in [('standard',standard),('vip',standard),('vip_plus',plus)]:
                 _,q=self.quote(product,membership,width=100,height=100,thickness=2,quantity=2)
                 self.assertEqual(q['subtotal'],expected)
                 self.assertEqual(q['shipping_fee'],0)
                 self.assertTrue(q['free_shipping'])
-                self.assertEqual(q['items'][0]['charged_area_sqm'],.2)
+                self.assertEqual(q['items'][0]['charged_area_sqm'],.1)
                 self.assertIsNone(build_review(q['source_spec'],q))
+
+    def test_metal_minimum_groups_sizes_but_not_material_thickness_or_color(self):
+        a = dict(product='pegboard', width=80, height=80, thickness=2, quantity=1, color='natural')
+        b = dict(a, width=90, height=100)
+        for change, expected in [({}, 216), ({'color':'black'},432),
+                                  ({'thickness':5},612), ({'product':'aluminum_plate'},356)]:
+            with self.subTest(change=change):
+                _, q = quote_profile({'items':[a, {**b, **change}]}, 'standard')
+                self.assertEqual(q['subtotal'], expected)
+        _, marine = self.quote('marine_board', width=80, height=80, thickness=12,
+                               quantity=2, marine_spec='marine_bbb_plain', color='natural')
+        self.assertEqual(marine['subtotal'], 54.4, 'Marine boards still have a per-piece minimum')
 
     def test_marine_color_and_weight(self):
         _, q=self.quote('marine_board',width=1000,height=1000,thickness=18,quantity=2,marine_spec='marine_bbb_plain',color='natural',province='天津')

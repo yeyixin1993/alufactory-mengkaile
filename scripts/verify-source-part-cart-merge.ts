@@ -101,7 +101,9 @@ assert.equal(linesNamed(pdf, 'SHF12A support')[0].line.quantity, 8, 'and keeps t
 // --- 2. a named catalogue part still keys on its catalogue row -------------
 // The No.3 link did not change: sixteen brackets are one order SKU, so they must
 // stay one line keyed by the catalogue row rather than by the source identity.
-const bracketLines = linesNamed(grouped, '3号角码 · 3030');
+const bracketLines = grouped.flatMap(item => ((item.config as any).lines || [])
+  .filter((line: any) => line.id === '3::3030' && !line.kitRole)
+  .map((line: any) => ({ line, item })));
 assert.equal(bracketLines.length, 1, `sixteen No.3 brackets are one catalogue line, got ${bracketLines.length}`);
 assert.equal(bracketLines[0].line.quantity, 16);
 const includedHardware = (bracketLines[0].item.config as any).lines.filter((line: any) => line.kitRole);

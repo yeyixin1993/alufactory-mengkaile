@@ -9,13 +9,9 @@ from pathlib import Path
 CATALOG = json.loads(Path(__file__).with_name('ai_catalog.json').read_text())
 
 # Shared by deterministic quotes and concise machining-price answers.
-PROFILE_MACHINING_RATES = {
-    'through_hole_count': 1,
-    'countersunk_count': 1.8,
-    'threaded_hole_count': 1.8,
-    'miter45_count': 1,
-    'end_tapping': 1.5,
-}
+PROFILE_MACHINING_RATES = CATALOG['profileMachining']['rates']
+DANGER_FEE_THRESHOLD_MM = CATALOG['profileMachining']['dangerFeeThresholdMm']
+DANGER_FEE_PER_PIECE = CATALOG['profileMachining']['dangerFeePerPiece']
 
 def normalize_profile_color(color):
     # `silver` is the existing catalog ID for explicit bright silver, not a synonym.
@@ -180,7 +176,7 @@ def quote_single(spec, membership):
             return '请明确每根型材的打孔类别与数量（0–100）。', None
         processing += n * rate_per_hole
     tapping = (sum(sum(selections[end]) for end in ('left','right')) if selections else {'none': 0, 'left': 1, 'right': 1, 'both': 2}[spec['tapping']]) * PROFILE_MACHINING_RATES['end_tapping']
-    unit = rounded(rate * spec['length'] / 1000 + tapping + processing + (5 if membership != 'vip_plus' and spec['length'] <= 100 else 0))
+    unit = rounded(rate * spec['length'] / 1000 + tapping + processing + (DANGER_FEE_PER_PIECE if membership != 'vip_plus' and spec['length'] <= DANGER_FEE_THRESHOLD_MM else 0))
     subtotal = rounded(unit * spec['quantity'])
     weight = CATALOG['weights'].get(spec['model'], 0.6) * spec['length'] / 1000 * spec['quantity']
     options = {}

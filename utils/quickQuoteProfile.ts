@@ -1,3 +1,4 @@
+import { PROFILE_MACHINING_RATES as fees, DANGER_FEE_THRESHOLD_MM, DANGER_FEE_PER_PIECE } from '../data/profilePricing';
 import { COLOR_ONLY_COLORED_SECTION_IDS, PROFILE_VARIANTS, PROFILE_WEIGHTS } from '../constants';
 import { getAPillarMillingSpec, normalizeAPillarMilling, type APillarMillingOption } from '../data/aPillarMilling';
 
@@ -23,8 +24,8 @@ export function calculateQuickProfileRow<T extends QuickProfileRow>(input:T, dis
   const length = Math.min(3000,safe(row.length));
   const rate = Math.max(0,variant.price[finish]-discount);
   const aPillarMillingRate = getAPillarMillingSpec(row.model, row.aPillarMilling)?.feePerMeter || 0;
-  const process = safe(row.tappingCount)*1.5+safe(row.throughHoleCount)+safe(row.countersunkHoleCount)*1.8+safe(row.threadedHoleCount)*1.8+safe(row.miter45CutCount);
-  const unitPrice=round(length/1000*(rate+aPillarMillingRate)+process+(membership!=='vip_plus'&&row.length>0&&row.length<=100?5:0));
+  const process = safe(row.tappingCount)*fees.end_tapping+safe(row.throughHoleCount)*fees.through_hole_count+safe(row.countersunkHoleCount)*fees.countersunk_count+safe(row.threadedHoleCount)*fees.threaded_hole_count+safe(row.miter45CutCount)*fees.miter45_count;
+  const unitPrice=round(length/1000*(rate+aPillarMillingRate)+process+(membership!=='vip_plus'&&row.length>0&&row.length<=DANGER_FEE_THRESHOLD_MM?DANGER_FEE_PER_PIECE:0));
   const qty=safe(row.quantity||0);
   return {row,unitPrice,subtotal:round(unitPrice*qty),aPillarMillingRate,aPillarMillingFee:round(length/1000*qty*aPillarMillingRate),totalWeightKg:(PROFILE_WEIGHTS[row.model]||0.6)*length/1000*qty};
 }

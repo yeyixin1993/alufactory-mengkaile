@@ -70,7 +70,7 @@ const DesignerProfileMachining: React.FC<Props> = ({ variantId, length, colorId,
     </div>
     <p className="text-xs text-blue-800">{tr('选面 → 点击图中槽位 → 输入距端尺寸 → 确认。点击已有孔可编辑。', 'Choose a face → click a slot → enter end distance → confirm. Click an existing hole to edit.', '面を選択 → 溝をクリック → 端からの距離を入力 → 確定。既存の穴はクリックで編集。')}</p>
     <div className="rounded-xl border border-blue-100 bg-white p-2">
-      <ProfileVisualizer config={{ variantId, length, colorId, tapping, aPillarMilling, holes: draftVisible && valid ? [...holes.filter(hole => hole.id !== editingId), draft] : holes }}
+      <ProfileVisualizer language={language} config={{ variantId, length, colorId, tapping, aPillarMilling, holes: draftVisible && valid ? [...holes.filter(hole => hole.id !== editingId), draft] : holes }}
         selectedSide={side} onSideChange={next => { setSide(next); setGroove(0); }} interactive tapLabel={tr('攻丝', 'Tap', 'タップ')}
         onTapToggle={end => onToggleTapping(end)}
         previewHoleId={draftVisible ? draft.id : undefined}

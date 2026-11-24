@@ -136,7 +136,16 @@ assert.equal(fasteners.sets, 32);
 const factoryRows = buildMaterialList(buildProductionData(fitted, 'cn')).sections
   .flatMap((section) => section.rows)
   .filter((row) => row.partIds.some((id) => id.startsWith('stool-support-fastener-')));
-assert.equal(factoryRows.length, 2);
-assert.ok(factoryRows.every((row) => row.quantity === 32));
+// No.3 brackets now include their hardware. The production projection must
+// keep both packing quantities, without adding the old separately charged rows.
+assert.equal(factoryRows.length, 0, 'Included No.3 hardware must not be listed twice');
+const includedHardware = buildProductionData(fitted, 'cn').parts
+  .flatMap(part => part.installationKitLines)
+  .filter(line => line.kitParentKey === '3::3030');
+for (const role of ['screw', 'nut']) {
+  assert.equal(includedHardware.filter(line => line.kitRole === role)
+    .reduce((sum, line) => sum + line.quantity, 0), 32);
+}
+assert.ok(includedHardware.every(line => line.subtotal === 0), 'No.3 packing is included in the bracket price');
 
 console.log('Designer release gate passed: no question ⇒ proceed, unverified statements ⇒ acknowledge once, computed failure ⇒ blocked whatever was accepted; the acceptance is void when the statements change, and the factory projection is price-free.');

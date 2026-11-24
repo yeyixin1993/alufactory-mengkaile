@@ -2605,8 +2605,8 @@ const App: React.FC = () => {
     <HashRouter>
       <RouteHashSync onChange={setCurrentHash} />
       <div className={`min-h-screen font-sans text-slate-900 selection:bg-blue-100 selection:text-blue-900 ${isPreviewRoute || isDesignerRoute || isAIChatRoute ? '' : 'bg-slate-50 pb-20'}`}>
-        {cartHydrationFailed && <div role="alert" className="bg-amber-50 p-3 text-sm text-amber-900">云端购物车暂时未能读取，当前修改保存在本机，尚未同步。<button className="ml-3 underline" onClick={() => setCartRetry(value => value + 1)}>重试同步</button></div>}
-        {cacheUnavailable && <div role="alert" className="fixed bottom-4 left-4 right-4 z-[10001] rounded-xl bg-amber-100 p-4 text-amber-950 shadow-lg">浏览器存储空间不足，购物车仍可继续使用，但刷新或关闭页面可能丢失本次更改。请先保存设计或完成订单。<button className="ml-4 underline" onClick={() => setCacheUnavailable(false)}>知道了</button></div>}
+        {cartHydrationFailed && <div role="alert" className="print:hidden bg-amber-50 p-3 text-sm text-amber-900">云端购物车暂时未能读取，当前修改保存在本机，尚未同步。<button className="ml-3 underline" onClick={() => setCartRetry(value => value + 1)}>重试同步</button></div>}
+        {cacheUnavailable && <div role="alert" className="print:hidden fixed bottom-4 left-4 right-4 z-[10001] rounded-xl bg-amber-100 p-4 text-amber-950 shadow-lg">浏览器存储空间不足，购物车仍可继续使用，但刷新或关闭页面可能丢失本次更改。请先保存设计或完成订单。<button className="ml-4 underline" onClick={() => setCacheUnavailable(false)}>知道了</button></div>}
         {showWeChatBrowserNotice && (
           <div className="fixed inset-0 z-[10000] flex items-start justify-center bg-slate-950/65 px-4 pt-16 backdrop-blur-sm" role="dialog" aria-modal="true" aria-labelledby="wechat-browser-title">
             <div className="relative w-full max-w-md rounded-[2rem] border border-amber-200 bg-white p-6 shadow-2xl">

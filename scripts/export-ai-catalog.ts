@@ -1,4 +1,5 @@
 import { MARINE_BOARD_COLORS } from '../constants';
+import { PROFILE_MACHINING_RATES, DANGER_FEE_THRESHOLD_MM, DANGER_FEE_PER_PIECE } from '../data/profilePricing';
 import { BOARD_PRODUCT_RULES } from '../data/boardProductRules';
 import * as quickQuote from '../utils/quickQuoteCatalog';
 import { CUSTOMER_ACCESSORY_ROWS } from '../data/accessoryCatalog';
@@ -9,6 +10,7 @@ import { PROFILE_VARIANTS, PROFILE_COLORS, PROFILE_WEIGHTS, SHIPPING_RATES, SHIP
 
 // Run from repository root. Backend quotes never accept a client-supplied catalog.
 writeFileSync('alufactory-backend/app/ai_catalog.json', JSON.stringify({
+  profileMachining: { rates: PROFILE_MACHINING_RATES, dangerFeeThresholdMm: DANGER_FEE_THRESHOLD_MM, dangerFeePerPiece: DANGER_FEE_PER_PIECE },
   boardRules: BOARD_PRODUCT_RULES, marineColors: MARINE_BOARD_COLORS, quickQuote, accessories: CUSTOMER_ACCESSORY_ROWS, accessoryBulkThreshold: ACCESSORY_BULK_THRESHOLD,
   grooves: Object.fromEntries(PROFILE_VARIANTS.map(v => [v.id, Object.fromEntries((['A','B','C','D'] as const).map(side => [side, getProfileGrooveCount(v.id, side)]))])),
   variants: PROFILE_VARIANTS, colors: PROFILE_COLORS.map(({ id, name, maxLength }) => ({ id, name, maxLength })),

@@ -16,12 +16,12 @@ visit(source);
 const evaluate = (name, scope) => new Function(...Object.keys(scope), ts.transpile(
   `return (${declarations.get(name).getText(source)});`, { target: ts.ScriptTarget.ES2022 },
 ))(...Object.values(scope));
-const bundle = await build({ stdin: { contents: `export * from './constants'; export * from './data/aPillarMilling';`, resolveDir: process.cwd() }, bundle: true, platform: 'node', format: 'cjs', write: false });
+const bundle = await build({ stdin: { contents: `export * from './constants'; export * from './data/aPillarMilling'; export * from './data/profilePricing';`, resolveDir: process.cwd() }, bundle: true, platform: 'node', format: 'cjs', write: false });
 const module = { exports: {} };
 new Function('require', 'module', 'exports', bundle.outputFiles[0].text)(createRequire(import.meta.url), module, module.exports);
 const api = module.exports;
 const constants = {};
-for (const name of ['PRICE_HOLE_THROUGH', 'PRICE_HOLE_COUNTERSUNK', 'PRICE_TAPPING_PER_END', 'PRICE_MITER_CUT', 'MIN_PROFILE_LENGTH_MM', 'DANGER_FEE_THRESHOLD_MM', 'DANGER_FEE_PER_PIECE']) constants[name] = evaluate(name, {});
+for (const name of ['PRICE_HOLE_THROUGH', 'PRICE_HOLE_COUNTERSUNK', 'PRICE_TAPPING_PER_END', 'PRICE_MITER_CUT', 'MIN_PROFILE_LENGTH_MM', 'DANGER_FEE_THRESHOLD_MM', 'DANGER_FEE_PER_PIECE']) constants[name] = declarations.has(name) ? evaluate(name, api) : api[name];
 const noOp = () => {};
 const defaultMiterCut = { left: { enabled: false, direction: 'up', side: 'AC' }, right: { enabled: false, direction: 'up', side: 'AC' } };
 

@@ -3,6 +3,8 @@ import { LineSegments, Mesh } from 'three';
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import FactorySheet from '../components/FactorySheet';
+import ProfileVisualizer from '../components/ProfileVisualizer';
+import APillarMillingDiagram from '../components/APillarMillingDiagram';
 import { buildDesignDocument, buildProductionData, calculatePrice, createChatProfilePreview, itemsFromProductionWorkbook, normalizeDesignItems, originalCartRowForSceneItem, restoreCartDesign } from '../components/DIYDesigner';
 import { getAPillarMillingLayout, readAPillarMillingConfig } from '../data/aPillarMilling';
 import { INITIAL_PRODUCTS } from '../constants';
@@ -72,6 +74,46 @@ assert(factorySheet.includes('孔距25mm，共80孔'));
 assert(!factorySheet.includes('无额外加工'));
 assert.equal((factorySheet.match(/data-testid="profile-a-pillar-slot"/g) || []).length, 80,
   'the factory drawing must include all slots on the selected milling face');
+assert(factorySheet.includes('data-length-axis="vertical"'));
+assert(!factorySheet.includes('preserveAspectRatio="none"'), 'factory slots must never be stretched independently along the two axes');
+for (const [model, specId, face, slotWidth] of [
+  ['2040', 'narrow_single', 'B', 3], ['2040', 'wide_single', 'D', 8],
+  ['2047', 'narrow_double', 'B', 3], ['3030-N2', 'narrow_double', 'A', 3],
+] as const) {
+  for (const length of [20, 1000, 2120, 3000]) {
+    const config = { ...row.config, variantId: model, length, aPillarMilling: { specId, face } };
+    const layout = getAPillarMillingLayout(model, length, config.aPillarMilling)!;
+    const markup = renderToStaticMarkup(createElement(APillarMillingDiagram, { config }));
+    const slots = [...markup.matchAll(/<rect[^>]*data-testid="profile-a-pillar-slot"[^>]*>/g)].map(match => match[0]);
+    assert.equal(slots.length, layout.centersMm.length * layout.columnOffsetsMm.length);
+    for (const slot of slots) {
+      const attr = (name: string) => Number(slot.match(new RegExp(`(?:^| )${name}="([^"]+)"`))![1]);
+      assert.equal(attr('width'), slotWidth, 'width is across the upright profile');
+      assert.equal(attr('height'), 14, '14mm long axis follows the upright profile');
+      assert.equal(attr('y') + 7, attr('data-center-mm'), 'slots keep actual stations along the length');
+    }
+    for (const scale of markup.matchAll(/transform="translate\([^)]*\) scale\(([^)]*)\)"/g)) {
+      assert(Number.isFinite(Number(scale[1])), 'only one uniform scale factor, no X/Y stretching');
+    }
+    assert(markup.includes('preserveAspectRatio="xMidYMid meet"'));
+    assert(markup.includes(`孔宽 ${slotWidth}mm`));
+    if (specId === 'narrow_double') assert(markup.includes('双排横向净距 5mm'));
+  }
+}
+const mixedMarkup = renderToStaticMarkup(createElement(ProfileVisualizer, {
+  config: { ...row.config, holes: [{ id: 'keep-drill', side: 'B', type: 'through', positionMm: 100 }] },
+  selectedSide: 'B', onSideChange: () => {}, tapLabel: '攻丝', showSideSelector: false,
+}));
+assert(mixedMarkup.includes('profile-a-pillar-diagram') && mixedMarkup.includes('profile-hole-keep-drill'),
+  'separate proportional milling view must retain ordinary drilling and tapping');
+assert(!mixedMarkup.includes('data-testid="profile-tap-'), 'untapped ports are not production instructions');
+const tappedMarkup = renderToStaticMarkup(createElement(ProfileVisualizer, {
+  config: { ...row.config, tapping: { left: [true, false], right: [false, true] } },
+  selectedSide: 'B', onSideChange: () => {}, tapLabel: '攻丝', showSideSelector: false,
+}));
+assert.equal((tappedMarkup.match(/data-testid="profile-tap-/g) || []).length, 2);
+assert(tappedMarkup.includes('profile-tap-left-0') && tappedMarkup.includes('profile-tap-right-1'),
+  'print only the saved tapped ports at the correct end');
 assert.equal(inspectDesignerImportItems([item]).valid, true);
 for (const invalid of [{ specId: 'wide_single', face: 'B' }, { specId: 'narrow_double', face: 'C' }, 'narrow_double', null]) {
   assert.equal(inspectDesignerImportItems([{ ...item, aPillarMilling: invalid }]).valid, false);

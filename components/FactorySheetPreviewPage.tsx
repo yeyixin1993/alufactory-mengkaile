@@ -1,4 +1,4 @@
-import { decodeDesignerSnapshot } from '../utils/designerCartSnapshot';
+import { readFactorySheetPreviewData } from './FactorySheetPreview';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { CartItem, User, Language, Address } from '../types';
 import { TRANSLATIONS } from '../constants';
@@ -13,7 +13,7 @@ import { expandFinishedFurnitureCartItems } from '../utils/finishedFurnitureCart
 
 /**
  * Standalone preview page – rendered in a new browser window.
- * Reads cart / user / language data from sessionStorage (set by the opener).
+ * Reads compressed preview data, including the storage-full tab handoff.
  *
  * PDF strategy: the primary "download" is the browser's own print-to-PDF,
  * because html2canvas + jsPDF can only produce a raster image of the sheet
@@ -36,16 +36,7 @@ interface PreviewData {
   overlengthFee?: number;
 }
 
-const readPreviewData = (): PreviewData | null => {
-  try {
-    const raw = localStorage.getItem('__factorySheetPreviewData');
-    if (!raw) return null;
-    const parsed = JSON.parse(raw);
-    return (parsed.format === 'compressed-preview-v1' ? decodeDesignerSnapshot(parsed.data) : parsed) as PreviewData;
-  } catch {
-    return null;
-  }
-};
+const readPreviewData = (): PreviewData | null => readFactorySheetPreviewData() as PreviewData | null;
 
 const PRINT_GUIDE_TEXT = {
   cn: {

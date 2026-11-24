@@ -1,7 +1,8 @@
 import React from 'react';
-import { DrillHole, ProfileConfig, ProfileSide, TappingConfig, MiterCutConfig } from '../types';
+import { DrillHole, ProfileConfig, ProfileSide, TappingConfig, MiterCutConfig, Language } from '../types';
 import { PROFILE_VARIANTS } from '../constants';
 import { getAPillarMillingLayout } from '../data/aPillarMilling';
+import APillarMillingDiagram from './APillarMillingDiagram';
 import {
   getHoleDisplayGrooveIndex,
   getProfileGrooveCount,
@@ -25,6 +26,7 @@ interface ProfileVisualizerProps {
   previewHoleId?: string;
   // Optional factory-facing name (e.g. "2040 N1-20封"); editor/quote views keep the catalog name.
   modelLabel?: string;
+  language?: Language;
 }
 
 /**
@@ -126,7 +128,8 @@ const ProfileVisualizer: React.FC<ProfileVisualizerProps> = ({
   interactive = false,
   tapLabel,
   showSideSelector = true,
-  modelLabel
+  modelLabel,
+  language = 'cn'
 }) => {
   const { length, variantId, holes, tapping } = config;
   const selectedVariant = PROFILE_VARIANTS.find(v => v.id === variantId) || PROFILE_VARIANTS[0];
@@ -155,13 +158,18 @@ const ProfileVisualizer: React.FC<ProfileVisualizerProps> = ({
 
   const visibleHoles = getVisibleHoles(selectedSide);
   const milling = getAPillarMillingLayout(selectedVariant.id, length, config.aPillarMilling);
-  const faceWidthMm = Number(selectedVariant.id.slice(isWideFace ? 2 : 0, isWideFace ? 4 : 2));
+  const millingOnFace = milling?.face === selectedSide;
+  const showMachiningBar = !millingOnFace || interactive || visibleHoles.length > 0
+    || tapping.left.some(Boolean) || tapping.right.some(Boolean)
+    || config.miterCut?.left?.enabled || config.miterCut?.right?.enabled;
 
   // Helper to render tap indicator
   const renderTapIndicator = (side: 'left' | 'right', index: number, topPct: string) => {
     // Disable taps visually/click behavior for certain variants when A or C is selected
     const disabledForSide = getProfileTapPortCountForSide(selectedVariant.id, selectedSide) === 0;
     const isTapped = tapping[side][index] && !disabledForSide;
+    // Production drawings show actual machining, not the editor's unselected controls.
+    if (!interactive && !isTapped) return null;
 
     return (
       <button
@@ -213,7 +221,13 @@ const ProfileVisualizer: React.FC<ProfileVisualizerProps> = ({
         </div>
       )}
 
-      {/* Visual Bar Container - Restored to px-8 for tap indicator visibility */}
+      {millingOnFace && <APillarMillingDiagram config={config} language={language} />}
+      {millingOnFace && showMachiningBar && <p className="mt-3 mb-2 text-xs font-bold text-slate-500">
+        {language === 'en' ? 'Drilling / tapping / end cuts' : language === 'jp' ? '穴あけ・タップ・端部切断' : '钻孔 / 攻丝 / 端部切割定位'}
+      </p>}
+      {/* This stretched placement bar is for drilling interaction, never the
+          shape of A-pillar slots. Those use the proportional drawing above. */}
+      {showMachiningBar && (
       <div 
         className={`relative w-full px-8 bg-slate-50 border border-slate-200 rounded flex items-center justify-center select-none transition-all duration-300 overflow-visible ${isExtraWideFace ? 'h-48' : isWideFace ? 'h-32' : 'h-24'}`}
       >
@@ -296,33 +310,6 @@ const ProfileVisualizer: React.FC<ProfileVisualizerProps> = ({
              <span className="text-2xl font-black text-slate-500 whitespace-nowrap">{modelLabel || selectedVariant.name}</span>
           </div>
 
-          {/* A-pillar slots cut only the selected face, separate from screw holes. */}
-          {milling?.face === selectedSide && length > 0 && (
-            <svg
-              data-testid="profile-a-pillar-pattern"
-              data-face={milling.face}
-              className="pointer-events-none absolute inset-0 h-full w-full"
-              viewBox={`0 0 ${length} ${faceWidthMm}`}
-              preserveAspectRatio="none"
-              aria-label={`A柱 ${milling.spec.name.cn} ${milling.face}面`}
-            >
-              {milling.centersMm.flatMap(center => milling.columnOffsetsMm.map(offset => (
-                <rect
-                  key={`${center}:${offset}`}
-                  data-testid="profile-a-pillar-slot"
-                  data-center-mm={center}
-                  data-column-offset-mm={offset}
-                  x={center - milling.heightMm / 2}
-                  y={faceWidthMm / 2 + offset - milling.widthMm / 2}
-                  width={milling.heightMm}
-                  height={milling.widthMm}
-                  rx={0.75}
-                  fill="#334155"
-                />
-              )))}
-            </svg>
-          )}
-
           {/* Holes */}
           {visibleHoles.map(hole => {
             const isExit = hole.side !== selectedSide;
@@ -387,6 +374,7 @@ const ProfileVisualizer: React.FC<ProfileVisualizerProps> = ({
           </div>
         </div>
       </div>
+      )}
     </div>
   );
 };

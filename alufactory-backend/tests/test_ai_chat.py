@@ -220,14 +220,13 @@ class AIChatTest(unittest.TestCase):
 
     @patch('app.routes.ai_chat.provider_extract', return_value=(json.dumps(SPEC), 100000, {}))
     def test_free_allowance_applies_locally_too(self, provider):
-        # The local launcher used to enable an unlimited switch, so loopback traffic behaved
-        # differently from production. Owner decision 2026-10-09: no such switch — the
-        # three-message allowance and the balance rule apply on every host, local included.
+        # Loopback requests alone never bypass allowances. Only the isolated
+        # live-test launcher explicitly enables the later 2026-10-21 local mode.
         self.status('standard')
         account = db.session.get(AIAccount, 'u:standard')
         account.trial_used = 3
         db.session.commit()
-        self.assertNotIn('local_unlimited', self.status('standard').json)
+        self.assertFalse(self.status('standard').json['local_unlimited'])
         self.assertEqual(self.chat('standard', 41).status_code, 409)
 
 if __name__ == '__main__':unittest.main()

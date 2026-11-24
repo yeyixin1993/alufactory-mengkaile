@@ -577,7 +577,7 @@ const FactorySheet: React.FC<FactorySheetProps> = ({ cart, user, language, order
 
       <div data-pdf-block className="bg-slate-50 p-4 rounded border border-slate-200">
         <h4 className="text-xs font-black text-slate-400 uppercase tracking-widest mb-2">{t.profileSummary || 'Profiles Summary'}</h4>
-        <div className="overflow-x-auto">
+        <div className="overflow-visible">
           <table className="w-full text-sm border-collapse">
             <thead>
               <tr className="bg-white/50 text-left text-xs">
@@ -825,13 +825,13 @@ const FactorySheet: React.FC<FactorySheetProps> = ({ cart, user, language, order
                           <h4 className="text-xs font-black text-slate-400 uppercase tracking-widest mb-4">{previewLabel}</h4>
                           <div className="grid grid-cols-1 gap-4">
                             {sidesToShow.map(side => (
-                              <div key={side} className="flex gap-4 items-center">
+                              <div key={side} data-pdf-keep-together className="flex gap-4 items-center" style={{ breakInside: 'avoid' }}>
                                 {/* Same reason as the header number badge: the letter is
                                     drawn as SVG text so the image-PDF export keeps it
                                     centered inside the square. */}
                                 <SheetBadge size={40} tone="dark" label={side} fontSize={20} />
                                 <div className="flex-1 bg-slate-50 border border-slate-200 rounded-xl p-3 overflow-visible">
-                                  <ProfileVisualizer config={profileCfg} selectedSide={side} onSideChange={() => {}} interactive={false} tapLabel={t.tapAction} showSideSelector={false} modelLabel={getProfileModelLabel(profileCfg.variantId, language)} />
+                                  <ProfileVisualizer language={language} config={profileCfg} selectedSide={side} onSideChange={() => {}} interactive={false} tapLabel={t.tapAction} showSideSelector={false} modelLabel={getProfileModelLabel(profileCfg.variantId, language)} />
                                 </div>
                               </div>
                             ))}
@@ -884,7 +884,9 @@ const FactorySheet: React.FC<FactorySheetProps> = ({ cart, user, language, order
                       </div>
                     ) : (
                       <div className="text-[10px] text-slate-400 italic bg-slate-50 p-2 rounded border border-dashed border-slate-200 text-center uppercase tracking-widest">
-                        {t.noDrilling}
+                        {profileCfg.aPillarMilling
+                          ? language === 'cn' ? '无额外钻孔（A柱铣槽见上图）' : language === 'jp' ? '追加の穴あけなし（A柱長穴は上図参照）' : 'No additional drilled holes (A-pillar slots shown above)'
+                          : t.noDrilling}
                       </div>
                     )}
                  </div>

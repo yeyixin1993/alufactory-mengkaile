@@ -1,4 +1,15 @@
 {
+  "profileMachining": {
+    "rates": {
+      "through_hole_count": 1,
+      "countersunk_count": 1.8,
+      "threaded_hole_count": 1.8,
+      "miter45_count": 1,
+      "end_tapping": 1.5
+    },
+    "dangerFeeThresholdMm": 100,
+    "dangerFeePerPiece": 5
+  },
   "boardRules": {
     "aluminumPlate": {
       "maxWidthMm": 2400,
