@@ -17,7 +17,9 @@ def normalize_profile_color(color):
     # `silver` is the existing catalog ID for explicit bright silver, not a synonym.
     return {'银色': 'natural', '本色': 'natural', '原色': 'natural',
             '银白': 'natural', '银白色': 'natural', '亮银色': 'silver',
-            '紫色': 'purple', '米白': 'beige'}.get(color, color)
+            '紫色': 'purple', '米白': 'beige',
+            '浅青蓝': 'sky_blue', '天蓝色': 'sky_blue', '天蓝': 'sky_blue',
+            '浅青蓝/天蓝色': 'sky_blue'}.get(color, color)
 
 def clarification_questions(spec, stage=None):
     values = spec.get('clarifications', [])

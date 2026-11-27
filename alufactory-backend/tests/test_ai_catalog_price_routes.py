@@ -5,7 +5,8 @@ from unittest.mock import patch
 
 from flask import Flask
 from flask_jwt_extended import JWTManager, create_access_token
-from app.ai_models import AIAccount, AISettings
+from app.ai_models import AIAccount, AISettings, AIFaqRule
+from app.ai_advice import END_TAPPING_STANDARD_ANSWER
 from app.ai_quote import CATALOG
 from app.models.user import db, User
 from app.routes.ai_chat import ai_bp, provider_extract, visual_draft
@@ -51,6 +52,48 @@ class CatalogPriceRouteTest(unittest.TestCase):
         self.assertEqual(response.status_code, 200, response.json)
         self.assertEqual(response.json['guidance'], [])
         return response.json
+
+    @patch('app.routes.ai_chat.provider_extract')
+    def test_tapping_specs_override_stale_faq_and_preserve_existing_quote(self, provider):
+        question = '3030攻丝是6mm还是8mm'
+        db.session.add(AIFaqRule(id='old-tapping', question=question, aliases=[],
+            answer='3030端面攻丝是M6，不是M8。', category='加工说明', enabled=True))
+        db.session.commit()
+        first = self.send(question, 'vip')
+        self.assertEqual(first['reply'], '3030系列：端面攻丝M8，攻丝长度至少20mm。')
+        spec = {'items': [{'model': '3030', 'color': 'natural', 'length': 800, 'quantity': 2,
+                          'tapping': 'both'}], '_visual_pending': True}
+        account = db.session.get(AIAccount, 'u:vip')
+        account.history = [{'role': 'assistant', 'content': json.dumps(spec)}]
+        db.session.commit()
+        for message, expected in [(question, first['reply']),
+                ('1515攻丝深度是多少', '1515系列：端面攻丝M4，攻丝长度至少10mm。')]:
+            result = self.send(message, 'vip')
+            self.assertEqual(result['reply'], expected)
+            self.assertEqual(result['rule_id'], 'end-tapping-specs')
+            self.assertEqual(result['charged_cny'], 0)
+            self.assertIsNone(result['quote'])
+            db.session.refresh(account)
+            self.assertEqual(visual_draft(account.history), spec)
+        provider.assert_not_called()
+
+    @patch('app.routes.ai_chat.provider_extract')
+    def test_equipment_tree_specs_work_during_quote_without_changing_it(self, provider):
+        first = self.send('设备树光轴直径多少', 'vip')
+        self.assertEqual(first['rule_id'], 'equipment-tree-specs')
+        self.assertIn('35mm的实心镀铬硬轴', first['reply'])
+        spec = {'items': [{'model': '2020', 'color': 'natural', 'length': 800, 'quantity': 2}],
+                '_visual_pending': True}
+        account = db.session.get(AIAccount, 'u:vip')
+        account.history = [{'role': 'assistant', 'content': json.dumps(spec)}]
+        db.session.commit()
+        result = self.send('设备树打印件有多少种颜色', 'vip')
+        self.assertEqual(result['reply'], '设备树的3D打印件采用PETG材料，目前仅有黑色。')
+        self.assertEqual(result['charged_cny'], 0)
+        self.assertIsNone(result['quote'])
+        db.session.refresh(account)
+        self.assertEqual(visual_draft(account.history), spec)
+        provider.assert_not_called()
 
     @patch('app.routes.ai_chat.provider_extract')
     def test_profile_prices_follow_account_not_client_claims(self, provider):
@@ -134,6 +177,10 @@ class CatalogPriceRouteTest(unittest.TestCase):
             provider_extract([], '咨询价格', membership=tier)
             payload = json.loads(upstream.call_args.args[0].data)
             prompt = payload['messages'][0]['content']
+            self.assertIn(END_TAPPING_STANDARD_ANSWER, prompt)
+            self.assertNotIn('攻丝深度20mm。', prompt)
+            self.assertIn('3030端面攻丝是M8', prompt)
+            self.assertIn('2047例外：端面中央孔攻M8、两侧孔攻M6', prompt)
             catalog, _ = json.JSONDecoder().raw_decode(prompt.split('目录：', 1)[1])
             self.assertEqual(catalog['accountMembership'], tier)
             self.assertTrue(catalog['profilePricesIncludeMembershipDiscount'])

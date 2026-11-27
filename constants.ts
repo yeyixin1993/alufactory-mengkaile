@@ -891,7 +891,7 @@ export const PROFILE_COLORS: ColorDef[] = [
   },
   {
     id: "sky_blue",
-    name: { en: "Light Cyan Blue", cn: "浅青蓝", jp: "ライトシアンブルー" },
+    name: { en: "Light Cyan Blue", cn: "浅青蓝/天蓝色", jp: "ライトシアンブルー" },
     maxLength: 3000,
   },
   {

@@ -63,6 +63,8 @@ module Mengkaile
       'sapphire_blue' => 'sapphire_blue', '宝石蓝' => 'sapphire_blue', '寶石藍' => 'sapphire_blue',
       'purple' => 'purple', '紫色' => 'purple',
       'sky_blue' => 'sky_blue', '浅青蓝' => 'sky_blue', '淺青藍' => 'sky_blue',
+      '天蓝色' => 'sky_blue', '天藍色' => 'sky_blue', '天蓝' => 'sky_blue', '天藍' => 'sky_blue',
+      '浅青蓝/天蓝色' => 'sky_blue', '淺青藍/天藍色' => 'sky_blue',
       'green' => 'green', '松绿' => 'green', '松綠' => 'green',
       'willow_green' => 'willow_green', '柳绿' => 'willow_green', '柳綠' => 'willow_green',
       'qingli_coffee' => 'qingli_coffee', '青骊咖' => 'qingli_coffee', '青驪咖' => 'qingli_coffee',

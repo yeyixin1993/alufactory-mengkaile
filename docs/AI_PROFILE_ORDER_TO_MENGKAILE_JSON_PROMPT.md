@@ -141,7 +141,7 @@ colorId 只能使用下列稳定 ID：
 - cola_red：可乐红
 - sapphire_blue：宝石蓝
 - purple：紫色
-- sky_blue：浅青蓝
+- sky_blue：浅青蓝/天蓝色（同一种颜色的不同叫法）
 - green：松绿
 - willow_green：柳绿
 - qingli_coffee：青骊咖

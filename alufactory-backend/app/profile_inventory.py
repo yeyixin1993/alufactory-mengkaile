@@ -17,7 +17,7 @@ PROFILE_VARIANTS = (
 
 PROFILE_COLORS = {
     'natural': '银白', 'silver': '亮银色', 'red': '中国红', 'cola_red': '可乐红',
-    'sapphire_blue': '宝石蓝', 'purple': '紫色', 'sky_blue': '浅青蓝', 'green': '松绿',
+    'sapphire_blue': '宝石蓝', 'purple': '紫色', 'sky_blue': '浅青蓝/天蓝色', 'green': '松绿',
     'willow_green': '柳绿', 'qingli_coffee': '青骊咖', 'beige': '米白',
     'indigo_blue': '黛蓝', 'cool_green': '冷青绿', 'ink_green': '墨青绿',
     'apple_gold': '苹果金', 'olive_brown': '橄榄棕', 'lime_gold': '青金',

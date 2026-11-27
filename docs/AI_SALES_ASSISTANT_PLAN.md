@@ -143,3 +143,21 @@ Implemented explicit backend `AI_PROVIDER=deepseek` with `DEEPSEEK_API_KEY`, off
 - In local Vite development only, expired visitor credentials from a different local database are replaced once; production visitor identity is unchanged.
 - Reproduced a DeepSeek response containing only whitespace after mixed informational turns. Retry that response once with an explicit JSON instruction, retaining both attempts' measured costs and reserving for both before paid production requests.
 - Real API checks: tapping depth, shipping, cross-section, accessories, cabinet dimensions, unavailable materials, cleaning advice, pegboard quote, intervening advice, then quantity update. Pegboard 800×600×2mm × 1 = ¥518.4; × 2 = ¥1036.8, shipping included. Regression script and production build pass.
+
+### 来料加工上色话术（2026-11-25）
+- 按实际称重计费：不足40kg为45元/公斤，40kg及以上为25元/公斤；来回运费自理。
+- 来料/自带材料上色、按公斤上色费用及该服务运费问题直接返回此话术，不套用打孔费或购买彩色型材的米价，不添加未确认的会员优惠。
+- 询问时已有商品报价也可直接答复，保留原清单与确认状态；此服务话术不创建自动下单商品。
+
+### 设备树规格话术（2026-11-25）
+- 业主确认：设备树光轴为直径35mm的实心镀铬硬轴；设备树3D打印件为PETG材料，目前仅黑色。
+- 仅用于明确询问设备树的光轴或打印件规格，不套用到其他产品；不推断承重、硬度数值、耐温或价格。
+- 普通咨询和已有报价过程中均直接答复已知规格，不调用模型、不改原清单；“直径多少”“多少种颜色”不能误判为询价。
+
+### 型材端面攻丝规格（2026-11-27）
+- 1515系列M4、攻丝长度至少10mm；2020系列M6，3030及4040系列M8、攻丝长度至少20mm。优先直接返回确定规格，不追问颜色、数量或完整订单，不以配件螺丝的M6规格替代3030端面M8。
+- 普通咨询和已有报价过程中都可命中，保留清单；模型系统提示同步同一规格来源，优先于旧问答和历史错误回复。
+- 2047的中央孔M8、两侧孔M6为既有端口特例；底孔、侧面螺纹孔、刀具及特殊要求不套用普通端面规格。
+
+### 表面工艺咨询（2026-11-27 业主确认）
+表面工艺有三种：喷砂阳极氧化、喷砂高定水性漆、喷涂砂纹。前两种支持截面彩色，喷涂砂纹只有截面本色。AI直接回答此工艺规则，不能仅解释切口颜色；已有报价中咨询也保留原清单。本次调整咨询话术，不改现有商品价格或配置字段。

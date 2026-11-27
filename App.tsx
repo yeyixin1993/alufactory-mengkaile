@@ -1495,7 +1495,7 @@ const Cart: React.FC<{
                         const selectedLines = lines.filter((line: any) => Number(line?.quantity || 0) > 0);
                         const sizeText = cfg?.profileSize || cfg?.size || cfg?.variantId || '-';
                         const rawColorMode = String(cfg?.colorMode || '').toLowerCase();
-                        const selectedAccessoryColorName = cfg?.colorName || (cfg?.colorId ? PROFILE_COLORS.find(c => c.id === cfg.colorId)?.name?.[language] : '');
+                        const selectedAccessoryColorName = (cfg?.colorId ? PROFILE_COLORS.find(c => c.id === cfg.colorId)?.name?.[language] : '') || cfg?.colorName;
                         const colorModeText = rawColorMode === 'natural'
                           ? (language === 'cn' ? '银白' : language === 'jp' ? 'シルバーホワイト' : 'Silver White')
                           : rawColorMode === 'colored'
@@ -1687,7 +1687,7 @@ const Cart: React.FC<{
                           {language === 'cn' ? '颜色' : language === 'jp' ? '色' : 'Color'}:{' '}
                           {item.product.type === ProductType.MARINE_BOARD
                             ? getMarineBoardOrderColorName(String((item.config as any)?.colorId || 'natural'), language)
-                            : ((item.config as any)?.colorName || (((item.config as any)?.colorId && PROFILE_COLORS.find(c => c.id === (item.config as any).colorId)?.name?.[language]) || '-'))}
+                            : (((item.config as any)?.colorId && PROFILE_COLORS.find(c => c.id === (item.config as any).colorId)?.name?.[language]) || (item.config as any)?.colorName || '-')}
                         </span>
                         {item.product.type === ProductType.MARINE_BOARD && (
                           <span className="px-3 py-1.5 rounded-xl bg-slate-100 text-slate-700">{language === 'cn' ? '海洋板规格' : language === 'jp' ? '海洋板仕様' : 'Marine Spec'}: {((item.config as any)?.marineSpecName || ((item.config as any)?.marineSpecId === 'marine_bbb_plain'

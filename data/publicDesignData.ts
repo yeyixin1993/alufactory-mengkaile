@@ -29,7 +29,7 @@ export const PUBLIC_PROFILE_COLORS: PublicDesignColor[] = [
   { id: 'cola_red', name: { en: 'Cola Red', cn: '可乐红', jp: 'コーラレッド' }, maxLength: 3000 },
   { id: 'sapphire_blue', name: { en: 'Gem Blue', cn: '宝石蓝', jp: 'ジェムブルー' }, maxLength: 3000 },
   { id: 'purple', name: { en: 'Purple', cn: '紫色', jp: 'パープル' }, maxLength: 3000 },
-  { id: 'sky_blue', name: { en: 'Light Cyan Blue', cn: '浅青蓝', jp: 'ライトシアンブルー' }, maxLength: 3000 },
+  { id: 'sky_blue', name: { en: 'Light Cyan Blue', cn: '浅青蓝/天蓝色', jp: 'ライトシアンブルー' }, maxLength: 3000 },
   { id: 'green', name: { en: 'Pine Green', cn: '松绿', jp: '松緑' }, maxLength: 3000 },
   { id: 'willow_green', name: { en: 'Willow Green', cn: '柳绿', jp: '柳緑' }, maxLength: 3000 },
   { id: 'qingli_coffee', name: { en: 'Qingli Coffee', cn: '青骊咖', jp: '青驪コーヒー' }, maxLength: 3000 },

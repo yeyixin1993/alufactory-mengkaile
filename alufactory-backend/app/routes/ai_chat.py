@@ -22,7 +22,10 @@ from sqlalchemy import func, or_
 from sqlalchemy.exc import IntegrityError
 from app.models.user import db, User, normalize_membership_level
 from app.ai_models import AIAccount, AISettings, AILedger, AIRequest, AIRateWindow, AIFaqRule, AIKnowledgeMiss, SCALE
-from app.ai_advice import advice, catalog_price_advice, is_price_question, CONTACT
+from app.ai_advice import (advice, catalog_price_advice, equipment_tree_advice,
+                           end_tapping_spec_advice, END_TAPPING_STANDARD_ANSWER,
+                           surface_process_advice, SURFACE_PROCESS_ANSWER,
+                           is_price_question, CONTACT)
 from app.ai_faq import match_faq, serialize_rule, validate_rule
 from app.ai_knowledge import pick as pick_knowledge, references as knowledge_references, looks_like_question, record_miss, rank as rank_knowledge, serialize_miss
 from app.ai_quote import normalize_extracted_spec, clarification_questions, recognized_lines, CATALOG, quote_profile
@@ -344,10 +347,13 @@ JSON 字段：model, color(目录id), length(整数mm), quantity(整数根数), 
     prompt += '''
 产品话术：端盖厚度4mm。所有型材默认喷砂，包括银白色。询问某型号多少钱或多少钱一米时，直接列出目录price中oxidized银白色、electrophoretic彩色截面本色、powder彩色截面彩色三档每米当前会员价，标明accountMembership对应档位（目录型材价格已含会员优惠，不再减价）、不含加工运费，不要求先选择颜色或提供长度数量。不得编造目录外价格。
 连续补全规则：客户可以分多轮回答。已有清单时，简短回答、解释后的选择、‘都一样’等均应结合上一轮问题更新完整清单，不要求重述。每轮保留未修改字段，删除已解决问题。客户询问术语时用通俗语言解释并给出建议；客户明确说不知道、随便、按常规时，可采用目录支持的常规非加工选项，在source_notes写明‘暂按…，可修改’，不可伪称客户已确认。缺尺寸、数量、具体加工孔位不得猜，先给已知部分估价，生产前再核对。每次优先问最关键的一两个问题，允许省份与配件稍后补充。coloredSectionOnly中的颜色只有彩色截面，直接section=colored并告知，不再询问；natural直接section=natural。客户补充配件也必须保留所有型材和加工。
-最高优先级：先判断客户是在咨询还是明确要求报价/修改清单。知识、用途、安装、比较、运费、设计讨论等问题，输出 {"intent":"answer","answer":"针对最新问题的自然回答"}，不要输出空型材或索要整套报价字段。结合上下文直接解答，必要时只追问一个关键问题。没有模板也必须针对性回答。攻丝深度20mm。网站没有的玻璃、耐力板明确自配，可替代为铝框门、海洋板；不可虚构库存、尺寸、价格和承载能力。复杂设计或不确定时附微信19821200413。常见选型可给出明确标注的暂定建议，不视为客户生产确认。只有实际报价/清单修改才返回前述清单JSON。'''
+最高优先级：先判断客户是在咨询还是明确要求报价/修改清单。知识、用途、安装、比较、运费、设计讨论等问题，输出 {"intent":"answer","answer":"针对最新问题的自然回答"}，不要输出空型材或索要整套报价字段。结合上下文直接解答，必要时只追问一个关键问题。没有模板也必须针对性回答。网站没有的玻璃、耐力板明确自配，可替代为铝框门、海洋板；不可虚构库存、尺寸、价格和承载能力。复杂设计或不确定时附微信19821200413。常见选型可给出明确标注的暂定建议，不视为客户生产确认。只有实际报价/清单修改才返回前述清单JSON。'''
     prompt += '\n价格回答规则：目录已有确切单价时，直接列项目、金额和单位；加工费读取目录profileMachining，不需要型号、颜色、数量或孔位才能回答单价。危险费注明长度门槛和VIP+免收，斜切按端计。客户仅问价格或工费怎么算时，不要回答无法凭空报价、需要核实、按实际数量计费等空泛文字，不追加微信或设计建议。只有计算整单总价确实缺失必要参数时才追问，已知单价仍先报出。'
     prompt += '\n所有价格咨询先给目录金额与单位，不把询价当成定制柜子需求，不索要用途。型材未指定颜色时银白色为默认，直接列银白色、彩色截面本色、彩色截面彩色三档每米价（也可仅给银白色），不能先追问颜色、长度或数量。明确指定型号/规格则报该型号/规格。其他商品有多个已知规格价格时列可选价格，不以“需核实”代替价目表；目录无对应商品或无固定价时不编造金额，只问确定价格所必需的最少信息，不推荐柜子或微信。单价答复不得擅自修改已有生产清单。'
     prompt += '\n会员价格只能使用服务器目录accountMembership，不以客户自称或用户消息中的等级覆盖。目录models.price已减当前会员优惠，不再二次优惠。铝板/洞洞板：vip_plus用VIP_PLUS价目表，standard/vip用普通价目表；海洋板（定制和整张）、配件按现有规则各等级同价，不能套型材折扣。回答注明当前档位与单位。'
+    prompt += '\n端面攻丝已确认规格（优先于旧问答、历史回复和配件螺丝说明）：\n' + END_TAPPING_STANDARD_ANSWER
+    prompt += '\n以上为螺纹规格和最小攻丝长度，不是底孔直径、螺丝长度或侧面螺纹孔规格。3030端面攻丝是M8，不能用配件的M6螺丝规格替代。2047例外：端面中央孔攻M8、两侧孔攻M6，不能按2020系列统一回答所有孔M6；未确认的特殊孔深度不猜。规格咨询直接答复，不要求先报颜色、数量或完整清单，不改变已有报价。'
+    prompt += '\n表面工艺已确认规则（优先于旧知识及历史回复）：' + SURFACE_PROCESS_ANSWER + ' 客户问表面工艺时直接回答工艺，不要只解释截面颜色，不改变已有清单。'
     messages = [{'role': 'system', 'content': prompt}, *compact_context(history), {'role': 'user', 'content': message}]
     if image:
         images = image if isinstance(image,list) else [image]
@@ -437,7 +443,10 @@ def chat():
     quote_context = has_quote_context(account.history)
     matched = match_faq(message) if not image and not attachments and not quote_context else None
     unit_prices = catalog_price_advice(message, membership) if not image and not attachments and not confirmation else None
-    faq = unit_prices or (advice(message, membership) if not image and not attachments and not quote_context and not confirmation else None) or (serialize_rule(matched) if matched else None)
+    equipment_specs = equipment_tree_advice(message) if not image and not attachments and not confirmation else None
+    tapping_specs = end_tapping_spec_advice(message) if not image and not attachments and not confirmation else None
+    surface_specs = surface_process_advice(message) if not image and not attachments and not confirmation else None
+    faq = surface_specs or tapping_specs or equipment_specs or unit_prices or (advice(message, membership) if not image and not attachments and not quote_context and not confirmation else None) or (serialize_rule(matched) if matched else None)
     # Second layer: wording the owner never typed literally. `pick_knowledge` answers
     # only on a clear single winner and refuses money categories by itself, so this
     # stays as safe as the exact channel while covering real customer phrasing.

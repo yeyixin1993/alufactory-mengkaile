@@ -149,7 +149,8 @@ These correspond to the common module-aligned connection states seen in MayCAD/J
 - `亮银色 / Bright Silver` is slightly darker with a stronger bright/reflective feel.
 - Bright Silver uses the same price tier as other decorative colors. Only Silver White uses the natural-price tier.
 - Green ordering and rendering: 冷青绿 is the darkest teal green, 松绿 is the medium green, and 柳绿 is the lightest. 墨青绿 is a separate newly-added green option.
-- Current customer-facing color names follow the physical sample labels: 中国红、可乐红、宝石蓝、紫色、浅青蓝、松绿、柳绿、青骊咖、米白、黛蓝、冷青绿、墨青绿、青金、丁香粉、摩卡咖、暗夜黑、深空灰. Legacy stable IDs may remain unchanged in saved data even when their display name changes (for example `black` now displays 暗夜黑 and `british_grey` now displays 深空灰). 橄榄棕 and other colors without a newly supplied sample remain unchanged.
+- Current customer-facing color names follow the physical sample labels: 中国红、可乐红、宝石蓝、紫色、浅青蓝/天蓝色、松绿、柳绿、青骊咖、米白、黛蓝、冷青绿、墨青绿、青金、丁香粉、摩卡咖、暗夜黑、深空灰. Legacy stable IDs may remain unchanged in saved data even when their display name changes (for example `black` now displays 暗夜黑 and `british_grey` now displays 深空灰). 橄榄棕 and other colors without a newly supplied sample remain unchanged.
+- 2026-11-25：业主确认浅青蓝与天蓝色是同一种颜色的不同叫法，中文展示统一为「浅青蓝/天蓝色」，两种名称都对应既有 `sky_blue`。设计器、报价、购物车、生产单和库存共用此名称；不增加颜色选项，不修改色卡、色值、价格或历史颜色ID。此前客服素材中区分两者的表述由本条取代。
 - 可乐红 and 墨青绿 currently support colored cut ends only. They must not offer the natural-cut-end tier until that product availability changes.
 - Physical swatch photography is the color/material reference. The individual photos are centered on a consistent 900×1200 canvas with margin and high-detail JPEG encoding; preserve visible matte/gloss/metallic texture ahead of pursuing the smallest possible file size. Only the selected swatch is inserted into the page and it is lazy-loaded, so the full set must not be eagerly preloaded.
 - The rotated/cropped all-color overview is shown beside the compact natural-vs-colored cut-end explanation until the customer chooses a specific color. After a specific color is chosen, hide the overview and show only the selected swatch where applicable.
@@ -210,6 +211,8 @@ Existing 3D workflow:
 - The production PDF/Excel must show both entry and exit paths so customer and factory can verify the same hole.
 
 ### 10.4 End tapping
+
+- **2026-11-27 owner clarification:** 1515系列端面攻丝M4，长度至少10mm；2020系列M6，3030及4040系列M8，长度至少20mm。AI规格答复直接使用此规则，不能把3030配件的M6螺丝当作端面攻丝规格，也不能再统一答所有系列20mm。底孔直径、侧面螺纹孔、配件螺丝长度分别按其实际定义，不混用。2047保留其已确认的端口例外：中央孔M8、两侧孔M6，不凭系列名覆盖。规格咨询在已有报价过程中也必须保留清单和确认状态。
 
 - Show end tapping directly on the profile end face using red indicators, not yellow.
 - Support no tapping, left end only, right end only, and both ends.
@@ -777,7 +780,7 @@ Save separate conversations in the server database, with request membership and 
 2026-10-20展示调整：衣柜配置页不展示“默认不内退…删除大弯门或更换门型后自动恢复”的说明块；自动退让规则保持，作为内部产品知识。
 
 ### AI sales consultation routing (2026-10-20)
-- Informational questions are answered before quote-field collection. End tapping depth is 20mm; cross-section and wall-thickness questions show the same `/images/profile_<variant>.png` assets as P2.
+- Informational questions are answered before quote-field collection. End tapping follows the series-specific thread and minimum-length rules in §10.4; cross-section and wall-thickness questions show the same `/images/profile_<variant>.png` assets as P2.
 - Freight explanations use the current shipping catalog and quote calculator, including a 2020 natural 1000mm × 1 Shanghai example. Do not invent freight prices.
 - Cabinet/rack/design requests can open the existing wardrobe configurator inside chat; explicitly labelled mm/cm dimensions seed its inputs. Trolley proposals start with the supported caster frame. This is a preliminary editable design, not a load-bearing certification.
 - Accessory browsing uses the existing accessory quote editor and cart path. No automatic screw purchase. Explicit accessory quote requests remain in the normal quote flow.
@@ -865,3 +868,6 @@ End caps are 4mm thick. All profiles are sandblasted by default, including natur
 2026-11-23（补）：单价咨询独立于定制/下单流程，优先直接从目录报金额。问2020多少钱一米时，默认银白色优先，列银白色、彩色截面本色、彩色截面彩色三档每米价及会员档位，不追问颜色/长度/数量/用途，不自动推荐柜子、配件编辑器或微信。铝板/洞洞板列可售厚度的平方米单价，海洋板列定制或整张价，已明确编号/型号的配件列对应单价。已有清单不妨碍询价；询价不修改清单。无法确定商品或目录没有定价时仅询问确定价格必需的信息，不能虚构金额。真正整单总价与配置修改保持原报价流程。
 
 2026-11-24：以上询价规则覆盖型材、铝板、铝洞洞板、海洋板及目录配件；会员价格从服务器认证账号读取，答复注明当前档位，不采纳消息或请求体自称的会员等级。保持现有计价规则：型材VIP/VIP+每米分别优惠2/4元；铝板、洞洞板仅VIP+使用专属价目表，普通与VIP同价；海洋板（定制/整张）与配件各会员等级同价，不虚构折扣。海洋板定制同时列原色与含加色费的彩色金额，整张仅原色。明确询问仅支持彩色截面的型材颜色时，只报可购买的截面价格。同句询问型材与板材时保留各自价格，不能把型材加工价套给板材；未知型号、不支持的厚度不得替换成相近商品。询问壁厚/攻丝深度等规格不应命中价格规则。
+
+### 表面工艺咨询（2026-11-27 业主确认）
+表面工艺有三种：喷砂阳极氧化、喷砂高定水性漆、喷涂砂纹。前两种支持截面彩色，喷涂砂纹只有截面本色。AI直接回答此工艺规则，不能仅解释切口颜色；已有报价中咨询也保留原清单。本次调整咨询话术，不改现有商品价格或配置字段。

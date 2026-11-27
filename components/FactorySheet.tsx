@@ -919,7 +919,7 @@ const FactorySheet: React.FC<FactorySheetProps> = ({ cart, user, language, order
                     const selectedLines = lines.filter((line: any) => Number(line?.quantity || 0) > 0);
                     const fitModel = getProfileModelLabel(cfg?.profileSize || cfg?.size || cfg?.variantId, language);
                     const rawColorMode = String(cfg?.colorMode || '').toLowerCase();
-                    const selectedAccessoryColorName = cfg?.colorName || (cfg?.colorId ? PROFILE_COLORS.find(c => c.id === cfg.colorId)?.name?.[language] : '');
+                    const selectedAccessoryColorName = (cfg?.colorId ? PROFILE_COLORS.find(c => c.id === cfg.colorId)?.name?.[language] : '') || cfg?.colorName;
                     const colorModeText = rawColorMode === 'natural'
                       ? (language === 'cn' ? '银白' : language === 'jp' ? 'シルバーホワイト' : 'Silver White')
                       : rawColorMode === 'colored'

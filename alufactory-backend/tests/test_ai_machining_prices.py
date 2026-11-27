@@ -5,7 +5,7 @@ from unittest.mock import patch
 
 from flask import Flask
 from flask_jwt_extended import JWTManager, create_access_token
-from app.ai_advice import advice, machining_price_advice
+from app.ai_advice import advice, machining_price_advice, supplied_material_coloring_advice
 from app.ai_models import AIAccount, AISettings, AILedger
 from app.ai_quote import CATALOG, PROFILE_MACHINING_RATES, DANGER_FEE_PER_PIECE, DANGER_FEE_THRESHOLD_MM
 from app.models.user import db, User
@@ -22,6 +22,18 @@ EXPECTED_ANSWER = '\n'.join([
 
 
 class MachiningPriceTest(unittest.TestCase):
+    def test_supplied_material_coloring_does_not_return_drilling_or_material_prices(self):
+        expected = '来料加工上色按实际称重计费：不足40kg，45元/公斤；40kg及以上，25元/公斤。来回运费自理。'
+        for message in ['来料加工上色多少钱', '自带2020型材上色价格', '上色多少钱一公斤',
+                        '来料上色40kg怎么收费', '40kg上色价格', '来料上色来回运费谁付', '可以来料加工上色吗']:
+            for tier in ['standard', 'vip', 'vip_plus']:
+                with self.subTest(message=message, tier=tier):
+                    result = advice(message, tier)
+                    self.assertEqual(result['answer'], expected)
+                    self.assertEqual(result['guidance'], [])
+        for message in ['2020彩色型材多少钱一米', '来料打孔多少钱', '取消来料上色', '自带型材不要改色']:
+            self.assertIsNone(supplied_material_coloring_advice(message))
+
     def test_screenshot_returns_only_catalog_rate_lines(self):
         result = advice(SCREENSHOT_QUESTION)
         self.assertEqual(result['id'], 'machining-unit-prices')
@@ -112,6 +124,24 @@ class MachiningPriceRouteTest(unittest.TestCase):
     def send(self, message=SCREENSHOT_QUESTION, index=1):
         return self.client.post('/api/ai/chat', headers=self.headers, json={
             'message': message, 'request_id': f'00000000-0000-4000-8000-{index:012d}'})
+
+    @patch('app.routes.ai_chat.provider_extract')
+    def test_coloring_service_reply_during_quote_preserves_order(self, provider):
+        spec = {'items': [{'model': '2020', 'color': 'natural', 'length': 800, 'quantity': 2}],
+                '_visual_pending': True}
+        account = db.session.get(AIAccount, 'u:price-test')
+        account.history = [{'role': 'assistant', 'content': json.dumps(spec)}]
+        db.session.commit()
+        result = self.send('来料加工上色怎么收费').json
+        self.assertEqual(result['rule_id'], 'supplied-material-coloring')
+        self.assertIn('45元/公斤', result['reply'])
+        self.assertIn('40kg及以上，25元/公斤', result['reply'])
+        self.assertIn('来回运费自理', result['reply'])
+        self.assertEqual(result['charged_cny'], 0)
+        self.assertIsNone(result['quote'])
+        db.session.refresh(account)
+        self.assertEqual(visual_draft(account.history), spec)
+        provider.assert_not_called()
 
     @patch('app.routes.ai_chat.provider_extract')
     def test_no_provider_required_and_retries_are_idempotent(self, provider):
